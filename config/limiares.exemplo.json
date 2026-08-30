@@ -1,0 +1,9 @@
+{
+  "_comentario": "VALORES PROVISORIOS. Ajustar apos validacao com o time do sistema de totalizacao (ver docs/limiares-referencia.md).",
+  "latencia_ms":          { "viavel_ate": 60,  "ressalva_ate": 120 },
+  "jitter_ms":            { "viavel_ate": 10,  "ressalva_ate": 30 },
+  "perda_percentual":     { "viavel_ate": 1,   "ressalva_ate": 5 },
+  "banda_download_mbps":  { "viavel_min": 20,  "ressalva_min": 8 },
+  "banda_upload_mbps":    { "viavel_min": 10,  "ressalva_min": 4 },
+  "carregamento_web_s":   { "viavel_ate": 5,   "ressalva_ate": 12 }
+}

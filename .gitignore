@@ -1,0 +1,30 @@
+# Resultados de execução (gerados em campo)
+/resultados/pendentes/*
+/resultados/enviados/*
+/logs/*
+
+# Cache local da lista de Juntas (baixado do Web App)
+/data/*
+
+# Configs reais — versiona apenas os exemplos
+/config/*.json
+!/config/*.exemplo.json
+
+# Binários de terceiros (baixados no setup, não versionados)
+/bin/iperf3/*
+/bin/geckodriver/*
+/bin/chromedriver/*
+/lib/Selenium/*
+
+# Mantém as pastas vazias no repositório
+!**/.gitkeep
+
+# clasp: id do projeto e credenciais (nunca versionar credenciais)
+.clasp.json
+.clasprc.json
+*.clasprc.json
+
+# Diversos Windows / PowerShell
+*.tmp
+Thumbs.db
+desktop.ini

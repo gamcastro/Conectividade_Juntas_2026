@@ -1,0 +1,18 @@
+{
+  "_comentario": "Enderecos do ambiente de teste. Copiar para ambiente.json e preencher com os valores reais.",
+  "ping": {
+    "alvo": "10.0.0.1",
+    "amostras": 20
+  },
+  "iperf3": {
+    "servidor": "10.0.0.1",
+    "porta": 5201,
+    "duracao_s": 10,
+    "reverso": true
+  },
+  "totalizacao": {
+    "url": "https://totalizacao.exemplo.tre-ma.jus.br",
+    "navegadores": ["firefox", "chrome"],
+    "timeout_s": 60
+  }
+}

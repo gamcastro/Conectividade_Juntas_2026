@@ -1,0 +1,4 @@
+{
+  "_comentario": "Copie para config/admin.json (fica fora do git) e coloque o hash SHA-256 do PIN do administrador. Gere com: tools/Definir-PIN-Admin.ps1",
+  "pin_sha256": "COLOQUE_O_HASH_AQUI"
+}

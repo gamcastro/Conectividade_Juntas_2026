@@ -1,0 +1,7 @@
+{
+  "_comentario": "modo: 'na-hora' envia ao final da coleta; 'offline-first' apenas salva local e o reenvio e feito depois (manual ou no proximo start).",
+  "endpoint_apps_script": "https://script.google.com/macros/s/COLOQUE_O_ID_AQUI/exec",
+  "modo": "offline-first",
+  "retentativas": 3,
+  "intervalo_retentativa_s": 5
+}
