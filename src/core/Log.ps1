@@ -51,6 +51,13 @@ function Write-Log {
         $dispatcher.Invoke([action] $aplicar)
     } else {
         & $aplicar
+        # Operacoes sincronas na thread de UI (sync, reenvio) travam o redesenho
+        # ate terminarem. Um flush aqui faz o feed "ATIVIDADE" atualizar ao vivo.
+        if ($dispatcher -and -not $Global:ModoTeste) {
+            try {
+                $dispatcher.Invoke([action] { }, [Windows.Threading.DispatcherPriority]::Background)
+            } catch { }
+        }
     }
 
     # Espelho no console (modo -SemUI) e no arquivo.
