@@ -127,11 +127,12 @@
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                             <ContentControl Style="{DynamicResource MarcaDicon}" Width="52" Height="52"
                                             Foreground="{DynamicResource Dicon.Text}"/>
-                            <StackPanel Margin="14,0,0,0" VerticalAlignment="Center">
+                            <StackPanel Margin="14,0,0,0" VerticalAlignment="Center" MaxWidth="240">
                                 <TextBlock Text="DICON" FontFamily="{DynamicResource Dicon.Display}"
                                            FontWeight="Bold" FontSize="30" Foreground="{DynamicResource Dicon.Text}"/>
-                                <TextBlock Text="Diagn&#243;stico de Conectividade" FontFamily="Consolas"
-                                           FontSize="10" Foreground="{DynamicResource Dicon.Text3}"/>
+                                <TextBlock Text="Diagn&#243;stico de Conectividade &#8212; Juntas Especiais 2026"
+                                           FontFamily="Consolas" FontSize="10" TextWrapping="Wrap"
+                                           Foreground="{DynamicResource Dicon.Text3}"/>
                             </StackPanel>
                         </StackPanel>
 
