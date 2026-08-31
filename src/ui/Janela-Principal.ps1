@@ -1004,8 +1004,11 @@ function Update-SeletorJuntas {
     $juntas = @($juntas | Sort-Object @{ Expression = { -not $_.NaRota } }, Zona, Termo)
 
     $cboJunta.ItemsSource = $juntas
-    $modo = if ($filtrar) { 'rota do tecnico' } elseif ($chavesRota.Count) { 'todas (admin)' } else { 'todas (sem roteiro)' }
-    Write-Log ("Seletor de Juntas: {0} Junta(s) - {1}." -f $juntas.Count, $modo) -Nivel Info
+    # so registra no feed depois do login (a montagem inicial e ruido)
+    if ($Global:SessaoAtual) {
+        $modo = if ($filtrar) { 'rota do tecnico' } elseif ($chavesRota.Count) { 'todas (admin)' } else { 'todas (sem roteiro)' }
+        Write-Log ("Seletor de Juntas: {0} Junta(s) - {1}." -f $juntas.Count, $modo) -Nivel Info
+    }
 }
 
 function Update-ComboLocais {
