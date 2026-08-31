@@ -27,7 +27,9 @@ function Invoke-ProcessoComSaida {
     param(
         [Parameter(Position = 0)] [string] $Caminho,
         [string[]] $Argumentos = @(),
-        [int] $TimeoutS = 60
+        [int] $TimeoutS = 60,
+        # Encoding do stdout/stderr. Util p/ apps de console (ping.exe usa OEM).
+        [System.Text.Encoding] $Encoding
     )
 
     if (-not (Test-Path $Caminho)) {
@@ -42,6 +44,10 @@ function Invoke-ProcessoComSaida {
     $psi.RedirectStandardError  = $true
     $psi.UseShellExecute        = $false
     $psi.CreateNoWindow         = $true
+    if ($Encoding) {
+        $psi.StandardOutputEncoding = $Encoding
+        $psi.StandardErrorEncoding  = $Encoding
+    }
 
     $p = [Diagnostics.Process]::Start($psi)
     if (-not $p.WaitForExit($TimeoutS * 1000)) {

@@ -837,7 +837,7 @@ function Update-PainelFaseLocal {
 
     if (-not $p) {
         if ($card) { $card.Visibility = 'Collapsed' }
-        $w.FindName('painelInternetLocal').Visibility = 'Collapsed'
+        $w.FindName('cardInternetLocal').Visibility = 'Collapsed'
         $w.FindName('txtLocDica').Visibility = 'Collapsed'
         $w.FindName('btnRodarFaseLocal').IsEnabled = $false
         $w.FindName('chkTetheringCelular').IsEnabled = $false
@@ -883,19 +883,49 @@ function Update-PainelFaseLocal {
         $tw.Foreground = $cinza ; $dw.Fill = $cinza
     }
 
-    # painel do teste de internet: so quando a checagem completa rodou
-    $pi = $w.FindName('painelInternetLocal')
+    # card proprio do teste de internet: so quando a checagem completa rodou
+    $ci = $w.FindName('cardInternetLocal')
     if ($it) {
-        $parts = @()
-        $parts += if ($it.ping_ok)     { 'ping publico {0} ms (perda {1}%)' -f $it.ping_latencia_ms, $it.ping_perda_pct } else { 'ping publico falhou' }
-        $parts += if ($it.dns_ok)      { 'DNS {0} ms' -f $it.dns_ms } else { 'DNS falhou' }
-        $parts += if ($it.download_ok) { 'download ~{0} Mbps' -f $it.download_mbps } else { 'download falhou' }
-        $ti = $w.FindName('txtLocInternet')
-        $ti.Text = $parts -join '   -   '
-        $ti.Foreground = if ($it.ping_ok -and $it.dns_ok) { $verde } else { $vermelho }
-        $pi.Visibility = 'Visible'
+        $prop = { param($n) if ($it.PSObject.Properties[$n]) { $it.($n) } }
+
+        # PING - saida linha a linha (estilo Windows)
+        $tp = $w.FindName('txtPingSaida')
+        $ps = @(& $prop 'ping_saida')
+        if ($ps.Count) {
+            $tp.Text = $ps -join "`n"
+        } elseif ($it.ping_ok) {
+            $tp.Text = 'Resposta de {0}: media {1} ms, perda {2}%' -f (& $prop 'ping_alvo'), $it.ping_latencia_ms, $it.ping_perda_pct
+        } else {
+            $tp.Text = 'Sem resposta de ' + [string] (& $prop 'ping_alvo')
+        }
+        $tp.Foreground = if ($it.ping_ok) { $verde } else { $vermelho }
+
+        # DNS
+        $td = $w.FindName('txtDnsSaida')
+        $ips = @(& $prop 'dns_ips')
+        if ($it.dns_ok) {
+            $td.Text = '{0}  ->  {1}   ({2} ms)' -f (& $prop 'dns_nome'), ($ips -join ', '), $it.dns_ms
+            $td.Foreground = $verde
+        } else {
+            $td.Text = 'resolucao de {0} falhou' -f (& $prop 'dns_nome')
+            $td.Foreground = $vermelho
+        }
+
+        # DOWNLOAD - alvo + tamanho do arquivo
+        $tw2 = $w.FindName('txtDownloadSaida')
+        if ($it.download_ok) {
+            $bytes = [double] (& $prop 'download_bytes')
+            $tamanho = if ($bytes -ge 1MB) { '{0} MB' -f ([math]::Round($bytes / 1MB, 2)) } else { '{0} KB' -f ([math]::Round($bytes / 1KB)) }
+            $tw2.Text = ("Alvo:  {0}`n{1} em {2} s   (~{3} Mbps)" -f (& $prop 'download_url'), $tamanho, (& $prop 'download_seg'), $it.download_mbps)
+            $tw2.Foreground = $verde
+        } else {
+            $tw2.Text = 'download de {0} falhou' -f (& $prop 'download_url')
+            $tw2.Foreground = $vermelho
+        }
+
+        $ci.Visibility = 'Visible'
     } else {
-        $pi.Visibility = 'Collapsed'
+        $ci.Visibility = 'Collapsed'
     }
 
     $cbo = $w.FindName('cboWifiSsid')

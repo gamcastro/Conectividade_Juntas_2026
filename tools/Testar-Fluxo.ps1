@@ -35,8 +35,17 @@ $Global:FaseLocalSimulada = [pscustomobject]@{
         ssid = ''; sinal_pct = $null; redes_disponiveis = @('JE-CAMPO', 'VIVO-2G')
     }
     Internet = [pscustomobject]@{
-        ping_ok = $true; ping_latencia_ms = 22; ping_perda_pct = 0
+        ping_alvo = '8.8.8.8'
+        ping_ok = $true; ping_latencia_ms = 22; ping_perda_pct = 0; ping_min_ms = 21; ping_max_ms = 24
+        ping_saida = @(
+            'Disparando 8.8.8.8 com 32 bytes de dados:'
+            'Resposta de 8.8.8.8: bytes=32 tempo=21ms TTL=115'
+            'Resposta de 8.8.8.8: bytes=32 tempo=24ms TTL=115'
+            'Estatisticas do Ping para 8.8.8.8: Enviados = 4, Recebidos = 4, Perdidos = 0 (0% de perda)'
+        )
+        dns_nome = 'www.tre-ma.jus.br'
         dns_ok = $true; dns_ms = 35; dns_ips = @('200.1.1.1')
+        download_url = 'https://speed.cloudflare.com/__down?bytes=8000000'
         download_ok = $true; download_mbps = 48.3; download_bytes = 8000000; download_seg = 1.3
     }
     Quando = (Get-Date).ToString('o')
@@ -148,10 +157,10 @@ try {
     if ($Global:WizardStep -ne 3) { Write-Host "[4c] FALHA: nao foi para o passo 3 (rede local)"; $falhas++ }
     $hostTxt = "$($w.FindName('txtLocHost').Text)"
     if ($w.FindName('cardFaseLocal').Visibility -eq 'Visible' -and
-        $w.FindName('painelInternetLocal').Visibility -eq 'Collapsed' -and
+        $w.FindName('cardInternetLocal').Visibility -eq 'Collapsed' -and
         $w.FindName('btnRodarFaseLocal').IsEnabled -and $hostTxt -match 'NB-TESTE-01') {
         Write-Host "[4c] probe ao entrar: placas mostradas ($hostTxt), internet ainda nao testada"
-    } else { Write-Host "    FALHA: probe do passo 3 (card=$($w.FindName('cardFaseLocal').Visibility) inet=$($w.FindName('painelInternetLocal').Visibility) rodar.en=$($w.FindName('btnRodarFaseLocal').IsEnabled) host='$hostTxt')"; $falhas++ }
+    } else { Write-Host "    FALHA: probe do passo 3 (card=$($w.FindName('cardFaseLocal').Visibility) inet=$($w.FindName('cardInternetLocal').Visibility) rodar.en=$($w.FindName('btnRodarFaseLocal').IsEnabled) host='$hostTxt')"; $falhas++ }
 
     # 4c-1. passo 3 bloqueia antes de rodar a checagem da internet do local
     Invoke-WizardProximo
@@ -162,9 +171,17 @@ try {
     Invoke-RodarFaseLocal
     Invoke-Pump
     $ipTxt = "$($w.FindName('txtLocIp').Text)"
-    if ($null -ne $Global:FaseLocalPayload.Internet -and $ipTxt -match '192\.168\.15\.42' -and $w.FindName('painelInternetLocal').Visibility -eq 'Visible') {
-        Write-Host "[4c] checagem local OK: '$ipTxt' + painel de internet visivel"
-    } else { Write-Host "    FALHA: checagem nao completou (internet=$($null -ne $Global:FaseLocalPayload.Internet) ip='$ipTxt' painel=$($w.FindName('painelInternetLocal').Visibility))"; $falhas++ }
+    if ($null -ne $Global:FaseLocalPayload.Internet -and $ipTxt -match '192\.168\.15\.42' -and $w.FindName('cardInternetLocal').Visibility -eq 'Visible') {
+        Write-Host "[4c] checagem local OK: '$ipTxt' + card de internet visivel"
+    } else { Write-Host "    FALHA: checagem nao completou (internet=$($null -ne $Global:FaseLocalPayload.Internet) ip='$ipTxt' card=$($w.FindName('cardInternetLocal').Visibility))"; $falhas++ }
+    $pingTxt = "$($w.FindName('txtPingSaida').Text)"
+    $dlTxt   = "$($w.FindName('txtDownloadSaida').Text)"
+    if ($pingTxt -match 'Resposta de 8\.8\.8\.8' -and $pingTxt -match 'tempo=21ms') {
+        Write-Host "[4c] ping verboso linha a linha OK"
+    } else { Write-Host "    FALHA: ping sem saida verbosa ('$pingTxt')"; $falhas++ }
+    if ($dlTxt -match 'speed\.cloudflare\.com' -and $dlTxt -match 'MB') {
+        Write-Host "[4c] download mostra alvo + tamanho: '$($dlTxt -replace "`n",' | ')'"
+    } else { Write-Host "    FALHA: download sem alvo/tamanho ('$dlTxt')"; $falhas++ }
     Invoke-WizardProximo
     if ($Global:WizardStep -ne 4) { Write-Host "    FALHA: nao foi para o passo 4 (diagnostico com VPN)"; $falhas++ }
 
@@ -291,9 +308,10 @@ try {
         Write-Host "[5d] salvo: tecnico='$($doc.tecnico.nome)' final='$($doc.classificacao.final)' ajustada='$($linhaAlt.metrica)'->'$($linhaAlt.classe_final)'"
         if (-not $okDoc) { Write-Host "    FALHA: JSON incompleto"; $falhas++ }
         $rl = $doc.rede_local
-        if ($rl -and $rl.ip_local -eq '192.168.15.42' -and $rl.gateway -eq '192.168.15.1' -and $rl.host -eq 'NB-TESTE-01' -and @($rl.wireless_redes).Count -ge 1) {
-            Write-Host "[5d] JSON traz rede_local: host=$($rl.host) ip=$($rl.ip_local) gw=$($rl.gateway) wifi_redes=$(@($rl.wireless_redes).Count)"
-        } else { Write-Host "    FALHA: JSON sem bloco rede_local completo (host='$($rl.host)' ip='$($rl.ip_local)')"; $falhas++ }
+        if ($rl -and $rl.ip_local -eq '192.168.15.42' -and $rl.gateway -eq '192.168.15.1' -and $rl.host -eq 'NB-TESTE-01' -and
+            @($rl.wireless_redes).Count -ge 1 -and $rl.internet_ping_alvo -eq '8.8.8.8' -and "$($rl.internet_download_url)" -match 'cloudflare') {
+            Write-Host "[5d] JSON traz rede_local: host=$($rl.host) ip=$($rl.ip_local) ping_alvo=$($rl.internet_ping_alvo) dl_url=ok"
+        } else { Write-Host "    FALHA: JSON sem bloco rede_local completo (host='$($rl.host)' ip='$($rl.ip_local)' alvo='$($rl.internet_ping_alvo)')"; $falhas++ }
         if ($rl.tethering_celular -eq $true -and $rl.operadora -eq 'Vivo') {
             Write-Host "[5d] rede_local traz o tethering: operadora=$($rl.operadora)"
         } else { Write-Host "    FALHA: rede_local sem tethering/operadora (t=$($rl.tethering_celular) op='$($rl.operadora)')"; $falhas++ }

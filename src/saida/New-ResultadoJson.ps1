@@ -92,9 +92,16 @@ function New-ResultadoJson {
             wireless_ssid          = [string] (Get-Prop $wf 'ssid')
             wireless_sinal_pct     = (Get-Prop $wf 'sinal_pct')
             wireless_redes         = @(Get-Prop $wf 'redes_disponiveis')
+            internet_ping_alvo     = [string] (Get-Prop $it 'ping_alvo')
             internet_ping_ms       = (Get-Prop $it 'ping_latencia_ms')
+            internet_ping_min_ms   = (Get-Prop $it 'ping_min_ms')
+            internet_ping_max_ms   = (Get-Prop $it 'ping_max_ms')
             internet_perda_pct     = (Get-Prop $it 'ping_perda_pct')
+            internet_dns_nome      = [string] (Get-Prop $it 'dns_nome')
             internet_dns_ms        = (Get-Prop $it 'dns_ms')
+            internet_download_url  = [string] (Get-Prop $it 'download_url')
+            internet_download_bytes = (Get-Prop $it 'download_bytes')
+            internet_download_seg  = (Get-Prop $it 'download_seg')
             internet_download_mbps = (Get-Prop $it 'download_mbps')
         }
     }

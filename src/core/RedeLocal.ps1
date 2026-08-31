@@ -190,19 +190,37 @@ function Connect-RedeWireless {
 function Test-InternetLocal {
     $cfg = Get-ConfigRedeLocal
     $res = [ordered]@{
+        ping_alvo = [string] $cfg.ping_alvo
         ping_ok = $false; ping_latencia_ms = $null; ping_perda_pct = $null
+        ping_min_ms = $null; ping_max_ms = $null; ping_saida = @()
+        dns_nome = [string] $cfg.dns_nome
         dns_ok = $false; dns_ms = $null; dns_ips = @()
+        download_url = [string] $cfg.download_url
         download_ok = $false; download_mbps = $null; download_bytes = $null; download_seg = $null
     }
+    $nPing = 4
 
-    # ping publico
+    # ping publico - saida linha a linha, igual a do Windows (ping.exe)
     try {
-        $pings = @(Test-Connection -ComputerName $cfg.ping_alvo -Count 4 -ErrorAction SilentlyContinue)
-        if ($pings.Count) {
-            $rtts = @($pings | ForEach-Object { $_.ResponseTime })
+        $pexe = Join-Path $env:SystemRoot 'System32\PING.EXE'
+        if (-not (Test-Path $pexe)) { $pexe = 'ping' }
+        $oem = try { [Text.Encoding]::GetEncoding([Globalization.CultureInfo]::CurrentCulture.TextInfo.OEMCodePage) } catch { $null }
+        Write-Log ("Internet local: ping {0} -n {1}..." -f $cfg.ping_alvo, $nPing) -Nivel Info
+        $out = Invoke-ProcessoComSaida -Caminho $pexe -Argumentos @('-n', "$nPing", $cfg.ping_alvo) -TimeoutS 25 -Encoding $oem
+        $linhas = @(($out -split "`r?`n") | ForEach-Object { $_.TrimEnd() } | Where-Object { $_ -ne '' })
+        $res.ping_saida = $linhas
+        foreach ($ln in $linhas) { Write-Log ("  $ln") -Nivel Neutro }
+
+        $tempos = @()
+        foreach ($ln in $linhas) {
+            if ($ln -match '(?:tempo|time)[=<]\s*(\d+)\s*ms') { $tempos += [int] $Matches[1] }
+        }
+        if ($tempos.Count -gt 0) {
             $res.ping_ok          = $true
-            $res.ping_latencia_ms = [math]::Round((($rtts | Measure-Object -Average).Average), 1)
-            $res.ping_perda_pct   = [math]::Round((4 - $pings.Count) / 4 * 100)
+            $res.ping_latencia_ms = [math]::Round((($tempos | Measure-Object -Average).Average), 1)
+            $res.ping_min_ms      = ($tempos | Measure-Object -Minimum).Minimum
+            $res.ping_max_ms      = ($tempos | Measure-Object -Maximum).Maximum
+            $res.ping_perda_pct   = [math]::Round(($nPing - $tempos.Count) / $nPing * 100)
         } else {
             Write-Log 'Internet local: ping publico falhou (sem internet no local?).' -Nivel Aviso
         }
@@ -223,14 +241,16 @@ function Test-InternetLocal {
             $res.dns_ok  = $true
             $res.dns_ms  = [math]::Round($sw.Elapsed.TotalMilliseconds)
             $res.dns_ips = $ips
+            Write-Log ("Internet local: DNS {0} -> {1} ({2} ms)" -f $cfg.dns_nome, ($ips -join ', '), $res.dns_ms) -Nivel Info
         }
     } catch { Write-Log 'Internet local: resolucao DNS falhou.' -Nivel Aviso }
 
-    # mini download
+    # download de um arquivo pequeno (mostra alvo + tamanho)
     try {
         try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 } catch { }
         $to = [int] $cfg.download_timeout_s; if ($to -le 0) { $to = 30 }
         $tmp = Join-Path ([IO.Path]::GetTempPath()) ('dicon-dl-{0}.bin' -f ([guid]::NewGuid().ToString('N')))
+        Write-Log ("Internet local: baixando de {0}..." -f $cfg.download_url) -Nivel Info
         $old = $ProgressPreference; $ProgressPreference = 'SilentlyContinue'
         $sw = [Diagnostics.Stopwatch]::StartNew()
         try { Invoke-WebRequest -Uri $cfg.download_url -OutFile $tmp -UseBasicParsing -TimeoutSec $to -ErrorAction Stop }
@@ -243,6 +263,7 @@ function Test-InternetLocal {
             $res.download_bytes = $bytes
             $res.download_seg   = [math]::Round($sw.Elapsed.TotalSeconds, 2)
             $res.download_mbps  = [math]::Round(($bytes * 8) / $sw.Elapsed.TotalSeconds / 1e6, 1)
+            Write-Log ("Internet local: {0} KB em {1}s (~{2} Mbps)" -f [math]::Round($bytes / 1KB), $res.download_seg, $res.download_mbps) -Nivel Info
         }
     } catch { Write-Log 'Internet local: mini download falhou.' -Nivel Aviso }
 

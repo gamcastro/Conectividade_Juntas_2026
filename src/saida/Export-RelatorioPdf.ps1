@@ -165,12 +165,22 @@ function New-RelatorioHtml {
         if ($rl.velocidade_mbps) { $ce += '<div><b>Enlace:</b> {0} Mbps</div>' -f $rl.velocidade_mbps }
         $ce += '<div style="grid-column:1/3"><b>Wi-Fi:</b> {0}</div>' -f $wifiS
 
+        $pAlvo = if ($rl.PSObject.Properties['internet_ping_alvo']) { [string] $rl.internet_ping_alvo } else { '' }
+        $dUrl  = if ($rl.PSObject.Properties['internet_download_url']) { [string] $rl.internet_download_url } else { '' }
+        $dBy   = if ($rl.PSObject.Properties['internet_download_bytes']) { $rl.internet_download_bytes } else { $null }
+
         $intp = @()
-        if ($null -ne $rl.internet_ping_ms)       { $intp += ('ping p&uacute;blico {0} ms' -f $rl.internet_ping_ms) }
+        if ($null -ne $rl.internet_ping_ms) {
+            $intp += ('ping p&uacute;blico{0} {1} ms' -f $(if ($pAlvo) { ' a ' + (ConvertTo-HtmlSafe $pAlvo) } else { '' }), $rl.internet_ping_ms)
+        }
         if ($null -ne $rl.internet_perda_pct)     { $intp += ('perda {0}%' -f $rl.internet_perda_pct) }
         if ($null -ne $rl.internet_dns_ms)        { $intp += ('DNS {0} ms' -f $rl.internet_dns_ms) }
-        if ($null -ne $rl.internet_download_mbps) { $intp += ('download ~{0} Mbps' -f $rl.internet_download_mbps) }
+        if ($null -ne $rl.internet_download_mbps) {
+            $tam = if ($dBy) { ' de {0} MB' -f ([math]::Round([double] $dBy / 1MB, 1)) } else { '' }
+            $intp += ('download ~{0} Mbps{1}' -f $rl.internet_download_mbps, $tam)
+        }
         if ($intp.Count) { $ce += '<div style="grid-column:1/3"><b>Internet local (sem VPN):</b> {0}</div>' -f ($intp -join ' &middot; ') }
+        if ($dUrl) { $ce += '<div style="grid-column:1/3"><b>Alvo do download:</b> {0}</div>' -f (ConvertTo-HtmlSafe $dUrl) }
 
         $blocoRedeLocal = "  <h2>Rede local (antes da VPN do TRE)</h2>`n  <div class=""grid2"">`n    " + ($ce -join "`n    ") + "`n  </div>`n"
     }
