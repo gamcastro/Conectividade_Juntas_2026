@@ -250,8 +250,18 @@ function Test-InternetLocal {
 }
 
 # --------------------------------------------------------------- orquestracao
+#   -SemInternet: so inventaria as placas (LAN + Wi-Fi), sem ping/DNS/download.
+#                 A GUI usa nesse modo ao ENTRAR no passo 3 (probe rapido).
 function Invoke-FaseLocal {
-    if ($Global:ModoTeste -and $Global:FaseLocalSimulada) { return $Global:FaseLocalSimulada }
+    param([switch] $SemInternet)
+
+    if ($Global:ModoTeste -and $Global:FaseLocalSimulada) {
+        $s = $Global:FaseLocalSimulada
+        if ($SemInternet) {
+            return [pscustomobject]@{ Host = $s.Host; Lan = $s.Lan; Wireless = $s.Wireless; Internet = $null; Quando = $s.Quando }
+        }
+        return $s
+    }
 
     Write-Log 'Fase 1 - rede local do local (SEM a VPN do TRE)' -Nivel Destaque
 
@@ -276,7 +286,7 @@ function Invoke-FaseLocal {
         Write-Log 'Wi-Fi: sem placa wireless neste computador.' -Nivel Info
     }
 
-    $net = Test-InternetLocal
+    $net = if ($SemInternet) { $null } else { Test-InternetLocal }
 
     [pscustomobject]@{
         Host     = [string] $env:COMPUTERNAME

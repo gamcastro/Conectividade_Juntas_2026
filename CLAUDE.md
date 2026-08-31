@@ -65,8 +65,13 @@ alternados por `Visibility`; estado em `$Global:WizardStep`, navegação por
 `Show-WizardPasso` / `Invoke-WizardProximo` / `Invoke-WizardVoltar`, com gates de
 justificativa):
 1. informação do teste → 2. Junta/Local (com cartão de detalhe) →
-3. **rede local, SEM a VPN** (`Invoke-RodarFaseLocal` → `Complete-FaseLocal`;
-gate: precisa rodar a checagem; card com IP/gateway/Wi-Fi + conectar a um Wi-Fi)
+3. **rede local, SEM a VPN**: ao entrar, `Invoke-ProbeRedeLocal`
+(`Invoke-FaseLocal -SemInternet`, async) inventaria as placas com indicador
+verde/vermelho de LAN e Wi-Fi; "Rodar checagem local" (`Invoke-RodarFaseLocal` →
+`Complete-FaseLocal`) só habilita se houver conexão (cabo ou Wi-Fi) e faz o
+teste de internet (ping/DNS/download) num painel próprio; "teste pelo celular"
+(tethering + operadora) só habilita quando NÃO há cabo e existe placa Wi-Fi;
+trocar de Local / voltar ao passo 2 zera a checagem
 → 4. rodar a bateria **com a VPN** (auto-avança ao concluir) → 5. resultado por
 métrica → 6. decisão final → 7. conclusão: **Salvar** / **Transmitir** /
 **Exportar relatório (PDF)** + checklist.
