@@ -77,8 +77,11 @@ teste de internet (ping/DNS/download) num painel próprio; "teste pelo celular"
 trocar de Local / voltar ao passo 2 zera a checagem
 → 4. rodar a bateria **com a VPN**: `Update-EstadoVpn` (via `Test-VpnAtiva`)
 bloqueia "Rodar diagnóstico" sem a VPN e mostra **"Abrir o FortiClient"**
-(`Get-CaminhoFortiClient`) + "Verificar novamente"; **não** auto-avança ao
-concluir (o técnico revisa o log e clica em Próximo) → 5. resultado por
+(`Get-CaminhoFortiClient`) + "Verificar novamente"; **"Próximo" fica
+desabilitado** (`Update-Passo4Nav`) até o diagnóstico rodar **ou** o técnico
+marcar **"Não foi possível conectar a VPN"** + motivo (`Set-DiagnosticoVpnImpossivel`
+gera payload sintético INVIÁVEL; vai em `vpn.impossivel/motivo` no JSON e num
+aviso vermelho no relatório); **não** auto-avança ao concluir → 5. resultado por
 métrica → 6. decisão final → 7. conclusão: **Salvar** / **Transmitir** /
 **Exportar relatório (PDF)** + checklist.
 O runspace da fase local / conexão Wi-Fi é o `Start-TarefaRede`

@@ -34,7 +34,10 @@ function New-ResultadoJson {
         $FaseLocal,
         # Rede do local veio do roteamento (tethering) do celular do tecnico?
         [bool]     $Tethering,
-        [string]   $Operadora
+        [string]   $Operadora,
+        # Nao foi possivel conectar a VPN da JE no local (bateria nao rodou).
+        [bool]     $VpnImpossivel,
+        [string]   $VpnMotivo
     )
 
     # index metrica -> override do tecnico
@@ -130,6 +133,7 @@ function New-ResultadoJson {
             tipo_internet       = $Local.tipo_internet
         }
         rede_local        = $redeLocal
+        vpn               = [pscustomobject]@{ impossivel = [bool] $VpnImpossivel; motivo = [string] $VpnMotivo }
         ambiente          = $Ambiente
         metricas          = [pscustomobject]@{
             latencia_ms         = $Metricas.LatenciaMediaMs

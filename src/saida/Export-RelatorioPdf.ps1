@@ -103,6 +103,15 @@ function New-RelatorioHtml {
         '<p class="small"><b>Ajuste da decis' + [char]0x00E3 + 'o:</b> ' + (ConvertTo-HtmlSafe ([string] $cl.justificativa)) + '</p>'
     } else { '' }
 
+    $vpnBanner = ''
+    $vpnObj = if ($r.PSObject.Properties['vpn']) { $r.vpn } else { $null }
+    if ($vpnObj -and $vpnObj.impossivel) {
+        $vpnBanner = '<p style="border:1px solid #BC352A;color:#BC352A;padding:6px 12px;border-radius:4px;font-weight:700">' +
+            'N&atilde;o foi poss&iacute;vel conectar a VPN da Justi&ccedil;a Eleitoral neste local &mdash; a bateria com VPN n&atilde;o foi medida.' +
+            $(if ($vpnObj.motivo) { '<br><span style="font-weight:400">Motivo: ' + (ConvertTo-HtmlSafe ([string] $vpnObj.motivo)) + '</span>' } else { '' }) +
+            '</p>'
+    }
+
     $tecnico  = ConvertTo-HtmlSafe ([string] $r.tecnico.nome)
     $geradoEm = (Get-Date).ToString('dd/MM/yyyy HH:mm:ss')
 
@@ -239,6 +248,7 @@ function New-RelatorioHtml {
   <p class="resumo">ZE $($loc.zona_eleitoral) &mdash; $(ConvertTo-HtmlSafe $loc.municipio_termo) (sede: $(ConvertTo-HtmlSafe $loc.municipio_sede))</p>
   <div class="final">Decis&atilde;o final: $rotFinal</div>
   $justFinal
+  $vpnBanner
 
   <h2>Local avaliado</h2>
   <div class="grid2">

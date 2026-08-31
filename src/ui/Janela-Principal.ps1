@@ -233,6 +233,8 @@ function New-JanelaPrincipal {
     $window.FindName('btnRodar').Add_Click({ Invoke-ExecucaoNaJanela })
     $window.FindName('btnAbrirFortiClient').Add_Click({ Invoke-AbrirFortiClient })
     $window.FindName('btnReverificarVpn').Add_Click({ Invoke-ReverificarVpn })
+    $window.FindName('chkVpnImpossivel').Add_Click({ Update-VpnImpossivel })
+    $window.FindName('txtVpnMotivo').Add_TextChanged({ Update-Passo4Nav })
     $window.FindName('btnAtualizar').Add_Click({ Invoke-AtualizarListaJuntas })
     $window.FindName('cboJunta').Add_SelectionChanged({ Update-ComboLocais })
     $window.FindName('cboLocal').Add_SelectionChanged({ Update-DetalheLocal })
@@ -606,6 +608,7 @@ function Show-WizardPasso {
     $prox = $w.FindName('btnWizProximo')
     $prox.Visibility = if ($N -lt 7) { 'Visible' } else { 'Collapsed' }
     $prox.Content    = if ($N -eq 6) { 'Concluir' } else { 'Pr' + [char]0x00F3 + 'ximo' }
+    $prox.IsEnabled  = $true   # passo 4 recalcula em Update-Passo4Nav
 
     switch ($N) {
         2 { Update-DetalheLocal }
@@ -652,6 +655,16 @@ function Invoke-WizardProximo {
             Show-WizardPasso 4
         }
         4 {
+            if ([bool] $w.FindName('chkVpnImpossivel').IsChecked) {
+                $motivo = ([string] $w.FindName('txtVpnMotivo').Text).Trim()
+                if (-not $motivo) {
+                    Write-Log 'Descreva por que nao foi possivel conectar a VPN da JE.' -Nivel Aviso
+                    return
+                }
+                if (-not $Global:DiagPayload) { Set-DiagnosticoVpnImpossivel -Motivo $motivo }
+                Show-WizardPasso 5
+                return
+            }
             if (-not $Global:DiagPayload) {
                 Write-Log 'Rode o diagnostico antes de avancar.' -Nivel Aviso
                 return
@@ -1174,7 +1187,9 @@ function Invoke-ExportarRelatorio {
             -Avaliacoes $avaliacoes -ClassificacaoFinal @{ final = $decFinal; justificativa = $justDec } `
             -TecnicoNome ($Global:SessaoAtual.tecnico_nome) -FaseLocal $Global:FaseLocalPayload `
             -Tethering ([bool] $w.FindName('chkTetheringCelular').IsChecked) `
-            -Operadora (([string] $w.FindName('cboOperadora').Text).Trim())
+            -Operadora (([string] $w.FindName('cboOperadora').Text).Trim()) `
+            -VpnImpossivel ([bool] $w.FindName('chkVpnImpossivel').IsChecked) `
+            -VpnMotivo (([string] $w.FindName('txtVpnMotivo').Text).Trim())
         $out = Export-RelatorioPdf -Resultado $res
         $Global:FeitoExportar = $true
         $st.Text = "Relatorio salvo: $out"
@@ -1451,10 +1466,50 @@ function Update-EstadoVpn {
         $tv.Text = 'VPN da Justica Eleitoral NAO detectada - conecte pelo FortiClient antes de rodar o diagnostico.'
         $tv.Foreground = $vermelho ; $dv.Fill = $vermelho
     }
-    $w.FindName('btnRodar').IsEnabled = [bool] $sel -and $vpn
-    $vis = if ($vpn) { 'Collapsed' } else { 'Visible' }
+    $impossivel = [bool] $w.FindName('chkVpnImpossivel').IsChecked
+    $w.FindName('btnRodar').IsEnabled = [bool] $sel -and $vpn -and (-not $impossivel)
+    $vis = if ($vpn -or $impossivel) { 'Collapsed' } else { 'Visible' }
     $w.FindName('btnAbrirFortiClient').Visibility = $vis
     $w.FindName('btnReverificarVpn').Visibility   = $vis
+    Update-Passo4Nav
+}
+
+# "Proximo" no passo 4 so habilita se o diagnostico rodou OU se o tecnico
+# marcou "nao consegui conectar a VPN" e descreveu o motivo.
+function Update-Passo4Nav {
+    $w = $Global:JanelaPrincipal
+    if (-not $w -or $Global:WizardStep -ne 4) { return }
+    $impossivelOk = [bool] $w.FindName('chkVpnImpossivel').IsChecked -and
+        (-not [string]::IsNullOrWhiteSpace([string] $w.FindName('txtVpnMotivo').Text))
+    $w.FindName('btnWizProximo').IsEnabled = ($null -ne $Global:DiagPayload) -or $impossivelOk
+}
+
+# Checkbox "Nao foi possivel conectar a VPN" -> libera/limpa o campo de motivo.
+function Update-VpnImpossivel {
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    $on = [bool] $w.FindName('chkVpnImpossivel').IsChecked
+    $vis = if ($on) { 'Visible' } else { 'Collapsed' }
+    $w.FindName('txtVpnMotivo').Visibility     = $vis
+    $w.FindName('txtVpnMotivoDica').Visibility = $vis
+    if (-not $on) { $w.FindName('txtVpnMotivo').Text = '' }
+    Update-EstadoVpn   # recomputa "Rodar diagnostico" / botoes do FortiClient + Update-Passo4Nav
+}
+
+# Registra o local como INVIAVEL por VPN indisponivel (sem rodar a bateria).
+function Set-DiagnosticoVpnImpossivel {
+    param([string] $Motivo)
+    $w = $Global:JanelaPrincipal
+    $sel = $w.FindName('cboLocal').SelectedItem
+    if (-not $sel) { return }
+    $met = [pscustomobject]@{
+        LatenciaMediaMs = $null; JitterMs = $null; PerdaPercentual = $null
+        BandaDownloadMbps = $null; BandaUploadMbps = $null; CarregamentoWebS = $null
+    }
+    $dec = Invoke-MotorDecisao -Metricas $met -Limiares (Get-LimiaresConfig)
+    $amb = Get-EstadoAmbiente
+    Show-PainelResultado -Payload ([pscustomobject]@{ Ambiente = $amb; Metricas = $met; Decisao = $dec; Local = $sel.Dados })
+    Write-Log ("VPN impossivel de conectar - local registrado como INVIAVEL. Motivo: {0}" -f $Motivo) -Nivel Aviso
 }
 
 function Invoke-ReverificarVpn { Update-EstadoVpn }
@@ -1520,6 +1575,10 @@ function Clear-PainelResultado {
     $w.FindName('btnTransmitirResultado').IsEnabled = $false
     $w.FindName('txtFimStatus').Text = ''
     $w.FindName('cardDetalheLocal').Visibility = 'Collapsed'
+    $w.FindName('chkVpnImpossivel').IsChecked = $false
+    $w.FindName('txtVpnMotivo').Text = ''
+    $w.FindName('txtVpnMotivo').Visibility = 'Collapsed'
+    $w.FindName('txtVpnMotivoDica').Visibility = 'Collapsed'
     $Global:FeitoSalvar     = $false
     $Global:FeitoTransmitir = $false
     $Global:FeitoExportar   = $false
@@ -1550,6 +1609,7 @@ function Complete-Diagnostico {
         return
     }
     Show-PainelResultado -Payload $Payload
+    Update-Passo4Nav
     # nao avanca sozinho: o tecnico confere o log e clica em "Proximo".
     Write-Log 'Diagnostico concluido. Revise e clique em "Proximo".' -Nivel Ok
 }
@@ -1633,7 +1693,9 @@ function Invoke-SalvarResultado {
             -TecnicoNome ($Global:SessaoAtual.tecnico_nome) `
             -FaseLocal $Global:FaseLocalPayload `
             -Tethering ([bool] $w.FindName('chkTetheringCelular').IsChecked) `
-            -Operadora (([string] $w.FindName('cboOperadora').Text).Trim())
+            -Operadora (([string] $w.FindName('cboOperadora').Text).Trim()) `
+            -VpnImpossivel ([bool] $w.FindName('chkVpnImpossivel').IsChecked) `
+            -VpnMotivo (([string] $w.FindName('txtVpnMotivo').Text).Trim())
         Write-Log "Resultado salvo: $caminho" -Nivel Ok
         $Global:FeitoSalvar          = $true
         $Global:UltimoResultadoSalvo = $caminho

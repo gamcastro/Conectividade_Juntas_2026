@@ -85,7 +85,9 @@ function Save-Diagnostico {
         [string] $TecnicoNome,
         $FaseLocal,
         [bool] $Tethering,
-        [string] $Operadora
+        [string] $Operadora,
+        [bool] $VpnImpossivel,
+        [string] $VpnMotivo
     )
 
     $cfgEnvio = Get-Config 'envio'
@@ -93,7 +95,8 @@ function Save-Diagnostico {
 
     $resultado = New-ResultadoJson -Ambiente $Ambiente -Metricas $Metricas -Decisao $Decisao `
         -Local $Local -Avaliacoes $Avaliacoes -ClassificacaoFinal $ClassificacaoFinal -TecnicoNome $TecnicoNome `
-        -FaseLocal $FaseLocal -Tethering $Tethering -Operadora $Operadora
+        -FaseLocal $FaseLocal -Tethering $Tethering -Operadora $Operadora `
+        -VpnImpossivel $VpnImpossivel -VpnMotivo $VpnMotivo
     $caminho = Save-ResultadoLocal -Resultado $resultado
 
     if ($cfgEnvio.modo -eq 'na-hora') {

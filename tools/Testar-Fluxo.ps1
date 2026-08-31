@@ -284,6 +284,25 @@ try {
     Invoke-ExecucaoNaJanela
     if ($null -eq $Global:DiagRunState -and $null -eq $Global:DiagPayload) { Write-Host "[4d] sem VPN: 'Rodar diagnostico' nao inicia a bateria" }
     else { Write-Host "    FALHA: rodou o diagnostico sem VPN (runstate=$($null -ne $Global:DiagRunState))"; $falhas++ }
+
+    # 4d-1. "Proximo" no passo 4 fica DESABILITADO ate rodar (ou marcar "VPN impossivel" + motivo)
+    if (-not $w.FindName('btnWizProximo').IsEnabled) { Write-Host "[4d] 'Proximo' desabilitado sem diagnostico" }
+    else { Write-Host "    FALHA: 'Proximo' habilitado sem rodar o diagnostico"; $falhas++ }
+    $w.FindName('chkVpnImpossivel').IsChecked = $true ; Update-VpnImpossivel
+    if ("$($w.FindName('txtVpnMotivo').Visibility)" -eq 'Visible' -and -not $w.FindName('btnWizProximo').IsEnabled) {
+        Write-Host "[4d] marcou 'VPN impossivel' sem motivo: 'Proximo' segue desabilitado"
+    } else { Write-Host "    FALHA: 'Proximo' habilitou sem o motivo da VPN"; $falhas++ }
+    $w.FindName('txtVpnMotivo').Text = 'FortiClient corrompido; sem internet no local para reinstalar.'
+    Update-Passo4Nav
+    if ($w.FindName('btnWizProximo').IsEnabled) { Write-Host "[4d] motivo preenchido: 'Proximo' habilita" }
+    else { Write-Host "    FALHA: 'Proximo' nao habilitou com o motivo"; $falhas++ }
+    Set-DiagnosticoVpnImpossivel -Motivo ([string] $w.FindName('txtVpnMotivo').Text)
+    if (@($Global:DiagPayload.Decisao.Detalhes).Count -eq 6 -and $Global:DiagPayload.Decisao.Classificacao -eq 'inviavel') {
+        Write-Host "[4d] 'VPN impossivel' -> payload sintetico INVIAVEL (6 metricas sem medida)"
+    } else { Write-Host "    FALHA: payload sintetico da VPN impossivel (det=$(@($Global:DiagPayload.Decisao.Detalhes).Count) cls=$($Global:DiagPayload.Decisao.Classificacao))"; $falhas++ }
+    $w.FindName('chkVpnImpossivel').IsChecked = $false ; Update-VpnImpossivel
+    Clear-PainelResultado
+
     $Global:VpnSimulada = $true ; Update-EstadoVpn
     if ($w.FindName('btnRodar').IsEnabled -and "$($w.FindName('btnAbrirFortiClient').Visibility)" -eq 'Collapsed') {
         Write-Host "[4d] com VPN: 'Rodar diagnostico' habilita, botao do FortiClient some"
@@ -309,6 +328,8 @@ try {
     if (-not $ok) { $falhas++ }
     if ($Global:WizardStep -ne 4) { Write-Host "    FALHA: avancou sozinho apos rodar (esperado ficar no passo 4)"; $falhas++ }
     else { Write-Host "[5] apos rodar continua no passo 4 (sem auto-avancar)" }
+    if ($w.FindName('btnWizProximo').IsEnabled) { Write-Host "[5] apos rodar, 'Proximo' habilita" }
+    else { Write-Host "    FALHA: 'Proximo' seguiu desabilitado apos rodar o diagnostico"; $falhas++ }
     Invoke-WizardProximo
     $decIni = [string] $w.FindName('cboDecisaoFinal').SelectedItem
     if ($Global:WizardStep -ne 5) { Write-Host "    FALHA: Proximo nao foi para o passo 5"; $falhas++ }
@@ -355,6 +376,8 @@ try {
         if ($rl.tethering_celular -eq $true -and $rl.operadora -eq 'Vivo') {
             Write-Host "[5d] rede_local traz o tethering: operadora=$($rl.operadora)"
         } else { Write-Host "    FALHA: rede_local sem tethering/operadora (t=$($rl.tethering_celular) op='$($rl.operadora)')"; $falhas++ }
+        if ($doc.vpn -and $doc.vpn.impossivel -eq $false) { Write-Host "[5d] JSON traz bloco vpn (impossivel=false neste teste)" }
+        else { Write-Host "    FALHA: JSON sem bloco vpn"; $falhas++ }
     }
     $vok = [char]0x2713
     if ($Global:FeitoSalvar -and "$($w.FindName('chkFimSalvar').Text)" -eq $vok -and $w.FindName('btnTransmitirResultado').IsEnabled -and "$($w.FindName('chkFimTransmitir').Text)" -ne $vok) {
