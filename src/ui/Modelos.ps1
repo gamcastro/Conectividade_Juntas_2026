@@ -185,6 +185,9 @@ function New-LimiarRow {
     $r.DirecaoTexto  = if ($Info.direcao -eq 'max') { 'menor ' + [char]0x00E9 + ' melhor' } else { 'maior ' + [char]0x00E9 + ' melhor' }
     $r.LimiarViavel   = [string] $Limiar.$sv
     $r.LimiarRessalva = [string] $Limiar.$sr
-    $r.Ativo = if ($null -eq $Limiar.ativo) { $true } else { [bool] $Limiar.ativo }
+    # cache antigo pode nao ter 'ativo'; ausente = na bateria (e StrictMode
+    # lanca se acessarmos a propriedade direto)
+    $pAtivo = if ($Limiar) { $Limiar.PSObject.Properties['ativo'] } else { $null }
+    $r.Ativo = if ($pAtivo) { [bool] $pAtivo.Value } else { $true }
     return $r
 }

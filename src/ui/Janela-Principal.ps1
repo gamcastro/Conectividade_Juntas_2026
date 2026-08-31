@@ -1066,7 +1066,7 @@ function Show-PainelResultado {
     $Global:AvaliacaoRows = $rows
     $w.FindName('dgAvaliacao').ItemsSource = $rows
 
-    $des = @($Payload.Decisao.MetricasDesativadas)
+    $des = @(if ($Payload.Decisao.PSObject.Properties['MetricasDesativadas']) { $Payload.Decisao.MetricasDesativadas })
     $lblDes = $w.FindName('txtMetricasDesativadas')
     if ($des.Count) {
         $lblDes.Text = 'Desativadas pela configuracao (nao avaliadas): ' + (($des | ForEach-Object { Get-RotuloMetrica $_ }) -join ', ')

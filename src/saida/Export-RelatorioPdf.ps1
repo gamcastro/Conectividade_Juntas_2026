@@ -106,7 +106,7 @@ function New-RelatorioHtml {
     $tecnico  = ConvertTo-HtmlSafe ([string] $r.tecnico.nome)
     $geradoEm = (Get-Date).ToString('dd/MM/yyyy HH:mm:ss')
 
-    $desat = @($r.metricas_desativadas)
+    $desat = @(if ($r.PSObject.Properties['metricas_desativadas']) { $r.metricas_desativadas })
     $linhaDesat = if ($desat.Count) {
         '<p class="small"><b>M&eacute;tricas n&atilde;o avaliadas (desativadas na configura&ccedil;&atilde;o):</b> {0}</p>' -f `
             (ConvertTo-HtmlSafe (($desat | ForEach-Object { Get-RotuloMetrica $_ }) -join ', '))
