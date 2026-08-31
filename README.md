@@ -40,7 +40,7 @@ O script força modo STA (exigido pelo WPF) e faz auto-elevação UAC.
 | `src/decisao/` | Motor de decisão que aplica os limiares às métricas |
 | `src/saida/` | Montagem do JSON, gravação local e envio ao Apps Script |
 | `apps-script/` | Web App (`Codigo.gs`): `?recurso=juntas\|tecnicos\|roteiros`. Deploy via `clasp` (`CLASP.md`) |
-| `assets/` | Logo `Eleições 2026` |
+| `assets/` | Logo `Eleições 2026`; `marca/` = identidade visual do DICON (símbolo, ícone, `.ico`, paleta) |
 | `data/` | Caches locais (gitignored): `juntas.json`, `tecnicos.json`, `roteiros.json`, `sessao.json` |
 | `bin/`, `lib/Selenium/` | Binários portáteis (`iperf3`, drivers) e Selenium .NET |
 | `resultados/` | `pendentes/` e `enviados/` |

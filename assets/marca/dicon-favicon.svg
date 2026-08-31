@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="32" height="32" role="img" aria-label="DICON">
+  <title>DICON — favicon (simplificado para tamanhos pequenos)</title>
+  <rect width="120" height="120" rx="24" fill="#123FA8"/>
+  <g transform="translate(8 6)" fill="none" stroke="#EAF0FF" stroke-width="7" stroke-linecap="round">
+    <path d="M50.25 40.55 A36 36 0 0 1 79.45 69.75"/>
+    <path d="M52.68 26.76 A50 50 0 0 1 93.24 67.32"/>
+  </g>
+  <circle cx="52" cy="80" r="8" fill="#EAF0FF"/>
+</svg>

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120" role="img" aria-label="DICON">
+  <title>DICON — icone do aplicativo</title>
+  <rect width="120" height="120" rx="24" fill="#123FA8"/>
+  <g transform="translate(8 4)" fill="none" stroke="#EAF0FF" stroke-width="3.6" stroke-linecap="round">
+    <path d="M47.82 54.33 A22 22 0 0 1 65.67 72.18"/>
+    <path d="M50.25 40.55 A36 36 0 0 1 79.45 69.75"/>
+    <path d="M52.68 26.76 A50 50 0 0 1 93.24 67.32"/>
+  </g>
+  <circle cx="52" cy="80" r="5.4" fill="#EAF0FF"/>
+  <path transform="translate(67.56 64.44) scale(5.6)" fill="#7FE0A0" d="M0,-1 L0.2245,-0.309 0.9511,-0.309 0.3633,0.1181 0.5878,0.809 0,0.382 -0.5878,0.809 -0.3633,0.1181 -0.9511,-0.309 -0.2245,-0.309 Z"/>
+  <path transform="translate(77.46 54.54) scale(5.6)" fill="#F2D272" d="M0,-1 L0.2245,-0.309 0.9511,-0.309 0.3633,0.1181 0.5878,0.809 0,0.382 -0.5878,0.809 -0.3633,0.1181 -0.9511,-0.309 -0.2245,-0.309 Z"/>
+  <path transform="translate(87.36 44.64) scale(5.6)" fill="#F2A79C" d="M0,-1 L0.2245,-0.309 0.9511,-0.309 0.3633,0.1181 0.5878,0.809 0,0.382 -0.5878,0.809 -0.3633,0.1181 -0.9511,-0.309 -0.2245,-0.309 Z"/>
+</svg>
