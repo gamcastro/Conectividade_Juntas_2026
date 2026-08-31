@@ -181,6 +181,11 @@ function New-RelatorioHtml {
         }
         if ($intp.Count) { $ce += '<div style="grid-column:1/3"><b>Internet local (sem VPN):</b> {0}</div>' -f ($intp -join ' &middot; ') }
         if ($dUrl) { $ce += '<div style="grid-column:1/3"><b>Alvo do download:</b> {0}</div>' -f (ConvertTo-HtmlSafe $dUrl) }
+        if ($rl.PSObject.Properties['internet_tracert_saltos'] -and [int] $rl.internet_tracert_saltos -gt 0) {
+            $trH = if ($rl.PSObject.Properties['internet_tracert_host']) { [string] $rl.internet_tracert_host } else { '' }
+            $ce += '<div style="grid-column:1/3"><b>Rota (tracert):</b> {0} salto(s){1}</div>' -f `
+                $rl.internet_tracert_saltos, $(if ($trH) { ' at&eacute; ' + (ConvertTo-HtmlSafe $trH) } else { '' })
+        }
 
         $blocoRedeLocal = "  <h2>Rede local (antes da VPN do TRE)</h2>`n  <div class=""grid2"">`n    " + ($ce -join "`n    ") + "`n  </div>`n"
     }

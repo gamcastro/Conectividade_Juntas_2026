@@ -9,6 +9,35 @@
 # Depois desta fase o tecnico conecta a VPN do TRE e roda a bateria "com VPN"
 # (Invoke-DiagnosticoCompleto).
 
+# --- feeds ao vivo do teste de internet (ping / tracert / download) ----------
+# ObservableCollections ligadas por binding as 3 colunas do card. Alimentadas
+# linha a linha por Write-LinhaRede (marshalla para o Dispatcher, como Write-Log).
+foreach ($__n in 'RedePing', 'RedeTracert', 'RedeDownload') {
+    if (-not (Get-Variable -Name $__n -Scope Global -ErrorAction SilentlyContinue)) {
+        Set-Variable -Name $__n -Scope Global `
+            -Value ([System.Collections.ObjectModel.ObservableCollection[object]]::new())
+    }
+}
+
+function Write-LinhaRede {
+    param(
+        [ValidateSet('ping', 'tracert', 'download')] [string] $Alvo,
+        [string] $Texto = ''
+    )
+    # via hashtable: 'switch'/'$()' desenrolam colecao vazia para $null.
+    $col = @{ ping = $Global:RedePing; tracert = $Global:RedeTracert; download = $Global:RedeDownload }[$Alvo]
+    if ($null -eq $col) { return }
+
+    $janela = Get-Variable -Name JanelaPrincipal -Scope Global -ErrorAction SilentlyContinue
+    $dispatcher = if ($janela) { $janela.Value.Dispatcher } else { $null }
+    $aplicar = { $col.Add($Texto) }
+    if ($dispatcher -and -not $dispatcher.CheckAccess()) {
+        $dispatcher.Invoke([action] $aplicar)
+    } else {
+        & $aplicar
+    }
+}
+
 # --------------------------------------------------------------- configuracao
 function Get-ConfigRedeLocal {
     $def = [pscustomobject]@{
@@ -16,14 +45,60 @@ function Get-ConfigRedeLocal {
         dns_nome           = 'www.tre-ma.jus.br'
         download_url       = 'https://speed.cloudflare.com/__down?bytes=8000000'
         download_timeout_s = 30
+        tracert_host       = ''
+        tracert_saltos     = 12
     }
     try {
         $c = Get-Config 'rede-local'
-        foreach ($p in 'ping_alvo', 'dns_nome', 'download_url', 'download_timeout_s') {
+        foreach ($p in 'ping_alvo', 'dns_nome', 'download_url', 'download_timeout_s', 'tracert_host', 'tracert_saltos') {
             if ($c.PSObject.Properties[$p] -and "$($c.$p)" -ne '') { $def.$p = $c.$p }
         }
     } catch { }
+    if (-not $def.tracert_host) { $def.tracert_host = $def.dns_nome }
+    if ([int] $def.tracert_saltos -le 0) { $def.tracert_saltos = 12 }
     $def
+}
+
+# Encoding OEM do console (ping.exe / tracert.exe usam), p/ acentos corretos.
+function Get-EncodingOem {
+    try { [Text.Encoding]::GetEncoding([Globalization.CultureInfo]::CurrentCulture.TextInfo.OEMCodePage) } catch { $null }
+}
+
+# Roda um .exe de console lendo o stdout LINHA A LINHA e mandando cada uma
+# para a coluna $Alvo (feed ao vivo). Devolve todas as linhas.
+function Invoke-ProcessoStreaming {
+    param(
+        [string] $Caminho, [string] $Argumentos, [string] $Alvo, [int] $TimeoutS = 60
+    )
+    $linhas = New-Object System.Collections.Generic.List[string]
+    if (-not (Test-Path $Caminho)) {
+        $cmd = Get-Command $Caminho -ErrorAction SilentlyContinue
+        if ($cmd) { $Caminho = $cmd.Source } else { return $linhas }
+    }
+    $psi = [Diagnostics.ProcessStartInfo]::new()
+    $psi.FileName               = $Caminho
+    $psi.Arguments              = $Argumentos
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError  = $true
+    $psi.UseShellExecute        = $false
+    $psi.CreateNoWindow         = $true
+    $oem = Get-EncodingOem
+    if ($oem) { $psi.StandardOutputEncoding = $oem; $psi.StandardErrorEncoding = $oem }
+
+    try {
+        $p = [Diagnostics.Process]::Start($psi)
+        while ($null -ne ($ln = $p.StandardOutput.ReadLine())) {
+            $t = $ln.TrimEnd()
+            if ($t -eq '') { continue }
+            $linhas.Add($t)
+            Write-LinhaRede -Alvo $Alvo -Texto $t
+        }
+        if (-not $p.WaitForExit($TimeoutS * 1000)) { try { $p.Kill() } catch { } }
+    } catch {
+        $linhas.Add("falhou: $_")
+        Write-LinhaRede -Alvo $Alvo -Texto "falhou: $_"
+    }
+    $linhas
 }
 
 # --------------------------------------------------------------- placa LAN
@@ -186,88 +261,135 @@ function Connect-RedeWireless {
     }
 }
 
-# --------------------------------------------------------------- internet local
-function Test-InternetLocal {
-    $cfg = Get-ConfigRedeLocal
-    $res = [ordered]@{
-        ping_alvo = [string] $cfg.ping_alvo
-        ping_ok = $false; ping_latencia_ms = $null; ping_perda_pct = $null
-        ping_min_ms = $null; ping_max_ms = $null; ping_saida = @()
-        dns_nome = [string] $cfg.dns_nome
-        dns_ok = $false; dns_ms = $null; dns_ips = @()
-        download_url = [string] $cfg.download_url
-        download_ok = $false; download_mbps = $null; download_bytes = $null; download_seg = $null
+# --------------------------------------------------------------- PING (streaming)
+function Test-PingLocal {
+    param([string] $Alvo, [int] $Contagem = 4)
+    $r = [pscustomobject]@{ ok = $false; media_ms = $null; min_ms = $null; max_ms = $null; perda_pct = $null; saida = @() }
+    $pexe = Join-Path $env:SystemRoot 'System32\PING.EXE'
+    Write-LinhaRede -Alvo 'ping' -Texto ("> ping -n {0} {1}" -f $Contagem, $Alvo)
+    $linhas = Invoke-ProcessoStreaming -Caminho $pexe -Argumentos ("-n $Contagem $Alvo") -Alvo 'ping' -TimeoutS 25
+    $r.saida = @($linhas)
+    $tempos = @()
+    foreach ($ln in $linhas) {
+        if ($ln -match '(?:tempo|time)[=<]\s*(\d+)\s*ms') { $tempos += [int] $Matches[1] }
     }
-    $nPing = 4
+    if ($tempos.Count) {
+        $r.ok        = $true
+        $r.media_ms  = [math]::Round((($tempos | Measure-Object -Average).Average), 1)
+        $r.min_ms    = ($tempos | Measure-Object -Minimum).Minimum
+        $r.max_ms    = ($tempos | Measure-Object -Maximum).Maximum
+        $r.perda_pct = [math]::Round(($Contagem - $tempos.Count) / $Contagem * 100)
+    }
+    $r
+}
 
-    # ping publico - saida linha a linha, igual a do Windows (ping.exe)
-    try {
-        $pexe = Join-Path $env:SystemRoot 'System32\PING.EXE'
-        if (-not (Test-Path $pexe)) { $pexe = 'ping' }
-        $oem = try { [Text.Encoding]::GetEncoding([Globalization.CultureInfo]::CurrentCulture.TextInfo.OEMCodePage) } catch { $null }
-        Write-Log ("Internet local: ping {0} -n {1}..." -f $cfg.ping_alvo, $nPing) -Nivel Info
-        $out = Invoke-ProcessoComSaida -Caminho $pexe -Argumentos @('-n', "$nPing", $cfg.ping_alvo) -TimeoutS 25 -Encoding $oem
-        $linhas = @(($out -split "`r?`n") | ForEach-Object { $_.TrimEnd() } | Where-Object { $_ -ne '' })
-        $res.ping_saida = $linhas
-        foreach ($ln in $linhas) { Write-Log ("  $ln") -Nivel Neutro }
+# ---------------------------------------------------- DNS + TRACERT (streaming)
+function Test-TracertLocal {
+    param([string] $NomeDns, [string] $Destino, [int] $Saltos = 12)
+    $r = [pscustomobject]@{ dns_ok = $false; dns_ms = $null; dns_ips = @(); tracert_ok = $false; tracert_saltos = 0; saida = @() }
 
-        $tempos = @()
-        foreach ($ln in $linhas) {
-            if ($ln -match '(?:tempo|time)[=<]\s*(\d+)\s*ms') { $tempos += [int] $Matches[1] }
-        }
-        if ($tempos.Count -gt 0) {
-            $res.ping_ok          = $true
-            $res.ping_latencia_ms = [math]::Round((($tempos | Measure-Object -Average).Average), 1)
-            $res.ping_min_ms      = ($tempos | Measure-Object -Minimum).Minimum
-            $res.ping_max_ms      = ($tempos | Measure-Object -Maximum).Maximum
-            $res.ping_perda_pct   = [math]::Round(($nPing - $tempos.Count) / $nPing * 100)
-        } else {
-            Write-Log 'Internet local: ping publico falhou (sem internet no local?).' -Nivel Aviso
-        }
-    } catch { Write-Log "Internet local: ping falhou ($_)." -Nivel Aviso }
-
-    # resolucao DNS
+    Write-LinhaRede -Alvo 'tracert' -Texto ("> resolvendo {0}" -f $NomeDns)
     try {
         $sw = [Diagnostics.Stopwatch]::StartNew()
         $ips = @()
-        try {
-            $ips = @((Resolve-DnsName -Name $cfg.dns_nome -Type A -DnsOnly -ErrorAction Stop |
-                        Where-Object { $_.IPAddress }).IPAddress)
-        } catch {
-            $ips = @([System.Net.Dns]::GetHostAddresses($cfg.dns_nome) | ForEach-Object { $_.IPAddressToString })
-        }
+        try { $ips = @((Resolve-DnsName -Name $NomeDns -Type A -DnsOnly -ErrorAction Stop | Where-Object { $_.IPAddress }).IPAddress) }
+        catch { $ips = @([System.Net.Dns]::GetHostAddresses($NomeDns) | ForEach-Object { $_.IPAddressToString }) }
         $sw.Stop()
         if ($ips.Count) {
-            $res.dns_ok  = $true
-            $res.dns_ms  = [math]::Round($sw.Elapsed.TotalMilliseconds)
-            $res.dns_ips = $ips
-            Write-Log ("Internet local: DNS {0} -> {1} ({2} ms)" -f $cfg.dns_nome, ($ips -join ', '), $res.dns_ms) -Nivel Info
+            $r.dns_ok = $true; $r.dns_ms = [math]::Round($sw.Elapsed.TotalMilliseconds); $r.dns_ips = $ips
+            Write-LinhaRede -Alvo 'tracert' -Texto ("{0}  ->  {1}   ({2} ms)" -f $NomeDns, ($ips -join ', '), $r.dns_ms)
+        } else {
+            Write-LinhaRede -Alvo 'tracert' -Texto ("resolucao de {0} falhou" -f $NomeDns)
         }
-    } catch { Write-Log 'Internet local: resolucao DNS falhou.' -Nivel Aviso }
+    } catch { Write-LinhaRede -Alvo 'tracert' -Texto ("resolucao de {0} falhou" -f $NomeDns) }
 
-    # download de um arquivo pequeno (mostra alvo + tamanho)
+    $texe = Join-Path $env:SystemRoot 'System32\TRACERT.EXE'
+    Write-LinhaRede -Alvo 'tracert' -Texto ("> tracert -d -h {0} {1}" -f $Saltos, $Destino)
+    $linhas = Invoke-ProcessoStreaming -Caminho $texe -Argumentos ("-d -h $Saltos -w 700 $Destino") -Alvo 'tracert' -TimeoutS 90
+    $r.saida = @($linhas)
+    foreach ($ln in $linhas) { if ($ln -match '^\s*(\d+)\s') { $r.tracert_saltos = [int] $Matches[1] } }
+    $r.tracert_ok = ($r.tracert_saltos -gt 0)
+    $r
+}
+
+# --------------------------------------------------- DOWNLOAD (streaming, %)
+function Test-DownloadLocal {
+    param([string] $Url, [int] $TimeoutS = 30)
+    $r = [pscustomobject]@{ ok = $false; mbps = $null; bytes = $null; seg = $null; saida = @() }
+    $linhas = New-Object System.Collections.Generic.List[string]
+    try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 } catch { }
+    Write-LinhaRede -Alvo 'download' -Texto ("> GET {0}" -f $Url); $linhas.Add("> GET $Url")
     try {
-        try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 } catch { }
-        $to = [int] $cfg.download_timeout_s; if ($to -le 0) { $to = 30 }
-        $tmp = Join-Path ([IO.Path]::GetTempPath()) ('dicon-dl-{0}.bin' -f ([guid]::NewGuid().ToString('N')))
-        Write-Log ("Internet local: baixando de {0}..." -f $cfg.download_url) -Nivel Info
-        $old = $ProgressPreference; $ProgressPreference = 'SilentlyContinue'
+        $req = [Net.HttpWebRequest] [Net.WebRequest]::Create($Url)
+        $req.Timeout = $TimeoutS * 1000
+        $req.ReadWriteTimeout = $TimeoutS * 1000
+        $req.UserAgent = 'DICON'
+        $resp = $req.GetResponse()
+        $total = [int64] $resp.ContentLength
+        $m = ("HTTP {0}   {1}" -f [int] $resp.StatusCode, $(if ($total -gt 0) { '{0} MB' -f [math]::Round($total / 1MB, 1) } else { 'tamanho ?' }))
+        $linhas.Add($m); Write-LinhaRede -Alvo 'download' -Texto $m
+        $st = $resp.GetResponseStream()
+        $buf = New-Object byte[] 65536
+        $lido = [int64] 0; $marca = [int64] 0
         $sw = [Diagnostics.Stopwatch]::StartNew()
-        try { Invoke-WebRequest -Uri $cfg.download_url -OutFile $tmp -UseBasicParsing -TimeoutSec $to -ErrorAction Stop }
-        finally { $ProgressPreference = $old }
-        $sw.Stop()
-        $bytes = if (Test-Path $tmp) { (Get-Item $tmp).Length } else { 0 }
-        Remove-Item $tmp -Force -ErrorAction SilentlyContinue
-        if ($bytes -gt 0 -and $sw.Elapsed.TotalSeconds -gt 0) {
-            $res.download_ok    = $true
-            $res.download_bytes = $bytes
-            $res.download_seg   = [math]::Round($sw.Elapsed.TotalSeconds, 2)
-            $res.download_mbps  = [math]::Round(($bytes * 8) / $sw.Elapsed.TotalSeconds / 1e6, 1)
-            Write-Log ("Internet local: {0} KB em {1}s (~{2} Mbps)" -f [math]::Round($bytes / 1KB), $res.download_seg, $res.download_mbps) -Nivel Info
+        while (($n = $st.Read($buf, 0, $buf.Length)) -gt 0) {
+            $lido += $n
+            if (($lido - $marca) -ge 1MB) {
+                $marca = $lido
+                $mbps = [math]::Round(($lido * 8) / $sw.Elapsed.TotalSeconds / 1e6, 1)
+                $pct = if ($total -gt 0) { '{0,3}%  ' -f [math]::Round($lido * 100.0 / $total) } else { '' }
+                $m = ("{0}{1} MB   {2} Mbps" -f $pct, [math]::Round($lido / 1MB, 1), $mbps)
+                $linhas.Add($m); Write-LinhaRede -Alvo 'download' -Texto $m
+            }
         }
-    } catch { Write-Log 'Internet local: mini download falhou.' -Nivel Aviso }
+        $sw.Stop(); $st.Close(); $resp.Close()
+        $r.bytes = $lido; $r.seg = [math]::Round($sw.Elapsed.TotalSeconds, 2)
+        if ($lido -gt 0 -and $sw.Elapsed.TotalSeconds -gt 0) {
+            $r.ok = $true
+            $r.mbps = [math]::Round(($lido * 8) / $sw.Elapsed.TotalSeconds / 1e6, 1)
+            $m = ("concluido: {0} MB em {1}s   (~{2} Mbps)" -f [math]::Round($lido / 1MB, 2), $r.seg, $r.mbps)
+            $linhas.Add($m); Write-LinhaRede -Alvo 'download' -Texto $m
+        }
+    } catch {
+        $m = "falhou: $_"; $linhas.Add($m); Write-LinhaRede -Alvo 'download' -Texto $m
+    }
+    $r.saida = @($linhas)
+    $r
+}
 
-    [pscustomobject] $res
+# --------------------------------------------------------------- internet local
+# Roda PING -> DNS/TRACERT -> DOWNLOAD, um de cada vez, transmitindo linha a linha.
+function Test-InternetLocal {
+    $cfg = Get-ConfigRedeLocal
+
+    $pg = Test-PingLocal    -Alvo $cfg.ping_alvo -Contagem 4
+    $tr = Test-TracertLocal -NomeDns $cfg.dns_nome -Destino $cfg.tracert_host -Saltos ([int] $cfg.tracert_saltos)
+    $to = [int] $cfg.download_timeout_s; if ($to -le 0) { $to = 30 }
+    $dl = Test-DownloadLocal -Url $cfg.download_url -TimeoutS $to
+
+    [pscustomobject]@{
+        ping_alvo        = [string] $cfg.ping_alvo
+        ping_ok          = $pg.ok
+        ping_latencia_ms = $pg.media_ms
+        ping_min_ms      = $pg.min_ms
+        ping_max_ms      = $pg.max_ms
+        ping_perda_pct   = $pg.perda_pct
+        ping_saida       = @($pg.saida)
+        dns_nome         = [string] $cfg.dns_nome
+        dns_ok           = $tr.dns_ok
+        dns_ms           = $tr.dns_ms
+        dns_ips          = @($tr.dns_ips)
+        tracert_host     = [string] $cfg.tracert_host
+        tracert_ok       = $tr.tracert_ok
+        tracert_saltos   = $tr.tracert_saltos
+        tracert_saida    = @($tr.saida)
+        download_url     = [string] $cfg.download_url
+        download_ok      = $dl.ok
+        download_mbps    = $dl.mbps
+        download_bytes   = $dl.bytes
+        download_seg     = $dl.seg
+        download_saida   = @($dl.saida)
+    }
 }
 
 # --------------------------------------------------------------- orquestracao

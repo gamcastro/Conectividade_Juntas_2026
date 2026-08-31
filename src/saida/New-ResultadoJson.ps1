@@ -97,12 +97,17 @@ function New-ResultadoJson {
             internet_ping_min_ms   = (Get-Prop $it 'ping_min_ms')
             internet_ping_max_ms   = (Get-Prop $it 'ping_max_ms')
             internet_perda_pct     = (Get-Prop $it 'ping_perda_pct')
+            internet_ping_saida    = @(Get-Prop $it 'ping_saida')
             internet_dns_nome      = [string] (Get-Prop $it 'dns_nome')
             internet_dns_ms        = (Get-Prop $it 'dns_ms')
+            internet_tracert_host  = [string] (Get-Prop $it 'tracert_host')
+            internet_tracert_saltos = (Get-Prop $it 'tracert_saltos')
+            internet_tracert_saida = @(Get-Prop $it 'tracert_saida')
             internet_download_url  = [string] (Get-Prop $it 'download_url')
             internet_download_bytes = (Get-Prop $it 'download_bytes')
             internet_download_seg  = (Get-Prop $it 'download_seg')
             internet_download_mbps = (Get-Prop $it 'download_mbps')
+            internet_download_saida = @(Get-Prop $it 'download_saida')
         }
     }
 

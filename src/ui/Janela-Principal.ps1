@@ -213,6 +213,14 @@ function New-JanelaPrincipal {
     $window.FindName('lstLog').ItemsSource     = $Global:LogEntries
     $window.FindName('lstLogHome').ItemsSource = $Global:LogHome
 
+    foreach ($c in $Global:RedePing, $Global:RedeTracert, $Global:RedeDownload) { $c.Clear() }
+    $window.FindName('lstPing').ItemsSource     = $Global:RedePing
+    $window.FindName('lstTracert').ItemsSource  = $Global:RedeTracert
+    $window.FindName('lstDownload').ItemsSource  = $Global:RedeDownload
+    $Global:RedePing.Add_CollectionChanged({ Invoke-ScrollRede 'ping' })
+    $Global:RedeTracert.Add_CollectionChanged({ Invoke-ScrollRede 'tracert' })
+    $Global:RedeDownload.Add_CollectionChanged({ Invoke-ScrollRede 'download' })
+
     $logo = New-LogoBitmap
     if ($logo) {
         foreach ($n in 'imgLogoLogin', 'imgLogoHome') {
@@ -770,7 +778,8 @@ function Start-TarefaRede {
     $rs.ApartmentState = 'MTA'
     $rs.ThreadOptions  = 'ReuseThread'
     $rs.Open()
-    foreach ($v in 'RaizApp', 'LogEntries', 'LogHome', 'LogHomeMax', 'JanelaPrincipal', 'ArquivoLog', 'PastaDadosOverride') {
+    foreach ($v in 'RaizApp', 'LogEntries', 'LogHome', 'LogHomeMax', 'JanelaPrincipal', 'ArquivoLog', 'PastaDadosOverride',
+        'RedePing', 'RedeTracert', 'RedeDownload') {
         $rs.SessionStateProxy.SetVariable($v, (Get-Variable -Name $v -Scope Global -ValueOnly -ErrorAction SilentlyContinue))
     }
     foreach ($k in $Vars.Keys) { $rs.SessionStateProxy.SetVariable([string] $k, $Vars[$k]) }
@@ -888,46 +897,24 @@ function Update-PainelFaseLocal {
         $tw.Foreground = $cinza ; $dw.Fill = $cinza
     }
 
-    # card proprio do teste de internet: so quando a checagem completa rodou
+    # card do teste de internet (3 colunas): as linhas ja foram transmitidas ao
+    # vivo; aqui so garantimos o conteudo final e a cor dos indicadores.
     $ci = $w.FindName('cardInternetLocal')
     if ($it) {
         $prop = { param($n) if ($it.PSObject.Properties[$n]) { $it.($n) } }
-
-        # PING - saida linha a linha (estilo Windows)
-        $tp = $w.FindName('txtPingSaida')
-        $ps = @(& $prop 'ping_saida')
-        if ($ps.Count) {
-            $tp.Text = $ps -join "`n"
-        } elseif ($it.ping_ok) {
-            $tp.Text = 'Resposta de {0}: media {1} ms, perda {2}%' -f (& $prop 'ping_alvo'), $it.ping_latencia_ms, $it.ping_perda_pct
-        } else {
-            $tp.Text = 'Sem resposta de ' + [string] (& $prop 'ping_alvo')
+        $colunas = @(
+            @{ dot = 'dotPing';     col = $Global:RedePing;     arr = @(& $prop 'ping_saida');     ok = [bool] $it.ping_ok }
+            @{ dot = 'dotTracert';  col = $Global:RedeTracert;  arr = @(& $prop 'tracert_saida');  ok = [bool] (& $prop 'tracert_ok') }
+            @{ dot = 'dotDownload'; col = $Global:RedeDownload; arr = @(& $prop 'download_saida'); ok = [bool] $it.download_ok }
+        )
+        foreach ($c in $colunas) {
+            if ($c.col.Count -ne @($c.arr).Count) {
+                $c.col.Clear()
+                foreach ($l in @($c.arr)) { $c.col.Add([string] $l) }
+            }
+            $d = $w.FindName($c.dot)
+            if ($d) { $d.Fill = if ($c.ok) { $verde } elseif (@($c.arr).Count) { $vermelho } else { $cinza } }
         }
-        $tp.Foreground = if ($it.ping_ok) { $verde } else { $vermelho }
-
-        # DNS
-        $td = $w.FindName('txtDnsSaida')
-        $ips = @(& $prop 'dns_ips')
-        if ($it.dns_ok) {
-            $td.Text = '{0}  ->  {1}   ({2} ms)' -f (& $prop 'dns_nome'), ($ips -join ', '), $it.dns_ms
-            $td.Foreground = $verde
-        } else {
-            $td.Text = 'resolucao de {0} falhou' -f (& $prop 'dns_nome')
-            $td.Foreground = $vermelho
-        }
-
-        # DOWNLOAD - alvo + tamanho do arquivo
-        $tw2 = $w.FindName('txtDownloadSaida')
-        if ($it.download_ok) {
-            $bytes = [double] (& $prop 'download_bytes')
-            $tamanho = if ($bytes -ge 1MB) { '{0} MB' -f ([math]::Round($bytes / 1MB, 2)) } else { '{0} KB' -f ([math]::Round($bytes / 1KB)) }
-            $tw2.Text = ("Alvo:  {0}`n{1} em {2} s   (~{3} Mbps)" -f (& $prop 'download_url'), $tamanho, (& $prop 'download_seg'), $it.download_mbps)
-            $tw2.Foreground = $verde
-        } else {
-            $tw2.Text = 'download de {0} falhou' -f (& $prop 'download_url')
-            $tw2.Foreground = $vermelho
-        }
-
         $ci.Visibility = 'Visible'
     } else {
         $ci.Visibility = 'Collapsed'
@@ -986,7 +973,30 @@ function Complete-ProbeRedeLocal {
     Update-PainelFaseLocal
 }
 
-# Botao "Rodar checagem local": faz o teste de internet (ping/DNS/download).
+# Rola cada coluna do teste de internet para o fim quando chega linha nova.
+function Invoke-ScrollRede {
+    param([string] $Alvo)
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    $nome = switch ($Alvo) { 'ping' { 'scPing' } 'tracert' { 'scTracert' } 'download' { 'scDownload' } }
+    $sc = $w.FindName($nome)
+    if ($sc) { $sc.ScrollToEnd() }
+}
+
+# Cor dos 3 indicadores do card de internet. 'rodando' = azul; senao cinza.
+function Set-DotsRedeInternet {
+    param([string] $Estado)
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    $hex = if ($Estado -eq 'rodando') { '#6E9BFF' } else { '#7D8698' }
+    $b = [Windows.Media.SolidColorBrush]::new([Windows.Media.ColorConverter]::ConvertFromString($hex))
+    $b.Freeze()
+    foreach ($n in 'dotPing', 'dotTracert', 'dotDownload') {
+        $d = $w.FindName($n); if ($d) { $d.Fill = $b }
+    }
+}
+
+# Botao "Rodar checagem local": teste de internet (ping -> tracert -> download).
 function Invoke-RodarFaseLocal {
     $p = $Global:FaseLocalPayload
     $conectado = $p -and ([bool] $p.Lan.conectado -or [bool] $p.Wireless.conectado)
@@ -994,6 +1004,11 @@ function Invoke-RodarFaseLocal {
         Write-Log 'Conecte o computador a rede do local (cabo ou Wi-Fi) antes de rodar a checagem.' -Nivel Aviso
         return
     }
+    foreach ($c in $Global:RedePing, $Global:RedeTracert, $Global:RedeDownload) { $c.Clear() }
+    Set-DotsRedeInternet 'rodando'
+    $w = $Global:JanelaPrincipal
+    if ($w) { $w.FindName('cardInternetLocal').Visibility = 'Visible' }
+
     if ($Global:FaseLocalSimulada) { Complete-FaseLocal $Global:FaseLocalSimulada $null; return }
     Set-FaseLocalOcupado $true
     Write-Log 'Testando a internet do local (sem a VPN do TRE)...' -Nivel Destaque
@@ -1059,6 +1074,8 @@ function Update-TetheringCelular {
 # Zera o passo 3 (rede local) ao abrir o assistente limpo / pelo guia.
 function Reset-PainelFaseLocal {
     $Global:FaseLocalPayload = $null
+    foreach ($c in $Global:RedePing, $Global:RedeTracert, $Global:RedeDownload) { $c.Clear() }
+    Set-DotsRedeInternet 'idle'
     $w = $Global:JanelaPrincipal
     if ($w) {
         $w.FindName('txtWifiStatus').Text     = ''

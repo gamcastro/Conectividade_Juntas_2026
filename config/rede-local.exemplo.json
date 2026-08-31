@@ -3,5 +3,7 @@
   "ping_alvo": "8.8.8.8",
   "dns_nome": "www.tre-ma.jus.br",
   "download_url": "https://speed.cloudflare.com/__down?bytes=8000000",
-  "download_timeout_s": 30
+  "download_timeout_s": 30,
+  "tracert_host": "",
+  "tracert_saltos": 12
 }

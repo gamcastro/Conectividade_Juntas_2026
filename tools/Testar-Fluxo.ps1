@@ -46,8 +46,21 @@ $Global:FaseLocalSimulada = [pscustomobject]@{
         )
         dns_nome = 'www.tre-ma.jus.br'
         dns_ok = $true; dns_ms = 35; dns_ips = @('200.1.1.1')
+        tracert_host = 'www.tre-ma.jus.br'; tracert_ok = $true; tracert_saltos = 7
+        tracert_saida = @(
+            'www.tre-ma.jus.br  ->  200.1.1.1   (35 ms)'
+            '> tracert -d -h 12 www.tre-ma.jus.br'
+            '  1     1 ms     1 ms     1 ms  192.168.15.1'
+            '  7    30 ms    31 ms    30 ms  200.1.1.1'
+        )
         download_url = 'https://speed.cloudflare.com/__down?bytes=8000000'
         download_ok = $true; download_mbps = 48.3; download_bytes = 8000000; download_seg = 1.3
+        download_saida = @(
+            '> GET https://speed.cloudflare.com/__down?bytes=8000000'
+            'HTTP 200   7.6 MB'
+            ' 50%  3.8 MB   210 Mbps'
+            'concluido: 7.63 MB em 1.3s   (~48.3 Mbps)'
+        )
     }
     Quando = (Get-Date).ToString('o')
 }
@@ -175,14 +188,21 @@ try {
     if ($null -ne $Global:FaseLocalPayload.Internet -and $ipTxt -match '192\.168\.15\.42' -and $w.FindName('cardInternetLocal').Visibility -eq 'Visible') {
         Write-Host "[4c] checagem local OK: '$ipTxt' + card de internet visivel"
     } else { Write-Host "    FALHA: checagem nao completou (internet=$($null -ne $Global:FaseLocalPayload.Internet) ip='$ipTxt' card=$($w.FindName('cardInternetLocal').Visibility))"; $falhas++ }
-    $pingTxt = "$($w.FindName('txtPingSaida').Text)"
-    $dlTxt   = "$($w.FindName('txtDownloadSaida').Text)"
-    if ($pingTxt -match 'Resposta de 8\.8\.8\.8' -and $pingTxt -match 'tempo=21ms') {
-        Write-Host "[4c] ping verboso linha a linha OK"
-    } else { Write-Host "    FALHA: ping sem saida verbosa ('$pingTxt')"; $falhas++ }
-    if ($dlTxt -match 'speed\.cloudflare\.com' -and $dlTxt -match 'MB') {
-        Write-Host "[4c] download mostra alvo + tamanho: '$($dlTxt -replace "`n",' | ')'"
-    } else { Write-Host "    FALHA: download sem alvo/tamanho ('$dlTxt')"; $falhas++ }
+    $pingTxt = ($Global:RedePing    | Out-String)
+    $trTxt   = ($Global:RedeTracert | Out-String)
+    $dlTxt   = ($Global:RedeDownload | Out-String)
+    if ($Global:RedePing.Count -ge 3 -and $pingTxt -match 'Resposta de 8\.8\.8\.8' -and $pingTxt -match 'tempo=21ms') {
+        Write-Host "[4c] coluna PING: $($Global:RedePing.Count) linhas transmitidas"
+    } else { Write-Host "    FALHA: coluna PING sem linhas ($($Global:RedePing.Count))"; $falhas++ }
+    if ($Global:RedeTracert.Count -ge 2 -and $trTxt -match 'tracert' -and $trTxt -match '200\.1\.1\.1') {
+        Write-Host "[4c] coluna TRACERT: $($Global:RedeTracert.Count) linhas (dns + saltos)"
+    } else { Write-Host "    FALHA: coluna TRACERT sem linhas ($($Global:RedeTracert.Count))"; $falhas++ }
+    if ($Global:RedeDownload.Count -ge 2 -and $dlTxt -match 'GET ' -and $dlTxt -match 'Mbps') {
+        Write-Host "[4c] coluna DOWNLOAD: $($Global:RedeDownload.Count) linhas (alvo + progresso)"
+    } else { Write-Host "    FALHA: coluna DOWNLOAD sem linhas ($($Global:RedeDownload.Count))"; $falhas++ }
+    $dg = "$($w.FindName('dotPing').Fill)$($w.FindName('dotTracert').Fill)$($w.FindName('dotDownload').Fill)"
+    if ($dg -notmatch '7D8698') { Write-Host "[4c] indicadores das 3 colunas coloridos (ok/erro)" }
+    else { Write-Host "    FALHA: algum indicador ficou cinza (dots='$dg')"; $falhas++ }
     Invoke-WizardProximo
     if ($Global:WizardStep -ne 4) { Write-Host "    FALHA: nao foi para o passo 4 (diagnostico com VPN)"; $falhas++ }
 
@@ -328,9 +348,10 @@ try {
         if (-not $okDoc) { Write-Host "    FALHA: JSON incompleto"; $falhas++ }
         $rl = $doc.rede_local
         if ($rl -and $rl.ip_local -eq '192.168.15.42' -and $rl.gateway -eq '192.168.15.1' -and $rl.host -eq 'NB-TESTE-01' -and
-            @($rl.wireless_redes).Count -ge 1 -and $rl.internet_ping_alvo -eq '8.8.8.8' -and "$($rl.internet_download_url)" -match 'cloudflare') {
-            Write-Host "[5d] JSON traz rede_local: host=$($rl.host) ip=$($rl.ip_local) ping_alvo=$($rl.internet_ping_alvo) dl_url=ok"
-        } else { Write-Host "    FALHA: JSON sem bloco rede_local completo (host='$($rl.host)' ip='$($rl.ip_local)' alvo='$($rl.internet_ping_alvo)')"; $falhas++ }
+            @($rl.wireless_redes).Count -ge 1 -and $rl.internet_ping_alvo -eq '8.8.8.8' -and "$($rl.internet_download_url)" -match 'cloudflare' -and
+            $rl.internet_tracert_saltos -eq 7 -and @($rl.internet_tracert_saida).Count -ge 1) {
+            Write-Host "[5d] JSON traz rede_local: host=$($rl.host) ip=$($rl.ip_local) ping_alvo=$($rl.internet_ping_alvo) tracert=$($rl.internet_tracert_saltos) saltos"
+        } else { Write-Host "    FALHA: JSON sem bloco rede_local completo (host='$($rl.host)' ip='$($rl.ip_local)' alvo='$($rl.internet_ping_alvo)' tracert='$($rl.internet_tracert_saltos)')"; $falhas++ }
         if ($rl.tethering_celular -eq $true -and $rl.operadora -eq 'Vivo') {
             Write-Host "[5d] rede_local traz o tethering: operadora=$($rl.operadora)"
         } else { Write-Host "    FALHA: rede_local sem tethering/operadora (t=$($rl.tethering_celular) op='$($rl.operadora)')"; $falhas++ }

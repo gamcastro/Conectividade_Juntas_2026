@@ -33,7 +33,10 @@ Script), em vez de criar um BI/dashboard separado.
   máscara, gateway, DNS, MAC, velocidade — o IP vai no relatório), detecção da
   placa Wi-Fi + redes por perto (`netsh wlan`), conexão a um Wi-Fi WPA2 por
   dentro da ferramenta (`Connect-RedeWireless`), e checagem da internet do local
-  (ping público + DNS + mini-download; alvos em `config/rede-local.json`).
+  (`Test-InternetLocal`: **ping.exe → DNS+tracert.exe → download** em sequência,
+  transmitindo linha a linha para as 3 colunas do card via `Write-LinhaRede` +
+  `$Global:RedePing/RedeTracert/RedeDownload`; alvos/saltos em
+  `config/rede-local.json`).
   Se não houver rede no local, o técnico pode marcar **"testei pelo roteamento
   do celular"** e informar a **operadora** (vai no `rede_local` e no relatório).
   A **Fase 2 (com a VPN do TRE)** é a bateria de sempre (ping/iperf3/Selenium).
