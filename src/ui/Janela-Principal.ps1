@@ -17,6 +17,7 @@ $Global:NavegandoPrograma  = $false  # guarda: Show-View mexendo no rail sem dis
 $Global:TemaCarregado      = $false  # MahApps + Application ja inicializados neste processo?
 $Global:MostrarTodasJuntas = $false  # admin: incluir Juntas fora da rota no seletor
 $Global:WizardStep         = 1       # passo atual do assistente de diagnostico (1..6)
+$Global:HomeTrabalhoState  = $null   # runspace do "Atualizar dados"/"Reenviar" async
 $Global:FeitoSalvar        = $false  # checklist do passo 6
 $Global:FeitoTransmitir    = $false
 $Global:FeitoExportar      = $false
@@ -408,29 +409,93 @@ function Enter-Home {
     Show-View 'viewHome'
 }
 
-function Invoke-AtualizarDados {
+# Trava/destrava a tela inicial e mostra o spinner enquanto um trabalho roda.
+function Set-HomeOcupado {
+    param([bool] $Ocupado, [string] $Rotulo = 'Processando...')
     $w = $Global:JanelaPrincipal
-    $btn = $w.FindName('btnMenuAtualizar')
-    $btn.IsEnabled = $false
-    $rotulo = $btn.Content
-    $btn.Content = 'Atualizando...'
-    try {
+    if (-not $w) { return }
+    $w.FindName('painelAtualizando').Visibility = if ($Ocupado) { 'Visible' } else { 'Collapsed' }
+    $ring = $w.FindName('ringHome'); if ($ring) { $ring.IsActive = $Ocupado }
+    if ($Ocupado) { $w.FindName('txtAtualizandoMsg').Text = $Rotulo }
+    foreach ($n in 'btnMenuGuia', 'btnMenuDiag', 'btnMenuAdmin', 'btnMenuAtualizar',
+        'btnReenviarPendentes', 'btnTrocarUsuario', 'navGuia', 'navDiag', 'navAdmin', 'navAtualizar') {
+        $c = $w.FindName($n); if ($c) { $c.IsEnabled = -not $Ocupado }
+    }
+}
+
+# Roda -Trabalho num runspace (janela responde + spinner) e chama -AoConcluir
+# na thread de UI com ($resultado, $erro). O Write-Log do runspace ja marshalla
+# para o Dispatcher, entao o feed "ATIVIDADE" atualiza ao vivo.
+function Start-TrabalhoHome {
+    param(
+        [Parameter(Mandatory)] [scriptblock] $Trabalho,
+        [scriptblock] $AoConcluir = {},
+        [string] $Rotulo = 'Processando...'
+    )
+    if ($Global:HomeTrabalhoState) { return }   # ja tem um rodando
+
+    if (-not $Global:JanelaPrincipal) {          # sem janela: roda sincrono
+        try { $r = & $Trabalho; & $AoConcluir $r $null } catch { & $AoConcluir $null "$_" }
+        return
+    }
+
+    Set-HomeOcupado $true $Rotulo
+
+    $rs = [runspacefactory]::CreateRunspace()
+    $rs.ApartmentState = 'MTA'
+    $rs.ThreadOptions  = 'ReuseThread'
+    $rs.Open()
+    foreach ($v in 'RaizApp', 'LogEntries', 'LogHome', 'LogHomeMax', 'JanelaPrincipal', 'ArquivoLog', 'PastaDadosOverride') {
+        $rs.SessionStateProxy.SetVariable($v, (Get-Variable -Name $v -Scope Global -ValueOnly -ErrorAction SilentlyContinue))
+    }
+
+    $ps = [powershell]::Create()
+    $ps.Runspace = $rs
+    [void] $ps.AddScript({
+        param($sbTexto)
+        Import-Module (Join-Path $RaizApp 'src\Conectividade.psd1') -Force
+        try { [pscustomobject]@{ Resultado = (& ([scriptblock]::Create($sbTexto))); Erro = $null } }
+        catch { [pscustomobject]@{ Resultado = $null; Erro = "$_" } }
+    }).AddArgument($Trabalho.ToString())
+
+    $handle = $ps.BeginInvoke()
+    $timer = [Windows.Threading.DispatcherTimer]::new()
+    $timer.Interval = [TimeSpan]::FromMilliseconds(200)
+    $Global:HomeTrabalhoState = @{ PS = $ps; RS = $rs; Handle = $handle; Timer = $timer; AoConcluir = $AoConcluir }
+
+    $timer.Add_Tick({
+        $st = $Global:HomeTrabalhoState
+        if ($null -eq $st -or -not $st.Handle.IsCompleted) { return }
+        $st.Timer.Stop()
+        $Global:HomeTrabalhoState = $null
+
+        $res = $null; $erro = $null
+        try {
+            $r = $st.PS.EndInvoke($st.Handle) | Select-Object -First 1
+            $res = $r.Resultado; $erro = $r.Erro
+        } catch { $erro = "$_" } finally { $st.PS.Dispose(); $st.RS.Dispose() }
+
+        if ($erro) { Write-Log "Falha: $erro" -Nivel Erro }
+        try { & $st.AoConcluir $res $erro } catch { Write-Log "Pos-processamento falhou: $_" -Nivel Erro }
+        Set-HomeOcupado $false
+    })
+    $timer.Start()
+}
+
+function Invoke-AtualizarDados {
+    Start-TrabalhoHome -Rotulo 'Atualizando dados...' -Trabalho {
         $r = Sync-TudoOnline
         Write-Log ("Dados atualizados: {0} juntas, {1} tecnicos, {2} roteiros." -f $r.juntas, $r.tecnicos, $r.roteiros) -Nivel Ok
-        Initialize-SeletorJuntas
-
-        $cfgEnvio = $null
-        try { $cfgEnvio = Get-Config 'envio' } catch { }
-        if (-not $cfgEnvio -or $cfgEnvio.reenvio_ao_atualizar -ne $false) {
-            Send-ResultadosPendentes -Endpoint $cfgEnvio.endpoint_apps_script | Out-Null
+        $cfg = $null
+        try { $cfg = Get-Config 'envio' } catch { }
+        if (-not $cfg -or $cfg.reenvio_ao_atualizar -ne $false) {
+            Send-ResultadosPendentes -Endpoint $cfg.endpoint_apps_script | Out-Null
         }
-
+        $r
+    } -AoConcluir {
+        param($res, $erro)
+        Initialize-SeletorJuntas
         if ($Global:SessaoAtual) { Enter-Home -Sessao $Global:SessaoAtual }
-    } catch {
-        Write-Log "Falha ao atualizar dados: $_" -Nivel Erro
-    } finally {
-        $btn.Content = $rotulo
-        $btn.IsEnabled = $true
     }
 }
 
@@ -1164,19 +1229,14 @@ function Update-AvisoPendentes {
 }
 
 function Invoke-ReenvioPendentes {
-    $w = $Global:JanelaPrincipal
-    $btn = $w.FindName('btnReenviarPendentes')
-    if ($btn) { $btn.IsEnabled = $false; $btn.Content = 'Reenviando...' }
-    try {
+    Start-TrabalhoHome -Rotulo 'Reenviando resultados...' -Trabalho {
         $cfg = $null
         try { $cfg = Get-Config 'envio' } catch { }
         Send-ResultadosPendentes -Endpoint $cfg.endpoint_apps_script | Out-Null
-    } catch {
-        Write-Log "Falha ao reenviar pendentes: $_" -Nivel Erro
-    } finally {
-        if ($btn) { $btn.IsEnabled = $true }
+    } -AoConcluir {
+        param($res, $erro)
         Update-AvisoPendentes
-        $w.FindName('painelLogHome').Visibility = if ($Global:LogHome.Count) { 'Visible' } else { 'Collapsed' }
+        $Global:JanelaPrincipal.FindName('painelLogHome').Visibility = if ($Global:LogHome.Count) { 'Visible' } else { 'Collapsed' }
     }
 }
 

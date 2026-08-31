@@ -181,6 +181,15 @@
                                      Foreground="{DynamicResource Dicon.Accent}" BorderThickness="0"/>
                     </StackPanel>
 
+                    <StackPanel x:Name="painelAtualizando" Orientation="Horizontal" Margin="0,0,0,16"
+                                HorizontalAlignment="Center" Visibility="Collapsed">
+                        <mah:ProgressRing x:Name="ringHome" Width="16" Height="16" IsActive="False"
+                                          Foreground="{DynamicResource Dicon.Accent}"/>
+                        <TextBlock x:Name="txtAtualizandoMsg" Text="Atualizando dados..." Margin="10,0,0,0"
+                                   VerticalAlignment="Center" FontSize="12"
+                                   Foreground="{DynamicResource Dicon.Text2}"/>
+                    </StackPanel>
+
                     <UniformGrid Rows="1" Columns="3" Margin="0,0,0,24">
                         <Border Style="{DynamicResource Cartao}" Margin="0,0,7,0" Padding="16,14">
                             <StackPanel>
