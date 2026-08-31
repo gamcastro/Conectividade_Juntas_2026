@@ -649,10 +649,20 @@
                                                        TextAlignment="Center" Margin="0,4,0,0"
                                                        Foreground="{DynamicResource Dicon.Text3}"/>
                                         </StackPanel>
-                                        <TextBlock x:Name="txtVeloMin" Text="0" Canvas.Left="48" Canvas.Top="222"
-                                                   FontFamily="Consolas" FontSize="9" Foreground="{DynamicResource Dicon.Text3}"/>
-                                        <TextBlock x:Name="txtVeloMax" Text="100" Canvas.Left="202" Canvas.Top="222"
-                                                   FontFamily="Consolas" FontSize="9" Foreground="{DynamicResource Dicon.Text3}"/>
+                                        <TextBlock x:Name="tickVelo0" FontFamily="Consolas" FontSize="8"
+                                                   Foreground="{DynamicResource Dicon.Text3}"/>
+                                        <TextBlock x:Name="tickVelo1" FontFamily="Consolas" FontSize="8"
+                                                   Foreground="{DynamicResource Dicon.Text3}"/>
+                                        <TextBlock x:Name="tickVelo2" FontFamily="Consolas" FontSize="8"
+                                                   Foreground="{DynamicResource Dicon.Text3}"/>
+                                        <TextBlock x:Name="tickVelo3" FontFamily="Consolas" FontSize="8"
+                                                   Foreground="{DynamicResource Dicon.Text3}"/>
+                                        <TextBlock x:Name="tickVelo4" FontFamily="Consolas" FontSize="8"
+                                                   Foreground="{DynamicResource Dicon.Text3}"/>
+                                        <TextBlock x:Name="tickVelo5" FontFamily="Consolas" FontSize="8"
+                                                   Foreground="{DynamicResource Dicon.Text3}"/>
+                                        <TextBlock x:Name="tickVelo6" FontFamily="Consolas" FontSize="8"
+                                                   Foreground="{DynamicResource Dicon.Text3}"/>
                                     </Canvas>
 
                                     <ProgressBar x:Name="prgSpeed" Height="4" Minimum="0" Maximum="1" Value="0"

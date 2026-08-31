@@ -976,56 +976,86 @@ function Complete-ProbeRedeLocal {
 
 # Rola cada coluna do teste de internet para o fim quando chega linha nova.
 # ------------------------------------------------------- VELOCIMETRO (speedtest)
-# Geometria: centro (140,140), raio 110, arco de -135 a +135 graus.
+# Geometria: centro (140,140), raio 110, arco de -135 a +135 graus (270). Escala
+# logaritmica ate 1000 Mbps (compressao estilo Ookla).
+$Global:VeloMaxMbps = 1000.0
+$Global:VeloTick    = 0
+$Global:VeloTicks   = @(0, 10, 50, 100, 250, 500, 1000)
+
 function Get-PontoArco {
     param([double] $Cx, [double] $Cy, [double] $R, [double] $AngGraus)
     $rad = $AngGraus * [Math]::PI / 180.0
     [Windows.Point]::new($Cx + $R * [Math]::Sin($rad), $Cy - $R * [Math]::Cos($rad))
 }
 
+function Get-FracVelo {
+    param([double] $Valor, [double] $Max = 0, [double] $Linear = 0)
+    if ($Linear -gt 0) { return [Math]::Max(0.0, [Math]::Min(1.0, $Valor / $Linear)) }
+    if ($Max -le 0) { $Max = $Global:VeloMaxMbps }
+    $f = [Math]::Log10(1.0 + [Math]::Max(0.0, $Valor)) / [Math]::Log10(1.0 + $Max)
+    [Math]::Max(0.0, [Math]::Min(1.0, $f))
+}
+
+# Anima uma DependencyProperty ate $Para (ms) com easing suave.
+function Set-PropAnimada {
+    param($Alvo, $Prop, $Para, [int] $Ms = 150)
+    $dur = [Windows.Duration] ([TimeSpan]::FromMilliseconds($Ms))
+    $anim = if ($Para -is [Windows.Point]) {
+        [Windows.Media.Animation.PointAnimation]::new([Windows.Point] $Para, $dur)
+    } else {
+        [Windows.Media.Animation.DoubleAnimation]::new([double] $Para, $dur)
+    }
+    $anim.EasingFunction = [Windows.Media.Animation.CubicEase]::new()
+    $Alvo.BeginAnimation($Prop, $anim)
+}
+
+function Set-TicksVelocimetro {
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    for ($i = 0; $i -lt $Global:VeloTicks.Count; $i++) {
+        $tb = $w.FindName('tickVelo' + $i)
+        if (-not $tb) { continue }
+        $v = [double] $Global:VeloTicks[$i]
+        $ang = -135.0 + 270.0 * (Get-FracVelo -Valor $v)
+        $pt = Get-PontoArco -Cx 140 -Cy 140 -R 129 -AngGraus $ang
+        $tb.Text = '{0:0}' -f $v
+        [Windows.Controls.Canvas]::SetLeft($tb, $pt.X - 8)
+        [Windows.Controls.Canvas]::SetTop($tb, $pt.Y - 6)
+    }
+}
+
 function Reset-Velocimetro {
     $w = $Global:JanelaPrincipal
     if (-not $w) { return }
-    $Global:VeloMax = 100.0
-    $w.FindName('rotAgulha').Angle = -135
-    $w.FindName('segVelo').Point   = [Windows.Point]::new(62.22, 217.78)
-    $w.FindName('segVelo').IsLargeArc = $false
+    $Global:VeloTick = 0
+    $rot = $w.FindName('rotAgulha')
+    $rot.BeginAnimation([Windows.Media.RotateTransform]::AngleProperty, $null)
+    $rot.Angle = -135
+    $seg = $w.FindName('segVelo')
+    $seg.BeginAnimation([Windows.Media.ArcSegment]::PointProperty, $null)
+    $seg.Point = [Windows.Point]::new(62.22, 217.78)
+    $seg.IsLargeArc = $false
     $w.FindName('txtVeloNum').Text  = '0'
     $w.FindName('txtVeloUnid').Text = 'Mbps'
     $w.FindName('txtVeloFase').Text = ''
-    $w.FindName('txtVeloMin').Text  = '0'
-    $w.FindName('txtVeloMax').Text  = '100'
     $w.FindName('prgSpeed').Value   = 0
     $w.FindName('painelSpeedResultado').Visibility = 'Collapsed'
     $w.FindName('txtSpeedErro').Visibility = 'Collapsed'
     $w.FindName('txtSpeedInfo').Text = ''
-}
-
-function Set-VelocimetroEscala {
-    param([double] $Max)
-    $w = $Global:JanelaPrincipal
-    $Global:VeloMax = [double] $Max
-    if ($w) { $w.FindName('txtVeloMax').Text = ('{0:0}' -f $Max) }
+    Set-TicksVelocimetro
 }
 
 function Set-VelocimetroValor {
-    param([double] $Valor, [string] $Unidade = 'Mbps', [string] $Fase = '', [double] $Escala = 0)
+    param([double] $Valor, [string] $Unidade = 'Mbps', [string] $Fase = '', [double] $Linear = 0)
     $w = $Global:JanelaPrincipal
     if (-not $w) { return }
-    if (-not $Global:VeloMax) { $Global:VeloMax = 100.0 }
-    if ($Escala -gt 0) { Set-VelocimetroEscala $Escala }
-    elseif ($Valor -gt $Global:VeloMax) {
-        $prox = @(100, 250, 500, 1000, 2000, 5000) | Where-Object { $_ -ge $Valor } | Select-Object -First 1
-        if (-not $prox) { $prox = [math]::Ceiling($Valor / 1000) * 1000 }
-        Set-VelocimetroEscala $prox
-    }
-    $frac = [Math]::Max(0.0, [Math]::Min(1.0, $Valor / $Global:VeloMax))
+    $frac = Get-FracVelo -Valor $Valor -Linear $Linear
     $ang  = -135.0 + 270.0 * $frac
-    $w.FindName('rotAgulha').Angle = $ang
+    Set-PropAnimada $w.FindName('rotAgulha') ([Windows.Media.RotateTransform]::AngleProperty) $ang
     $pt = Get-PontoArco -Cx 140 -Cy 140 -R 110 -AngGraus $ang
     $seg = $w.FindName('segVelo')
-    $seg.Point = $pt
     $seg.IsLargeArc = ((270.0 * $frac) -gt 180.0)
+    Set-PropAnimada $seg ([Windows.Media.ArcSegment]::PointProperty) $pt
     $fmt = if ($Valor -ge 100) { '{0:0}' } elseif ($Valor -ge 10) { '{0:0.0}' } else { '{0:0.00}' }
     $w.FindName('txtVeloNum').Text  = ($fmt -f $Valor)
     $w.FindName('txtVeloUnid').Text = $Unidade
@@ -1043,7 +1073,15 @@ function Update-Speedtest {
     param($Evento)
     $w = $Global:JanelaPrincipal
     if (-not $w -or -not $Evento) { return }
-    switch ([string] $Evento.type) {
+    $tipo = [string] $Evento.type
+    # ponteiro/arco: no maximo ~12x/s durante o dilúvio de eventos de progresso
+    $desenha = $true
+    if ($tipo -in @('ping', 'download', 'upload')) {
+        $agora = [Environment]::TickCount
+        if (($agora - [int] $Global:VeloTick) -lt 80) { $desenha = $false }
+        else { $Global:VeloTick = $agora }
+    }
+    switch ($tipo) {
         'testStart' {
             $srv = $Evento.server
             $ext = if ($Evento.PSObject.Properties['interface'] -and $Evento.interface) { [string] $Evento.interface.externalIp } else { '' }
@@ -1052,18 +1090,16 @@ function Update-Speedtest {
             $w.FindName('txtVeloFase').Text = 'conectando...'
         }
         'ping' {
-            Set-VelocimetroValor -Valor ([double] $Evento.ping.latency) -Unidade 'ms' -Fase 'Ping' -Escala 100
             Set-ProgressoSpeed (0.10 * [double] $Evento.ping.progress)
+            if ($desenha) { Set-VelocimetroValor -Valor ([double] $Evento.ping.latency) -Unidade 'ms' -Fase 'Ping' -Linear 60 }
         }
         'download' {
-            $m = (ConvertTo-MbpsGui $Evento.download.bandwidth)
-            Set-VelocimetroValor -Valor $m -Unidade 'Mbps' -Fase 'Download'
             Set-ProgressoSpeed (0.10 + 0.50 * [double] $Evento.download.progress)
+            if ($desenha) { Set-VelocimetroValor -Valor (ConvertTo-MbpsGui $Evento.download.bandwidth) -Unidade 'Mbps' -Fase 'Download' }
         }
         'upload' {
-            $m = (ConvertTo-MbpsGui $Evento.upload.bandwidth)
-            Set-VelocimetroValor -Valor $m -Unidade 'Mbps' -Fase 'Upload'
             Set-ProgressoSpeed (0.60 + 0.40 * [double] $Evento.upload.progress)
+            if ($desenha) { Set-VelocimetroValor -Valor (ConvertTo-MbpsGui $Evento.upload.bandwidth) -Unidade 'Mbps' -Fase 'Upload' }
         }
         'result' {
             Set-ProgressoSpeed 1.0

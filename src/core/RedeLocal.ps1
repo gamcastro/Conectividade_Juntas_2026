@@ -38,23 +38,25 @@ function Get-CaminhoSpeedtest {
     return $null
 }
 
-# Repassa um evento JSONL do speedtest para a GUI (Update-Speedtest), marshallando
-# para o Dispatcher quando esta fora da thread de UI (mesmo padrao do Write-Log).
+# Repassa um evento JSONL do speedtest para a GUI (Update-Speedtest). Usa
+# BeginInvoke com prioridade Background: assincrono (nao trava o runspace) e
+# deixa Render/Input do WPF na frente -> a janela nao "congela" no dilúvio de
+# eventos de progresso.
 function Write-EventoSpeedtest {
     param($Evento)
     $janela = Get-Variable -Name JanelaPrincipal -Scope Global -ErrorAction SilentlyContinue
     $dispatcher = if ($janela -and $janela.Value) { $janela.Value.Dispatcher } else { $null }
     if (-not $dispatcher) { return }
     $aplicar = { Update-Speedtest $Evento }
-    if (-not $dispatcher.CheckAccess()) { $dispatcher.Invoke([action] $aplicar) }
-    else { & $aplicar }
+    if ($dispatcher.CheckAccess()) { & $aplicar }
+    else { $dispatcher.BeginInvoke([Windows.Threading.DispatcherPriority]::Background, [action] $aplicar) | Out-Null }
 }
 
 # Roda o speedtest.exe lendo o stdout LINHA A LINHA (JSONL). Cada linha valida
 # vira um objeto; eventos de progresso vao ao vivo para a GUI. Devolve a lista
 # de eventos + a saida de erro.
 function Invoke-SpeedtestStreaming {
-    param([string] $Caminho, [string] $Argumentos, [int] $TimeoutS = 120)
+    param([string] $Caminho, [string] $Argumentos, [int] $TimeoutS = 100)
     $eventos = New-Object System.Collections.Generic.List[object]
     $psi = [Diagnostics.ProcessStartInfo]::new()
     $psi.FileName               = $Caminho
@@ -63,6 +65,9 @@ function Invoke-SpeedtestStreaming {
     $psi.RedirectStandardError  = $true
     $psi.UseShellExecute        = $false
     $psi.CreateNoWindow         = $true
+    # o speedtest.exe emite JSON em UTF-8 (nomes de servidor com acento).
+    $psi.StandardOutputEncoding = [Text.Encoding]::UTF8
+    $psi.StandardErrorEncoding  = [Text.Encoding]::UTF8
     $stderr = ''
     try {
         $p = [Diagnostics.Process]::Start($psi)
