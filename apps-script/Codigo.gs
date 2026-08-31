@@ -31,7 +31,7 @@ var ABA_ETAPAS             = 'Etapas';
 var PLANILHA_CONFIG_URL    = 'https://docs.google.com/spreadsheets/d/1wAZTeRsbDcFL4lyLF0J9pOmtR-cGElSh93HSpMKTCww/edit';
 var ABA_LIMIARES           = 'Limiares';
 
-var PLANILHA_RESULTADOS_ID = '';          // vazio = POST de resultado desativado
+var PLANILHA_RESULTADOS_ID = '1FnuGm-4sZHXamsK6WtHBKOIUlIsFobhrq6rhpBTrswk';  // vazio = POST de resultado desativado
 var ABA_RESULTADOS         = 'Resultados';
 
 // Direcao de cada metrica: 'max' = menor e melhor; 'min' = maior e melhor.

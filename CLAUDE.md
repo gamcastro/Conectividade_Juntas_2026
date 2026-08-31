@@ -54,7 +54,8 @@ Script), em vez de criar um BI/dashboard separado.
   `resultados/pendentes/`; o envio ao Web App acontece depois — no botão
   "Atualizar dados" (com internet) ou no aviso "Reenviar" da tela inicial.
 - Destino: **planilha Google dedicada só a resultados de conectividade**
-  (`PLANILHA_RESULTADOS_ID` em `apps-script/Codigo.gs`, aba `Resultados`).
+  (`PLANILHA_RESULTADOS_ID` em `apps-script/Codigo.gs`, aba `Resultados` criada
+  pelo próprio script). Web App na **v8** (POST `acao:'resultado'` ativo).
 - `Send-Resultado` só move para `resultados/enviados/` com resposta
   `{status:'ok'}`; `erro`/`ignorado` mantêm o arquivo em `pendentes/`.
 - Teste: `tools/Testar-Envio.ps1` (HttpListener local simula o Apps Script).
@@ -63,9 +64,6 @@ Script), em vez de criar um BI/dashboard separado.
 - Limiares exatos de latência/perda/banda/tempo de carregamento que definem
   viável vs inviável (depende de validação com o time responsável pelo sistema
   de totalização)
-- `PLANILHA_RESULTADOS_ID` a preencher quando a planilha de resultados existir
-  (hoje o Web App responde `{status:'ignorado'}` e o resultado fica em
-  `pendentes/`)
 - Coleta real das métricas (iperf3 + Selenium + ping) validada ponta a ponta
 - Fase 2 do admin: incluir/alterar Locais das Juntas
 - Empacotamento de campo (pasta portátil autocontida)
