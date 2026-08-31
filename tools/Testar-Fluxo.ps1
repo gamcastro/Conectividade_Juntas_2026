@@ -33,16 +33,10 @@ function Invoke-Pump {
     [Windows.Threading.Dispatcher]::PushFrame($frame)
 }
 
-# ---- preserva caches reais e injeta fixtures -----------------------------
-$dataDir = Join-Path $Global:RaizApp 'data'
-if (-not (Test-Path $dataDir)) { New-Item -ItemType Directory -Path $dataDir -Force | Out-Null }
-
-$arquivos = 'juntas.json', 'tecnicos.json', 'roteiros.json', 'sessao.json', 'limiares.json'
-$backups  = @{}
-foreach ($a in $arquivos) {
-    $p = Join-Path $dataDir $a
-    if (Test-Path $p) { $b = "$p.bak-teste"; Move-Item $p $b -Force; $backups[$p] = $b }
-}
+# ---- fixtures numa pasta temporaria: nao toca no data/ real -------------
+$dataDir = Join-Path ([IO.Path]::GetTempPath()) ('dicon-teste-data-' + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $dataDir -Force | Out-Null
+$Global:PastaDadosOverride = $dataDir
 
 $agora = (Get-Date).ToString('o')
 @{ atualizado_em = $agora; juntas = @(
@@ -241,8 +235,8 @@ try {
     else { Write-Host "[8] salvar limiares sem PIN bloqueado" }
 }
 finally {
-    foreach ($a in $arquivos) { $p = Join-Path $dataDir $a; if (Test-Path $p) { Remove-Item $p -Force } }
-    foreach ($kv in $backups.GetEnumerator()) { Move-Item $kv.Value $kv.Key -Force }
+    $Global:PastaDadosOverride = $null
+    Remove-Item $dataDir -Recurse -Force -EA SilentlyContinue
     # remove os JSON de resultado criados por este teste
     Get-ChildItem $pendDir -Filter *.json -EA SilentlyContinue |
         Where-Object { $_.FullName -notin $pendAntes } |
