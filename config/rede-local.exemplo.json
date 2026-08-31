@@ -1,9 +1,5 @@
 {
-  "_comentario": "Fase 1 do diagnostico (rede local do local, ANTES da VPN do TRE). ping_alvo/dns_nome checam se a internet do local funciona; download_url e um arquivo pequeno de um CDN so para uma nocao grosseira de banda. Copie para rede-local.json para ajustar por ambiente.",
-  "ping_alvo": "8.8.8.8",
-  "dns_nome": "www.tre-ma.jus.br",
-  "download_url": "https://speed.cloudflare.com/__down?bytes=8000000",
-  "download_timeout_s": 30,
-  "tracert_host": "",
-  "tracert_saltos": 12
+  "_comentario": "Fase 1 do diagnostico (rede local, ANTES da VPN do TRE). O teste de velocidade usa o Ookla Speedtest CLI: coloque o speedtest.exe em tools\\ (NAO vai ao repositorio). speedtest_server_id vazio = servidor mais proximo (auto); speedtest_extra_args passa flags adicionais ao binario.",
+  "speedtest_server_id": "",
+  "speedtest_extra_args": ""
 }

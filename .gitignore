@@ -16,6 +16,10 @@
 /bin/geckodriver/*
 /bin/chromedriver/*
 /lib/Selenium/*
+# Ookla Speedtest CLI — colocado manualmente em tools\, nunca versionado
+/tools/speedtest.exe
+/tools/speedtest.md
+/tools/speedtest*.5
 
 # Mantém as pastas vazias no repositório
 !**/.gitkeep

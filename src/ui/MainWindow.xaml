@@ -592,96 +592,178 @@
                             <Border x:Name="cardInternetLocal" Style="{DynamicResource Cartao}"
                                     Padding="16,14" Margin="0,12,0,0" Visibility="Collapsed">
                                 <StackPanel>
-                                    <TextBlock Text="Teste de internet do local" Style="{DynamicResource SecaoTela}"
+                                    <TextBlock Text="Teste de velocidade (Ookla Speedtest)" Style="{DynamicResource SecaoTela}"
                                                Margin="0,0,0,4"/>
-                                    <TextBlock Text="Roda em sequ&#234;ncia: ping &#8594; tracert &#8594; download, transmitindo linha a linha."
-                                               FontSize="11" Foreground="{DynamicResource Dicon.Text3}" Margin="0,0,0,10"/>
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="12"/>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="12"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
+                                    <TextBlock x:Name="txtSpeedInfo" FontFamily="Consolas" FontSize="11"
+                                               TextWrapping="Wrap" Foreground="{DynamicResource Dicon.Text3}"
+                                               Margin="0,0,0,6"/>
+                                    <TextBlock x:Name="txtSpeedErro" FontSize="12" TextWrapping="Wrap"
+                                               Foreground="{DynamicResource Dicon.Inviavel}" Visibility="Collapsed"/>
 
-                                        <DockPanel Grid.Column="0">
-                                            <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,4">
-                                                <Ellipse x:Name="dotPing" Width="9" Height="9" Margin="0,0,6,0"
-                                                         VerticalAlignment="Center" Fill="{DynamicResource Dicon.Text3}"/>
-                                                <TextBlock Text="PING" FontFamily="Consolas" FontSize="9"
-                                                           Foreground="{DynamicResource Dicon.Text3}"/>
-                                            </StackPanel>
-                                            <Border Background="{DynamicResource Dicon.SurfaceAlt}"
-                                                    BorderBrush="{DynamicResource Dicon.Hair}" BorderThickness="1"
-                                                    CornerRadius="4" Padding="8,6">
-                                                <ScrollViewer x:Name="scPing" Height="170"
-                                                              VerticalScrollBarVisibility="Auto"
-                                                              HorizontalScrollBarVisibility="Auto">
-                                                    <ItemsControl x:Name="lstPing">
-                                                        <ItemsControl.ItemTemplate>
-                                                            <DataTemplate>
-                                                                <TextBlock Text="{Binding}" FontFamily="Consolas"
-                                                                           FontSize="10.5"
-                                                                           Foreground="{DynamicResource Dicon.Text2}"/>
-                                                            </DataTemplate>
-                                                        </ItemsControl.ItemTemplate>
-                                                    </ItemsControl>
-                                                </ScrollViewer>
-                                            </Border>
-                                        </DockPanel>
+                                    <!-- VELOCIMETRO -->
+                                    <Canvas x:Name="canvasVelo" Width="280" Height="235" HorizontalAlignment="Center"
+                                            Margin="0,4,0,0">
+                                        <Path StrokeThickness="16" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                              Stroke="{DynamicResource Dicon.Hair}">
+                                            <Path.Data>
+                                                <PathGeometry>
+                                                    <PathFigure StartPoint="62.22,217.78">
+                                                        <ArcSegment Point="217.78,217.78" Size="110,110"
+                                                                    SweepDirection="Clockwise" IsLargeArc="True"/>
+                                                    </PathFigure>
+                                                </PathGeometry>
+                                            </Path.Data>
+                                        </Path>
+                                        <Path StrokeThickness="16" StrokeStartLineCap="Round" StrokeEndLineCap="Round">
+                                            <Path.Stroke>
+                                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                    <GradientStop Color="#6E9BFF" Offset="0"/>
+                                                    <GradientStop Color="#4FC177" Offset="1"/>
+                                                </LinearGradientBrush>
+                                            </Path.Stroke>
+                                            <Path.Data>
+                                                <PathGeometry>
+                                                    <PathFigure StartPoint="62.22,217.78">
+                                                        <ArcSegment x:Name="segVelo" Point="62.22,217.78" Size="110,110"
+                                                                    SweepDirection="Clockwise" IsLargeArc="False"/>
+                                                    </PathFigure>
+                                                </PathGeometry>
+                                            </Path.Data>
+                                        </Path>
+                                        <Path Fill="{DynamicResource Dicon.Text}" Data="M -3.5,0 L 3.5,0 L 0,-100 Z">
+                                            <Path.RenderTransform>
+                                                <TransformGroup>
+                                                    <RotateTransform x:Name="rotAgulha" Angle="-135"/>
+                                                    <TranslateTransform X="140" Y="140"/>
+                                                </TransformGroup>
+                                            </Path.RenderTransform>
+                                        </Path>
+                                        <Ellipse Width="16" Height="16" Fill="{DynamicResource Dicon.Text}"
+                                                 Canvas.Left="132" Canvas.Top="132"/>
+                                        <StackPanel Canvas.Left="45" Canvas.Top="96" Width="190">
+                                            <TextBlock x:Name="txtVeloNum" Text="0" FontSize="32" FontWeight="Bold"
+                                                       TextAlignment="Center" Foreground="{DynamicResource Dicon.Text}"/>
+                                            <TextBlock x:Name="txtVeloUnid" Text="Mbps" FontSize="11" TextAlignment="Center"
+                                                       Foreground="{DynamicResource Dicon.Text2}"/>
+                                            <TextBlock x:Name="txtVeloFase" Text="" FontFamily="Consolas" FontSize="9"
+                                                       TextAlignment="Center" Margin="0,4,0,0"
+                                                       Foreground="{DynamicResource Dicon.Text3}"/>
+                                        </StackPanel>
+                                        <TextBlock x:Name="txtVeloMin" Text="0" Canvas.Left="48" Canvas.Top="222"
+                                                   FontFamily="Consolas" FontSize="9" Foreground="{DynamicResource Dicon.Text3}"/>
+                                        <TextBlock x:Name="txtVeloMax" Text="100" Canvas.Left="202" Canvas.Top="222"
+                                                   FontFamily="Consolas" FontSize="9" Foreground="{DynamicResource Dicon.Text3}"/>
+                                    </Canvas>
 
-                                        <DockPanel Grid.Column="2">
-                                            <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,4">
-                                                <Ellipse x:Name="dotTracert" Width="9" Height="9" Margin="0,0,6,0"
-                                                         VerticalAlignment="Center" Fill="{DynamicResource Dicon.Text3}"/>
-                                                <TextBlock Text="DNS + TRACERT" FontFamily="Consolas" FontSize="9"
-                                                           Foreground="{DynamicResource Dicon.Text3}"/>
-                                            </StackPanel>
-                                            <Border Background="{DynamicResource Dicon.SurfaceAlt}"
-                                                    BorderBrush="{DynamicResource Dicon.Hair}" BorderThickness="1"
-                                                    CornerRadius="4" Padding="8,6">
-                                                <ScrollViewer x:Name="scTracert" Height="170"
-                                                              VerticalScrollBarVisibility="Auto"
-                                                              HorizontalScrollBarVisibility="Auto">
-                                                    <ItemsControl x:Name="lstTracert">
-                                                        <ItemsControl.ItemTemplate>
-                                                            <DataTemplate>
-                                                                <TextBlock Text="{Binding}" FontFamily="Consolas"
-                                                                           FontSize="10.5"
-                                                                           Foreground="{DynamicResource Dicon.Text2}"/>
-                                                            </DataTemplate>
-                                                        </ItemsControl.ItemTemplate>
-                                                    </ItemsControl>
-                                                </ScrollViewer>
-                                            </Border>
-                                        </DockPanel>
+                                    <ProgressBar x:Name="prgSpeed" Height="4" Minimum="0" Maximum="1" Value="0"
+                                                 Margin="0,4,0,0" BorderThickness="0"
+                                                 Background="{DynamicResource Dicon.Hair}"
+                                                 Foreground="{DynamicResource Dicon.Accent}"/>
 
-                                        <DockPanel Grid.Column="4">
-                                            <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,4">
-                                                <Ellipse x:Name="dotDownload" Width="9" Height="9" Margin="0,0,6,0"
-                                                         VerticalAlignment="Center" Fill="{DynamicResource Dicon.Text3}"/>
-                                                <TextBlock Text="DOWNLOAD" FontFamily="Consolas" FontSize="9"
-                                                           Foreground="{DynamicResource Dicon.Text3}"/>
-                                            </StackPanel>
-                                            <Border Background="{DynamicResource Dicon.SurfaceAlt}"
-                                                    BorderBrush="{DynamicResource Dicon.Hair}" BorderThickness="1"
-                                                    CornerRadius="4" Padding="8,6">
-                                                <ScrollViewer x:Name="scDownload" Height="170"
-                                                              VerticalScrollBarVisibility="Auto"
-                                                              HorizontalScrollBarVisibility="Auto">
-                                                    <ItemsControl x:Name="lstDownload">
-                                                        <ItemsControl.ItemTemplate>
-                                                            <DataTemplate>
-                                                                <TextBlock Text="{Binding}" FontFamily="Consolas"
-                                                                           FontSize="10.5"
-                                                                           Foreground="{DynamicResource Dicon.Text2}"/>
-                                                            </DataTemplate>
-                                                        </ItemsControl.ItemTemplate>
-                                                    </ItemsControl>
-                                                </ScrollViewer>
+                                    <!-- RESULTADO -->
+                                    <Grid x:Name="painelSpeedResultado" Margin="0,14,0,0" Visibility="Collapsed">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+
+                                        <UniformGrid Grid.Row="0" Rows="1" Columns="2">
+                                            <Border Style="{DynamicResource Faixa}" Margin="0,0,5,0">
+                                                <StackPanel>
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <Path Data="M8,2 L8,11 M4,8 L8,12 L12,8" Stretch="Uniform"
+                                                              Width="13" Height="13" Stroke="{DynamicResource Dicon.Accent}"
+                                                              StrokeThickness="1.8" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="DOWNLOAD" FontFamily="Consolas" FontSize="9"
+                                                                   Margin="6,0,0,0" VerticalAlignment="Center"
+                                                                   Foreground="{DynamicResource Dicon.Text3}"/>
+                                                    </StackPanel>
+                                                    <TextBlock Margin="0,2,0,0" Foreground="{DynamicResource Dicon.Text}">
+                                                        <Run x:Name="runResDown" Text="--" FontSize="22" FontWeight="Bold"/>
+                                                        <Run Text=" Mbps" FontSize="11" Foreground="{DynamicResource Dicon.Text2}"/>
+                                                    </TextBlock>
+                                                </StackPanel>
                                             </Border>
-                                        </DockPanel>
+                                            <Border Style="{DynamicResource Faixa}" Margin="5,0,0,0">
+                                                <StackPanel>
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <Path Data="M8,14 L8,5 M4,9 L8,4 L12,9" Stretch="Uniform"
+                                                              Width="13" Height="13" Stroke="{DynamicResource Dicon.Viavel}"
+                                                              StrokeThickness="1.8" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="UPLOAD" FontFamily="Consolas" FontSize="9"
+                                                                   Margin="6,0,0,0" VerticalAlignment="Center"
+                                                                   Foreground="{DynamicResource Dicon.Text3}"/>
+                                                    </StackPanel>
+                                                    <TextBlock Margin="0,2,0,0" Foreground="{DynamicResource Dicon.Text}">
+                                                        <Run x:Name="runResUp" Text="--" FontSize="22" FontWeight="Bold"/>
+                                                        <Run Text=" Mbps" FontSize="11" Foreground="{DynamicResource Dicon.Text2}"/>
+                                                    </TextBlock>
+                                                </StackPanel>
+                                            </Border>
+                                        </UniformGrid>
+
+                                        <UniformGrid Grid.Row="1" Rows="1" Columns="3" Margin="0,8,0,0">
+                                            <StackPanel Orientation="Horizontal">
+                                                <Path Data="M1,8 L5,8 L7,3 L9,13 L11,8 L15,8" Stretch="Uniform" Width="14" Height="14"
+                                                      Stroke="{DynamicResource Dicon.Text2}" StrokeThickness="1.6"
+                                                      VerticalAlignment="Center"/>
+                                                <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" FontFamily="Consolas" FontSize="11"
+                                                           Foreground="{DynamicResource Dicon.Text2}">
+                                                    <Run Text="ping "/><Run x:Name="runResPing" Text="--" FontWeight="Bold"
+                                                         Foreground="{DynamicResource Dicon.Text}"/><Run Text=" ms"/>
+                                                </TextBlock>
+                                            </StackPanel>
+                                            <StackPanel Orientation="Horizontal">
+                                                <Path Data="M1,8 Q4,3 7,8 T13,8" Stretch="Uniform" Width="14" Height="14"
+                                                      Stroke="{DynamicResource Dicon.Text2}" StrokeThickness="1.6"
+                                                      VerticalAlignment="Center"/>
+                                                <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" FontFamily="Consolas" FontSize="11"
+                                                           Foreground="{DynamicResource Dicon.Text2}">
+                                                    <Run Text="jitter "/><Run x:Name="runResJitter" Text="--" FontWeight="Bold"
+                                                         Foreground="{DynamicResource Dicon.Text}"/><Run Text=" ms"/>
+                                                </TextBlock>
+                                            </StackPanel>
+                                            <StackPanel Orientation="Horizontal">
+                                                <Path Data="M2,3 L13,13 M13,3 L2,13" Stretch="Uniform" Width="12" Height="12"
+                                                      Stroke="{DynamicResource Dicon.Text2}" StrokeThickness="1.6"
+                                                      VerticalAlignment="Center"/>
+                                                <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" FontFamily="Consolas" FontSize="11"
+                                                           Foreground="{DynamicResource Dicon.Text2}">
+                                                    <Run Text="perda "/><Run x:Name="runResPerda" Text="--" FontWeight="Bold"
+                                                         Foreground="{DynamicResource Dicon.Text}"/><Run Text=" %"/>
+                                                </TextBlock>
+                                            </StackPanel>
+                                        </UniformGrid>
+
+                                        <StackPanel Grid.Row="2" Margin="0,10,0,0">
+                                            <StackPanel Orientation="Horizontal" Margin="0,1,0,0">
+                                                <Path Data="M8,2 A6,6 0 1 1 8,14 A6,6 0 1 1 8,2 M2,8 L14,8 M8,2 C5,5 5,11 8,14 C11,11 11,5 8,2"
+                                                      Stretch="Uniform" Width="13" Height="13" Stroke="{DynamicResource Dicon.Text3}"
+                                                      StrokeThickness="1.3" VerticalAlignment="Center"/>
+                                                <TextBlock x:Name="txtResIsp" Margin="7,0,0,0" VerticalAlignment="Center"
+                                                           FontSize="12" Foreground="{DynamicResource Dicon.Text2}"/>
+                                            </StackPanel>
+                                            <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
+                                                <Path Data="M2,4 L14,4 L14,7 L2,7 Z M2,9 L14,9 L14,12 L2,12 Z"
+                                                      Stretch="Uniform" Width="13" Height="13" Fill="{DynamicResource Dicon.Text3}"
+                                                      VerticalAlignment="Center"/>
+                                                <TextBlock x:Name="txtResServidor" Margin="7,0,0,0" VerticalAlignment="Center"
+                                                           FontSize="12" Foreground="{DynamicResource Dicon.Text2}"/>
+                                            </StackPanel>
+                                            <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
+                                                <Path Data="M4,3 L4,13 M9,3 L9,13 M2,6 L12,6 M2,10 L12,10"
+                                                      Stretch="Uniform" Width="13" Height="13" Stroke="{DynamicResource Dicon.Text3}"
+                                                      StrokeThickness="1.3" VerticalAlignment="Center"/>
+                                                <TextBlock x:Name="txtResIp" Margin="7,0,0,0" VerticalAlignment="Center"
+                                                           FontSize="12" Foreground="{DynamicResource Dicon.Text2}"/>
+                                            </StackPanel>
+                                        </StackPanel>
+
+                                        <TextBlock x:Name="txtResLink" Grid.Row="3" Margin="0,8,0,0" TextWrapping="Wrap"
+                                                   FontFamily="Consolas" FontSize="10.5"
+                                                   Foreground="{DynamicResource Dicon.Text3}"/>
                                     </Grid>
                                 </StackPanel>
                             </Border>

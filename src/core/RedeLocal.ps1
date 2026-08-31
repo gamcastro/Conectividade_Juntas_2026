@@ -3,78 +3,59 @@
 #   - inventario da placa de rede cabeada (LAN): conectada? IP, mascara, gateway,
 #     DNS, MAC, velocidade do enlace  -> o IP local vai no relatorio final
 #   - placa wireless: existe? conectada a que SSID? redes por perto
-#   - internet local: ping publico + resolucao DNS + mini download (nocao de banda)
+#   - internet local: teste de velocidade Ookla (speedtest.exe --format=jsonl),
+#     com velocimetro ao vivo (Write-EventoSpeedtest -> Update-Speedtest na GUI)
 #   - conexao a uma rede Wi-Fi por dentro da ferramenta (netsh wlan)
 #
 # Depois desta fase o tecnico conecta a VPN do TRE e roda a bateria "com VPN"
 # (Invoke-DiagnosticoCompleto).
 
-# --- feeds ao vivo do teste de internet (ping / tracert / download) ----------
-# ObservableCollections ligadas por binding as 3 colunas do card. Alimentadas
-# linha a linha por Write-LinhaRede (marshalla para o Dispatcher, como Write-Log).
-foreach ($__n in 'RedePing', 'RedeTracert', 'RedeDownload') {
-    if (-not (Get-Variable -Name $__n -Scope Global -ErrorAction SilentlyContinue)) {
-        Set-Variable -Name $__n -Scope Global `
-            -Value ([System.Collections.ObjectModel.ObservableCollection[object]]::new())
-    }
-}
-
-function Write-LinhaRede {
-    param(
-        [ValidateSet('ping', 'tracert', 'download')] [string] $Alvo,
-        [string] $Texto = ''
-    )
-    # via hashtable: 'switch'/'$()' desenrolam colecao vazia para $null.
-    $col = @{ ping = $Global:RedePing; tracert = $Global:RedeTracert; download = $Global:RedeDownload }[$Alvo]
-    if ($null -eq $col) { return }
-
-    $janela = Get-Variable -Name JanelaPrincipal -Scope Global -ErrorAction SilentlyContinue
-    $dispatcher = if ($janela) { $janela.Value.Dispatcher } else { $null }
-    $aplicar = { $col.Add($Texto) }
-    if ($dispatcher -and -not $dispatcher.CheckAccess()) {
-        $dispatcher.Invoke([action] $aplicar)
-    } else {
-        & $aplicar
-    }
-}
-
 # --------------------------------------------------------------- configuracao
 function Get-ConfigRedeLocal {
     $def = [pscustomobject]@{
-        ping_alvo          = '8.8.8.8'
-        dns_nome           = 'www.tre-ma.jus.br'
-        download_url       = 'https://speed.cloudflare.com/__down?bytes=8000000'
-        download_timeout_s = 30
-        tracert_host       = ''
-        tracert_saltos     = 12
+        speedtest_server_id = ''    # vazio = servidor mais proximo (auto)
+        speedtest_extra_args = ''   # flags adicionais do speedtest.exe
     }
     try {
         $c = Get-Config 'rede-local'
-        foreach ($p in 'ping_alvo', 'dns_nome', 'download_url', 'download_timeout_s', 'tracert_host', 'tracert_saltos') {
+        foreach ($p in 'speedtest_server_id', 'speedtest_extra_args') {
             if ($c.PSObject.Properties[$p] -and "$($c.$p)" -ne '') { $def.$p = $c.$p }
         }
     } catch { }
-    if (-not $def.tracert_host) { $def.tracert_host = $def.dns_nome }
-    if ([int] $def.tracert_saltos -le 0) { $def.tracert_saltos = 12 }
     $def
 }
 
-# Encoding OEM do console (ping.exe / tracert.exe usam), p/ acentos corretos.
-function Get-EncodingOem {
-    try { [Text.Encoding]::GetEncoding([Globalization.CultureInfo]::CurrentCulture.TextInfo.OEMCodePage) } catch { $null }
+# Caminho do speedtest.exe (Ookla CLL). Colocado manualmente em tools\ (NAO vai
+# ao repositorio). Sem ele, o teste de velocidade nao roda.
+function Get-CaminhoSpeedtest {
+    $cands = @(
+        (Join-Path $Global:RaizApp 'tools\speedtest.exe')
+        (Join-Path $Global:RaizApp 'bin\speedtest\speedtest.exe')
+    )
+    foreach ($c in $cands) { if ($c -and (Test-Path $c)) { return $c } }
+    $cmd = Get-Command 'speedtest.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($cmd) { return $cmd.Source }
+    return $null
 }
 
-# Roda um .exe de console lendo o stdout LINHA A LINHA e mandando cada uma
-# para a coluna $Alvo (feed ao vivo). Devolve todas as linhas.
-function Invoke-ProcessoStreaming {
-    param(
-        [string] $Caminho, [string] $Argumentos, [string] $Alvo, [int] $TimeoutS = 60
-    )
-    $linhas = New-Object System.Collections.Generic.List[string]
-    if (-not (Test-Path $Caminho)) {
-        $cmd = Get-Command $Caminho -ErrorAction SilentlyContinue
-        if ($cmd) { $Caminho = $cmd.Source } else { return $linhas }
-    }
+# Repassa um evento JSONL do speedtest para a GUI (Update-Speedtest), marshallando
+# para o Dispatcher quando esta fora da thread de UI (mesmo padrao do Write-Log).
+function Write-EventoSpeedtest {
+    param($Evento)
+    $janela = Get-Variable -Name JanelaPrincipal -Scope Global -ErrorAction SilentlyContinue
+    $dispatcher = if ($janela -and $janela.Value) { $janela.Value.Dispatcher } else { $null }
+    if (-not $dispatcher) { return }
+    $aplicar = { Update-Speedtest $Evento }
+    if (-not $dispatcher.CheckAccess()) { $dispatcher.Invoke([action] $aplicar) }
+    else { & $aplicar }
+}
+
+# Roda o speedtest.exe lendo o stdout LINHA A LINHA (JSONL). Cada linha valida
+# vira um objeto; eventos de progresso vao ao vivo para a GUI. Devolve a lista
+# de eventos + a saida de erro.
+function Invoke-SpeedtestStreaming {
+    param([string] $Caminho, [string] $Argumentos, [int] $TimeoutS = 120)
+    $eventos = New-Object System.Collections.Generic.List[object]
     $psi = [Diagnostics.ProcessStartInfo]::new()
     $psi.FileName               = $Caminho
     $psi.Arguments              = $Argumentos
@@ -82,23 +63,24 @@ function Invoke-ProcessoStreaming {
     $psi.RedirectStandardError  = $true
     $psi.UseShellExecute        = $false
     $psi.CreateNoWindow         = $true
-    $oem = Get-EncodingOem
-    if ($oem) { $psi.StandardOutputEncoding = $oem; $psi.StandardErrorEncoding = $oem }
-
+    $stderr = ''
     try {
         $p = [Diagnostics.Process]::Start($psi)
+        $errTask = $p.StandardError.ReadToEndAsync()
         while ($null -ne ($ln = $p.StandardOutput.ReadLine())) {
-            $t = $ln.TrimEnd()
-            if ($t -eq '') { continue }
-            $linhas.Add($t)
-            Write-LinhaRede -Alvo $Alvo -Texto $t
+            $t = $ln.Trim()
+            if ($t -eq '' -or $t[0] -ne '{') { continue }
+            $obj = $null
+            try { $obj = $t | ConvertFrom-Json } catch { continue }
+            if ($obj -and $obj.PSObject.Properties['type']) {
+                $eventos.Add($obj)
+                Write-EventoSpeedtest $obj
+            }
         }
         if (-not $p.WaitForExit($TimeoutS * 1000)) { try { $p.Kill() } catch { } }
-    } catch {
-        $linhas.Add("falhou: $_")
-        Write-LinhaRede -Alvo $Alvo -Texto "falhou: $_"
-    }
-    $linhas
+        try { $stderr = $errTask.Result } catch { }
+    } catch { $stderr = "$_" }
+    [pscustomobject]@{ Eventos = $eventos; Erro = $stderr }
 }
 
 # --------------------------------------------------------------- placa LAN
@@ -261,135 +243,97 @@ function Connect-RedeWireless {
     }
 }
 
-# --------------------------------------------------------------- PING (streaming)
-function Test-PingLocal {
-    param([string] $Alvo, [int] $Contagem = 4)
-    $r = [pscustomobject]@{ ok = $false; media_ms = $null; min_ms = $null; max_ms = $null; perda_pct = $null; saida = @() }
-    $pexe = Join-Path $env:SystemRoot 'System32\PING.EXE'
-    Write-LinhaRede -Alvo 'ping' -Texto ("> ping -n {0} {1}" -f $Contagem, $Alvo)
-    $linhas = Invoke-ProcessoStreaming -Caminho $pexe -Argumentos ("-n $Contagem $Alvo") -Alvo 'ping' -TimeoutS 25
-    $r.saida = @($linhas)
-    $tempos = @()
-    foreach ($ln in $linhas) {
-        if ($ln -match '(?:tempo|time)[=<]\s*(\d+)\s*ms') { $tempos += [int] $Matches[1] }
-    }
-    if ($tempos.Count) {
-        $r.ok        = $true
-        $r.media_ms  = [math]::Round((($tempos | Measure-Object -Average).Average), 1)
-        $r.min_ms    = ($tempos | Measure-Object -Minimum).Minimum
-        $r.max_ms    = ($tempos | Measure-Object -Maximum).Maximum
-        $r.perda_pct = [math]::Round(($Contagem - $tempos.Count) / $Contagem * 100)
-    }
-    $r
+# -------------------------------------------- internet local: Ookla Speedtest
+function ConvertTo-Mbps { param($BandwidthBytesSeg)
+    if ($null -eq $BandwidthBytesSeg) { return $null }
+    [math]::Round(([double] $BandwidthBytesSeg) * 8 / 1e6, 2)
 }
 
-# ---------------------------------------------------- DNS + TRACERT (streaming)
-function Test-TracertLocal {
-    param([string] $NomeDns, [string] $Destino, [int] $Saltos = 12)
-    $r = [pscustomobject]@{ dns_ok = $false; dns_ms = $null; dns_ips = @(); tracert_ok = $false; tracert_saltos = 0; saida = @() }
-
-    Write-LinhaRede -Alvo 'tracert' -Texto ("> resolvendo {0}" -f $NomeDns)
-    try {
-        $sw = [Diagnostics.Stopwatch]::StartNew()
-        $ips = @()
-        try { $ips = @((Resolve-DnsName -Name $NomeDns -Type A -DnsOnly -ErrorAction Stop | Where-Object { $_.IPAddress }).IPAddress) }
-        catch { $ips = @([System.Net.Dns]::GetHostAddresses($NomeDns) | ForEach-Object { $_.IPAddressToString }) }
-        $sw.Stop()
-        if ($ips.Count) {
-            $r.dns_ok = $true; $r.dns_ms = [math]::Round($sw.Elapsed.TotalMilliseconds); $r.dns_ips = $ips
-            Write-LinhaRede -Alvo 'tracert' -Texto ("{0}  ->  {1}   ({2} ms)" -f $NomeDns, ($ips -join ', '), $r.dns_ms)
-        } else {
-            Write-LinhaRede -Alvo 'tracert' -Texto ("resolucao de {0} falhou" -f $NomeDns)
-        }
-    } catch { Write-LinhaRede -Alvo 'tracert' -Texto ("resolucao de {0} falhou" -f $NomeDns) }
-
-    $texe = Join-Path $env:SystemRoot 'System32\TRACERT.EXE'
-    Write-LinhaRede -Alvo 'tracert' -Texto ("> tracert -d -h {0} {1}" -f $Saltos, $Destino)
-    $linhas = Invoke-ProcessoStreaming -Caminho $texe -Argumentos ("-d -h $Saltos -w 700 $Destino") -Alvo 'tracert' -TimeoutS 90
-    $r.saida = @($linhas)
-    foreach ($ln in $linhas) { if ($ln -match '^\s*(\d+)\s') { $r.tracert_saltos = [int] $Matches[1] } }
-    $r.tracert_ok = ($r.tracert_saltos -gt 0)
-    $r
-}
-
-# --------------------------------------------------- DOWNLOAD (streaming, %)
-function Test-DownloadLocal {
-    param([string] $Url, [int] $TimeoutS = 30)
-    $r = [pscustomobject]@{ ok = $false; mbps = $null; bytes = $null; seg = $null; saida = @() }
-    $linhas = New-Object System.Collections.Generic.List[string]
-    try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 } catch { }
-    Write-LinhaRede -Alvo 'download' -Texto ("> GET {0}" -f $Url); $linhas.Add("> GET $Url")
-    try {
-        $req = [Net.HttpWebRequest] [Net.WebRequest]::Create($Url)
-        $req.Timeout = $TimeoutS * 1000
-        $req.ReadWriteTimeout = $TimeoutS * 1000
-        $req.UserAgent = 'DICON'
-        $resp = $req.GetResponse()
-        $total = [int64] $resp.ContentLength
-        $m = ("HTTP {0}   {1}" -f [int] $resp.StatusCode, $(if ($total -gt 0) { '{0} MB' -f [math]::Round($total / 1MB, 1) } else { 'tamanho ?' }))
-        $linhas.Add($m); Write-LinhaRede -Alvo 'download' -Texto $m
-        $st = $resp.GetResponseStream()
-        $buf = New-Object byte[] 65536
-        $lido = [int64] 0; $marca = [int64] 0
-        $sw = [Diagnostics.Stopwatch]::StartNew()
-        while (($n = $st.Read($buf, 0, $buf.Length)) -gt 0) {
-            $lido += $n
-            if (($lido - $marca) -ge 1MB) {
-                $marca = $lido
-                $mbps = [math]::Round(($lido * 8) / $sw.Elapsed.TotalSeconds / 1e6, 1)
-                $pct = if ($total -gt 0) { '{0,3}%  ' -f [math]::Round($lido * 100.0 / $total) } else { '' }
-                $m = ("{0}{1} MB   {2} Mbps" -f $pct, [math]::Round($lido / 1MB, 1), $mbps)
-                $linhas.Add($m); Write-LinhaRede -Alvo 'download' -Texto $m
-            }
-        }
-        $sw.Stop(); $st.Close(); $resp.Close()
-        $r.bytes = $lido; $r.seg = [math]::Round($sw.Elapsed.TotalSeconds, 2)
-        if ($lido -gt 0 -and $sw.Elapsed.TotalSeconds -gt 0) {
-            $r.ok = $true
-            $r.mbps = [math]::Round(($lido * 8) / $sw.Elapsed.TotalSeconds / 1e6, 1)
-            $m = ("concluido: {0} MB em {1}s   (~{2} Mbps)" -f [math]::Round($lido / 1MB, 2), $r.seg, $r.mbps)
-            $linhas.Add($m); Write-LinhaRede -Alvo 'download' -Texto $m
-        }
-    } catch {
-        $m = "falhou: $_"; $linhas.Add($m); Write-LinhaRede -Alvo 'download' -Texto $m
-    }
-    $r.saida = @($linhas)
-    $r
-}
-
-# --------------------------------------------------------------- internet local
-# Roda PING -> DNS/TRACERT -> DOWNLOAD, um de cada vez, transmitindo linha a linha.
+# Roda o speedtest.exe (Ookla CLI) em --format=jsonl, com velocimetro ao vivo.
+# Devolve o objeto achatado usado no relatorio / JSON.
 function Test-InternetLocal {
     $cfg = Get-ConfigRedeLocal
-
-    $pg = Test-PingLocal    -Alvo $cfg.ping_alvo -Contagem 4
-    $tr = Test-TracertLocal -NomeDns $cfg.dns_nome -Destino $cfg.tracert_host -Saltos ([int] $cfg.tracert_saltos)
-    $to = [int] $cfg.download_timeout_s; if ($to -le 0) { $to = 30 }
-    $dl = Test-DownloadLocal -Url $cfg.download_url -TimeoutS $to
-
-    [pscustomobject]@{
-        ping_alvo        = [string] $cfg.ping_alvo
-        ping_ok          = $pg.ok
-        ping_latencia_ms = $pg.media_ms
-        ping_min_ms      = $pg.min_ms
-        ping_max_ms      = $pg.max_ms
-        ping_perda_pct   = $pg.perda_pct
-        ping_saida       = @($pg.saida)
-        dns_nome         = [string] $cfg.dns_nome
-        dns_ok           = $tr.dns_ok
-        dns_ms           = $tr.dns_ms
-        dns_ips          = @($tr.dns_ips)
-        tracert_host     = [string] $cfg.tracert_host
-        tracert_ok       = $tr.tracert_ok
-        tracert_saltos   = $tr.tracert_saltos
-        tracert_saida    = @($tr.saida)
-        download_url     = [string] $cfg.download_url
-        download_ok      = $dl.ok
-        download_mbps    = $dl.mbps
-        download_bytes   = $dl.bytes
-        download_seg     = $dl.seg
-        download_saida   = @($dl.saida)
+    $r = [ordered]@{
+        speedtest_ok    = $false
+        speedtest_erro  = ''
+        isp             = ''
+        ip_externo      = ''
+        servidor_nome   = ''
+        servidor_local  = ''
+        servidor_id     = $null
+        servidor_host   = ''
+        ping_ms         = $null
+        jitter_ms       = $null
+        perda_pct       = $null
+        download_mbps   = $null
+        upload_mbps     = $null
+        download_lat_ms = $null
+        upload_lat_ms   = $null
+        resultado_url   = ''
+        resultado_id    = ''
+        quando          = (Get-Date).ToString('o')
     }
+
+    $exe = Get-CaminhoSpeedtest
+    if (-not $exe) {
+        $r.speedtest_erro = 'speedtest.exe (Ookla CLI) nao esta em tools\. Copie o binario para a pasta e rode de novo.'
+        Write-Log $r.speedtest_erro -Nivel Erro
+        return [pscustomobject] $r
+    }
+
+    $argv = '--format=jsonl --progress=yes --accept-license --accept-gdpr'
+    if ($cfg.speedtest_server_id) { $argv += ' --server-id={0}' -f $cfg.speedtest_server_id }
+    if ($cfg.speedtest_extra_args) { $argv += ' ' + $cfg.speedtest_extra_args }
+    Write-Log ("Speedtest (Ookla): {0} {1}" -f $exe, $argv) -Nivel Destaque
+
+    $saida = Invoke-SpeedtestStreaming -Caminho $exe -Argumentos $argv -TimeoutS 120
+    $res = @($saida.Eventos | Where-Object { $_.type -eq 'result' }) | Select-Object -Last 1
+    $err = @($saida.Eventos | Where-Object { $_.type -eq 'error' }) | Select-Object -Last 1
+
+    if (-not $res) {
+        $r.speedtest_erro = if ($err -and $err.message) { [string] $err.message }
+                            elseif ($saida.Erro) { ($saida.Erro -split "`n" | Where-Object { $_.Trim() } | Select-Object -Last 1) }
+                            else { 'o speedtest nao concluiu (sem internet no local?).' }
+        Write-Log ("Speedtest falhou: {0}" -f $r.speedtest_erro) -Nivel Erro
+        return [pscustomobject] $r
+    }
+
+    $r.speedtest_ok    = $true
+    $r.isp             = [string] $res.isp
+    if ($res.PSObject.Properties['interface'] -and $res.interface) {
+        $r.ip_externo = [string] $res.interface.externalIp
+    }
+    if ($res.PSObject.Properties['server'] -and $res.server) {
+        $r.servidor_nome  = [string] $res.server.name
+        $r.servidor_local = ('{0}{1}' -f [string] $res.server.location, $(if ($res.server.country) { ', ' + $res.server.country } else { '' }))
+        $r.servidor_id    = $res.server.id
+        $r.servidor_host  = [string] $res.server.host
+    }
+    if ($res.ping) {
+        $r.ping_ms   = [math]::Round([double] $res.ping.latency, 1)
+        $r.jitter_ms = [math]::Round([double] $res.ping.jitter, 1)
+    }
+    if ($res.PSObject.Properties['packetLoss'] -and $null -ne $res.packetLoss) {
+        $r.perda_pct = [math]::Round([double] $res.packetLoss, 1)
+    }
+    if ($res.download) {
+        $r.download_mbps = ConvertTo-Mbps $res.download.bandwidth
+        if ($res.download.PSObject.Properties['latency'] -and $res.download.latency) {
+            $r.download_lat_ms = [math]::Round([double] $res.download.latency.iqm, 1)
+        }
+    }
+    if ($res.upload) {
+        $r.upload_mbps = ConvertTo-Mbps $res.upload.bandwidth
+        if ($res.upload.PSObject.Properties['latency'] -and $res.upload.latency) {
+            $r.upload_lat_ms = [math]::Round([double] $res.upload.latency.iqm, 1)
+        }
+    }
+    if ($res.PSObject.Properties['result'] -and $res.result) {
+        $r.resultado_url = [string] $res.result.url
+        $r.resultado_id  = [string] $res.result.id
+    }
+    Write-Log ("Speedtest OK: down {0} Mbps / up {1} Mbps / ping {2} ms ({3})" -f $r.download_mbps, $r.upload_mbps, $r.ping_ms, $r.isp) -Nivel Ok
+    [pscustomobject] $r
 }
 
 # --------------------------------------------------------------- orquestracao

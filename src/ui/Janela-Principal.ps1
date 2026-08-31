@@ -213,13 +213,7 @@ function New-JanelaPrincipal {
     $window.FindName('lstLog').ItemsSource     = $Global:LogEntries
     $window.FindName('lstLogHome').ItemsSource = $Global:LogHome
 
-    foreach ($c in $Global:RedePing, $Global:RedeTracert, $Global:RedeDownload) { $c.Clear() }
-    $window.FindName('lstPing').ItemsSource     = $Global:RedePing
-    $window.FindName('lstTracert').ItemsSource  = $Global:RedeTracert
-    $window.FindName('lstDownload').ItemsSource  = $Global:RedeDownload
-    $Global:RedePing.Add_CollectionChanged({ Invoke-ScrollRede 'ping' })
-    $Global:RedeTracert.Add_CollectionChanged({ Invoke-ScrollRede 'tracert' })
-    $Global:RedeDownload.Add_CollectionChanged({ Invoke-ScrollRede 'download' })
+    Reset-Velocimetro
 
     $logo = New-LogoBitmap
     if ($logo) {
@@ -791,8 +785,7 @@ function Start-TarefaRede {
     $rs.ApartmentState = 'MTA'
     $rs.ThreadOptions  = 'ReuseThread'
     $rs.Open()
-    foreach ($v in 'RaizApp', 'LogEntries', 'LogHome', 'LogHomeMax', 'JanelaPrincipal', 'ArquivoLog', 'PastaDadosOverride',
-        'RedePing', 'RedeTracert', 'RedeDownload') {
+    foreach ($v in 'RaizApp', 'LogEntries', 'LogHome', 'LogHomeMax', 'JanelaPrincipal', 'ArquivoLog', 'PastaDadosOverride') {
         $rs.SessionStateProxy.SetVariable($v, (Get-Variable -Name $v -Scope Global -ValueOnly -ErrorAction SilentlyContinue))
     }
     foreach ($k in $Vars.Keys) { $rs.SessionStateProxy.SetVariable([string] $k, $Vars[$k]) }
@@ -910,25 +903,20 @@ function Update-PainelFaseLocal {
         $tw.Foreground = $cinza ; $dw.Fill = $cinza
     }
 
-    # card do teste de internet (3 colunas): as linhas ja foram transmitidas ao
-    # vivo; aqui so garantimos o conteudo final e a cor dos indicadores.
+    # card do speedtest: as linhas ja foram transmitidas ao vivo pelo runspace;
+    # aqui so garantimos o resultado final (ou o erro) a partir do payload.
     $ci = $w.FindName('cardInternetLocal')
     if ($it) {
-        $prop = { param($n) if ($it.PSObject.Properties[$n]) { $it.($n) } }
-        $colunas = @(
-            @{ dot = 'dotPing';     col = $Global:RedePing;     arr = @(& $prop 'ping_saida');     ok = [bool] $it.ping_ok }
-            @{ dot = 'dotTracert';  col = $Global:RedeTracert;  arr = @(& $prop 'tracert_saida');  ok = [bool] (& $prop 'tracert_ok') }
-            @{ dot = 'dotDownload'; col = $Global:RedeDownload; arr = @(& $prop 'download_saida'); ok = [bool] $it.download_ok }
-        )
-        foreach ($c in $colunas) {
-            if ($c.col.Count -ne @($c.arr).Count) {
-                $c.col.Clear()
-                foreach ($l in @($c.arr)) { $c.col.Add([string] $l) }
-            }
-            $d = $w.FindName($c.dot)
-            if ($d) { $d.Fill = if ($c.ok) { $verde } elseif (@($c.arr).Count) { $vermelho } else { $cinza } }
-        }
         $ci.Visibility = 'Visible'
+        $preenche = { param($n) if ($it.PSObject.Properties[$n]) { $it.($n) } }
+        if ($it.speedtest_ok) {
+            Update-SpeedtestPainel -It $it
+        } else {
+            $w.FindName('painelSpeedResultado').Visibility = 'Collapsed'
+            $te = $w.FindName('txtSpeedErro')
+            $te.Text = [string] (& $preenche 'speedtest_erro')
+            $te.Visibility = if ($te.Text) { 'Visible' } else { 'Collapsed' }
+        }
     } else {
         $ci.Visibility = 'Collapsed'
     }
@@ -987,29 +975,160 @@ function Complete-ProbeRedeLocal {
 }
 
 # Rola cada coluna do teste de internet para o fim quando chega linha nova.
-function Invoke-ScrollRede {
-    param([string] $Alvo)
-    $w = $Global:JanelaPrincipal
-    if (-not $w) { return }
-    $nome = switch ($Alvo) { 'ping' { 'scPing' } 'tracert' { 'scTracert' } 'download' { 'scDownload' } }
-    $sc = $w.FindName($nome)
-    if ($sc) { $sc.ScrollToEnd() }
+# ------------------------------------------------------- VELOCIMETRO (speedtest)
+# Geometria: centro (140,140), raio 110, arco de -135 a +135 graus.
+function Get-PontoArco {
+    param([double] $Cx, [double] $Cy, [double] $R, [double] $AngGraus)
+    $rad = $AngGraus * [Math]::PI / 180.0
+    [Windows.Point]::new($Cx + $R * [Math]::Sin($rad), $Cy - $R * [Math]::Cos($rad))
 }
 
-# Cor dos 3 indicadores do card de internet. 'rodando' = azul; senao cinza.
-function Set-DotsRedeInternet {
-    param([string] $Estado)
+function Reset-Velocimetro {
     $w = $Global:JanelaPrincipal
     if (-not $w) { return }
-    $hex = if ($Estado -eq 'rodando') { '#6E9BFF' } else { '#7D8698' }
-    $b = [Windows.Media.SolidColorBrush]::new([Windows.Media.ColorConverter]::ConvertFromString($hex))
-    $b.Freeze()
-    foreach ($n in 'dotPing', 'dotTracert', 'dotDownload') {
-        $d = $w.FindName($n); if ($d) { $d.Fill = $b }
+    $Global:VeloMax = 100.0
+    $w.FindName('rotAgulha').Angle = -135
+    $w.FindName('segVelo').Point   = [Windows.Point]::new(62.22, 217.78)
+    $w.FindName('segVelo').IsLargeArc = $false
+    $w.FindName('txtVeloNum').Text  = '0'
+    $w.FindName('txtVeloUnid').Text = 'Mbps'
+    $w.FindName('txtVeloFase').Text = ''
+    $w.FindName('txtVeloMin').Text  = '0'
+    $w.FindName('txtVeloMax').Text  = '100'
+    $w.FindName('prgSpeed').Value   = 0
+    $w.FindName('painelSpeedResultado').Visibility = 'Collapsed'
+    $w.FindName('txtSpeedErro').Visibility = 'Collapsed'
+    $w.FindName('txtSpeedInfo').Text = ''
+}
+
+function Set-VelocimetroEscala {
+    param([double] $Max)
+    $w = $Global:JanelaPrincipal
+    $Global:VeloMax = [double] $Max
+    if ($w) { $w.FindName('txtVeloMax').Text = ('{0:0}' -f $Max) }
+}
+
+function Set-VelocimetroValor {
+    param([double] $Valor, [string] $Unidade = 'Mbps', [string] $Fase = '', [double] $Escala = 0)
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    if (-not $Global:VeloMax) { $Global:VeloMax = 100.0 }
+    if ($Escala -gt 0) { Set-VelocimetroEscala $Escala }
+    elseif ($Valor -gt $Global:VeloMax) {
+        $prox = @(100, 250, 500, 1000, 2000, 5000) | Where-Object { $_ -ge $Valor } | Select-Object -First 1
+        if (-not $prox) { $prox = [math]::Ceiling($Valor / 1000) * 1000 }
+        Set-VelocimetroEscala $prox
+    }
+    $frac = [Math]::Max(0.0, [Math]::Min(1.0, $Valor / $Global:VeloMax))
+    $ang  = -135.0 + 270.0 * $frac
+    $w.FindName('rotAgulha').Angle = $ang
+    $pt = Get-PontoArco -Cx 140 -Cy 140 -R 110 -AngGraus $ang
+    $seg = $w.FindName('segVelo')
+    $seg.Point = $pt
+    $seg.IsLargeArc = ((270.0 * $frac) -gt 180.0)
+    $fmt = if ($Valor -ge 100) { '{0:0}' } elseif ($Valor -ge 10) { '{0:0.0}' } else { '{0:0.00}' }
+    $w.FindName('txtVeloNum').Text  = ($fmt -f $Valor)
+    $w.FindName('txtVeloUnid').Text = $Unidade
+    if ($Fase) { $w.FindName('txtVeloFase').Text = $Fase }
+}
+
+function Set-ProgressoSpeed {
+    param([double] $Frac)
+    $w = $Global:JanelaPrincipal
+    if ($w) { $w.FindName('prgSpeed').Value = [Math]::Max(0.0, [Math]::Min(1.0, $Frac)) }
+}
+
+# Recebe um evento JSONL do speedtest.exe (via Write-EventoSpeedtest, na thread de UI).
+function Update-Speedtest {
+    param($Evento)
+    $w = $Global:JanelaPrincipal
+    if (-not $w -or -not $Evento) { return }
+    switch ([string] $Evento.type) {
+        'testStart' {
+            $srv = $Evento.server
+            $ext = if ($Evento.PSObject.Properties['interface'] -and $Evento.interface) { [string] $Evento.interface.externalIp } else { '' }
+            $w.FindName('txtSpeedInfo').Text = ('{0}   -   servidor: {1} ({2})   -   IP {3}' -f `
+                    $Evento.isp, $srv.name, $srv.location, $ext)
+            $w.FindName('txtVeloFase').Text = 'conectando...'
+        }
+        'ping' {
+            Set-VelocimetroValor -Valor ([double] $Evento.ping.latency) -Unidade 'ms' -Fase 'Ping' -Escala 100
+            Set-ProgressoSpeed (0.10 * [double] $Evento.ping.progress)
+        }
+        'download' {
+            $m = (ConvertTo-MbpsGui $Evento.download.bandwidth)
+            Set-VelocimetroValor -Valor $m -Unidade 'Mbps' -Fase 'Download'
+            Set-ProgressoSpeed (0.10 + 0.50 * [double] $Evento.download.progress)
+        }
+        'upload' {
+            $m = (ConvertTo-MbpsGui $Evento.upload.bandwidth)
+            Set-VelocimetroValor -Valor $m -Unidade 'Mbps' -Fase 'Upload'
+            Set-ProgressoSpeed (0.60 + 0.40 * [double] $Evento.upload.progress)
+        }
+        'result' {
+            Set-ProgressoSpeed 1.0
+            $it = [pscustomobject]@{
+                speedtest_ok  = $true
+                isp           = [string] $Evento.isp
+                ip_externo    = if ($Evento.PSObject.Properties['interface'] -and $Evento.interface) { [string] $Evento.interface.externalIp } else { '' }
+                servidor_nome = [string] $Evento.server.name
+                servidor_local = [string] $Evento.server.location
+                ping_ms       = [math]::Round([double] $Evento.ping.latency, 1)
+                jitter_ms     = [math]::Round([double] $Evento.ping.jitter, 1)
+                perda_pct     = if ($Evento.PSObject.Properties['packetLoss'] -and $null -ne $Evento.packetLoss) { [math]::Round([double] $Evento.packetLoss, 1) } else { $null }
+                download_mbps = (ConvertTo-MbpsGui $Evento.download.bandwidth)
+                upload_mbps   = (ConvertTo-MbpsGui $Evento.upload.bandwidth)
+                resultado_url = if ($Evento.PSObject.Properties['result'] -and $Evento.result) { [string] $Evento.result.url } else { '' }
+            }
+            Update-SpeedtestPainel -It $it
+        }
+        'error' {
+            $te = $w.FindName('txtSpeedErro')
+            $te.Text = [string] $Evento.message
+            $te.Visibility = 'Visible'
+        }
     }
 }
 
-# Botao "Rodar checagem local": teste de internet (ping -> tracert -> download).
+function ConvertTo-MbpsGui {
+    param($BandwidthBytesSeg)
+    if ($null -eq $BandwidthBytesSeg) { return 0 }
+    [math]::Round(([double] $BandwidthBytesSeg) * 8 / 1e6, 2)
+}
+
+# Preenche o painel de resultado do speedtest a partir do payload achatado.
+function Update-SpeedtestPainel {
+    param($It)
+    $w = $Global:JanelaPrincipal
+    if (-not $w -or -not $It) { return }
+    $g = { param($n) if ($It.PSObject.Properties[$n]) { $It.($n) } }
+    $fmt = { param($v) if ($null -eq $v -or "$v" -eq '') { '--' } elseif ([double] $v -ge 100) { '{0:0}' -f $v } else { '{0:0.0}' -f $v } }
+
+    $dl = & $g 'download_mbps'; $ul = & $g 'upload_mbps'
+    $w.FindName('runResDown').Text   = & $fmt $dl
+    $w.FindName('runResUp').Text     = & $fmt $ul
+    $w.FindName('runResPing').Text   = & $fmt (& $g 'ping_ms')
+    $w.FindName('runResJitter').Text = & $fmt (& $g 'jitter_ms')
+    $perda = & $g 'perda_pct'
+    $w.FindName('runResPerda').Text  = if ($null -eq $perda) { '--' } else { '{0:0.0}' -f $perda }
+
+    $w.FindName('txtResIsp').Text = 'Provedor: ' + [string] (& $g 'isp')
+    $srv = [string] (& $g 'servidor_nome')
+    $loc = [string] (& $g 'servidor_local')
+    $w.FindName('txtResServidor').Text = 'Servidor: ' + $srv + $(if ($loc) { " - $loc" } else { '' })
+    $w.FindName('txtResIp').Text = 'IP externo: ' + [string] (& $g 'ip_externo')
+    $url = [string] (& $g 'resultado_url')
+    $tl = $w.FindName('txtResLink')
+    $tl.Text = if ($url) { 'Resultado Ookla: ' + $url } else { '' }
+    $tl.Visibility = if ($url) { 'Visible' } else { 'Collapsed' }
+
+    $w.FindName('txtSpeedErro').Visibility = 'Collapsed'
+    $w.FindName('painelSpeedResultado').Visibility = 'Visible'
+    # velocimetro final mostra o download
+    if ($null -ne $dl) { Set-VelocimetroValor -Valor ([double] $dl) -Unidade 'Mbps' -Fase 'concluido' }
+}
+
+# Botao "Rodar checagem local": teste de velocidade Ookla (speedtest.exe).
 function Invoke-RodarFaseLocal {
     $p = $Global:FaseLocalPayload
     $conectado = $p -and ([bool] $p.Lan.conectado -or [bool] $p.Wireless.conectado)
@@ -1017,14 +1136,16 @@ function Invoke-RodarFaseLocal {
         Write-Log 'Conecte o computador a rede do local (cabo ou Wi-Fi) antes de rodar a checagem.' -Nivel Aviso
         return
     }
-    foreach ($c in $Global:RedePing, $Global:RedeTracert, $Global:RedeDownload) { $c.Clear() }
-    Set-DotsRedeInternet 'rodando'
+    Reset-Velocimetro
     $w = $Global:JanelaPrincipal
-    if ($w) { $w.FindName('cardInternetLocal').Visibility = 'Visible' }
+    if ($w) {
+        $w.FindName('cardInternetLocal').Visibility = 'Visible'
+        $w.FindName('txtVeloFase').Text = 'iniciando...'
+    }
 
     if ($Global:FaseLocalSimulada) { Complete-FaseLocal $Global:FaseLocalSimulada $null; return }
     Set-FaseLocalOcupado $true
-    Write-Log 'Testando a internet do local (sem a VPN do TRE)...' -Nivel Destaque
+    Write-Log 'Rodando o Speedtest (Ookla), sem a VPN do TRE...' -Nivel Destaque
     Start-TarefaRede -Script 'Invoke-FaseLocal' -AoConcluir { param($res, $erro) Complete-FaseLocal $res $erro }
 }
 
@@ -1087,8 +1208,7 @@ function Update-TetheringCelular {
 # Zera o passo 3 (rede local) ao abrir o assistente limpo / pelo guia.
 function Reset-PainelFaseLocal {
     $Global:FaseLocalPayload = $null
-    foreach ($c in $Global:RedePing, $Global:RedeTracert, $Global:RedeDownload) { $c.Clear() }
-    Set-DotsRedeInternet 'idle'
+    Reset-Velocimetro
     $w = $Global:JanelaPrincipal
     if ($w) {
         $w.FindName('txtWifiStatus').Text     = ''

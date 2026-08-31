@@ -36,31 +36,13 @@ $Global:FaseLocalSimulada = [pscustomobject]@{
         ssid = ''; sinal_pct = $null; redes_disponiveis = @('JE-CAMPO', 'VIVO-2G')
     }
     Internet = [pscustomobject]@{
-        ping_alvo = '8.8.8.8'
-        ping_ok = $true; ping_latencia_ms = 22; ping_perda_pct = 0; ping_min_ms = 21; ping_max_ms = 24
-        ping_saida = @(
-            'Disparando 8.8.8.8 com 32 bytes de dados:'
-            'Resposta de 8.8.8.8: bytes=32 tempo=21ms TTL=115'
-            'Resposta de 8.8.8.8: bytes=32 tempo=24ms TTL=115'
-            'Estatisticas do Ping para 8.8.8.8: Enviados = 4, Recebidos = 4, Perdidos = 0 (0% de perda)'
-        )
-        dns_nome = 'www.tre-ma.jus.br'
-        dns_ok = $true; dns_ms = 35; dns_ips = @('200.1.1.1')
-        tracert_host = 'www.tre-ma.jus.br'; tracert_ok = $true; tracert_saltos = 7
-        tracert_saida = @(
-            'www.tre-ma.jus.br  ->  200.1.1.1   (35 ms)'
-            '> tracert -d -h 12 www.tre-ma.jus.br'
-            '  1     1 ms     1 ms     1 ms  192.168.15.1'
-            '  7    30 ms    31 ms    30 ms  200.1.1.1'
-        )
-        download_url = 'https://speed.cloudflare.com/__down?bytes=8000000'
-        download_ok = $true; download_mbps = 48.3; download_bytes = 8000000; download_seg = 1.3
-        download_saida = @(
-            '> GET https://speed.cloudflare.com/__down?bytes=8000000'
-            'HTTP 200   7.6 MB'
-            ' 50%  3.8 MB   210 Mbps'
-            'concluido: 7.63 MB em 1.3s   (~48.3 Mbps)'
-        )
+        speedtest_ok = $true; speedtest_erro = ''
+        isp = 'BARREIRAS NET'; ip_externo = '187.62.154.178'
+        servidor_nome = 'Suprinet Fibra'; servidor_local = 'Corrente'; servidor_id = 12345; servidor_host = 'st.suprinet.net:8080'
+        ping_ms = 20.1; jitter_ms = 0.8; perda_pct = 0.0
+        download_mbps = 855.63; upload_mbps = 295.27; download_lat_ms = 27; upload_lat_ms = 20
+        resultado_url = 'https://www.speedtest.net/result/c/abc-123'; resultado_id = 'abc-123'
+        quando = (Get-Date).ToString('o')
     }
     Quando = (Get-Date).ToString('o')
 }
@@ -181,28 +163,21 @@ try {
     if ($Global:WizardStep -ne 3) { Write-Host "[4c] FALHA: avancou sem testar a internet local"; $falhas++ }
     else { Write-Host "[4c] passo 3 bloqueia antes do teste de internet" }
 
-    # 4c-2. roda a checagem (simulada): painel de internet aparece; avanca p/ passo 4
+    # 4c-2. roda o speedtest (simulado): velocimetro + painel de resultado; avanca p/ passo 4
     Invoke-RodarFaseLocal
     Invoke-Pump
-    $ipTxt = "$($w.FindName('txtLocIp').Text)"
-    if ($null -ne $Global:FaseLocalPayload.Internet -and $ipTxt -match '192\.168\.15\.42' -and $w.FindName('cardInternetLocal').Visibility -eq 'Visible') {
-        Write-Host "[4c] checagem local OK: '$ipTxt' + card de internet visivel"
-    } else { Write-Host "    FALHA: checagem nao completou (internet=$($null -ne $Global:FaseLocalPayload.Internet) ip='$ipTxt' card=$($w.FindName('cardInternetLocal').Visibility))"; $falhas++ }
-    $pingTxt = ($Global:RedePing    | Out-String)
-    $trTxt   = ($Global:RedeTracert | Out-String)
-    $dlTxt   = ($Global:RedeDownload | Out-String)
-    if ($Global:RedePing.Count -ge 3 -and $pingTxt -match 'Resposta de 8\.8\.8\.8' -and $pingTxt -match 'tempo=21ms') {
-        Write-Host "[4c] coluna PING: $($Global:RedePing.Count) linhas transmitidas"
-    } else { Write-Host "    FALHA: coluna PING sem linhas ($($Global:RedePing.Count))"; $falhas++ }
-    if ($Global:RedeTracert.Count -ge 2 -and $trTxt -match 'tracert' -and $trTxt -match '200\.1\.1\.1') {
-        Write-Host "[4c] coluna TRACERT: $($Global:RedeTracert.Count) linhas (dns + saltos)"
-    } else { Write-Host "    FALHA: coluna TRACERT sem linhas ($($Global:RedeTracert.Count))"; $falhas++ }
-    if ($Global:RedeDownload.Count -ge 2 -and $dlTxt -match 'GET ' -and $dlTxt -match 'Mbps') {
-        Write-Host "[4c] coluna DOWNLOAD: $($Global:RedeDownload.Count) linhas (alvo + progresso)"
-    } else { Write-Host "    FALHA: coluna DOWNLOAD sem linhas ($($Global:RedeDownload.Count))"; $falhas++ }
-    $dg = "$($w.FindName('dotPing').Fill)$($w.FindName('dotTracert').Fill)$($w.FindName('dotDownload').Fill)"
-    if ($dg -notmatch '7D8698') { Write-Host "[4c] indicadores das 3 colunas coloridos (ok/erro)" }
-    else { Write-Host "    FALHA: algum indicador ficou cinza (dots='$dg')"; $falhas++ }
+    $it = $Global:FaseLocalPayload.Internet
+    if ($it -and $it.speedtest_ok -and $w.FindName('cardInternetLocal').Visibility -eq 'Visible' -and
+        "$($w.FindName('painelSpeedResultado').Visibility)" -eq 'Visible') {
+        Write-Host "[4c] speedtest OK: card + painel de resultado visiveis"
+    } else { Write-Host "    FALHA: speedtest nao completou (ok=$($it.speedtest_ok) card=$($w.FindName('cardInternetLocal').Visibility) painel=$($w.FindName('painelSpeedResultado').Visibility))"; $falhas++ }
+    $rd = "$($w.FindName('runResDown').Text)"; $rp = "$($w.FindName('txtResIsp').Text)"
+    if ($rd -match '85' -and "$($w.FindName('runResUp').Text)" -match '29' -and $rp -match 'BARREIRAS NET') {
+        Write-Host "[4c] resultado: down=$rd Mbps  up=$($w.FindName('runResUp').Text)  provedor='$rp'"
+    } else { Write-Host "    FALHA: painel de resultado do speedtest (down='$rd' isp='$rp')"; $falhas++ }
+    if ("$($w.FindName('txtVeloNum').Text)" -match '85' -and "$($w.FindName('txtVeloFase').Text)" -match 'concluido') {
+        Write-Host "[4c] velocimetro fixou o download ($($w.FindName('txtVeloNum').Text) Mbps)"
+    } else { Write-Host "    FALHA: velocimetro final (num='$($w.FindName('txtVeloNum').Text)' fase='$($w.FindName('txtVeloFase').Text)')"; $falhas++ }
     Invoke-WizardProximo
     if ($Global:WizardStep -ne 4) { Write-Host "    FALHA: nao foi para o passo 4 (diagnostico com VPN)"; $falhas++ }
 
@@ -369,10 +344,10 @@ try {
         if (-not $okDoc) { Write-Host "    FALHA: JSON incompleto"; $falhas++ }
         $rl = $doc.rede_local
         if ($rl -and $rl.ip_local -eq '192.168.15.42' -and $rl.gateway -eq '192.168.15.1' -and $rl.host -eq 'NB-TESTE-01' -and
-            @($rl.wireless_redes).Count -ge 1 -and $rl.internet_ping_alvo -eq '8.8.8.8' -and "$($rl.internet_download_url)" -match 'cloudflare' -and
-            $rl.internet_tracert_saltos -eq 7 -and @($rl.internet_tracert_saida).Count -ge 1) {
-            Write-Host "[5d] JSON traz rede_local: host=$($rl.host) ip=$($rl.ip_local) ping_alvo=$($rl.internet_ping_alvo) tracert=$($rl.internet_tracert_saltos) saltos"
-        } else { Write-Host "    FALHA: JSON sem bloco rede_local completo (host='$($rl.host)' ip='$($rl.ip_local)' alvo='$($rl.internet_ping_alvo)' tracert='$($rl.internet_tracert_saltos)')"; $falhas++ }
+            @($rl.wireless_redes).Count -ge 1 -and $rl.speedtest_ok -eq $true -and $rl.internet_provedor -eq 'BARREIRAS NET' -and
+            [double] $rl.internet_download_mbps -gt 800 -and "$($rl.internet_resultado_url)" -match 'speedtest') {
+            Write-Host "[5d] JSON traz rede_local: host=$($rl.host) ip=$($rl.ip_local) provedor=$($rl.internet_provedor) down=$($rl.internet_download_mbps) up=$($rl.internet_upload_mbps)"
+        } else { Write-Host "    FALHA: JSON sem bloco rede_local completo (host='$($rl.host)' provedor='$($rl.internet_provedor)' down='$($rl.internet_download_mbps)')"; $falhas++ }
         if ($rl.tethering_celular -eq $true -and $rl.operadora -eq 'Vivo') {
             Write-Host "[5d] rede_local traz o tethering: operadora=$($rl.operadora)"
         } else { Write-Host "    FALHA: rede_local sem tethering/operadora (t=$($rl.tethering_celular) op='$($rl.operadora)')"; $falhas++ }
