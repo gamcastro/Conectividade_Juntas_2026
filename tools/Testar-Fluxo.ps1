@@ -241,8 +241,8 @@ try {
     Set-Sessao -TecnicoNome $Global:AdminNome -Papel 'admin' | Out-Null
     Enter-Home -Sessao (Get-Sessao)
     if ($w.FindName('btnMenuAdmin').Visibility -ne 'Visible') { Write-Host "[8] FALHA: botao Administracao nao aparece para admin"; $falhas++ }
-    if ($w.FindName('chkTodasJuntas').Visibility -ne 'Visible') { Write-Host "    FALHA: admin sem opcao 'incluir Juntas fora da rota'"; $falhas++ }
-    else { Write-Host "[8] admin ve a opcao de incluir Juntas fora da rota" }
+    if ($w.FindName('chkTodasJuntas').Visibility -ne 'Collapsed') { Write-Host "    FALHA: checkbox 'incluir Juntas fora da rota' deveria estar oculto"; $falhas++ }
+    else { Write-Host "[8] checkbox 'incluir Juntas fora da rota' oculto (desativado por ora)" }
     Show-Admin
     $nLim = $w.FindName('dgLimiares').Items.Count
     Write-Host "[8] Admin: $nLim linha(s) de limiar"

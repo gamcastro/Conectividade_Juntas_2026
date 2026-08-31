@@ -371,11 +371,12 @@ function Enter-Home {
     $w.FindName('btnMenuAdmin').Visibility = $visAdmin
     $w.FindName('navAdmin').Visibility     = $visAdmin
 
-    # seletor de Juntas volta ao padrao "so da rota" a cada troca de usuario
+    # seletor de Juntas: sempre so da rota (checkbox "incluir fora da rota"
+    # desativado por ora; para reativar, use  $chkTodas.Visibility = $visAdmin)
     $Global:MostrarTodasJuntas = $false
     $chkTodas = $w.FindName('chkTodasJuntas')
     $chkTodas.IsChecked  = $false
-    $chkTodas.Visibility = $visAdmin
+    $chkTodas.Visibility = 'Collapsed'
 
     $rot = $null
     try { $rot = Get-RoteiroDoTecnico -Nome $Sessao.tecnico_nome } catch { Write-Log "Roteiro nao carregado: $_" -Nivel Aviso }
