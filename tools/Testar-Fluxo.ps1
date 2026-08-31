@@ -23,6 +23,7 @@ $Global:ModoTeste  = $true   # nao abrir o PDF/pasta no final do export
 
 # fase 1 (rede local) simulada: nao mexe na placa de rede real da maquina de teste
 $Global:FaseLocalSimulada = [pscustomobject]@{
+    Host = 'NB-TESTE-01'
     Lan = [pscustomobject]@{
         presente = $true; nome = 'Ethernet'; descricao = 'Realtek PCIe GbE Family Controller'
         status = 'Up'; conectado = $true
@@ -153,10 +154,13 @@ try {
     # 4c-2. roda a checagem local (simulada): painel mostra o IP; avanca p/ passo 4
     Invoke-RodarFaseLocal
     Invoke-Pump
-    $ipTxt = "$($w.FindName('txtLocIp').Text)"
+    $ipTxt   = "$($w.FindName('txtLocIp').Text)"
+    $hostTxt = "$($w.FindName('txtLocHost').Text)"
     if ($null -ne $Global:FaseLocalPayload -and $ipTxt -match '192\.168\.15\.42' -and $w.FindName('cardFaseLocal').Visibility -eq 'Visible') {
         Write-Host "[4c] checagem local OK: '$ipTxt'"
     } else { Write-Host "    FALHA: fase local nao populou (payload=$($null -ne $Global:FaseLocalPayload) ip='$ipTxt')"; $falhas++ }
+    if ($hostTxt -match 'NB-TESTE-01') { Write-Host "[4c] card mostra o notebook: '$hostTxt'" }
+    else { Write-Host "    FALHA: card sem o hostname (host='$hostTxt')"; $falhas++ }
     Invoke-WizardProximo
     if ($Global:WizardStep -ne 4) { Write-Host "    FALHA: nao foi para o passo 4 (diagnostico com VPN)"; $falhas++ }
 
@@ -245,9 +249,9 @@ try {
         Write-Host "[5d] salvo: tecnico='$($doc.tecnico.nome)' final='$($doc.classificacao.final)' ajustada='$($linhaAlt.metrica)'->'$($linhaAlt.classe_final)'"
         if (-not $okDoc) { Write-Host "    FALHA: JSON incompleto"; $falhas++ }
         $rl = $doc.rede_local
-        if ($rl -and $rl.ip_local -eq '192.168.15.42' -and $rl.gateway -eq '192.168.15.1' -and @($rl.wireless_redes).Count -ge 1) {
-            Write-Host "[5d] JSON traz rede_local: ip=$($rl.ip_local) gw=$($rl.gateway) wifi_redes=$(@($rl.wireless_redes).Count)"
-        } else { Write-Host "    FALHA: JSON sem bloco rede_local completo (ip='$($rl.ip_local)')"; $falhas++ }
+        if ($rl -and $rl.ip_local -eq '192.168.15.42' -and $rl.gateway -eq '192.168.15.1' -and $rl.host -eq 'NB-TESTE-01' -and @($rl.wireless_redes).Count -ge 1) {
+            Write-Host "[5d] JSON traz rede_local: host=$($rl.host) ip=$($rl.ip_local) gw=$($rl.gateway) wifi_redes=$(@($rl.wireless_redes).Count)"
+        } else { Write-Host "    FALHA: JSON sem bloco rede_local completo (host='$($rl.host)' ip='$($rl.ip_local)')"; $falhas++ }
         if ($rl.tethering_celular -eq $true -and $rl.operadora -eq 'Vivo') {
             Write-Host "[5d] rede_local traz o tethering: operadora=$($rl.operadora)"
         } else { Write-Host "    FALHA: rede_local sem tethering/operadora (t=$($rl.tethering_celular) op='$($rl.operadora)')"; $falhas++ }

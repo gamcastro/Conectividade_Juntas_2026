@@ -819,6 +819,8 @@ function Update-PainelFaseLocal {
     if (-not $p) { if ($card) { $card.Visibility = 'Collapsed' }; return }
 
     $lan = $p.Lan; $wf = $p.Wireless; $it = $p.Internet
+    $hostNb = if ($p.PSObject.Properties['Host']) { [string] $p.Host } else { '' }
+    Set-LinhaDetalhe $w.FindName('txtLocHost') 'Notebook' $hostNb
     $verde    = Get-PincelVeredito 'viavel'
     $vermelho = Get-PincelVeredito 'inviavel'
     $cinza    = [Windows.Media.SolidColorBrush]::new([Windows.Media.ColorConverter]::ConvertFromString('#7D8698'))

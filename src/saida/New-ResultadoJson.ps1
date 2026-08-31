@@ -75,6 +75,7 @@ function New-ResultadoJson {
         $it  = Get-Prop $FaseLocal 'Internet'
         $redeLocal = [pscustomobject]@{
             coletado_em            = (Get-Prop $FaseLocal 'Quando')
+            host                   = [string] (Get-Prop $FaseLocal 'Host')
             lan_conectada          = [bool] (Get-Prop $lan 'conectado')
             lan_adaptador          = [string] (Get-Prop $lan 'nome')
             lan_descricao          = [string] (Get-Prop $lan 'descricao')

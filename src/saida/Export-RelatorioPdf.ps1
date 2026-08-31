@@ -147,6 +147,9 @@ function New-RelatorioHtml {
         $tether = ($rl.PSObject.Properties['tethering_celular']) -and $rl.tethering_celular
 
         $ce = @()
+        if ($rl.PSObject.Properties['host'] -and $rl.host) {
+            $ce += '<div><b>Notebook:</b> {0}</div>' -f (ConvertTo-HtmlSafe ([string] $rl.host))
+        }
         if ($tether) {
             $op = if ($rl.PSObject.Properties['operadora'] -and $rl.operadora) {
                 ' &mdash; operadora <b>{0}</b>' -f (ConvertTo-HtmlSafe ([string] $rl.operadora))

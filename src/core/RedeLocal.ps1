@@ -279,6 +279,7 @@ function Invoke-FaseLocal {
     $net = Test-InternetLocal
 
     [pscustomobject]@{
+        Host     = [string] $env:COMPUTERNAME
         Lan      = $lan
         Wireless = $wf
         Internet = $net

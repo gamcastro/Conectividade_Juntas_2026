@@ -546,6 +546,9 @@
                                 <StackPanel>
                                     <TextBlock Text="Rede do local" Style="{DynamicResource SecaoTela}"
                                                Margin="0,0,0,8"/>
+                                    <TextBlock x:Name="txtLocHost" Margin="0,0,0,4" FontFamily="Consolas"
+                                               FontSize="11" Foreground="{DynamicResource Dicon.Text3}"
+                                               Visibility="Collapsed"/>
                                     <TextBlock x:Name="txtLocLan" FontWeight="Bold" TextWrapping="Wrap"
                                                Foreground="{DynamicResource Dicon.Text}"/>
                                     <TextBlock x:Name="txtLocIp" Margin="0,3,0,0" FontFamily="Consolas"
