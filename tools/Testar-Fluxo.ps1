@@ -142,6 +142,19 @@ try {
         if (-not $okDoc) { Write-Host "    FALHA: JSON incompleto"; $falhas++ }
     }
 
+    # 5e. acompanhamento: guia marca o local como testado; home mostra progresso
+    Show-GuiaBordo
+    $grpT = @($w.FindName('lstGuiaJuntas').ItemsSource)[0]
+    $locT = @($grpT.locais) | Where-Object { $_.id -eq 'ZE99-TESTE-PRINCIPAL' } | Select-Object -First 1
+    if ($locT -and "$($locT.TesteStatus)" -match 'Testado' -and "$($locT.BotaoRodar)" -match 'Refazer') {
+        Write-Host "[5e] guia marca o local como testado: '$($locT.TesteStatus)'"
+    } else {
+        Write-Host "    FALHA: guia nao marcou o local como testado (status='$($locT.TesteStatus)')"; $falhas++
+    }
+    $prog = Get-ProgressoRoteiro -Roteiro $Global:RoteiroAtual -TecnicoNome 'TECNICO HEADLESS'
+    if ($prog.Testados -eq 1 -and $prog.Total -eq 2) { Write-Host "[5e] progresso do roteiro: $($prog.Testados)/$($prog.Total)" }
+    else { Write-Host "    FALHA: progresso $($prog.Testados)/$($prog.Total) (esperado 1/2)"; $falhas++ }
+
     # 6. menu Inicio -> Diagnostico deve abrir limpo (sem selecao, sem log, sem painel)
     Open-DiagnosticoLimpo
     $selLimpo    = $w.FindName('cboLocal').SelectedItem

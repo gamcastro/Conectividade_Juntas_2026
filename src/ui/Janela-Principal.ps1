@@ -339,12 +339,19 @@ function Enter-Home {
     }
 
     if ($rot) {
-        $nLocais = @($rot.juntas | ForEach-Object { @($_.locais).Count } | Measure-Object -Sum).Sum
+        $prog = Get-ProgressoRoteiro -Roteiro $rot -TecnicoNome $Sessao.tecnico_nome
         $w.FindName('txtTileDias').Text   = [string] $rot.dias
-        $w.FindName('txtTileLocais').Text = [string] ([int] $nLocais)
+        $w.FindName('txtTileLocais').Text = [string] $prog.Total
         $w.FindName('txtTileKm').Text     = [string] $rot.total_km
+
+        $w.FindName('txtProgressoRoteiro').Text = '{0} de {1} locais testados' -f $prog.Testados, $prog.Total
+        $pb = $w.FindName('prgProgressoRoteiro')
+        $pb.Maximum = [math]::Max($prog.Total, 1)
+        $pb.Value   = $prog.Testados
+        $w.FindName('painelProgressoRoteiro').Visibility = 'Visible'
     } else {
         foreach ($t in 'txtTileDias', 'txtTileLocais', 'txtTileKm') { $w.FindName($t).Text = '--' }
+        $w.FindName('painelProgressoRoteiro').Visibility = 'Collapsed'
     }
 
     Update-AvisoPendentes
@@ -397,6 +404,35 @@ function Show-GuiaBordo {
     $w.FindName('txtGuiaSub').Text = ('Tecnico: {0}    |    Etapa {1}    |    {2} a {3}    |    {4} dias    |    {5} km ({6})' -f `
             $rot.tecnico, $rot.etapa, $rot.ida, $rot.retorno, $rot.dias, $rot.total_km, $rot.total_tempo)
     $w.FindName('lstTrechos').ItemsSource    = @($rot.trechos)
+
+    # marca cada local com o status do ultimo diagnostico feito pelo tecnico
+    $feitos = Get-DiagnosticosRealizados -TecnicoNome $Global:SessaoAtual.tecnico_nome
+    $cinza  = [Windows.Media.SolidColorBrush]::new([Windows.Media.ColorConverter]::ConvertFromString('#7D8698'))
+    $cinza.Freeze()
+    foreach ($grupo in @($rot.juntas)) {
+        foreach ($loc in @($grupo.locais)) {
+            $d = $feitos[[string] $loc.id]
+            if ($d) {
+                $ver = switch ($d.ClassificacaoFinal) {
+                    'viavel'              { 'vi' + [char]0x00E1 + 'vel' }
+                    'viavel_com_ressalva' { 'vi' + [char]0x00E1 + 'vel c/ ressalva' }
+                    'inviavel'            { 'invi' + [char]0x00E1 + 'vel' }
+                    default               { [string] $d.ClassificacaoFinal }
+                }
+                $sfx = if ($d.Enviado) { '' } else { '  (nao enviado)' }
+                $txt = 'Testado {0:dd/MM HH:mm}  -  {1}{2}' -f $d.Quando, $ver, $sfx
+                $cor = Get-PincelVeredito $d.ClassificacaoFinal
+                $bot = 'Refazer teste'
+            } else {
+                $txt = 'N' + [char]0x00E3 + 'o testado'
+                $cor = $cinza
+                $bot = 'Rodar diagn' + [char]0x00F3 + 'stico'
+            }
+            $loc | Add-Member -NotePropertyName TesteStatus -NotePropertyValue $txt -Force
+            $loc | Add-Member -NotePropertyName TesteCor    -NotePropertyValue $cor -Force
+            $loc | Add-Member -NotePropertyName BotaoRodar  -NotePropertyValue $bot -Force
+        }
+    }
     $w.FindName('lstGuiaJuntas').ItemsSource = @($rot.juntas)
 
     $sem = @($rot.cidades_sem_junta)
