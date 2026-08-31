@@ -49,9 +49,23 @@ Script), em vez de criar um BI/dashboard separado.
   partir de uma pasta única (executável + dependências), sem instalar nada
   extra no notebook de campo
 
+## Envio de resultados
+- **Modo `offline-first`** (`config/envio.json`): "Salvar resultado" grava em
+  `resultados/pendentes/`; o envio ao Web App acontece depois — no botão
+  "Atualizar dados" (com internet) ou no aviso "Reenviar" da tela inicial.
+- Destino: **planilha Google dedicada só a resultados de conectividade**
+  (`PLANILHA_RESULTADOS_ID` em `apps-script/Codigo.gs`, aba `Resultados`).
+- `Send-Resultado` só move para `resultados/enviados/` com resposta
+  `{status:'ok'}`; `erro`/`ignorado` mantêm o arquivo em `pendentes/`.
+- Teste: `tools/Testar-Envio.ps1` (HttpListener local simula o Apps Script).
+
 ## Ainda em aberto
 - Limiares exatos de latência/perda/banda/tempo de carregamento que definem
   viável vs inviável (depende de validação com o time responsável pelo sistema
   de totalização)
-- Endpoint exato do Apps Script do Painel de Vistoria para envio dos resultados
-- Se o envio é sempre na hora ou offline-first (salva local e tenta depois)
+- `PLANILHA_RESULTADOS_ID` a preencher quando a planilha de resultados existir
+  (hoje o Web App responde `{status:'ignorado'}` e o resultado fica em
+  `pendentes/`)
+- Coleta real das métricas (iperf3 + Selenium + ping) validada ponta a ponta
+- Fase 2 do admin: incluir/alterar Locais das Juntas
+- Empacotamento de campo (pasta portátil autocontida)

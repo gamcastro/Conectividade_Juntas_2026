@@ -45,7 +45,7 @@ O script força modo STA (exigido pelo WPF) e faz auto-elevação UAC.
 | `bin/`, `lib/Selenium/` | Binários portáteis (`iperf3`, drivers) e Selenium .NET |
 | `lib/mahapps/` | DLLs do MahApps.Metro 2.4.10 (+ ControlzEx, Xaml.Behaviors) — versionadas |
 | `resultados/` | `pendentes/` e `enviados/` |
-| `tools/` | `Testar-Gui.ps1`, `Testar-Fluxo.ps1` (headless), `Definir-PIN-Admin.ps1` |
+| `tools/` | `Testar-Gui.ps1`, `Testar-Fluxo.ps1` / `Testar-Envio.ps1` (headless), `Definir-PIN-Admin.ps1`, `Spike-MahApps.ps1` |
 | `docs/` | Manual do técnico, referência de limiares, contrato do JSON |
 
 ## Dependências de terceiros

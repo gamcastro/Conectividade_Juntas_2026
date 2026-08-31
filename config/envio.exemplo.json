@@ -1,7 +1,8 @@
 {
-  "_comentario": "modo: 'na-hora' envia ao final da coleta; 'offline-first' apenas salva local e o reenvio e feito depois (manual ou no proximo start).",
+  "_comentario": "modo: 'na-hora' tenta enviar ao final da coleta (com fallback para pendentes); 'offline-first' apenas salva local e o reenvio e feito depois. reenvio_ao_atualizar: no botao 'Atualizar dados' (com internet), tambem esvazia a fila de resultados\\pendentes\\.",
   "endpoint_apps_script": "https://script.google.com/macros/s/COLOQUE_O_ID_AQUI/exec",
   "modo": "offline-first",
   "retentativas": 3,
-  "intervalo_retentativa_s": 5
+  "intervalo_retentativa_s": 5,
+  "reenvio_ao_atualizar": true
 }

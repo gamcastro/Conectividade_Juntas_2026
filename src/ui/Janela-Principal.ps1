@@ -193,6 +193,7 @@ function New-JanelaPrincipal {
     $window.FindName('btnMenuDiag').Add_Click({ Open-DiagnosticoLimpo })
     $window.FindName('btnMenuAdmin').Add_Click({ Show-Admin })
     $window.FindName('btnMenuAtualizar').Add_Click({ Invoke-AtualizarDados })
+    $window.FindName('btnReenviarPendentes').Add_Click({ Invoke-ReenvioPendentes })
     $window.FindName('btnTrocarUsuario').Add_Click({ Invoke-TrocarUsuario })
 
     # rail de navegacao (RadioButtons) - handlers ignoram mudanca programatica
@@ -346,6 +347,7 @@ function Enter-Home {
         foreach ($t in 'txtTileDias', 'txtTileLocais', 'txtTileKm') { $w.FindName($t).Text = '--' }
     }
 
+    Update-AvisoPendentes
     Show-View 'viewHome'
 }
 
@@ -359,6 +361,13 @@ function Invoke-AtualizarDados {
         $r = Sync-TudoOnline
         Write-Log ("Dados atualizados: {0} juntas, {1} tecnicos, {2} roteiros." -f $r.juntas, $r.tecnicos, $r.roteiros) -Nivel Ok
         Initialize-SeletorJuntas
+
+        $cfgEnvio = $null
+        try { $cfgEnvio = Get-Config 'envio' } catch { }
+        if (-not $cfgEnvio -or $cfgEnvio.reenvio_ao_atualizar -ne $false) {
+            Send-ResultadosPendentes -Endpoint $cfgEnvio.endpoint_apps_script | Out-Null
+        }
+
         if ($Global:SessaoAtual) { Enter-Home -Sessao $Global:SessaoAtual }
     } catch {
         Write-Log "Falha ao atualizar dados: $_" -Nivel Erro
@@ -741,6 +750,45 @@ function Invoke-SalvarResultado {
     } catch {
         Write-Log "Falha ao salvar: $_" -Nivel Erro
         $w.FindName('btnSalvarResultado').IsEnabled = $true
+    }
+    Update-AvisoPendentes
+}
+
+# ------------------------------------------------------------- ENVIO PENDENTES
+
+# Mostra/oculta o aviso "N resultado(s) aguardando envio" na tela inicial.
+function Update-AvisoPendentes {
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    $btn = $w.FindName('btnReenviarPendentes')
+    if (-not $btn) { return }
+
+    $n = @(Get-ChildItem (Join-Path $Global:RaizApp 'resultados\pendentes') -Filter '*.json' -ErrorAction SilentlyContinue).Count
+    if ($n -gt 0) {
+        $btn.Content = if ($n -eq 1) {
+            '1 resultado aguardando envio  -  Reenviar'
+        } else {
+            '{0} resultados aguardando envio  -  Reenviar' -f $n
+        }
+        $btn.Visibility = 'Visible'
+    } else {
+        $btn.Visibility = 'Collapsed'
+    }
+}
+
+function Invoke-ReenvioPendentes {
+    $w = $Global:JanelaPrincipal
+    $btn = $w.FindName('btnReenviarPendentes')
+    if ($btn) { $btn.IsEnabled = $false; $btn.Content = 'Reenviando...' }
+    try {
+        $cfg = $null
+        try { $cfg = Get-Config 'envio' } catch { }
+        Send-ResultadosPendentes -Endpoint $cfg.endpoint_apps_script | Out-Null
+    } catch {
+        Write-Log "Falha ao reenviar pendentes: $_" -Nivel Erro
+    } finally {
+        if ($btn) { $btn.IsEnabled = $true }
+        Update-AvisoPendentes
     }
 }
 

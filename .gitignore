@@ -28,3 +28,6 @@
 *.tmp
 Thumbs.db
 desktop.ini
+
+# Permissões locais do Claude Code (pessoais, não versionar)
+/.claude/settings.local.json

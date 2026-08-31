@@ -206,7 +206,13 @@
                             Style="{DynamicResource BotaoFantasma}" HorizontalAlignment="Center"
                             Margin="0,12,0,0" Visibility="Collapsed"/>
 
-                    <Image x:Name="imgLogoHome" Height="46" Margin="0,26,0,0" Opacity="0.85"
+                    <Button x:Name="btnReenviarPendentes" Content="Resultados aguardando envio  -  Reenviar"
+                            Style="{DynamicResource BotaoSecundario}" HorizontalAlignment="Center"
+                            HorizontalContentAlignment="Center"
+                            Foreground="{DynamicResource Dicon.Ressalva}"
+                            Margin="0,16,0,0" Visibility="Collapsed"/>
+
+                    <Image x:Name="imgLogoHome" Height="46" Margin="0,22,0,0" Opacity="0.85"
                            HorizontalAlignment="Center"/>
                 </StackPanel>
             </Grid>
