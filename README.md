@@ -1,7 +1,9 @@
-# Conectividade_Juntas_2026
+# DICON — Diagnóstico de Conectividade
 
 Ferramenta de campo (PowerShell + GUI WPF) para diagnosticar a viabilidade de
 conectividade de um local candidato a Junta Eleitoral Especial 2026 — TRE-MA.
+
+**DICON** = **Di**agnóstico de **Con**ectividade.
 
 O técnico roda a bateria de testes no notebook durante a visita e recebe na hora
 uma classificação objetiva: **viável / viável com ressalva / inviável**.

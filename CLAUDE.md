@@ -1,4 +1,6 @@
-# Conectividade_Juntas_2026
+# DICON — Diagnóstico de Conectividade
+
+> **DICON** = **Di**agnóstico de **Con**ectividade. (Repositório: `Conectividade_Juntas_2026`.)
 
 ## Contexto
 Ferramenta de diagnóstico de conectividade e viabilidade de infraestrutura de TIC

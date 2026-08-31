@@ -5,7 +5,7 @@
     Author            = 'TRE-MA / STI'
     CompanyName       = 'Tribunal Regional Eleitoral do Maranhao'
     Copyright         = '(c) 2026 TRE-MA'
-    Description       = 'Diagnostico de conectividade e viabilidade de infraestrutura de TIC para as Juntas Eleitorais Especiais 2026.'
+    Description       = 'DICON - Diagnostico de Conectividade. Viabilidade de infraestrutura de TIC para as Juntas Eleitorais Especiais 2026 (TRE-MA).'
     PowerShellVersion = '5.1'
 
     # Todas as funcoes Verbo-Substantivo (o .psm1 ja restringe com Export-ModuleMember '*-*').
