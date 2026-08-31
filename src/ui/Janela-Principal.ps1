@@ -116,6 +116,19 @@ function Get-PalavraVeredito {
     }
 }
 
+# Rotulo legivel do veredito para textos corridos (ex.: "Viavel com Ressalva").
+function Get-RotuloVeredito {
+    param([string] $Classificacao)
+    $a = [char]0x00E1  # a acentuado
+    switch ($Classificacao) {
+        'viavel'              { 'Vi{0}vel' -f $a }
+        'ressalva'            { 'Ressalva' }
+        'viavel_com_ressalva' { 'Vi{0}vel com Ressalva' -f $a }
+        'inviavel'            { 'Invi{0}vel' -f $a }
+        default               { if ($Classificacao) { [string] $Classificacao } else { '--' } }
+    }
+}
+
 # Atualiza a faixa + palavra da barra de decisao final.
 function Set-BarraDecisao {
     param([string] $Classificacao)
@@ -447,12 +460,7 @@ function Show-GuiaBordo {
         foreach ($loc in @($grupo.locais)) {
             $d = $feitos[[string] $loc.id]
             if ($d) {
-                $ver = switch ($d.ClassificacaoFinal) {
-                    'viavel'              { 'vi' + [char]0x00E1 + 'vel' }
-                    'viavel_com_ressalva' { 'vi' + [char]0x00E1 + 'vel c/ ressalva' }
-                    'inviavel'            { 'invi' + [char]0x00E1 + 'vel' }
-                    default               { [string] $d.ClassificacaoFinal }
-                }
+                $ver = Get-RotuloVeredito $d.ClassificacaoFinal
                 $sfx = if ($d.Enviado) { '' } else { '  (nao enviado)' }
                 $txt = 'Testado {0:dd/MM HH:mm}  -  {1}{2}' -f $d.Quando, $ver, $sfx
                 $cor = Get-PincelVeredito $d.ClassificacaoFinal
@@ -611,7 +619,7 @@ function Update-DetalheLocal {
     $t   = $feitos[[string] $d.id]
     $lbl = $w.FindName('txtDetTestado')
     if ($t) {
-        $lbl.Text       = 'Ja diagnosticado em {0:dd/MM/yyyy HH:mm} - {1}' -f $t.Quando, $t.ClassificacaoFinal
+        $lbl.Text       = 'Ja diagnosticado em {0:dd/MM/yyyy HH:mm} - {1}' -f $t.Quando, (Get-RotuloVeredito $t.ClassificacaoFinal)
         $lbl.Foreground = Get-PincelVeredito $t.ClassificacaoFinal
     } else {
         $cinza = [Windows.Media.SolidColorBrush]::new([Windows.Media.ColorConverter]::ConvertFromString('#7D8698'))
