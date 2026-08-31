@@ -477,6 +477,9 @@
                                                FontSize="11" Foreground="{DynamicResource Dicon.Text3}"/>
                                     <TextBlock x:Name="txtDetTestado" Margin="0,8,0,0" FontFamily="Consolas"
                                                FontSize="11" TextWrapping="Wrap"/>
+                                    <Button x:Name="btnRefazerTeste" Content="Refazer o teste"
+                                            Style="{DynamicResource BotaoPrimario}" HorizontalAlignment="Left"
+                                            Margin="0,12,0,0" Visibility="Collapsed"/>
                                 </StackPanel>
                             </Border>
                         </StackPanel>

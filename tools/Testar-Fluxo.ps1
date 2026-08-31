@@ -212,6 +212,26 @@ try {
         $falhas++
     } else { Write-Host "[6] Assistente pelo menu abre limpo no passo 1" }
 
+    # 6b. passo 2 com local JA testado: some "Proximo", aparece "Refazer o teste"
+    Show-WizardPasso 2
+    $cboJ6 = $w.FindName('cboJunta'); if ($cboJ6.Items.Count) { $cboJ6.SelectedIndex = 0 }
+    $cboL6 = $w.FindName('cboLocal')
+    $liP = @($cboL6.Items) | Where-Object { $_.Dados.id -eq 'ZE99-TESTE-PRINCIPAL' } | Select-Object -First 1
+    $liC = @($cboL6.Items) | Where-Object { $_.Dados.id -eq 'ZE99-TESTE-CONTINGENCIA' } | Select-Object -First 1
+    $cboL6.SelectedItem = $liC; Invoke-Pump          # nao testado
+    $cboL6.SelectedItem = $liP; Invoke-Pump          # testado no passo 5d
+    $refV  = "$($w.FindName('btnRefazerTeste').Visibility)"
+    $proxV = "$($w.FindName('btnWizProximo').Visibility)"
+    if ($refV -eq 'Visible' -and $proxV -ne 'Visible') { Write-Host "[6b] local testado: 'Refazer o teste' no card, sem 'Proximo'" }
+    else { Write-Host "    FALHA: nav passo 2 p/ testado (refazer=$refV proximo=$proxV)"; $falhas++ }
+    $cboL6.SelectedItem = $liC; Invoke-Pump          # volta para nao testado
+    if ("$($w.FindName('btnWizProximo').Visibility)" -eq 'Visible' -and "$($w.FindName('btnRefazerTeste').Visibility)" -ne 'Visible') { Write-Host "[6b] local nao testado: 'Proximo' de volta" }
+    else { Write-Host "    FALHA: nav nao voltou p/ nao testado"; $falhas++ }
+    $cboL6.SelectedItem = $liP; Invoke-Pump
+    Invoke-WizardProximo                              # o handler de 'Refazer o teste'
+    if ($Global:WizardStep -eq 3) { Write-Host "[6b] 'Refazer o teste' -> passo 3" }
+    else { Write-Host "    FALHA: refazer nao foi ao passo 3 (step=$($Global:WizardStep))"; $falhas++ }
+
     # 7. trocar usuario
     Invoke-TrocarUsuario
     if ($w.FindName('viewLogin').Visibility -ne 'Visible') { Write-Host "[7] FALHA: 'trocar usuario' nao voltou ao login"; $falhas++ }

@@ -200,6 +200,7 @@ function New-JanelaPrincipal {
         })
     $window.FindName('btnWizVoltar').Add_Click({ Invoke-WizardVoltar })
     $window.FindName('btnWizProximo').Add_Click({ Invoke-WizardProximo })
+    $window.FindName('btnRefazerTeste').Add_Click({ Invoke-WizardProximo })
     $window.FindName('btnExportarPdf').Add_Click({ Invoke-ExportarRelatorio })
     $window.FindName('btnTransmitirResultado').Add_Click({ Invoke-TransmitirResultado })
     $window.FindName('btnDiagVoltar').Add_Click({ Show-View 'viewHome' })
@@ -495,6 +496,7 @@ function Show-WizardPasso {
     $w.FindName('prgWizard').Value   = $N
 
     $w.FindName('btnWizVoltar').IsEnabled = ($N -gt 1)
+    $w.FindName('btnRefazerTeste').Visibility = 'Collapsed'
     $prox = $w.FindName('btnWizProximo')
     $prox.Visibility = if ($N -lt 6) { 'Visible' } else { 'Collapsed' }
     $prox.Content    = if ($N -eq 5) { 'Concluir' } else { 'Pr' + [char]0x00F3 + 'ximo' }
@@ -582,7 +584,14 @@ function Update-DetalheLocal {
     $sel  = $w.FindName('cboLocal').SelectedItem
     $card = $w.FindName('cardDetalheLocal')
     if (-not $card) { return }
-    if (-not $sel) { $card.Visibility = 'Collapsed'; return }
+    if (-not $sel) {
+        $card.Visibility = 'Collapsed'
+        if ($Global:WizardStep -eq 2) {
+            $w.FindName('btnWizProximo').Visibility   = 'Visible'
+            $w.FindName('btnRefazerTeste').Visibility = 'Collapsed'
+        }
+        return
+    }
 
     $d = $sel.Dados
     $w.FindName('txtDetTipo').Text     = if ($d.tipo -eq 'principal') { 'LOCAL PRINCIPAL' } else { 'LOCAL DE CONTINGENCIA' }
@@ -611,6 +620,14 @@ function Update-DetalheLocal {
         $lbl.Foreground = $cinza
     }
     $card.Visibility = 'Visible'
+
+    # Passo 2: local ja testado (e nao ha diagnostico em andamento) -> some o
+    # "Proximo" do rodape e aparece "Refazer o teste" no proprio cartao.
+    if ($Global:WizardStep -eq 2) {
+        $jaTestado = $t -and (-not $Global:DiagPayload)
+        $w.FindName('btnWizProximo').Visibility   = if ($jaTestado) { 'Collapsed' } else { 'Visible' }
+        $w.FindName('btnRefazerTeste').Visibility = if ($jaTestado) { 'Visible' } else { 'Collapsed' }
+    }
 }
 
 # Atualiza os check-marks do passo 6 (verde = feito, vermelho = pendente).
