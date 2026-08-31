@@ -269,6 +269,13 @@
                                           ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
                                           IsHitTestVisible="False" VerticalAlignment="Center"
                                           HorizontalAlignment="Left"/>
+                        <TextBox x:Name="PART_EditableTextBox" Style="{x:Null}"
+                                 Margin="6,0,24,0" Padding="0" VerticalAlignment="Center"
+                                 VerticalContentAlignment="Center" Visibility="Hidden"
+                                 Background="Transparent" BorderThickness="0"
+                                 Foreground="{TemplateBinding Foreground}"
+                                 CaretBrush="{TemplateBinding Foreground}"
+                                 IsReadOnly="{TemplateBinding IsReadOnly}" Focusable="True"/>
                         <Path x:Name="ar" Data="M0,0 L8,0 L4,5 Z" Fill="{DynamicResource Dicon.Text3}"
                               HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0"
                               IsHitTestVisible="False"/>
@@ -286,6 +293,10 @@
                         </Popup>
                     </Grid>
                     <ControlTemplate.Triggers>
+                        <Trigger Property="IsEditable" Value="True">
+                            <Setter TargetName="PART_EditableTextBox" Property="Visibility" Value="Visible"/>
+                            <Setter TargetName="cp" Property="Visibility" Value="Collapsed"/>
+                        </Trigger>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource Dicon.Accent}"/>
                         </Trigger>
