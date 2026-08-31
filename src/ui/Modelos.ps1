@@ -113,6 +113,9 @@ namespace Conectividade
 
         private string _ressalva;
         public string LimiarRessalva { get { return _ressalva; } set { _ressalva = value; Raise("LimiarRessalva"); } }
+
+        private bool _ativo = true;   // metrica entra na bateria de teste?
+        public bool Ativo { get { return _ativo; } set { _ativo = value; Raise("Ativo"); } }
     }
 }
 '@
@@ -163,6 +166,12 @@ $Global:MetricasInfo = @(
     @{ metrica = 'carregamento_web_s';  rotulo = 'Carregamento web';  unidade = 's';    direcao = 'max' }
 )
 
+function Get-RotuloMetrica {
+    param([string] $Metrica)
+    $i = $Global:MetricasInfo | Where-Object { $_.metrica -eq $Metrica } | Select-Object -First 1
+    if ($i) { $i.rotulo } else { [string] $Metrica }
+}
+
 function New-LimiarRow {
     param($Info, $Limiar)
     $sv = if ($Info.direcao -eq 'max') { 'viavel_ate' } else { 'viavel_min' }
@@ -176,5 +185,6 @@ function New-LimiarRow {
     $r.DirecaoTexto  = if ($Info.direcao -eq 'max') { 'menor ' + [char]0x00E9 + ' melhor' } else { 'maior ' + [char]0x00E9 + ' melhor' }
     $r.LimiarViavel   = [string] $Limiar.$sv
     $r.LimiarRessalva = [string] $Limiar.$sr
+    $r.Ativo = if ($null -eq $Limiar.ativo) { $true } else { [bool] $Limiar.ativo }
     return $r
 }

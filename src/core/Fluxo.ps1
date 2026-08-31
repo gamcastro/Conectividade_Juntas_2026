@@ -23,15 +23,32 @@ function Invoke-DiagnosticoCompleto {
         Write-Log 'VPN nao detectada - os resultados podem nao refletir a rede da JE' -Nivel Aviso
     }
 
-    # --- Coleta ---------------------------------------------------------
-    $lat = Test-Latencia -Alvo $cfgAmbiente.ping.alvo -Amostras $cfgAmbiente.ping.amostras
+    # --- Coleta (so roda o teste se alguma metrica dele estiver ativa) -----
+    function Test-LimiarAtivo { param([string] $M)
+        $o = $limiares.$M
+        if ($null -eq $o) { return $true }
+        $p = $o.PSObject.Properties['ativo']
+        if (-not $p) { return $true }
+        return [bool] $p.Value
+    }
+    $usaPing  = (Test-LimiarAtivo 'latencia_ms') -or (Test-LimiarAtivo 'jitter_ms') -or (Test-LimiarAtivo 'perda_percentual')
+    $usaBanda = (Test-LimiarAtivo 'banda_download_mbps') -or (Test-LimiarAtivo 'banda_upload_mbps')
+    $usaWeb   = (Test-LimiarAtivo 'carregamento_web_s')
 
-    $band = Test-Banda -Servidor $cfgAmbiente.iperf3.servidor -Porta $cfgAmbiente.iperf3.porta `
-                       -Duracao $cfgAmbiente.iperf3.duracao_s -Reverso:$cfgAmbiente.iperf3.reverso
+    $lat = if ($usaPing) {
+        Test-Latencia -Alvo $cfgAmbiente.ping.alvo -Amostras $cfgAmbiente.ping.amostras
+    } else { Write-Log 'Ping desativado pela configuracao (admin).' -Nivel Aviso; [pscustomobject]@{ LatenciaMediaMs = $null; JitterMs = $null; PerdaPercentual = $null } }
 
-    $web = Test-CarregamentoWeb -Url $cfgAmbiente.totalizacao.url `
-                                -Navegadores $cfgAmbiente.totalizacao.navegadores `
-                                -TimeoutS $cfgAmbiente.totalizacao.timeout_s
+    $band = if ($usaBanda) {
+        Test-Banda -Servidor $cfgAmbiente.iperf3.servidor -Porta $cfgAmbiente.iperf3.porta `
+                   -Duracao $cfgAmbiente.iperf3.duracao_s -Reverso:$cfgAmbiente.iperf3.reverso
+    } else { Write-Log 'Teste de banda (iperf3) desativado pela configuracao (admin).' -Nivel Aviso; [pscustomobject]@{ DownloadMbps = $null; UploadMbps = $null } }
+
+    $web = if ($usaWeb) {
+        Test-CarregamentoWeb -Url $cfgAmbiente.totalizacao.url `
+                             -Navegadores $cfgAmbiente.totalizacao.navegadores `
+                             -TimeoutS $cfgAmbiente.totalizacao.timeout_s
+    } else { Write-Log 'Teste de carregamento web desativado pela configuracao (admin).' -Nivel Aviso; [pscustomobject]@{ TempoMedioS = $null } }
 
     $metricas = [pscustomobject]@{
         LatenciaMediaMs   = $lat.LatenciaMediaMs

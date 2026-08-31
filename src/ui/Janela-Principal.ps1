@@ -832,9 +832,9 @@ function Invoke-SalvarLimiares {
             return
         }
         if ($r.Direcao -eq 'max') {
-            $limiares[$r.Metrica] = @{ viavel_ate = $v; ressalva_ate = $rr }
+            $limiares[$r.Metrica] = @{ viavel_ate = $v; ressalva_ate = $rr; ativo = [bool] $r.Ativo }
         } else {
-            $limiares[$r.Metrica] = @{ viavel_min = $v; ressalva_min = $rr }
+            $limiares[$r.Metrica] = @{ viavel_min = $v; ressalva_min = $rr; ativo = [bool] $r.Ativo }
         }
     }
 
@@ -1065,6 +1065,15 @@ function Show-PainelResultado {
     }
     $Global:AvaliacaoRows = $rows
     $w.FindName('dgAvaliacao').ItemsSource = $rows
+
+    $des = @($Payload.Decisao.MetricasDesativadas)
+    $lblDes = $w.FindName('txtMetricasDesativadas')
+    if ($des.Count) {
+        $lblDes.Text = 'Desativadas pela configuracao (nao avaliadas): ' + (($des | ForEach-Object { Get-RotuloMetrica $_ }) -join ', ')
+        $lblDes.Visibility = 'Visible'
+    } else {
+        $lblDes.Visibility = 'Collapsed'
+    }
 
     $w.FindName('txtJustDecisao').Text = ''
     $w.FindName('btnSalvarResultado').IsEnabled = $true

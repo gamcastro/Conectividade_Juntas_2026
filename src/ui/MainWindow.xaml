@@ -553,6 +553,9 @@
                         <StackPanel>
                             <TextBlock Style="{DynamicResource SubtituloTela}" Margin="0,0,0,10"
                                        Text="Ajuste a classifica&#231;&#227;o de uma m&#233;trica se necess&#225;rio &#8212; nesse caso, informe o motivo."/>
+                            <TextBlock x:Name="txtMetricasDesativadas" Margin="0,0,0,8" TextWrapping="Wrap"
+                                       FontFamily="Consolas" FontSize="11" Visibility="Collapsed"
+                                       Foreground="{DynamicResource Dicon.Ressalva}"/>
                             <DataGrid x:Name="dgAvaliacao" Style="{DynamicResource GridMetricas}"
                                       MaxHeight="340" RowHeight="40"
                                       CanUserResizeRows="False" HeadersVisibility="Column"
@@ -746,7 +749,7 @@
                 <TextBlock Grid.Row="0" Text="Administra&#231;&#227;o &#8212; limiares de decis&#227;o"
                            Style="{DynamicResource TituloTela}"/>
                 <TextBlock Grid.Row="1"
-                           Text="Valores que definem vi&#225;vel / ressalva / invi&#225;vel por m&#233;trica. Salvos na planilha de configura&#231;&#227;o e usados por todos os notebooks."
+                           Text="Valores que definem vi&#225;vel / ressalva / invi&#225;vel por m&#233;trica. Desmarque &quot;Na bateria&quot; para tirar uma m&#233;trica do teste. Salvos na planilha de configura&#231;&#227;o e usados por todos os notebooks."
                            Style="{DynamicResource SubtituloTela}" Margin="0,6,0,14"/>
 
                 <Border Grid.Row="2" Style="{DynamicResource Cartao}" Padding="2">
@@ -755,12 +758,20 @@
                               CanUserResizeRows="False" HeadersVisibility="Column"
                               GridLinesVisibility="Horizontal">
                         <DataGrid.Columns>
+                            <DataGridTemplateColumn Header="Na bateria" Width="90">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <CheckBox Margin="8,0,0,0" VerticalAlignment="Center"
+                                                  IsChecked="{Binding Ativo, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
                             <DataGridTextColumn Header="M&#233;trica" Binding="{Binding Rotulo}"
-                                                IsReadOnly="True" Width="160"/>
+                                                IsReadOnly="True" Width="150"/>
                             <DataGridTextColumn Header="Unidade" Binding="{Binding Unidade}"
-                                                IsReadOnly="True" Width="80" FontFamily="Consolas"/>
+                                                IsReadOnly="True" Width="72" FontFamily="Consolas"/>
                             <DataGridTextColumn Header="Dire&#231;&#227;o" Binding="{Binding DirecaoTexto}"
-                                                IsReadOnly="True" Width="140"/>
+                                                IsReadOnly="True" Width="130"/>
                             <DataGridTemplateColumn Header="Ideal" Width="180">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>

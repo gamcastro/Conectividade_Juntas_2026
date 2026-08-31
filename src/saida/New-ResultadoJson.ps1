@@ -81,6 +81,7 @@ function New-ResultadoJson {
             carregamento_web_s  = $Metricas.CarregamentoWebS
         }
         avaliacao         = $avaliacao
+        metricas_desativadas = @($Decisao.MetricasDesativadas)
         classificacao     = [pscustomobject]@{
             automatica    = $Decisao.Classificacao
             recalculada   = $recalc

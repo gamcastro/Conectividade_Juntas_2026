@@ -106,6 +106,12 @@ function New-RelatorioHtml {
     $tecnico  = ConvertTo-HtmlSafe ([string] $r.tecnico.nome)
     $geradoEm = (Get-Date).ToString('dd/MM/yyyy HH:mm:ss')
 
+    $desat = @($r.metricas_desativadas)
+    $linhaDesat = if ($desat.Count) {
+        '<p class="small"><b>M&eacute;tricas n&atilde;o avaliadas (desativadas na configura&ccedil;&atilde;o):</b> {0}</p>' -f `
+            (ConvertTo-HtmlSafe (($desat | ForEach-Object { Get-RotuloMetrica $_ }) -join ', '))
+    } else { '' }
+
     $brasao    = Get-BrasaoDataUri
     $imgBrasao = if ($brasao) { '<img class="brasao" src="{0}" alt="">' -f $brasao } else { '' }
 
@@ -193,6 +199,7 @@ function New-RelatorioHtml {
 $($linhas -join "`n")
     </tbody>
   </table>
+  $linhaDesat
 
   <h2>Contexto da medi&ccedil;&atilde;o</h2>
   <div class="grid2">

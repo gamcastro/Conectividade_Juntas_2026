@@ -438,7 +438,7 @@ function _abaLimiares(criar) {
   var aba = ss.getSheetByName(ABA_LIMIARES);
   if (!aba && criar) {
     aba = ss.insertSheet(ABA_LIMIARES);
-    aba.appendRow(['metrica', 'direcao', 'limiar_viavel', 'limiar_ressalva']);
+    aba.appendRow(['metrica', 'direcao', 'limiar_viavel', 'limiar_ressalva', 'ativo']);
   }
   return aba;
 }
@@ -460,6 +460,9 @@ function lerLimiares() {
       var o = {};
       o[sv] = Number(linhas[r][2]);
       o[sr] = Number(linhas[r][3]);
+      // coluna 'ativo' (5a): vazio/ausente = ativo; so 'false'/'nao'/0 desativa
+      var a = String(linhas[r][4] == null ? '' : linhas[r][4]).trim().toLowerCase();
+      o.ativo = !(a === 'false' || a === 'nao' || a === 'não' || a === '0' || a === 'n');
       limiares[metrica] = o;
     }
     origem = 'planilha';
@@ -467,7 +470,12 @@ function lerLimiares() {
 
   // completa com os padroes o que faltar
   for (var m in LIMIARES_PADRAO) {
-    if (!limiares[m]) limiares[m] = LIMIARES_PADRAO[m];
+    if (!limiares[m]) {
+      var pd = {};
+      for (var k in LIMIARES_PADRAO[m]) pd[k] = LIMIARES_PADRAO[m][k];
+      pd.ativo = true;
+      limiares[m] = pd;
+    }
   }
 
   return { atualizado_em: new Date().toISOString(), origem: origem, limiares: limiares };
@@ -493,12 +501,13 @@ function salvarLimiares(body) {
     var v = Number(o[sv]);
     var rr = Number(o[sr]);
     if (!(v > 0) || !(rr > 0)) return { status: 'erro', erro: 'valores invalidos em ' + m };
-    linhas.push([m, dir, v, rr]);
+    var ativo = (o.ativo === false || o.ativo === 0 || String(o.ativo).toLowerCase() === 'false') ? 'false' : 'true';
+    linhas.push([m, dir, v, rr, ativo]);
   }
 
   var aba = _abaLimiares(true);
-  aba.getRange(2, 1, Math.max(aba.getLastRow() - 1, 1), 4).clearContent();
-  aba.getRange(2, 1, linhas.length, 4).setValues(linhas);
+  aba.getRange(2, 1, Math.max(aba.getLastRow() - 1, 1), 5).clearContent();
+  aba.getRange(2, 1, linhas.length, 5).setValues(linhas);
 
   return { status: 'ok', salvo_em: new Date().toISOString() };
 }

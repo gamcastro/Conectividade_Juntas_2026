@@ -59,19 +59,38 @@ function Invoke-MotorDecisao {
     }
 
     $L = $Limiares
-    $avaliacoes = @(
-        Test-Maximo $Metricas.LatenciaMediaMs   $L.latencia_ms.viavel_ate         $L.latencia_ms.ressalva_ate         'latencia_ms'         'Latencia'          'ms'
-        Test-Maximo $Metricas.JitterMs          $L.jitter_ms.viavel_ate           $L.jitter_ms.ressalva_ate           'jitter_ms'          'Jitter'           'ms'
-        Test-Maximo $Metricas.PerdaPercentual   $L.perda_percentual.viavel_ate    $L.perda_percentual.ressalva_ate    'perda_percentual'   'Perda de pacotes' '%'
-        Test-Minimo $Metricas.BandaDownloadMbps $L.banda_download_mbps.viavel_min $L.banda_download_mbps.ressalva_min 'banda_download_mbps' 'Download'         'Mbps'
-        Test-Minimo $Metricas.BandaUploadMbps   $L.banda_upload_mbps.viavel_min   $L.banda_upload_mbps.ressalva_min   'banda_upload_mbps'   'Upload'          'Mbps'
-        Test-Maximo $Metricas.CarregamentoWebS  $L.carregamento_web_s.viavel_ate  $L.carregamento_web_s.ressalva_ate  'carregamento_web_s' 'Carregamento web' 's'
+
+    # Metrica ativa? (o admin pode tirar itens da bateria; ausente = ativa)
+    function Test-MetricaAtiva {
+        param([string] $Metrica)
+        $m = $L.$Metrica
+        if ($null -eq $m) { return $true }
+        $p = $m.PSObject.Properties['ativo']
+        if (-not $p) { return $true }
+        return [bool] $p.Value
+    }
+
+    $todas = @(
+        @{ fn = { Test-Maximo $Metricas.LatenciaMediaMs   $L.latencia_ms.viavel_ate         $L.latencia_ms.ressalva_ate         'latencia_ms'         'Latencia'          'ms' };   m = 'latencia_ms' }
+        @{ fn = { Test-Maximo $Metricas.JitterMs          $L.jitter_ms.viavel_ate           $L.jitter_ms.ressalva_ate           'jitter_ms'          'Jitter'           'ms' };   m = 'jitter_ms' }
+        @{ fn = { Test-Maximo $Metricas.PerdaPercentual   $L.perda_percentual.viavel_ate    $L.perda_percentual.ressalva_ate    'perda_percentual'   'Perda de pacotes' '%' };    m = 'perda_percentual' }
+        @{ fn = { Test-Minimo $Metricas.BandaDownloadMbps $L.banda_download_mbps.viavel_min $L.banda_download_mbps.ressalva_min 'banda_download_mbps' 'Download'         'Mbps' }; m = 'banda_download_mbps' }
+        @{ fn = { Test-Minimo $Metricas.BandaUploadMbps   $L.banda_upload_mbps.viavel_min   $L.banda_upload_mbps.ressalva_min   'banda_upload_mbps'   'Upload'          'Mbps' }; m = 'banda_upload_mbps' }
+        @{ fn = { Test-Maximo $Metricas.CarregamentoWebS  $L.carregamento_web_s.viavel_ate  $L.carregamento_web_s.ressalva_ate  'carregamento_web_s' 'Carregamento web' 's' };   m = 'carregamento_web_s' }
     )
+
+    $avaliacoes  = @()
+    $desativadas = @()
+    foreach ($item in $todas) {
+        if (Test-MetricaAtiva $item.m) { $avaliacoes += (& $item.fn) }
+        else { $desativadas += $item.m }
+    }
 
     $classeFinal = Get-ClassificacaoFinal ($avaliacoes | Select-Object -ExpandProperty classe)
 
     [pscustomobject]@{
-        Classificacao = $classeFinal
-        Detalhes      = $avaliacoes
+        Classificacao      = $classeFinal
+        Detalhes           = $avaliacoes
+        MetricasDesativadas = @($desativadas)
     }
 }

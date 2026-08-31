@@ -247,10 +247,29 @@ try {
     $nLim = $w.FindName('dgLimiares').Items.Count
     Write-Host "[8] Admin: $nLim linha(s) de limiar"
     if ($nLim -ne 6) { Write-Host "    FALHA: deveria ter 6 metricas"; $falhas++ }
+    if ($Global:LimiarRows[0].Ativo -ne $true) { Write-Host "    FALHA: limiar sem 'Na bateria' marcado por padrao"; $falhas++ }
+    else { Write-Host "[8] limiar vem com 'Na bateria' marcado" }
     $w.FindName('txtPinAdmin').Password = ''
     Invoke-SalvarLimiares
     if ($w.FindName('lblAdminMsg').Text -notmatch 'PIN') { Write-Host "    FALHA: salvou limiares sem PIN"; $falhas++ }
     else { Write-Host "[8] salvar limiares sem PIN bloqueado" }
+
+    # 9. metrica desativada sai da bateria (motor)
+    $limTest = [pscustomobject]@{
+        latencia_ms         = [pscustomobject]@{ viavel_ate = 60; ressalva_ate = 120; ativo = $true }
+        jitter_ms           = [pscustomobject]@{ viavel_ate = 10; ressalva_ate = 30;  ativo = $true }
+        perda_percentual    = [pscustomobject]@{ viavel_ate = 1;  ressalva_ate = 5;   ativo = $true }
+        banda_download_mbps = [pscustomobject]@{ viavel_min = 20; ressalva_min = 8;   ativo = $true }
+        banda_upload_mbps   = [pscustomobject]@{ viavel_min = 10; ressalva_min = 4;   ativo = $true }
+        carregamento_web_s  = [pscustomobject]@{ viavel_ate = 5;  ressalva_ate = 12;  ativo = $false }
+    }
+    $met = [pscustomobject]@{ LatenciaMediaMs = 10; JitterMs = 1; PerdaPercentual = 0; BandaDownloadMbps = 50; BandaUploadMbps = 20; CarregamentoWebS = $null }
+    $dec = Invoke-MotorDecisao -Metricas $met -Limiares $limTest
+    if (@($dec.Detalhes).Count -eq 5 -and (@($dec.MetricasDesativadas) -contains 'carregamento_web_s') -and $dec.Classificacao -eq 'viavel') {
+        Write-Host "[9] metrica desativada fora da bateria (5 detalhes, decisao=viavel)"
+    } else {
+        Write-Host "    FALHA: motor c/ metrica desativada (detalhes=$(@($dec.Detalhes).Count) desat=$($dec.MetricasDesativadas -join ',') dec=$($dec.Classificacao))"; $falhas++
+    }
 }
 finally {
     $Global:PastaDadosOverride = $null
