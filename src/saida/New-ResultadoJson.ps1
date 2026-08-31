@@ -12,6 +12,15 @@ function Get-CampoLocal {
     return ''
 }
 
+# Acesso seguro a uma propriedade qualquer (objetos vindos da GUI, StrictMode).
+function Get-Prop {
+    param($Obj, [string] $Nome)
+    if ($null -eq $Obj) { return $null }
+    $p = $Obj.PSObject.Properties[$Nome]
+    if ($p) { return $p.Value }
+    return $null
+}
+
 function New-ResultadoJson {
     param(
         [psobject] $Ambiente,
@@ -20,7 +29,9 @@ function New-ResultadoJson {
         $Local,
         $Avaliacoes,
         $ClassificacaoFinal,
-        [string]   $TecnicoNome
+        [string]   $TecnicoNome,
+        # Payload da fase 1 (rede local, sem VPN) - de Invoke-FaseLocal. Opcional.
+        $FaseLocal
     )
 
     # index metrica -> override do tecnico
@@ -53,6 +64,34 @@ function New-ResultadoJson {
     $finalDecisao = if ($ClassificacaoFinal -and $ClassificacaoFinal.final) { [string] $ClassificacaoFinal.final } else { $recalc }
     $justDecisao  = if ($ClassificacaoFinal) { [string] $ClassificacaoFinal.justificativa } else { '' }
 
+    # --- fase 1: rede local (sem VPN) ---------------------------------------
+    $redeLocal = $null
+    if ($FaseLocal) {
+        $lan = Get-Prop $FaseLocal 'Lan'
+        $wf  = Get-Prop $FaseLocal 'Wireless'
+        $it  = Get-Prop $FaseLocal 'Internet'
+        $redeLocal = [pscustomobject]@{
+            coletado_em            = (Get-Prop $FaseLocal 'Quando')
+            lan_conectada          = [bool] (Get-Prop $lan 'conectado')
+            lan_adaptador          = [string] (Get-Prop $lan 'nome')
+            ip_local               = [string] (Get-Prop $lan 'ipv4')
+            mascara                = [string] (Get-Prop $lan 'mascara')
+            gateway                = [string] (Get-Prop $lan 'gateway')
+            dns                    = @(Get-Prop $lan 'dns')
+            mac                    = [string] (Get-Prop $lan 'mac')
+            velocidade_mbps        = (Get-Prop $lan 'velocidade_mbps')
+            wireless_presente      = [bool] (Get-Prop $wf 'presente')
+            wireless_conectado     = [bool] (Get-Prop $wf 'conectado')
+            wireless_ssid          = [string] (Get-Prop $wf 'ssid')
+            wireless_sinal_pct     = (Get-Prop $wf 'sinal_pct')
+            wireless_redes         = @(Get-Prop $wf 'redes_disponiveis')
+            internet_ping_ms       = (Get-Prop $it 'ping_latencia_ms')
+            internet_perda_pct     = (Get-Prop $it 'ping_perda_pct')
+            internet_dns_ms        = (Get-Prop $it 'dns_ms')
+            internet_download_mbps = (Get-Prop $it 'download_mbps')
+        }
+    }
+
     [pscustomobject]@{
         versao_ferramenta = $Global:VersaoApp
         coletado_em       = (Get-Date).ToString('o')
@@ -71,6 +110,7 @@ function New-ResultadoJson {
             telefone            = (Get-CampoLocal $Local 'telefone')
             tipo_internet       = $Local.tipo_internet
         }
+        rede_local        = $redeLocal
         ambiente          = $Ambiente
         metricas          = [pscustomobject]@{
             latencia_ms         = $Metricas.LatenciaMediaMs

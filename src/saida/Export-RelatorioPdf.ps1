@@ -135,6 +135,35 @@ function New-RelatorioHtml {
     $campos += '<div style="grid-column:1/3"><b>Tipo de internet:</b> {0}</div>' -f (ConvertTo-HtmlSafe $loc.tipo_internet)
     $blocoLocal = $campos -join "`n    "
 
+    # Bloco "Rede local (antes da VPN)" - so aparece se a fase 1 foi coletada.
+    $rl = if ($r.PSObject.Properties['rede_local']) { $r.rede_local } else { $null }
+    $blocoRedeLocal = ''
+    if ($rl) {
+        $lanS = if ($rl.lan_conectada) { 'conectada' } else { 'sem cabo / desconectada' }
+        $wifiS = if ($rl.wireless_conectado) {
+            'conectada a &quot;{0}&quot; ({1}%)' -f (ConvertTo-HtmlSafe ([string] $rl.wireless_ssid)), $rl.wireless_sinal_pct
+        } elseif ($rl.wireless_presente) { 'placa presente, n&atilde;o conectada' } else { 'sem placa Wi-Fi' }
+
+        $ce = @()
+        $ce += '<div><b>Placa de rede (LAN):</b> {0}</div>' -f $lanS
+        if ($rl.ip_local)        { $ce += '<div><b>IP na rede local:</b> {0}</div>' -f (ConvertTo-HtmlSafe ([string] $rl.ip_local)) }
+        if ($rl.mascara)         { $ce += '<div><b>M&aacute;scara:</b> {0}</div>' -f (ConvertTo-HtmlSafe ([string] $rl.mascara)) }
+        if ($rl.gateway)         { $ce += '<div><b>Gateway:</b> {0}</div>' -f (ConvertTo-HtmlSafe ([string] $rl.gateway)) }
+        if (@($rl.dns).Count)    { $ce += '<div><b>DNS:</b> {0}</div>' -f (ConvertTo-HtmlSafe ((@($rl.dns)) -join ', ')) }
+        if ($rl.mac)             { $ce += '<div><b>MAC:</b> {0}</div>' -f (ConvertTo-HtmlSafe ([string] $rl.mac)) }
+        if ($rl.velocidade_mbps) { $ce += '<div><b>Enlace:</b> {0} Mbps</div>' -f $rl.velocidade_mbps }
+        $ce += '<div style="grid-column:1/3"><b>Wi-Fi:</b> {0}</div>' -f $wifiS
+
+        $intp = @()
+        if ($null -ne $rl.internet_ping_ms)       { $intp += ('ping p&uacute;blico {0} ms' -f $rl.internet_ping_ms) }
+        if ($null -ne $rl.internet_perda_pct)     { $intp += ('perda {0}%' -f $rl.internet_perda_pct) }
+        if ($null -ne $rl.internet_dns_ms)        { $intp += ('DNS {0} ms' -f $rl.internet_dns_ms) }
+        if ($null -ne $rl.internet_download_mbps) { $intp += ('download ~{0} Mbps' -f $rl.internet_download_mbps) }
+        if ($intp.Count) { $ce += '<div style="grid-column:1/3"><b>Internet local (sem VPN):</b> {0}</div>' -f ($intp -join ' &middot; ') }
+
+        $blocoRedeLocal = "  <h2>Rede local (antes da VPN do TRE)</h2>`n  <div class=""grid2"">`n    " + ($ce -join "`n    ") + "`n  </div>`n"
+    }
+
     @"
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -190,6 +219,7 @@ function New-RelatorioHtml {
     $blocoLocal
   </div>
 
+$blocoRedeLocal
   <h2>M&eacute;tricas medidas</h2>
   <table>
     <thead>

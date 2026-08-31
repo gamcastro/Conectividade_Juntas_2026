@@ -21,6 +21,25 @@ $Global:RaizApp    = Split-Path $PSScriptRoot -Parent
 $Global:ArquivoLog = $null
 $Global:ModoTeste  = $true   # nao abrir o PDF/pasta no final do export
 
+# fase 1 (rede local) simulada: nao mexe na placa de rede real da maquina de teste
+$Global:FaseLocalSimulada = [pscustomobject]@{
+    Lan = [pscustomobject]@{
+        presente = $true; nome = 'Ethernet'; status = 'Up'; conectado = $true
+        ipv4 = '192.168.15.42'; prefixo = 24; mascara = '255.255.255.0'; gateway = '192.168.15.1'
+        dns = @('192.168.15.1', '8.8.8.8'); mac = 'AA-BB-CC-DD-EE-FF'; velocidade_mbps = 1000
+    }
+    Wireless = [pscustomobject]@{
+        presente = $true; nome = 'Wi-Fi'; status = 'Disconnected'; conectado = $false
+        ssid = ''; sinal_pct = $null; redes_disponiveis = @('JE-CAMPO', 'VIVO-2G')
+    }
+    Internet = [pscustomobject]@{
+        ping_ok = $true; ping_latencia_ms = 22; ping_perda_pct = 0
+        dns_ok = $true; dns_ms = 35; dns_ips = @('200.1.1.1')
+        download_ok = $true; download_mbps = 48.3; download_bytes = 8000000; download_seg = 1.3
+    }
+    Quando = (Get-Date).ToString('o')
+}
+
 Import-Module (Join-Path $Global:RaizApp 'src\Conectividade.psd1') -Force
 Add-Type -AssemblyName PresentationFramework
 Add-Type -AssemblyName PresentationCore
@@ -121,16 +140,39 @@ try {
         Write-Host "[4b] campos extras: '$($uc.Text)' / '$($rsp.Text)'"
     } else { Write-Host "    FALHA: cartao sem UC/responsavel (uc='$($uc.Text)' resp='$($rsp.Text)')"; $falhas++ }
 
-    # 4c. passo 2 -> 3
+    # 4c. passo 2 -> 3 (rede local, sem VPN)
     Invoke-WizardProximo
-    if ($Global:WizardStep -ne 3) { Write-Host "[4c] FALHA: nao foi para o passo 3"; $falhas++ }
+    if ($Global:WizardStep -ne 3) { Write-Host "[4c] FALHA: nao foi para o passo 3 (rede local)"; $falhas++ }
 
-    # 4d. passo 3 -> 4 bloqueia antes de rodar o diagnostico
+    # 4c-1. passo 3 bloqueia antes de rodar a checagem da rede local
     Invoke-WizardProximo
-    if ($Global:WizardStep -ne 3) { Write-Host "[4d] FALHA: avancou sem rodar o diagnostico"; $falhas++ }
-    else { Write-Host "[4d] passo 3 bloqueia antes de rodar" }
+    if ($Global:WizardStep -ne 3) { Write-Host "[4c] FALHA: avancou sem checar a rede local"; $falhas++ }
+    else { Write-Host "[4c] passo 3 bloqueia antes da checagem local" }
 
-    # 5. roda a bateria -> auto-avanca para o passo 4
+    # 4c-2. roda a checagem local (simulada): painel mostra o IP; avanca p/ passo 4
+    Invoke-RodarFaseLocal
+    Invoke-Pump
+    $ipTxt = "$($w.FindName('txtLocIp').Text)"
+    if ($null -ne $Global:FaseLocalPayload -and $ipTxt -match '192\.168\.15\.42' -and $w.FindName('cardFaseLocal').Visibility -eq 'Visible') {
+        Write-Host "[4c] checagem local OK: '$ipTxt'"
+    } else { Write-Host "    FALHA: fase local nao populou (payload=$($null -ne $Global:FaseLocalPayload) ip='$ipTxt')"; $falhas++ }
+    Invoke-WizardProximo
+    if ($Global:WizardStep -ne 4) { Write-Host "    FALHA: nao foi para o passo 4 (diagnostico com VPN)"; $falhas++ }
+
+    # 4c-3. conectar Wi-Fi sem SSID mostra aviso (nao chama netsh)
+    Show-WizardPasso 3
+    $w.FindName('cboWifiSsid').Text = ''
+    Invoke-ConectarWifi
+    if ("$($w.FindName('txtWifiStatus').Text)" -match 'SSID') { Write-Host "[4c] conectar Wi-Fi exige SSID" }
+    else { Write-Host "    FALHA: conectar Wi-Fi sem SSID nao avisou"; $falhas++ }
+    Show-WizardPasso 4
+
+    # 4d. passo 4 -> 5 bloqueia antes de rodar o diagnostico
+    Invoke-WizardProximo
+    if ($Global:WizardStep -ne 4) { Write-Host "[4d] FALHA: avancou sem rodar o diagnostico"; $falhas++ }
+    else { Write-Host "[4d] passo 4 bloqueia antes de rodar" }
+
+    # 5. roda a bateria -> auto-avanca para o passo 5
     Invoke-ExecucaoNaJanela
     $deadline = (Get-Date).AddSeconds($TimeoutS)
     $ok = $false
@@ -144,28 +186,28 @@ try {
     $decIni  = [string] $w.FindName('cboDecisaoFinal').SelectedItem
     Write-Host "[5] Concluiu: $ok | passo: $($Global:WizardStep) | painel: $nLinhas linhas | decisao: $decIni"
     if (-not $ok) { $falhas++ }
-    if ($Global:WizardStep -ne 4) { Write-Host "    FALHA: nao auto-avancou para o passo 4"; $falhas++ }
+    if ($Global:WizardStep -ne 5) { Write-Host "    FALHA: nao auto-avancou para o passo 5"; $falhas++ }
     if ($nLinhas -ne 6) { Write-Host "    FALHA: painel deveria ter 6 linhas"; $falhas++ }
     if ($decIni -notin @('viavel', 'viavel_com_ressalva', 'inviavel')) { Write-Host "    FALHA: decisao nao classificou"; $falhas++ }
 
-    # 5b. override de metrica + passo 4 -> 5 bloqueia sem justificativa
+    # 5b. override de metrica + passo 5 -> 6 bloqueia sem justificativa
     $linha = @($Global:AvaliacaoRows) | Where-Object { $_.Rotulo -eq 'Download' } | Select-Object -First 1
     $linha.ClasseFinal = 'viavel'
     Invoke-Pump
     Invoke-WizardProximo
     $ultimoLog = @($Global:LogEntries)[-1].Texto
-    if ($Global:WizardStep -eq 4 -and $ultimoLog -match 'Justificativa obrigatoria') {
-        Write-Host "[5b] passo 4 bloqueia override sem justificativa"
-    } else { Write-Host "    FALHA: passo 4 avancou sem justificativa (step=$($Global:WizardStep))"; $falhas++ }
+    if ($Global:WizardStep -eq 5 -and $ultimoLog -match 'Justificativa obrigatoria') {
+        Write-Host "[5b] passo 5 bloqueia override sem justificativa"
+    } else { Write-Host "    FALHA: passo 5 avancou sem justificativa (step=$($Global:WizardStep))"; $falhas++ }
 
-    # 5c. com justificativa -> passos 4 -> 5 -> 6
+    # 5c. com justificativa -> passos 5 -> 6 -> 7
     $linha.Justificativa = 'Refiz o teste pelo celular e deu 25 Mbps.'
     Invoke-Pump
     Invoke-WizardProximo
-    if ($Global:WizardStep -ne 5) { Write-Host "    FALHA: nao foi para o passo 5"; $falhas++ }
-    Invoke-WizardProximo
     if ($Global:WizardStep -ne 6) { Write-Host "    FALHA: nao foi para o passo 6"; $falhas++ }
-    else { Write-Host "[5c] passos 4->5->6 com justificativa" }
+    Invoke-WizardProximo
+    if ($Global:WizardStep -ne 7) { Write-Host "    FALHA: nao foi para o passo 7"; $falhas++ }
+    else { Write-Host "[5c] passos 5->6->7 com justificativa" }
 
     # 5d. passo 6: salva o resultado -> checklist "Salvar" fica verde, "Transmitir" habilita
     $antesJson = @(Get-ChildItem (Join-Path $Global:RaizApp 'resultados\pendentes') -Filter *.json -EA SilentlyContinue).Count
@@ -178,6 +220,10 @@ try {
         $okDoc = ($doc.tecnico.nome) -and ($doc.classificacao.final) -and $linhaAlt -and $linhaAlt.justificativa
         Write-Host "[5d] salvo: tecnico='$($doc.tecnico.nome)' final='$($doc.classificacao.final)' ajustada='$($linhaAlt.metrica)'->'$($linhaAlt.classe_final)'"
         if (-not $okDoc) { Write-Host "    FALHA: JSON incompleto"; $falhas++ }
+        $rl = $doc.rede_local
+        if ($rl -and $rl.ip_local -eq '192.168.15.42' -and $rl.gateway -eq '192.168.15.1' -and @($rl.wireless_redes).Count -ge 1) {
+            Write-Host "[5d] JSON traz rede_local: ip=$($rl.ip_local) gw=$($rl.gateway) wifi_redes=$(@($rl.wireless_redes).Count)"
+        } else { Write-Host "    FALHA: JSON sem bloco rede_local completo (ip='$($rl.ip_local)')"; $falhas++ }
     }
     $vok = [char]0x2713
     if ($Global:FeitoSalvar -and "$($w.FindName('chkFimSalvar').Text)" -eq $vok -and $w.FindName('btnTransmitirResultado').IsEnabled -and "$($w.FindName('chkFimTransmitir').Text)" -ne $vok) {
@@ -207,10 +253,11 @@ try {
     Open-DiagnosticoLimpo
     $selLimpo    = $w.FindName('cboLocal').SelectedItem
     $painelLimpo = ($w.FindName('dgAvaliacao').Items.Count -eq 0) -and ($null -eq $Global:DiagPayload)
-    if ($selLimpo -or $Global:LogEntries.Count -ne 0 -or -not $painelLimpo -or $Global:WizardStep -ne 1) {
-        Write-Host "[6] FALHA: nao abriu limpo (sel=$([bool]$selLimpo) log=$($Global:LogEntries.Count) painel=$($w.FindName('dgAvaliacao').Items.Count) payload=$($null -ne $Global:DiagPayload) step=$($Global:WizardStep))"
+    $faseLimpa   = ($null -eq $Global:FaseLocalPayload) -and ($w.FindName('cardFaseLocal').Visibility -ne 'Visible')
+    if ($selLimpo -or $Global:LogEntries.Count -ne 0 -or -not $painelLimpo -or -not $faseLimpa -or $Global:WizardStep -ne 1) {
+        Write-Host "[6] FALHA: nao abriu limpo (sel=$([bool]$selLimpo) log=$($Global:LogEntries.Count) painel=$($w.FindName('dgAvaliacao').Items.Count) payload=$($null -ne $Global:DiagPayload) fase=$($null -ne $Global:FaseLocalPayload) step=$($Global:WizardStep))"
         $falhas++
-    } else { Write-Host "[6] Assistente pelo menu abre limpo no passo 1" }
+    } else { Write-Host "[6] Assistente pelo menu abre limpo no passo 1 (rede local zerada)" }
 
     # 6b. passo 2 com local JA testado: some "Proximo", aparece "Refazer o teste"
     Show-WizardPasso 2
@@ -229,7 +276,7 @@ try {
     else { Write-Host "    FALHA: nav nao voltou p/ nao testado"; $falhas++ }
     $cboL6.SelectedItem = $liP; Invoke-Pump
     Invoke-WizardProximo                              # o handler de 'Refazer o teste'
-    if ($Global:WizardStep -eq 3) { Write-Host "[6b] 'Refazer o teste' -> passo 3" }
+    if ($Global:WizardStep -eq 3) { Write-Host "[6b] 'Refazer o teste' -> passo 3 (rede local)" }
     else { Write-Host "    FALHA: refazer nao foi ao passo 3 (step=$($Global:WizardStep))"; $falhas++ }
 
     # 7. trocar usuario
@@ -273,6 +320,7 @@ try {
 }
 finally {
     $Global:PastaDadosOverride = $null
+    $Global:FaseLocalSimulada  = $null
     Remove-Item $dataDir -Recurse -Force -EA SilentlyContinue
     # remove os JSON de resultado criados por este teste
     Get-ChildItem $pendDir -Filter *.json -EA SilentlyContinue |

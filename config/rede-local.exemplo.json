@@ -1,0 +1,7 @@
+{
+  "_comentario": "Fase 1 do diagnostico (rede local do local, ANTES da VPN do TRE). ping_alvo/dns_nome checam se a internet do local funciona; download_url e um arquivo pequeno de um CDN so para uma nocao grosseira de banda. Copie para rede-local.json para ajustar por ambiente.",
+  "ping_alvo": "8.8.8.8",
+  "dns_nome": "www.tre-ma.jus.br",
+  "download_url": "https://speed.cloudflare.com/__down?bytes=8000000",
+  "download_timeout_s": 30
+}

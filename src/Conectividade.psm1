@@ -9,6 +9,7 @@ $ordem = @(
     'core\Elevacao.ps1'
     'core\Processos.ps1'
     'core\Ambiente.ps1'
+    'core\RedeLocal.ps1'
     'core\Juntas.ps1'
     'core\Limiares.ps1'
     'core\Sessao.ps1'

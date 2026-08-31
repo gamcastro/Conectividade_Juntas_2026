@@ -16,21 +16,34 @@ $Global:LimiarRows         = $null   # ObservableCollection[LimiarRow] da tela d
 $Global:NavegandoPrograma  = $false  # guarda: Show-View mexendo no rail sem disparar handler
 $Global:TemaCarregado      = $false  # MahApps + Application ja inicializados neste processo?
 $Global:MostrarTodasJuntas = $false  # admin: incluir Juntas fora da rota no seletor
-$Global:WizardStep         = 1       # passo atual do assistente de diagnostico (1..6)
+$Global:WizardStep         = 1       # passo atual do assistente de diagnostico (1..7)
 $Global:HomeTrabalhoState  = $null   # runspace do "Atualizar dados"/"Reenviar" async
-$Global:FeitoSalvar        = $false  # checklist do passo 6
+$Global:TarefaRedeState    = $null   # runspace da fase local / conexao Wi-Fi
+$Global:FaseLocalPayload   = $null   # {Lan;Wireless;Internet;Quando} da fase 1 (sem VPN)
+$Global:FeitoSalvar        = $false  # checklist do passo 7
 $Global:FeitoTransmitir    = $false
 $Global:FeitoExportar      = $false
-$Global:UltimoResultadoSalvo = $null # caminho do JSON gravado no passo 6
-$Global:ModoTeste          = $false  # testes: nao abrir arquivos externos
+$Global:UltimoResultadoSalvo = $null # caminho do JSON gravado no passo 7
+
+# Ganchos de teste: preservam o valor definido ANTES de Import-Module -Force.
+if (-not (Get-Variable -Name ModoTeste -Scope Global -ErrorAction SilentlyContinue)) {
+    $Global:ModoTeste = $false            # testes: nao abrir arquivos externos
+}
+if (-not (Get-Variable -Name FaseLocalSimulada -Scope Global -ErrorAction SilentlyContinue)) {
+    $Global:FaseLocalSimulada = $null     # testes: payload fixo p/ a fase local
+}
+if (-not (Get-Variable -Name WifiConectarSimulado -Scope Global -ErrorAction SilentlyContinue)) {
+    $Global:WifiConectarSimulado = $null  # testes: resultado fixo p/ Connect-RedeWireless
+}
 
 $Global:Views = @('viewLogin', 'viewHome', 'viewGuia', 'viewDiag', 'viewAdmin')
 
-$Global:WizardPassos  = @('stepInfo', 'stepJunta', 'stepDiag', 'stepResultado', 'stepDecisao', 'stepFim')
+$Global:WizardPassos  = @('stepInfo', 'stepJunta', 'stepLocal', 'stepDiag', 'stepResultado', 'stepDecisao', 'stepFim')
 $Global:WizardTitulos = @(
     ('Informa' + [char]0x00E7 + [char]0x00E3 + 'o do teste')
     'Junta Especial'
-    ('Diagn' + [char]0x00F3 + 'stico')
+    'Rede local (sem VPN)'
+    ('Diagn' + [char]0x00F3 + 'stico com a VPN')
     ('Resultado por m' + [char]0x00E9 + 'trica')
     ('Decis' + [char]0x00E3 + 'o final')
     ('Conclus' + [char]0x00E3 + 'o')
@@ -217,6 +230,8 @@ function New-JanelaPrincipal {
     $window.FindName('btnWizVoltar').Add_Click({ Invoke-WizardVoltar })
     $window.FindName('btnWizProximo').Add_Click({ Invoke-WizardProximo })
     $window.FindName('btnRefazerTeste').Add_Click({ Invoke-WizardProximo })
+    $window.FindName('btnRodarFaseLocal').Add_Click({ Invoke-RodarFaseLocal })
+    $window.FindName('btnConectarWifi').Add_Click({ Invoke-ConectarWifi })
     $window.FindName('btnExportarPdf').Add_Click({ Invoke-ExportarRelatorio })
     $window.FindName('btnTransmitirResultado').Add_Click({ Invoke-TransmitirResultado })
     $window.FindName('btnDiagVoltar').Add_Click({ Show-View 'viewHome' })
@@ -561,32 +576,33 @@ function Show-WizardPasso {
     $w = $Global:JanelaPrincipal
     if (-not $w) { return }
     if ($N -lt 1) { $N = 1 }
-    if ($N -gt 6) { $N = 6 }
+    if ($N -gt 7) { $N = 7 }
     $Global:WizardStep = $N
 
-    for ($i = 0; $i -lt 6; $i++) {
+    for ($i = 0; $i -lt 7; $i++) {
         $vis = if ($i -eq ($N - 1)) { 'Visible' } else { 'Collapsed' }
         $w.FindName($Global:WizardPassos[$i]).Visibility = $vis
     }
     $w.FindName('txtWizTitulo').Text = $Global:WizardTitulos[$N - 1]
-    $w.FindName('txtWizPasso').Text  = 'Passo {0} de 6' -f $N
+    $w.FindName('txtWizPasso').Text  = 'Passo {0} de 7' -f $N
     $w.FindName('prgWizard').Value   = $N
 
     $w.FindName('btnWizVoltar').IsEnabled = ($N -gt 1)
     $w.FindName('btnRefazerTeste').Visibility = 'Collapsed'
     $prox = $w.FindName('btnWizProximo')
-    $prox.Visibility = if ($N -lt 6) { 'Visible' } else { 'Collapsed' }
-    $prox.Content    = if ($N -eq 5) { 'Concluir' } else { 'Pr' + [char]0x00F3 + 'ximo' }
+    $prox.Visibility = if ($N -lt 7) { 'Visible' } else { 'Collapsed' }
+    $prox.Content    = if ($N -eq 6) { 'Concluir' } else { 'Pr' + [char]0x00F3 + 'ximo' }
 
     switch ($N) {
         2 { Update-DetalheLocal }
-        3 {
+        3 { Update-PainelFaseLocal }
+        4 {
             $sel = $w.FindName('cboLocal').SelectedItem
             $w.FindName('txtDiagLocal').Text = if ($sel) { 'Local: ' + $sel.Rotulo } else { 'Volte e selecione o local.' }
             $w.FindName('btnRodar').IsEnabled = [bool] $sel
         }
-        5 { Update-DecisaoRecalculada }
-        6 { Update-ResumoFim }
+        6 { Update-DecisaoRecalculada }
+        7 { Update-ResumoFim }
     }
 }
 
@@ -606,21 +622,28 @@ function Invoke-WizardProximo {
             Show-WizardPasso 3
         }
         3 {
-            if (-not $Global:DiagPayload) {
-                Write-Log 'Rode o diagnostico antes de avancar.' -Nivel Aviso
+            if (-not $Global:FaseLocalPayload) {
+                Write-Log 'Rode a checagem da rede local antes de avancar.' -Nivel Aviso
                 return
             }
             Show-WizardPasso 4
         }
         4 {
-            $falta = Get-JustificativasFaltando -MetricasApenas
-            if ($falta.Count) { Write-Log ('Justificativa obrigatoria em: {0}' -f ($falta -join ', ')) -Nivel Erro; return }
+            if (-not $Global:DiagPayload) {
+                Write-Log 'Rode o diagnostico antes de avancar.' -Nivel Aviso
+                return
+            }
             Show-WizardPasso 5
         }
         5 {
-            $falta = Get-JustificativasFaltando
+            $falta = Get-JustificativasFaltando -MetricasApenas
             if ($falta.Count) { Write-Log ('Justificativa obrigatoria em: {0}' -f ($falta -join ', ')) -Nivel Erro; return }
             Show-WizardPasso 6
+        }
+        6 {
+            $falta = Get-JustificativasFaltando
+            if ($falta.Count) { Write-Log ('Justificativa obrigatoria em: {0}' -f ($falta -join ', ')) -Nivel Erro; return }
+            Show-WizardPasso 7
         }
     }
 }
@@ -707,7 +730,191 @@ function Update-DetalheLocal {
     }
 }
 
-# Atualiza os check-marks do passo 6 (verde = feito, vermelho = pendente).
+# ------------------------------------------------------------- PASSO 3: REDE LOCAL
+
+# Roda -Script (texto, avaliado no runspace) fora da thread de UI e chama
+# -AoConcluir($resultado, $erro) de volta na UI. -Vars entra no runspace por nome.
+# Mesmo padrao de Start-DiagnosticoAssincrono; um slot ($Global:TarefaRedeState).
+function Start-TarefaRede {
+    param(
+        [Parameter(Mandatory)] [string] $Script,
+        [Parameter(Mandatory)] [scriptblock] $AoConcluir,
+        [hashtable] $Vars = @{}
+    )
+    if ($Global:TarefaRedeState) { return }
+
+    $rs = [runspacefactory]::CreateRunspace()
+    $rs.ApartmentState = 'MTA'
+    $rs.ThreadOptions  = 'ReuseThread'
+    $rs.Open()
+    foreach ($v in 'RaizApp', 'LogEntries', 'LogHome', 'LogHomeMax', 'JanelaPrincipal', 'ArquivoLog', 'PastaDadosOverride') {
+        $rs.SessionStateProxy.SetVariable($v, (Get-Variable -Name $v -Scope Global -ValueOnly -ErrorAction SilentlyContinue))
+    }
+    foreach ($k in $Vars.Keys) { $rs.SessionStateProxy.SetVariable([string] $k, $Vars[$k]) }
+
+    $ps = [powershell]::Create()
+    $ps.Runspace = $rs
+    [void] $ps.AddScript({
+        param($sbTexto)
+        Import-Module (Join-Path $RaizApp 'src\Conectividade.psd1') -Force
+        try { [pscustomobject]@{ Resultado = (& ([scriptblock]::Create($sbTexto))); Erro = $null } }
+        catch { [pscustomobject]@{ Resultado = $null; Erro = "$_" } }
+    }).AddArgument($Script)
+
+    $handle = $ps.BeginInvoke()
+    $timer = [Windows.Threading.DispatcherTimer]::new()
+    $timer.Interval = [TimeSpan]::FromMilliseconds(200)
+    $Global:TarefaRedeState = @{ PS = $ps; RS = $rs; Handle = $handle; Timer = $timer; AoConcluir = $AoConcluir }
+
+    $timer.Add_Tick({
+        $st = $Global:TarefaRedeState
+        if ($null -eq $st -or -not $st.Handle.IsCompleted) { return }
+        $st.Timer.Stop()
+        $Global:TarefaRedeState = $null
+
+        $res = $null; $erro = $null
+        try {
+            $r = $st.PS.EndInvoke($st.Handle) | Select-Object -First 1
+            $res = $r.Resultado; $erro = $r.Erro
+        } catch { $erro = "$_" } finally { $st.PS.Dispose(); $st.RS.Dispose() }
+
+        try { & $st.AoConcluir $res $erro } catch { Write-Log "Pos-processamento de rede falhou: $_" -Nivel Erro }
+    })
+    $timer.Start()
+}
+
+# Trava os botoes do passo 3 e mostra o anel enquanto a fase local roda.
+function Set-FaseLocalOcupado {
+    param([bool] $Ocupado)
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    $ring = $w.FindName('ringLocal')
+    if ($ring) {
+        $ring.IsActive   = $Ocupado
+        $ring.Visibility = if ($Ocupado) { 'Visible' } else { 'Collapsed' }
+    }
+    foreach ($n in 'btnRodarFaseLocal', 'btnConectarWifi', 'btnWizProximo', 'btnWizVoltar') {
+        $c = $w.FindName($n); if ($c) { $c.IsEnabled = -not $Ocupado }
+    }
+}
+
+# Preenche o cartao da rede local com o ultimo $Global:FaseLocalPayload.
+function Update-PainelFaseLocal {
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    $card = $w.FindName('cardFaseLocal')
+    $p = $Global:FaseLocalPayload
+    if (-not $p) { if ($card) { $card.Visibility = 'Collapsed' }; return }
+
+    $lan = $p.Lan; $wf = $p.Wireless; $it = $p.Internet
+    $verde    = Get-PincelVeredito 'viavel'
+    $vermelho = Get-PincelVeredito 'inviavel'
+    $cinza    = [Windows.Media.SolidColorBrush]::new([Windows.Media.ColorConverter]::ConvertFromString('#7D8698'))
+    $cinza.Freeze()
+
+    $tl = $w.FindName('txtLocLan')
+    if ($lan.conectado) {
+        $tl.Text = 'Cabo de rede (LAN): conectado' + $(if ($lan.nome) { " - $($lan.nome)" } else { '' })
+        $tl.Foreground = $verde
+    } elseif ($lan.presente) {
+        $tl.Text = 'Cabo de rede (LAN): sem IP (cabo desconectado?)'
+        $tl.Foreground = $vermelho
+    } else {
+        $tl.Text = 'Cabo de rede (LAN): nenhuma placa cabeada neste notebook'
+        $tl.Foreground = $cinza
+    }
+
+    Set-LinhaDetalhe $w.FindName('txtLocIp')      'IP na rede local' ([string] $lan.ipv4)
+    Set-LinhaDetalhe $w.FindName('txtLocGateway') 'Gateway'          ([string] $lan.gateway)
+    Set-LinhaDetalhe $w.FindName('txtLocMascara') 'Mascara'          ([string] $lan.mascara)
+    Set-LinhaDetalhe $w.FindName('txtLocDns')     'DNS'              ((@($lan.dns)) -join ', ')
+    Set-LinhaDetalhe $w.FindName('txtLocMac')     'MAC'              ([string] $lan.mac)
+    Set-LinhaDetalhe $w.FindName('txtLocVel')     'Enlace'          $(if ($lan.velocidade_mbps) { "$($lan.velocidade_mbps) Mbps" } else { '' })
+
+    $tw = $w.FindName('txtLocWifi')
+    if ($wf.conectado) {
+        $tw.Text = 'Wi-Fi: conectado a "{0}" ({1}%)' -f $wf.ssid, $wf.sinal_pct
+    } elseif ($wf.presente) {
+        $n = (@($wf.redes_disponiveis)).Count
+        $tw.Text = 'Wi-Fi: placa presente, nao conectada' + $(if ($n) { " - $n rede(s) por perto" } else { '' })
+    } else {
+        $tw.Text = 'Wi-Fi: sem placa wireless neste notebook'
+    }
+
+    $ti = $w.FindName('txtLocInternet')
+    if ($it) {
+        $parts = @()
+        $parts += if ($it.ping_ok) { 'ping publico {0} ms (perda {1}%)' -f $it.ping_latencia_ms, $it.ping_perda_pct } else { 'ping publico falhou' }
+        $parts += if ($it.dns_ok) { 'DNS {0} ms' -f $it.dns_ms } else { 'DNS falhou' }
+        $parts += if ($it.download_ok) { 'download ~{0} Mbps' -f $it.download_mbps } else { 'download falhou' }
+        $ti.Text = 'Internet local: ' + ($parts -join '  -  ')
+        $ti.Foreground = if ($it.ping_ok -and $it.dns_ok) { $verde } else { $vermelho }
+    } else {
+        $ti.Text = 'Internet local: nao testada'
+        $ti.Foreground = $cinza
+    }
+
+    $cbo = $w.FindName('cboWifiSsid')
+    if ($cbo) {
+        $atual = [string] $cbo.Text
+        $cbo.ItemsSource = @($wf.redes_disponiveis)
+        if ($atual)         { $cbo.Text = $atual }
+        elseif ($wf.ssid)   { $cbo.Text = $wf.ssid }
+    }
+    $card.Visibility = 'Visible'
+}
+
+function Invoke-RodarFaseLocal {
+    if ($Global:FaseLocalSimulada) { Complete-FaseLocal $Global:FaseLocalSimulada $null; return }
+    Set-FaseLocalOcupado $true
+    Write-Log 'Checando a rede local (sem a VPN do TRE)...' -Nivel Destaque
+    Start-TarefaRede -Script 'Invoke-FaseLocal' -AoConcluir { param($res, $erro) Complete-FaseLocal $res $erro }
+}
+
+function Complete-FaseLocal {
+    param($Payload, $Erro)
+    Set-FaseLocalOcupado $false
+    if ($Erro) { Write-Log "Checagem da rede local falhou: $Erro" -Nivel Erro; return }
+    $Global:FaseLocalPayload = $Payload
+    Update-PainelFaseLocal
+    Write-Log 'Rede local checada. Conecte a VPN do TRE e clique em Proximo.' -Nivel Ok
+}
+
+function Invoke-ConectarWifi {
+    $w = $Global:JanelaPrincipal
+    $ssid  = ([string] $w.FindName('cboWifiSsid').Text).Trim()
+    $senha = $w.FindName('pwdWifiSenha').Password
+    $st = $w.FindName('txtWifiStatus')
+    if (-not $ssid)          { $st.Text = 'Informe o nome (SSID) da rede Wi-Fi.'; return }
+    if ($senha.Length -lt 8) { $st.Text = 'A senha do Wi-Fi precisa ter ao menos 8 caracteres.'; return }
+
+    Set-FaseLocalOcupado $true
+    $st.Text = "Conectando a '$ssid'..."
+    Write-Log "Conectando ao Wi-Fi '$ssid' pela ferramenta..." -Nivel Info
+
+    if ($Global:WifiConectarSimulado) { Complete-ConectarWifi $Global:WifiConectarSimulado $null; return }
+    Start-TarefaRede -Script 'Connect-RedeWireless -Ssid $ssid -Senha $senha' `
+        -Vars @{ ssid = $ssid; senha = $senha } `
+        -AoConcluir { param($res, $erro) Complete-ConectarWifi $res $erro }
+}
+
+function Complete-ConectarWifi {
+    param($Res, $Erro)
+    $w = $Global:JanelaPrincipal
+    $st = $w.FindName('txtWifiStatus')
+    Set-FaseLocalOcupado $false
+    if ($Erro) { $st.Text = "Falha ao conectar: $Erro"; Write-Log "Wi-Fi: $Erro" -Nivel Erro; return }
+    if ($Res -and $Res.ok) {
+        $st.Text = [string] $Res.mensagem
+        Write-Log ("Wi-Fi conectado: {0}" -f $Res.mensagem) -Nivel Ok
+        Invoke-RodarFaseLocal   # re-checa LAN/Wi-Fi/internet com a nova conexao
+    } else {
+        $st.Text = if ($Res) { [string] $Res.mensagem } else { 'Nao foi possivel conectar.' }
+        Write-Log ("Wi-Fi nao conectou: {0}" -f $st.Text) -Nivel Aviso
+    }
+}
+
+# Atualiza os check-marks do passo 7 (verde = feito, vermelho = pendente).
 function Update-ChecklistFim {
     $w = $Global:JanelaPrincipal
     if (-not $w) { return }
@@ -726,7 +933,7 @@ function Update-ChecklistFim {
     }
 }
 
-# Preenche o passo 6 (conclusao).
+# Preenche o passo 7 (conclusao).
 function Update-ResumoFim {
     $w = $Global:JanelaPrincipal
     $p = $Global:DiagPayload
@@ -791,7 +998,7 @@ function Invoke-ExportarRelatorio {
         $p = $Global:DiagPayload
         $res = New-ResultadoJson -Ambiente $p.Ambiente -Metricas $p.Metricas -Decisao $p.Decisao -Local $p.Local `
             -Avaliacoes $avaliacoes -ClassificacaoFinal @{ final = $decFinal; justificativa = $justDec } `
-            -TecnicoNome ($Global:SessaoAtual.tecnico_nome)
+            -TecnicoNome ($Global:SessaoAtual.tecnico_nome) -FaseLocal $Global:FaseLocalPayload
         $out = Export-RelatorioPdf -Resultado $res
         $Global:FeitoExportar = $true
         $st.Text = "Relatorio salvo: $out"
@@ -814,6 +1021,9 @@ function Open-DiagnosticoLimpo {
     $w.FindName('cboJunta').SelectedIndex = -1   # dispara Update-ComboLocais -> limpa cboLocal
     $w.FindName('cboLocal').ItemsSource = @()
     Clear-PainelResultado
+    $Global:FaseLocalPayload = $null
+    Update-PainelFaseLocal
+    $w.FindName('txtWifiStatus').Text = ''
     Set-ProgressoDiag $false
     Show-WizardPasso 1
     Show-View 'viewDiag'
@@ -827,6 +1037,9 @@ function Start-DiagnosticoDoGuia {
 
     $Global:LogEntries.Clear()
     Clear-PainelResultado
+    $Global:FaseLocalPayload = $null
+    Update-PainelFaseLocal
+    $Global:JanelaPrincipal.FindName('txtWifiStatus').Text = ''
     Set-ProgressoDiag $false
 
     $loc = @($Global:JuntasCache) | Where-Object { $_.id -eq $LocalId } | Select-Object -First 1
@@ -1117,7 +1330,7 @@ function Complete-Diagnostico {
         return
     }
     Show-PainelResultado -Payload $Payload
-    if ($Global:WizardStep -eq 3) { Show-WizardPasso 4 }
+    if ($Global:WizardStep -eq 4) { Show-WizardPasso 5 }
 }
 
 function Show-PainelResultado {
@@ -1196,7 +1409,8 @@ function Invoke-SalvarResultado {
         $caminho = Save-Diagnostico -Ambiente $p.Ambiente -Metricas $p.Metricas -Decisao $p.Decisao -Local $p.Local `
             -Avaliacoes $avaliacoes `
             -ClassificacaoFinal @{ final = $decFinal; justificativa = $justDec } `
-            -TecnicoNome ($Global:SessaoAtual.tecnico_nome)
+            -TecnicoNome ($Global:SessaoAtual.tecnico_nome) `
+            -FaseLocal $Global:FaseLocalPayload
         Write-Log "Resultado salvo: $caminho" -Nivel Ok
         $Global:FeitoSalvar          = $true
         $Global:UltimoResultadoSalvo = $caminho

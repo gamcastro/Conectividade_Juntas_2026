@@ -28,6 +28,13 @@ Script), em vez de criar um BI/dashboard separado.
 - **iperf3** (client Windows) — banda real, contra servidor iperf3 rodando num
   Ubuntu no CPD (via VPN)
 - **Ping nativo do Windows** — latência, jitter e perda
+- **Fase 1 — rede local (ANTES da VPN do TRE)** (`src/core/RedeLocal.ps1`,
+  `Invoke-FaseLocal`): inventário da placa cabeada (LAN conectada? **IP local**,
+  máscara, gateway, DNS, MAC, velocidade — o IP vai no relatório), detecção da
+  placa Wi-Fi + redes por perto (`netsh wlan`), conexão a um Wi-Fi WPA2 por
+  dentro da ferramenta (`Connect-RedeWireless`), e checagem da internet do local
+  (ping público + DNS + mini-download; alvos em `config/rede-local.json`).
+  A **Fase 2 (com a VPN do TRE)** é a bateria de sempre (ping/iperf3/Selenium).
 - **Selenium WebDriver** (geckodriver + chromedriver) — mede tempo de
   carregamento do sistema de totalização (app web), testado tanto no Firefox
   customizado usado em produção quanto no Chrome
@@ -50,13 +57,21 @@ Script), em vez de criar um BI/dashboard separado.
   extra no notebook de campo
 
 ## Assistente de diagnóstico (GUI)
-A tela de Diagnóstico é um **assistente de 6 passos** (`viewDiag` com os painéis
-`stepInfo/stepJunta/stepDiag/stepResultado/stepDecisao/stepFim` alternados por
-`Visibility`; estado em `$Global:WizardStep`, navegação por `Show-WizardPasso` /
-`Invoke-WizardProximo` / `Invoke-WizardVoltar`, com gates de justificativa):
-1. informação do teste → 2. Junta/Local (com cartão de detalhe) → 3. rodar a
-bateria (auto-avança ao concluir) → 4. resultado por métrica → 5. decisão final
-→ 6. conclusão: **Salvar resultado** + **Exportar relatório (PDF)**.
+A tela de Diagnóstico é um **assistente de 7 passos** (`viewDiag` com os painéis
+`stepInfo/stepJunta/stepLocal/stepDiag/stepResultado/stepDecisao/stepFim`
+alternados por `Visibility`; estado em `$Global:WizardStep`, navegação por
+`Show-WizardPasso` / `Invoke-WizardProximo` / `Invoke-WizardVoltar`, com gates de
+justificativa):
+1. informação do teste → 2. Junta/Local (com cartão de detalhe) →
+3. **rede local, SEM a VPN** (`Invoke-RodarFaseLocal` → `Complete-FaseLocal`;
+gate: precisa rodar a checagem; card com IP/gateway/Wi-Fi + conectar a um Wi-Fi)
+→ 4. rodar a bateria **com a VPN** (auto-avança ao concluir) → 5. resultado por
+métrica → 6. decisão final → 7. conclusão: **Salvar** / **Transmitir** /
+**Exportar relatório (PDF)** + checklist.
+O runspace da fase local / conexão Wi-Fi é o `Start-TarefaRede`
+(`$Global:TarefaRedeState`, mesmo padrão do `Start-DiagnosticoAssincrono`).
+O `rede_local` entra no JSON de resultado (`New-ResultadoJson -FaseLocal`) e numa
+seção própria do relatório PDF.
 O relatório (`src/saida/Export-RelatorioPdf.ps1`) monta um HTML no padrão TRE-MA
 e converte com o Edge/Chrome headless (`--print-to-pdf`); sem navegador, salva o
 HTML. Saída em `relatorios/` (gitignored).
@@ -76,6 +91,7 @@ HTML. Saída em `relatorios/` (gitignored).
 - Limiares exatos de latência/perda/banda/tempo de carregamento que definem
   viável vs inviável (depende de validação com o time responsável pelo sistema
   de totalização)
-- Coleta real das métricas (iperf3 + Selenium + ping) validada ponta a ponta
+- Coleta real das métricas da Fase 2 (iperf3 + Selenium + ping) validada ponta a
+  ponta (a Fase 1 — rede local — já coleta de verdade)
 - Fase 2 do admin: incluir/alterar Locais das Juntas
 - Empacotamento de campo (pasta portátil autocontida)
