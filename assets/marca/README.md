@@ -16,6 +16,11 @@ Guia completo (conceito, assinaturas, aplicações, usos indevidos):
 | `icones/dicon-{16..256}.png` | PNGs rasterizados do ícone. |
 | `paleta.md` | Tokens de cor (claro / escuro), com regras de uso. |
 | `dicon-cores.ps1` | Mesmos tokens para dot-source em PowerShell (`$DiconCor`). |
+| `institucional/eleicoes-2026.png` | Selo oficial **Eleições 2026** (850×567, fundo claro) — para a co-assinatura na tela de abertura. |
+
+> `assets/logo-eleicoes-2026.png` (raiz de `assets/`) é o mesmo arquivo, mantido
+> ali porque a GUI atual o referencia. Ao aplicar a identidade, migrar a
+> referência para `assets/marca/institucional/`.
 
 ## Regenerar os PNGs / .ico
 
