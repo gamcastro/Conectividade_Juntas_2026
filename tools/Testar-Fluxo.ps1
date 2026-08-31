@@ -19,6 +19,7 @@ if ([Threading.Thread]::CurrentThread.GetApartmentState() -ne 'STA') {
 
 $Global:RaizApp    = Split-Path $PSScriptRoot -Parent
 $Global:ArquivoLog = $null
+$Global:ModoTeste  = $true   # nao abrir o PDF/pasta no final do export
 
 Import-Module (Join-Path $Global:RaizApp 'src\Conectividade.psd1') -Force
 Add-Type -AssemblyName PresentationFramework
@@ -166,7 +167,7 @@ try {
     if ($Global:WizardStep -ne 6) { Write-Host "    FALHA: nao foi para o passo 6"; $falhas++ }
     else { Write-Host "[5c] passos 4->5->6 com justificativa" }
 
-    # 5d. passo 6: salva o resultado
+    # 5d. passo 6: salva o resultado -> checklist "Salvar" fica verde, "Transmitir" habilita
     $antesJson = @(Get-ChildItem (Join-Path $Global:RaizApp 'resultados\pendentes') -Filter *.json -EA SilentlyContinue).Count
     Invoke-SalvarResultado
     $novos = @(Get-ChildItem (Join-Path $Global:RaizApp 'resultados\pendentes') -Filter *.json -EA SilentlyContinue)
@@ -178,19 +179,16 @@ try {
         Write-Host "[5d] salvo: tecnico='$($doc.tecnico.nome)' final='$($doc.classificacao.final)' ajustada='$($linhaAlt.metrica)'->'$($linhaAlt.classe_final)'"
         if (-not $okDoc) { Write-Host "    FALHA: JSON incompleto"; $falhas++ }
     }
+    $vok = [char]0x2713
+    if ($Global:FeitoSalvar -and "$($w.FindName('chkFimSalvar').Text)" -eq $vok -and $w.FindName('btnTransmitirResultado').IsEnabled -and "$($w.FindName('chkFimTransmitir').Text)" -ne $vok) {
+        Write-Host "[5d] checklist: Salvar=OK, Transmitir habilitado e pendente"
+    } else { Write-Host "    FALHA: checklist do passo 6 (salvar=$($Global:FeitoSalvar) transmitir.en=$($w.FindName('btnTransmitirResultado').IsEnabled))"; $falhas++ }
 
-    # 5d-2. exporta o relatorio (PDF via navegador; HTML se nao houver)
-    $pp  = $Global:DiagPayload
-    $res = New-ResultadoJson -Ambiente $pp.Ambiente -Metricas $pp.Metricas -Decisao $pp.Decisao -Local $pp.Local `
-        -Avaliacoes @(@{ metrica = 'banda_download_mbps'; classe_final = 'viavel'; justificativa = 'teste' }) `
-        -ClassificacaoFinal @{ final = ([string] $w.FindName('cboDecisaoFinal').SelectedItem); justificativa = '' } `
-        -TecnicoNome 'TECNICO HEADLESS'
-    $rel = Export-RelatorioPdf -Resultado $res
-    if ($rel -and (Test-Path $rel)) {
-        Write-Host "[5d] relatorio gerado: $(Split-Path $rel -Leaf)"
-        Remove-Item $rel -Force -EA SilentlyContinue
-        Remove-Item ([IO.Path]::ChangeExtension($rel, '.html')) -Force -EA SilentlyContinue
-    } else { Write-Host "    FALHA: relatorio nao gerado"; $falhas++ }
+    # 5d-2. exporta o relatorio pelo botao -> checklist "Exportar" fica verde
+    Invoke-ExportarRelatorio
+    if ($Global:FeitoExportar -and "$($w.FindName('chkFimExportar').Text)" -eq $vok -and "$($w.FindName('txtFimStatus').Text)" -match 'Relatorio salvo') {
+        Write-Host "[5d] relatorio exportado ($($w.FindName('txtFimStatus').Text))"
+    } else { Write-Host "    FALHA: export nao marcou o checklist (exportar=$($Global:FeitoExportar))"; $falhas++ }
 
     # 5e. acompanhamento: guia marca o local como testado; home mostra progresso
     Show-GuiaBordo

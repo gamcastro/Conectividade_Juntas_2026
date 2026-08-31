@@ -17,6 +17,11 @@ $Global:NavegandoPrograma  = $false  # guarda: Show-View mexendo no rail sem dis
 $Global:TemaCarregado      = $false  # MahApps + Application ja inicializados neste processo?
 $Global:MostrarTodasJuntas = $false  # admin: incluir Juntas fora da rota no seletor
 $Global:WizardStep         = 1       # passo atual do assistente de diagnostico (1..6)
+$Global:FeitoSalvar        = $false  # checklist do passo 6
+$Global:FeitoTransmitir    = $false
+$Global:FeitoExportar      = $false
+$Global:UltimoResultadoSalvo = $null # caminho do JSON gravado no passo 6
+$Global:ModoTeste          = $false  # testes: nao abrir arquivos externos
 
 $Global:Views = @('viewLogin', 'viewHome', 'viewGuia', 'viewDiag', 'viewAdmin')
 
@@ -196,6 +201,7 @@ function New-JanelaPrincipal {
     $window.FindName('btnWizVoltar').Add_Click({ Invoke-WizardVoltar })
     $window.FindName('btnWizProximo').Add_Click({ Invoke-WizardProximo })
     $window.FindName('btnExportarPdf').Add_Click({ Invoke-ExportarRelatorio })
+    $window.FindName('btnTransmitirResultado').Add_Click({ Invoke-TransmitirResultado })
     $window.FindName('btnDiagVoltar').Add_Click({ Show-View 'viewHome' })
     $window.FindName('btnSalvarResultado').Add_Click({ Invoke-SalvarResultado })
     $window.FindName('cboDecisaoFinal').Add_SelectionChanged({
@@ -607,6 +613,25 @@ function Update-DetalheLocal {
     $card.Visibility = 'Visible'
 }
 
+# Atualiza os check-marks do passo 6 (verde = feito, vermelho = pendente).
+function Update-ChecklistFim {
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    $verde    = Get-PincelVeredito 'viavel'
+    $vermelho = Get-PincelVeredito 'inviavel'
+    $itens = @(
+        @{ n = 'chkFimSalvar';    ok = $Global:FeitoSalvar }
+        @{ n = 'chkFimTransmitir'; ok = $Global:FeitoTransmitir }
+        @{ n = 'chkFimExportar';   ok = $Global:FeitoExportar }
+    )
+    foreach ($it in $itens) {
+        $t = $w.FindName($it.n)
+        if (-not $t) { continue }
+        $t.Text       = if ($it.ok) { [char]0x2713 } else { [char]0x2717 }
+        $t.Foreground = if ($it.ok) { $verde } else { $vermelho }
+    }
+}
+
 # Preenche o passo 6 (conclusao).
 function Update-ResumoFim {
     $w = $Global:JanelaPrincipal
@@ -618,8 +643,40 @@ function Update-ResumoFim {
     $ver = $w.FindName('txtFimVeredito')
     $ver.Text       = Get-PalavraVeredito $dec
     $ver.Foreground = Get-PincelVeredito $dec
-    $w.FindName('btnSalvarResultado').IsEnabled = $true
-    $w.FindName('btnExportarPdf').IsEnabled     = $true
+    $w.FindName('btnSalvarResultado').IsEnabled     = $true
+    $w.FindName('btnExportarPdf').IsEnabled         = $true
+    $w.FindName('btnTransmitirResultado').IsEnabled = $Global:FeitoSalvar
+    Update-ChecklistFim
+}
+
+function Invoke-TransmitirResultado {
+    $w = $Global:JanelaPrincipal
+    if (-not $Global:UltimoResultadoSalvo -or -not (Test-Path $Global:UltimoResultadoSalvo)) {
+        Write-Log 'Salve o resultado antes de transmitir.' -Nivel Aviso
+        $st = $w.FindName('txtFimStatus'); if ($st) { $st.Text = 'Salve o resultado antes de transmitir.' }
+        return
+    }
+    $btn = $w.FindName('btnTransmitirResultado'); $btn.IsEnabled = $false
+    $st  = $w.FindName('txtFimStatus'); $st.Text = 'Transmitindo...'
+    try {
+        $cfg = $null
+        try { $cfg = Get-Config 'envio' } catch { }
+        $ok = Send-Resultado -Caminho $Global:UltimoResultadoSalvo -Endpoint $cfg.endpoint_apps_script `
+            -Retentativas ($cfg.retentativas) -IntervaloS ($cfg.intervalo_retentativa_s)
+        if ($ok) {
+            $Global:FeitoTransmitir = $true
+            $st.Text = 'Resultado transmitido ao painel.'
+        } else {
+            $st.Text = 'Nao foi possivel transmitir agora. O resultado fica pendente e vai no proximo "Atualizar dados".'
+            $btn.IsEnabled = $true
+        }
+    } catch {
+        Write-Log "Falha ao transmitir: $_" -Nivel Erro
+        $st.Text = "Falha ao transmitir: $_"
+        $btn.IsEnabled = $true
+    }
+    Update-ChecklistFim
+    Update-AvisoPendentes
 }
 
 function Invoke-ExportarRelatorio {
@@ -642,14 +699,16 @@ function Invoke-ExportarRelatorio {
             -Avaliacoes $avaliacoes -ClassificacaoFinal @{ final = $decFinal; justificativa = $justDec } `
             -TecnicoNome ($Global:SessaoAtual.tecnico_nome)
         $out = Export-RelatorioPdf -Resultado $res
+        $Global:FeitoExportar = $true
         $st.Text = "Relatorio salvo: $out"
-        try { Start-Process -FilePath $out } catch { }
+        if (-not $Global:ModoTeste) { try { Start-Process -FilePath $out } catch { } }
     } catch {
         $st.Text = "Falha ao exportar: $_"
         Write-Log "Falha ao exportar relatorio: $_" -Nivel Erro
     } finally {
         $btn.IsEnabled = $true
     }
+    Update-ChecklistFim
 }
 
 # Abre o assistente de diagnostico do zero (menu Inicio / rail).
@@ -928,8 +987,14 @@ function Clear-PainelResultado {
     $w.FindName('lblDecisaoRecalc').Text = ''
     $w.FindName('btnSalvarResultado').IsEnabled = $false
     $w.FindName('btnExportarPdf').IsEnabled = $false
+    $w.FindName('btnTransmitirResultado').IsEnabled = $false
     $w.FindName('txtFimStatus').Text = ''
     $w.FindName('cardDetalheLocal').Visibility = 'Collapsed'
+    $Global:FeitoSalvar     = $false
+    $Global:FeitoTransmitir = $false
+    $Global:FeitoExportar   = $false
+    $Global:UltimoResultadoSalvo = $null
+    Update-ChecklistFim
     Update-VisibilidadeJustDecisao
 }
 
@@ -1027,11 +1092,15 @@ function Invoke-SalvarResultado {
             -ClassificacaoFinal @{ final = $decFinal; justificativa = $justDec } `
             -TecnicoNome ($Global:SessaoAtual.tecnico_nome)
         Write-Log "Resultado salvo: $caminho" -Nivel Ok
-        $st = $w.FindName('txtFimStatus'); if ($st) { $st.Text = 'Resultado salvo. Sera enviado quando houver internet.' }
+        $Global:FeitoSalvar          = $true
+        $Global:UltimoResultadoSalvo = $caminho
+        $w.FindName('btnTransmitirResultado').IsEnabled = $true
+        $st = $w.FindName('txtFimStatus'); if ($st) { $st.Text = 'Resultado salvo neste notebook. Use "Transmitir" para enviar agora.' }
     } catch {
         Write-Log "Falha ao salvar: $_" -Nivel Erro
         $w.FindName('btnSalvarResultado').IsEnabled = $true
     }
+    Update-ChecklistFim
     Update-AvisoPendentes
 }
 

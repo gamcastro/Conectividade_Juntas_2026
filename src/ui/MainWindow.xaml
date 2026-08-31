@@ -663,18 +663,50 @@
                                                FontSize="20" Foreground="{DynamicResource Dicon.Text}"/>
                                 </StackPanel>
                                 <TextBlock Margin="0,12,0,0" TextWrapping="Wrap" FontSize="12"
-                                           Foreground="{DynamicResource Dicon.Text3}">O resultado &#233; salvo
-                                    neste notebook e enviado ao painel quando houver internet
-                                    ("Atualizar dados" / "Reenviar" na tela inicial).</TextBlock>
+                                           Foreground="{DynamicResource Dicon.Text3}">O resultado fica salvo
+                                    neste notebook. <Run FontWeight="Bold">Transmitir</Run> envia agora ao
+                                    painel (com internet); sen&#227;o ele vai junto no pr&#243;ximo
+                                    "Atualizar dados" / "Reenviar".</TextBlock>
                                 <StackPanel Orientation="Horizontal" Margin="0,18,0,0">
                                     <Button x:Name="btnSalvarResultado" Content="Salvar resultado"
                                             Style="{DynamicResource BotaoSucesso}" IsEnabled="False"/>
+                                    <Button x:Name="btnTransmitirResultado" Content="Transmitir resultado"
+                                            Style="{DynamicResource BotaoPrimario}" Margin="10,0,0,0"
+                                            IsEnabled="False"/>
                                     <Button x:Name="btnExportarPdf" Content="Exportar relat&#243;rio (PDF)"
                                             Style="{DynamicResource BotaoSecundario}" Margin="10,0,0,0"
                                             IsEnabled="False"/>
                                 </StackPanel>
                                 <TextBlock x:Name="txtFimStatus" Margin="0,12,0,0" TextWrapping="Wrap"
                                            FontSize="12" Foreground="{DynamicResource Dicon.Text2}"/>
+
+                                <Border Style="{DynamicResource Faixa}" Margin="0,20,0,0">
+                                    <StackPanel>
+                                        <TextBlock Text="A&#199;&#213;ES" FontFamily="Consolas" FontSize="9"
+                                                   Foreground="{DynamicResource Dicon.Text3}" Margin="0,0,0,4"/>
+                                        <StackPanel Orientation="Horizontal" Margin="0,3">
+                                            <TextBlock x:Name="chkFimSalvar" Text="&#10007;" Width="22"
+                                                       FontWeight="Bold" FontSize="13"
+                                                       Foreground="{DynamicResource Dicon.Inviavel}"/>
+                                            <TextBlock Text="Salvar resultado" FontSize="12"
+                                                       Foreground="{DynamicResource Dicon.Text2}"/>
+                                        </StackPanel>
+                                        <StackPanel Orientation="Horizontal" Margin="0,3">
+                                            <TextBlock x:Name="chkFimTransmitir" Text="&#10007;" Width="22"
+                                                       FontWeight="Bold" FontSize="13"
+                                                       Foreground="{DynamicResource Dicon.Inviavel}"/>
+                                            <TextBlock Text="Transmitir resultado" FontSize="12"
+                                                       Foreground="{DynamicResource Dicon.Text2}"/>
+                                        </StackPanel>
+                                        <StackPanel Orientation="Horizontal" Margin="0,3">
+                                            <TextBlock x:Name="chkFimExportar" Text="&#10007;" Width="22"
+                                                       FontWeight="Bold" FontSize="13"
+                                                       Foreground="{DynamicResource Dicon.Inviavel}"/>
+                                            <TextBlock Text="Exportar relat&#243;rio (PDF)" FontSize="12"
+                                                       Foreground="{DynamicResource Dicon.Text2}"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
                             </StackPanel>
                         </Border>
                     </ScrollViewer>
