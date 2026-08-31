@@ -464,6 +464,15 @@
                                                FontSize="11" Foreground="{DynamicResource Dicon.Text3}"/>
                                     <TextBlock x:Name="txtDetEndereco" Margin="0,2,0,0" TextWrapping="Wrap"
                                                Foreground="{DynamicResource Dicon.Text2}"/>
+                                    <TextBlock x:Name="txtDetUC" Margin="0,2,0,0" FontFamily="Consolas"
+                                               FontSize="11" TextWrapping="Wrap"
+                                               Foreground="{DynamicResource Dicon.Text3}" Visibility="Collapsed"/>
+                                    <TextBlock x:Name="txtDetResponsavel" Margin="0,2,0,0" FontFamily="Consolas"
+                                               FontSize="11" TextWrapping="Wrap"
+                                               Foreground="{DynamicResource Dicon.Text3}" Visibility="Collapsed"/>
+                                    <TextBlock x:Name="txtDetTelefone" Margin="0,2,0,0" FontFamily="Consolas"
+                                               FontSize="11" Foreground="{DynamicResource Dicon.Text3}"
+                                               Visibility="Collapsed"/>
                                     <TextBlock x:Name="txtDetInternet" Margin="0,2,0,0" FontFamily="Consolas"
                                                FontSize="11" Foreground="{DynamicResource Dicon.Text3}"/>
                                     <TextBlock x:Name="txtDetTestado" Margin="0,8,0,0" FontFamily="Consolas"

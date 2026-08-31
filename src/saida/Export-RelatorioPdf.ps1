@@ -91,6 +91,26 @@ function New-RelatorioHtml {
     $tecnico  = ConvertTo-HtmlSafe ([string] $r.tecnico.nome)
     $geradoEm = (Get-Date).ToString('dd/MM/yyyy HH:mm:ss')
 
+    # Bloco "Local avaliado" (so mostra o que existir nos dados).
+    $uc   = ConvertTo-HtmlSafe (Get-CampoLocal $loc 'unidade_consumidora')
+    $resp = Get-CampoLocal $loc 'responsavel'
+    $func = Get-CampoLocal $loc 'funcao'
+    if ($func) { $resp = '{0} ({1})' -f $resp, $func }
+    $resp = ConvertTo-HtmlSafe $resp
+    $tel  = ConvertTo-HtmlSafe (Get-CampoLocal $loc 'telefone')
+
+    $campos = @(
+        '<div><b>Tipo:</b> {0}</div>' -f $tipoLocal
+        '<div><b>Junta / ZE:</b> {0}</div>' -f $loc.zona_eleitoral
+        '<div style="grid-column:1/3"><b>Local:</b> {0}</div>' -f (ConvertTo-HtmlSafe $loc.nome)
+        '<div style="grid-column:1/3"><b>Endere&ccedil;o:</b> {0}</div>' -f (ConvertTo-HtmlSafe $loc.endereco)
+    )
+    if ($uc)   { $campos += '<div><b>Unidade consumidora:</b> {0}</div>' -f $uc }
+    if ($tel)  { $campos += '<div><b>Telefone / WhatsApp:</b> {0}</div>' -f $tel }
+    if ($resp) { $campos += '<div style="grid-column:1/3"><b>Respons&aacute;vel:</b> {0}</div>' -f $resp }
+    $campos += '<div style="grid-column:1/3"><b>Tipo de internet:</b> {0}</div>' -f (ConvertTo-HtmlSafe $loc.tipo_internet)
+    $blocoLocal = $campos -join "`n    "
+
     @"
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -138,11 +158,7 @@ function New-RelatorioHtml {
 
   <h2>Local avaliado</h2>
   <div class="grid2">
-    <div><b>Tipo:</b> $tipoLocal</div>
-    <div><b>Junta / ZE:</b> $($loc.zona_eleitoral)</div>
-    <div><b>Local:</b> $(ConvertTo-HtmlSafe $loc.nome)</div>
-    <div><b>Tipo de internet:</b> $(ConvertTo-HtmlSafe $loc.tipo_internet)</div>
-    <div style="grid-column:1/3"><b>Endere&ccedil;o:</b> $(ConvertTo-HtmlSafe $loc.endereco)</div>
+    $blocoLocal
   </div>
 
   <h2>M&eacute;tricas medidas</h2>
@@ -198,7 +214,7 @@ function Export-RelatorioPdf {
 
     $uri     = ([Uri] $htmlPath).AbsoluteUri
     $userDir = Join-Path ([IO.Path]::GetTempPath()) 'dicon-pdf-profile'
-    $args = @(
+    $argv = @(
         '--headless=new'
         '--disable-gpu'
         '--no-first-run'
@@ -207,7 +223,7 @@ function Export-RelatorioPdf {
         ('--print-to-pdf="{0}"' -f $Caminho)
         ('"{0}"' -f $uri)
     )
-    Invoke-ProcessoComSaida -Caminho $navegador -Argumentos $args -TimeoutS 45 | Out-Null
+    Invoke-ProcessoComSaida -Caminho $navegador -Argumentos $argv -TimeoutS 45 | Out-Null
 
     if (Test-Path $Caminho) {
         Remove-Item $htmlPath -Force -ErrorAction SilentlyContinue

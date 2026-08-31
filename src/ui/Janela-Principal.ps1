@@ -560,6 +560,15 @@ function Get-JustificativasFaltando {
     return @($falta)
 }
 
+# Linha "<Rotulo>: <Valor>" do cartao de detalhe; oculta se o valor for vazio.
+function Set-LinhaDetalhe {
+    param($Ctrl, [string] $Rotulo, [string] $Valor)
+    if (-not $Ctrl) { return }
+    if ([string]::IsNullOrWhiteSpace($Valor)) { $Ctrl.Visibility = 'Collapsed'; return }
+    $Ctrl.Text       = '{0}: {1}' -f $Rotulo, $Valor
+    $Ctrl.Visibility = 'Visible'
+}
+
 # Preenche o cartao "Local selecionado" no passo 2.
 function Update-DetalheLocal {
     $w = $Global:JanelaPrincipal
@@ -575,6 +584,13 @@ function Update-DetalheLocal {
     $w.FindName('txtDetZE').Text       = Format-RotuloJunta $d.zona_eleitoral $d.municipio_termo $d.municipio_sede
     $w.FindName('txtDetEndereco').Text = [string] $d.endereco
     $w.FindName('txtDetInternet').Text = 'Internet: ' + [string] $d.tipo_internet
+
+    $resp = Get-CampoLocal $d 'responsavel'
+    $func = Get-CampoLocal $d 'funcao'
+    if ($func) { $resp = '{0} ({1})' -f $resp, $func }
+    Set-LinhaDetalhe $w.FindName('txtDetUC')          'Unidade consumidora'  (Get-CampoLocal $d 'unidade_consumidora')
+    Set-LinhaDetalhe $w.FindName('txtDetResponsavel') 'Responsavel'          $resp
+    Set-LinhaDetalhe $w.FindName('txtDetTelefone')    'Telefone/WhatsApp'    (Get-CampoLocal $d 'telefone')
 
     $feitos = Get-DiagnosticosRealizados -TecnicoNome $Global:SessaoAtual.tecnico_nome
     $t   = $feitos[[string] $d.id]

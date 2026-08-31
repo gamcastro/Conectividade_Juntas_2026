@@ -47,7 +47,8 @@ foreach ($a in $arquivos) {
 $agora = (Get-Date).ToString('o')
 @{ atualizado_em = $agora; juntas = @(
         @{ id = 'ZE99-TESTE-PRINCIPAL'; zona_eleitoral = 99; municipio_sede = 'TESTE'; municipio_termo = 'Teste'
-            tipo = 'principal'; nome = 'LOCAL PRINCIPAL DE TESTE'; endereco = 'Rua Teste, 1'; tipo_internet = 'Fibra optica'; texto_completo = '' }
+            tipo = 'principal'; nome = 'LOCAL PRINCIPAL DE TESTE'; endereco = 'Rua Teste, 1'; tipo_internet = 'Fibra optica'
+            unidade_consumidora = '10163145'; responsavel = 'Fulano de Tal'; funcao = 'Servidor'; telefone = '(99) 90000-0000'; texto_completo = '' }
         @{ id = 'ZE99-TESTE-CONTINGENCIA'; zona_eleitoral = 99; municipio_sede = 'TESTE'; municipio_termo = 'Teste'
             tipo = 'contingencia'; nome = 'LOCAL DE CONTINGENCIA DE TESTE'; endereco = 'Rua Teste, 2'; tipo_internet = 'Banda larga'; texto_completo = '' }
         @{ id = 'ZE88-FORA-PRINCIPAL'; zona_eleitoral = 88; municipio_sede = 'FORA'; municipio_termo = 'Fora da Rota'
@@ -114,11 +115,16 @@ try {
     if (-not $selL) { Write-Host "[4] FALHA: local nao pre-selecionado"; $falhas++ }
     else { Write-Host "[4] Assistente passo 1, local pre-selecionado: $($selL.Rotulo)" }
 
-    # 4b. passo 1 -> 2: cartao de detalhe do local aparece
+    # 4b. passo 1 -> 2: cartao de detalhe do local aparece com os campos extras
     Invoke-WizardProximo
     if ($Global:WizardStep -ne 2) { Write-Host "[4b] FALHA: nao foi para o passo 2"; $falhas++ }
     if ($w.FindName('cardDetalheLocal').Visibility -ne 'Visible') { Write-Host "[4b] FALHA: cartao de detalhe nao apareceu"; $falhas++ }
     else { Write-Host "[4b] Passo 2: detalhe = '$($w.FindName('txtDetNome').Text)'" }
+    $uc  = $w.FindName('txtDetUC')
+    $rsp = $w.FindName('txtDetResponsavel')
+    if ($uc.Visibility -eq 'Visible' -and "$($uc.Text)" -match '10163145' -and $rsp.Visibility -eq 'Visible' -and "$($rsp.Text)" -match 'Servidor') {
+        Write-Host "[4b] campos extras: '$($uc.Text)' / '$($rsp.Text)'"
+    } else { Write-Host "    FALHA: cartao sem UC/responsavel (uc='$($uc.Text)' resp='$($rsp.Text)')"; $falhas++ }
 
     # 4c. passo 2 -> 3
     Invoke-WizardProximo

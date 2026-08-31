@@ -133,16 +133,14 @@ function montarLocal(zona, sede, termo, tipo, bloco) {
 
   var nome = linhas.length ? linhas[0].replace(/^Local\s*:\s*/i, '').trim() : '';
 
-  var endereco = '';
-  var tipoInternet = '';
-  var reEndereco = new RegExp('^Endere[çc]o\\s*:\\s*(.+)$', 'i');
-  var reInternet = new RegExp('^Tipo de Internet\\s*:\\s*(.+)$', 'i');
-
-  for (var i = 0; i < linhas.length; i++) {
-    var mEnd = linhas[i].match(reEndereco);
-    if (mEnd && !endereco) endereco = mEnd[1].trim();
-    var mNet = linhas[i].match(reInternet);
-    if (mNet && !tipoInternet) tipoInternet = mNet[1].trim();
+  // Extrai o primeiro valor de "<Rotulo>: <valor>" no bloco (case-insensitive).
+  function campo(rotulo) {
+    var re = new RegExp('^' + rotulo + '\\s*:\\s*(.+)$', 'i');
+    for (var i = 0; i < linhas.length; i++) {
+      var m = linhas[i].match(re);
+      if (m) return m[1].trim();
+    }
+    return '';
   }
 
   return {
@@ -152,8 +150,12 @@ function montarLocal(zona, sede, termo, tipo, bloco) {
     municipio_termo: termo,
     tipo: tipo,
     nome: nome,
-    endereco: endereco,
-    tipo_internet: tipoInternet,
+    endereco: campo('Endere[çc]o'),
+    unidade_consumidora: campo('Unidade Consumidora') || campo('UC'),
+    responsavel: campo('Respons[áa]vel'),
+    funcao: campo('Fun[çc][ãa]o'),
+    telefone: campo('Telefone(?:\\s*/\\s*WhatsApp)?') || campo('WhatsApp'),
+    tipo_internet: campo('Tipo de Internet') || campo('Internet'),
     texto_completo: bloco
   };
 }
