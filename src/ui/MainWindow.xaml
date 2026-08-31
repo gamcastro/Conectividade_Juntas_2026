@@ -424,11 +424,11 @@
                                            Margin="0,0,0,10"/>
                                 <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource Dicon.Text2}"
                                            LineHeight="21">O DICON mede a conectividade do local a partir
-                                    deste notebook, agora, e classifica a viabilidade da Junta Especial.
+                                    deste computador, agora, e classifica a viabilidade da Junta Especial.
                                     O teste tem duas partes:</TextBlock>
                                 <StackPanel Margin="0,12,0,0">
                                     <TextBlock Foreground="{DynamicResource Dicon.Text2}" TextWrapping="Wrap"
-                                               Margin="0,0,0,6">&#8226;  <Run FontWeight="Bold">Rede local, sem a VPN</Run>  &#8212;  placa de rede, IP que o notebook pegou no local, Wi-Fi e a internet do local (ping, DNS, download).</TextBlock>
+                                               Margin="0,0,0,6">&#8226;  <Run FontWeight="Bold">Rede local, sem a VPN</Run>  &#8212;  placa de rede, IP que o computador pegou no local, Wi-Fi e a internet do local (ping, DNS, download).</TextBlock>
                                     <TextBlock Foreground="{DynamicResource Dicon.Text2}" TextWrapping="Wrap"
                                                Margin="0,0,0,6">&#8226;  <Run FontWeight="Bold">Com a VPN da Justi&#231;a Eleitoral</Run>  &#8212;  lat&#234;ncia / jitter / perda (ping), banda (iperf3) e tempo de abertura da totaliza&#231;&#227;o (Firefox e Chrome).</TextBlock>
                                 </StackPanel>
@@ -529,8 +529,8 @@
                             <Border Style="{DynamicResource Faixa}">
                                 <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource Dicon.Ressalva}"
                                            FontSize="12">Ainda <Run FontWeight="Bold">SEM</Run> a VPN do TRE.
-                                    Conecte o notebook &#224; rede do local (cabo ou Wi-Fi) e rode a checagem.
-                                    O IP que o notebook receber aqui vai no relat&#243;rio final.</TextBlock>
+                                    Conecte o computador &#224; rede do local (cabo ou Wi-Fi) e rode a checagem.
+                                    O IP que o computador receber aqui vai no relat&#243;rio final.</TextBlock>
                             </Border>
 
                             <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
@@ -827,7 +827,7 @@
                                 </StackPanel>
                                 <TextBlock Margin="0,12,0,0" TextWrapping="Wrap" FontSize="12"
                                            Foreground="{DynamicResource Dicon.Text3}">O resultado fica salvo
-                                    neste notebook. <Run FontWeight="Bold">Transmitir</Run> envia agora ao
+                                    neste computador. <Run FontWeight="Bold">Transmitir</Run> envia agora ao
                                     painel (com internet); sen&#227;o ele vai junto no pr&#243;ximo
                                     "Atualizar dados" / "Reenviar".</TextBlock>
                                 <StackPanel Orientation="Horizontal" Margin="0,18,0,0">
@@ -906,7 +906,7 @@
                 <TextBlock Grid.Row="0" Text="Administra&#231;&#227;o &#8212; limiares de decis&#227;o"
                            Style="{DynamicResource TituloTela}"/>
                 <TextBlock Grid.Row="1"
-                           Text="Valores que definem vi&#225;vel / ressalva / invi&#225;vel por m&#233;trica. Desmarque &quot;Na bateria&quot; para tirar uma m&#233;trica do teste. Salvos na planilha de configura&#231;&#227;o e usados por todos os notebooks."
+                           Text="Valores que definem vi&#225;vel / ressalva / invi&#225;vel por m&#233;trica. Desmarque &quot;Na bateria&quot; para tirar uma m&#233;trica do teste. Salvos na planilha de configura&#231;&#227;o e usados por todos os computadores."
                            Style="{DynamicResource SubtituloTela}" Margin="0,6,0,14"/>
 
                 <Border Grid.Row="2" Style="{DynamicResource Cartao}" Padding="2">

@@ -261,7 +261,7 @@ function Invoke-FaseLocal {
     } elseif ($lan.presente) {
         Write-Log ("Placa LAN '{0}': sem IP (cabo desconectado?)." -f $lan.nome) -Nivel Aviso
     } else {
-        Write-Log 'Nenhuma placa de rede cabeada encontrada neste notebook.' -Nivel Aviso
+        Write-Log 'Nenhuma placa de rede cabeada encontrada neste computador.' -Nivel Aviso
     }
     if ($lan.descricao -match 'NDIS|Sharing|Tethering|Android|iPhone|\bPhone\b|Mobile Broadband') {
         Write-Log 'A placa de rede ativa parece ser roteamento de celular - marque a operadora no assistente.' -Nivel Info
@@ -273,7 +273,7 @@ function Invoke-FaseLocal {
     } elseif ($wf.presente) {
         Write-Log ("Wi-Fi: placa presente, nao conectada ({0} rede(s) por perto)." -f (@($wf.redes_disponiveis).Count)) -Nivel Info
     } else {
-        Write-Log 'Wi-Fi: sem placa wireless neste notebook.' -Nivel Info
+        Write-Log 'Wi-Fi: sem placa wireless neste computador.' -Nivel Info
     }
 
     $net = Test-InternetLocal

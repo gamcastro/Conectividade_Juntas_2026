@@ -148,7 +148,7 @@ function New-RelatorioHtml {
 
         $ce = @()
         if ($rl.PSObject.Properties['host'] -and $rl.host) {
-            $ce += '<div><b>Notebook:</b> {0}</div>' -f (ConvertTo-HtmlSafe ([string] $rl.host))
+            $ce += '<div><b>Computador:</b> {0}</div>' -f (ConvertTo-HtmlSafe ([string] $rl.host))
         }
         if ($tether) {
             $op = if ($rl.PSObject.Properties['operadora'] -and $rl.operadora) {
@@ -246,7 +246,7 @@ $($linhas -join "`n")
   <div class="grid2">
     <div><b>T&eacute;cnico:</b> $tecnico</div>
     <div><b>Coletado em:</b> $($quando.ToString('dd/MM/yyyy HH:mm:ss'))</div>
-    <div><b>Notebook:</b> $(ConvertTo-HtmlSafe $amb.host)</div>
+    <div><b>Computador:</b> $(ConvertTo-HtmlSafe $amb.host)</div>
     <div><b>Usu&aacute;rio:</b> $(ConvertTo-HtmlSafe $amb.usuario)</div>
     <div><b>VPN da JE:</b> $vpn</div>
     <div><b>Interface:</b> $(ConvertTo-HtmlSafe $amb.interface_principal)</div>

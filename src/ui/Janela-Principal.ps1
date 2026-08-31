@@ -820,7 +820,7 @@ function Update-PainelFaseLocal {
 
     $lan = $p.Lan; $wf = $p.Wireless; $it = $p.Internet
     $hostNb = if ($p.PSObject.Properties['Host']) { [string] $p.Host } else { '' }
-    Set-LinhaDetalhe $w.FindName('txtLocHost') 'Notebook' $hostNb
+    Set-LinhaDetalhe $w.FindName('txtLocHost') 'Computador' $hostNb
     $verde    = Get-PincelVeredito 'viavel'
     $vermelho = Get-PincelVeredito 'inviavel'
     $cinza    = [Windows.Media.SolidColorBrush]::new([Windows.Media.ColorConverter]::ConvertFromString('#7D8698'))
@@ -834,7 +834,7 @@ function Update-PainelFaseLocal {
         $tl.Text = 'Cabo de rede (LAN): sem IP (cabo desconectado?)'
         $tl.Foreground = $vermelho
     } else {
-        $tl.Text = 'Cabo de rede (LAN): nenhuma placa cabeada neste notebook'
+        $tl.Text = 'Cabo de rede (LAN): nenhuma placa cabeada neste computador'
         $tl.Foreground = $cinza
     }
 
@@ -852,7 +852,7 @@ function Update-PainelFaseLocal {
         $n = (@($wf.redes_disponiveis)).Count
         $tw.Text = 'Wi-Fi: placa presente, nao conectada' + $(if ($n) { " - $n rede(s) por perto" } else { '' })
     } else {
-        $tw.Text = 'Wi-Fi: sem placa wireless neste notebook'
+        $tw.Text = 'Wi-Fi: sem placa wireless neste computador'
     }
 
     $ti = $w.FindName('txtLocInternet')
@@ -900,7 +900,7 @@ function Invoke-ConectarWifi {
     $senha = $w.FindName('pwdWifiSenha').Password
     $st = $w.FindName('txtWifiStatus')
     $temWifi = if ($Global:FaseLocalPayload) { [bool] $Global:FaseLocalPayload.Wireless.presente } else { Test-TemPlacaWireless }
-    if (-not $temWifi)       { $st.Text = 'Este notebook nao tem placa de rede Wi-Fi.'; return }
+    if (-not $temWifi)       { $st.Text = 'Este computador nao tem placa de rede Wi-Fi.'; return }
     if (-not $ssid)          { $st.Text = 'Informe o nome (SSID) da rede Wi-Fi.'; return }
     if ($senha.Length -lt 8) { $st.Text = 'A senha do Wi-Fi precisa ter ao menos 8 caracteres.'; return }
 
@@ -1456,7 +1456,7 @@ function Invoke-SalvarResultado {
         $Global:FeitoSalvar          = $true
         $Global:UltimoResultadoSalvo = $caminho
         $w.FindName('btnTransmitirResultado').IsEnabled = $true
-        $st = $w.FindName('txtFimStatus'); if ($st) { $st.Text = 'Resultado salvo neste notebook. Use "Transmitir" para enviar agora.' }
+        $st = $w.FindName('txtFimStatus'); if ($st) { $st.Text = 'Resultado salvo neste computador. Use "Transmitir" para enviar agora.' }
     } catch {
         Write-Log "Falha ao salvar: $_" -Nivel Erro
         $w.FindName('btnSalvarResultado').IsEnabled = $true

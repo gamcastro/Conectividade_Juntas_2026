@@ -159,7 +159,7 @@ try {
     if ($null -ne $Global:FaseLocalPayload -and $ipTxt -match '192\.168\.15\.42' -and $w.FindName('cardFaseLocal').Visibility -eq 'Visible') {
         Write-Host "[4c] checagem local OK: '$ipTxt'"
     } else { Write-Host "    FALHA: fase local nao populou (payload=$($null -ne $Global:FaseLocalPayload) ip='$ipTxt')"; $falhas++ }
-    if ($hostTxt -match 'NB-TESTE-01') { Write-Host "[4c] card mostra o notebook: '$hostTxt'" }
+    if ($hostTxt -match 'NB-TESTE-01') { Write-Host "[4c] card mostra o computador: '$hostTxt'" }
     else { Write-Host "    FALHA: card sem o hostname (host='$hostTxt')"; $falhas++ }
     Invoke-WizardProximo
     if ($Global:WizardStep -ne 4) { Write-Host "    FALHA: nao foi para o passo 4 (diagnostico com VPN)"; $falhas++ }
