@@ -425,20 +425,17 @@
                                 <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource Dicon.Text2}"
                                            LineHeight="21">O DICON mede a conectividade do local a partir
                                     deste notebook, agora, e classifica a viabilidade da Junta Especial.
-                                    S&#227;o quatro medi&#231;&#245;es:</TextBlock>
+                                    O teste tem duas partes:</TextBlock>
                                 <StackPanel Margin="0,12,0,0">
                                     <TextBlock Foreground="{DynamicResource Dicon.Text2}" TextWrapping="Wrap"
-                                               Margin="0,0,0,6">&#8226;  <Run FontWeight="Bold">Lat&#234;ncia, jitter e perda</Run>  &#8212;  ping contra o servidor da rede da JE.</TextBlock>
+                                               Margin="0,0,0,6">&#8226;  <Run FontWeight="Bold">Rede local, sem a VPN</Run>  &#8212;  placa de rede, IP que o notebook pegou no local, Wi-Fi e a internet do local (ping, DNS, download).</TextBlock>
                                     <TextBlock Foreground="{DynamicResource Dicon.Text2}" TextWrapping="Wrap"
-                                               Margin="0,0,0,6">&#8226;  <Run FontWeight="Bold">Banda (download / upload)</Run>  &#8212;  iperf3 contra o servidor no CPD.</TextBlock>
-                                    <TextBlock Foreground="{DynamicResource Dicon.Text2}" TextWrapping="Wrap"
-                                               Margin="0,0,0,6">&#8226;  <Run FontWeight="Bold">Carregamento web</Run>  &#8212;  tempo de abertura do sistema de totaliza&#231;&#227;o (Firefox e Chrome).</TextBlock>
+                                               Margin="0,0,0,6">&#8226;  <Run FontWeight="Bold">Com a VPN da Justi&#231;a Eleitoral</Run>  &#8212;  lat&#234;ncia / jitter / perda (ping), banda (iperf3) e tempo de abertura da totaliza&#231;&#227;o (Firefox e Chrome).</TextBlock>
                                 </StackPanel>
                                 <Border Style="{DynamicResource Faixa}" Margin="0,10,0,0">
-                                    <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource Dicon.Ressalva}"
-                                               FontSize="12">Confirme que a VPN da Justi&#231;a Eleitoral est&#225;
-                                        conectada antes de come&#231;ar &#8212; sen&#227;o as medidas n&#227;o
-                                        refletem a rede real.</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource Dicon.Text3}"
+                                               FontSize="12">N&#227;o precisa da VPN agora. Comece pela rede local
+                                        &#8212; a ferramenta avisa quando conectar a VPN, no passo 4.</TextBlock>
                                 </Border>
                             </StackPanel>
                         </Border>
