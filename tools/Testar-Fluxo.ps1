@@ -160,8 +160,19 @@ try {
     Invoke-WizardProximo
     if ($Global:WizardStep -ne 4) { Write-Host "    FALHA: nao foi para o passo 4 (diagnostico com VPN)"; $falhas++ }
 
-    # 4c-3. conectar Wi-Fi sem SSID mostra aviso (nao chama netsh)
     Show-WizardPasso 3
+
+    # 4c-3. sem placa Wi-Fi -> some o card "Conectar a uma rede Wi-Fi"
+    $Global:FaseLocalPayload.Wireless.presente = $false
+    Update-PainelFaseLocal
+    if ($w.FindName('cardConectarWifi').Visibility -eq 'Collapsed') { Write-Host "[4c] sem placa Wi-Fi: card de conexao some" }
+    else { Write-Host "    FALHA: card Wi-Fi visivel sem placa"; $falhas++ }
+    $Global:FaseLocalPayload.Wireless.presente = $true
+    Update-PainelFaseLocal
+    if ($w.FindName('cardConectarWifi').Visibility -eq 'Visible') { Write-Host "[4c] com placa Wi-Fi: card de conexao aparece" }
+    else { Write-Host "    FALHA: card Wi-Fi oculto com placa"; $falhas++ }
+
+    # 4c-3b. conectar Wi-Fi sem SSID mostra aviso (nao chama netsh)
     $w.FindName('cboWifiSsid').Text = ''
     Invoke-ConectarWifi
     if ("$($w.FindName('txtWifiStatus').Text)" -match 'SSID') { Write-Host "[4c] conectar Wi-Fi exige SSID" }

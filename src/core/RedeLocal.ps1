@@ -97,6 +97,13 @@ function Invoke-Netsh {
     [string] (Invoke-ProcessoComSaida -Caminho $netsh -Argumentos $Argumentos -TimeoutS $TimeoutS)
 }
 
+# Checagem rapida (so Get-NetAdapter, sem netsh) - a GUI usa ao entrar no passo 3.
+function Test-TemPlacaWireless {
+    try {
+        [bool] (Get-NetAdapter -Physical -ErrorAction Stop | Where-Object { $_.InterfaceType -eq 71 })
+    } catch { $false }
+}
+
 function Get-AdaptadorWireless {
     $o = [pscustomobject]@{
         presente = $false; nome = ''; status = ''; conectado = $false

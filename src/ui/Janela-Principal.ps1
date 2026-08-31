@@ -810,6 +810,12 @@ function Update-PainelFaseLocal {
     if (-not $w) { return }
     $card = $w.FindName('cardFaseLocal')
     $p = $Global:FaseLocalPayload
+
+    # "Conectar a uma rede Wi-Fi" so aparece se o notebook tem placa wireless.
+    $temWifi = if ($p) { [bool] $p.Wireless.presente } else { Test-TemPlacaWireless }
+    $cardWifi = $w.FindName('cardConectarWifi')
+    if ($cardWifi) { $cardWifi.Visibility = if ($temWifi) { 'Visible' } else { 'Collapsed' } }
+
     if (-not $p) { if ($card) { $card.Visibility = 'Collapsed' }; return }
 
     $lan = $p.Lan; $wf = $p.Wireless; $it = $p.Internet
@@ -891,6 +897,8 @@ function Invoke-ConectarWifi {
     $ssid  = ([string] $w.FindName('cboWifiSsid').Text).Trim()
     $senha = $w.FindName('pwdWifiSenha').Password
     $st = $w.FindName('txtWifiStatus')
+    $temWifi = if ($Global:FaseLocalPayload) { [bool] $Global:FaseLocalPayload.Wireless.presente } else { Test-TemPlacaWireless }
+    if (-not $temWifi)       { $st.Text = 'Este notebook nao tem placa de rede Wi-Fi.'; return }
     if (-not $ssid)          { $st.Text = 'Informe o nome (SSID) da rede Wi-Fi.'; return }
     if ($senha.Length -lt 8) { $st.Text = 'A senha do Wi-Fi precisa ter ao menos 8 caracteres.'; return }
 
