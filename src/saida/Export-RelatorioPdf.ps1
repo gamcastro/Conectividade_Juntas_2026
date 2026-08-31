@@ -144,7 +144,15 @@ function New-RelatorioHtml {
             'conectada a &quot;{0}&quot; ({1}%)' -f (ConvertTo-HtmlSafe ([string] $rl.wireless_ssid)), $rl.wireless_sinal_pct
         } elseif ($rl.wireless_presente) { 'placa presente, n&atilde;o conectada' } else { 'sem placa Wi-Fi' }
 
+        $tether = ($rl.PSObject.Properties['tethering_celular']) -and $rl.tethering_celular
+
         $ce = @()
+        if ($tether) {
+            $op = if ($rl.PSObject.Properties['operadora'] -and $rl.operadora) {
+                ' &mdash; operadora <b>{0}</b>' -f (ConvertTo-HtmlSafe ([string] $rl.operadora))
+            } else { '' }
+            $ce += '<div style="grid-column:1/3"><b>Conex&atilde;o:</b> roteamento (tethering) do celular do t&eacute;cnico{0}</div>' -f $op
+        }
         $ce += '<div><b>Placa de rede (LAN):</b> {0}</div>' -f $lanS
         if ($rl.ip_local)        { $ce += '<div><b>IP na rede local:</b> {0}</div>' -f (ConvertTo-HtmlSafe ([string] $rl.ip_local)) }
         if ($rl.mascara)         { $ce += '<div><b>M&aacute;scara:</b> {0}</div>' -f (ConvertTo-HtmlSafe ([string] $rl.mascara)) }

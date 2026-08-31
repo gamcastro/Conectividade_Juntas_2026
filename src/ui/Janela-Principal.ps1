@@ -232,6 +232,7 @@ function New-JanelaPrincipal {
     $window.FindName('btnRefazerTeste').Add_Click({ Invoke-WizardProximo })
     $window.FindName('btnRodarFaseLocal').Add_Click({ Invoke-RodarFaseLocal })
     $window.FindName('btnConectarWifi').Add_Click({ Invoke-ConectarWifi })
+    $window.FindName('chkTetheringCelular').Add_Click({ Update-TetheringCelular })
     $window.FindName('btnExportarPdf').Add_Click({ Invoke-ExportarRelatorio })
     $window.FindName('btnTransmitirResultado').Add_Click({ Invoke-TransmitirResultado })
     $window.FindName('btnDiagVoltar').Add_Click({ Show-View 'viewHome' })
@@ -626,6 +627,11 @@ function Invoke-WizardProximo {
                 Write-Log 'Rode a checagem da rede local antes de avancar.' -Nivel Aviso
                 return
             }
+            if ([bool] $w.FindName('chkTetheringCelular').IsChecked -and
+                -not ([string] $w.FindName('cboOperadora').Text).Trim()) {
+                Write-Log 'Informe a operadora do celular usado no roteamento.' -Nivel Aviso
+                return
+            }
             Show-WizardPasso 4
         }
         4 {
@@ -914,6 +920,31 @@ function Complete-ConectarWifi {
     }
 }
 
+# "Testei pelo roteamento do celular" -> libera/limpa o campo Operadora.
+function Update-TetheringCelular {
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    $on = [bool] $w.FindName('chkTetheringCelular').IsChecked
+    $cbo = $w.FindName('cboOperadora')
+    $cbo.IsEnabled = $on
+    if (-not $on) { $cbo.Text = '' }
+}
+
+# Zera o passo 3 (rede local) ao abrir o assistente limpo / pelo guia.
+function Reset-PainelFaseLocal {
+    $Global:FaseLocalPayload = $null
+    $w = $Global:JanelaPrincipal
+    if ($w) {
+        $w.FindName('txtWifiStatus').Text     = ''
+        $w.FindName('cboWifiSsid').Text        = ''
+        $w.FindName('pwdWifiSenha').Password   = ''
+        $w.FindName('chkTetheringCelular').IsChecked = $false
+        $w.FindName('cboOperadora').Text       = ''
+        $w.FindName('cboOperadora').IsEnabled  = $false
+    }
+    Update-PainelFaseLocal
+}
+
 # Atualiza os check-marks do passo 7 (verde = feito, vermelho = pendente).
 function Update-ChecklistFim {
     $w = $Global:JanelaPrincipal
@@ -998,7 +1029,9 @@ function Invoke-ExportarRelatorio {
         $p = $Global:DiagPayload
         $res = New-ResultadoJson -Ambiente $p.Ambiente -Metricas $p.Metricas -Decisao $p.Decisao -Local $p.Local `
             -Avaliacoes $avaliacoes -ClassificacaoFinal @{ final = $decFinal; justificativa = $justDec } `
-            -TecnicoNome ($Global:SessaoAtual.tecnico_nome) -FaseLocal $Global:FaseLocalPayload
+            -TecnicoNome ($Global:SessaoAtual.tecnico_nome) -FaseLocal $Global:FaseLocalPayload `
+            -Tethering ([bool] $w.FindName('chkTetheringCelular').IsChecked) `
+            -Operadora (([string] $w.FindName('cboOperadora').Text).Trim())
         $out = Export-RelatorioPdf -Resultado $res
         $Global:FeitoExportar = $true
         $st.Text = "Relatorio salvo: $out"
@@ -1021,9 +1054,7 @@ function Open-DiagnosticoLimpo {
     $w.FindName('cboJunta').SelectedIndex = -1   # dispara Update-ComboLocais -> limpa cboLocal
     $w.FindName('cboLocal').ItemsSource = @()
     Clear-PainelResultado
-    $Global:FaseLocalPayload = $null
-    Update-PainelFaseLocal
-    $w.FindName('txtWifiStatus').Text = ''
+    Reset-PainelFaseLocal
     Set-ProgressoDiag $false
     Show-WizardPasso 1
     Show-View 'viewDiag'
@@ -1037,9 +1068,7 @@ function Start-DiagnosticoDoGuia {
 
     $Global:LogEntries.Clear()
     Clear-PainelResultado
-    $Global:FaseLocalPayload = $null
-    Update-PainelFaseLocal
-    $Global:JanelaPrincipal.FindName('txtWifiStatus').Text = ''
+    Reset-PainelFaseLocal
     Set-ProgressoDiag $false
 
     $loc = @($Global:JuntasCache) | Where-Object { $_.id -eq $LocalId } | Select-Object -First 1
@@ -1410,7 +1439,9 @@ function Invoke-SalvarResultado {
             -Avaliacoes $avaliacoes `
             -ClassificacaoFinal @{ final = $decFinal; justificativa = $justDec } `
             -TecnicoNome ($Global:SessaoAtual.tecnico_nome) `
-            -FaseLocal $Global:FaseLocalPayload
+            -FaseLocal $Global:FaseLocalPayload `
+            -Tethering ([bool] $w.FindName('chkTetheringCelular').IsChecked) `
+            -Operadora (([string] $w.FindName('cboOperadora').Text).Trim())
         Write-Log "Resultado salvo: $caminho" -Nivel Ok
         $Global:FeitoSalvar          = $true
         $Global:UltimoResultadoSalvo = $caminho

@@ -37,7 +37,7 @@ function ConvertTo-MascaraIpv4 {
 
 function Get-AdaptadorLan {
     $vazio = [pscustomobject]@{
-        presente = $false; nome = ''; status = ''; conectado = $false
+        presente = $false; nome = ''; descricao = ''; status = ''; conectado = $false
         ipv4 = ''; prefixo = $null; mascara = ''; gateway = ''; dns = @()
         mac = ''; velocidade_mbps = $null
     }
@@ -57,6 +57,7 @@ function Get-AdaptadorLan {
     $o = [pscustomobject]@{
         presente = $true
         nome     = [string] $lan.Name
+        descricao = [string] $lan.InterfaceDescription
         status   = [string] $lan.Status
         conectado = $false
         ipv4 = ''; prefixo = $null; mascara = ''; gateway = ''; dns = @()
@@ -254,6 +255,9 @@ function Invoke-FaseLocal {
         Write-Log ("Placa LAN '{0}': sem IP (cabo desconectado?)." -f $lan.nome) -Nivel Aviso
     } else {
         Write-Log 'Nenhuma placa de rede cabeada encontrada neste notebook.' -Nivel Aviso
+    }
+    if ($lan.descricao -match 'NDIS|Sharing|Tethering|Android|iPhone|\bPhone\b|Mobile Broadband') {
+        Write-Log 'A placa de rede ativa parece ser roteamento de celular - marque a operadora no assistente.' -Nivel Info
     }
 
     $wf = Get-AdaptadorWireless

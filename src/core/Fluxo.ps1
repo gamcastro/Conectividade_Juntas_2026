@@ -83,7 +83,9 @@ function Save-Diagnostico {
         $Avaliacoes,
         $ClassificacaoFinal,
         [string] $TecnicoNome,
-        $FaseLocal
+        $FaseLocal,
+        [bool] $Tethering,
+        [string] $Operadora
     )
 
     $cfgEnvio = Get-Config 'envio'
@@ -91,7 +93,7 @@ function Save-Diagnostico {
 
     $resultado = New-ResultadoJson -Ambiente $Ambiente -Metricas $Metricas -Decisao $Decisao `
         -Local $Local -Avaliacoes $Avaliacoes -ClassificacaoFinal $ClassificacaoFinal -TecnicoNome $TecnicoNome `
-        -FaseLocal $FaseLocal
+        -FaseLocal $FaseLocal -Tethering $Tethering -Operadora $Operadora
     $caminho = Save-ResultadoLocal -Resultado $resultado
 
     if ($cfgEnvio.modo -eq 'na-hora') {

@@ -24,7 +24,8 @@ $Global:ModoTeste  = $true   # nao abrir o PDF/pasta no final do export
 # fase 1 (rede local) simulada: nao mexe na placa de rede real da maquina de teste
 $Global:FaseLocalSimulada = [pscustomobject]@{
     Lan = [pscustomobject]@{
-        presente = $true; nome = 'Ethernet'; status = 'Up'; conectado = $true
+        presente = $true; nome = 'Ethernet'; descricao = 'Realtek PCIe GbE Family Controller'
+        status = 'Up'; conectado = $true
         ipv4 = '192.168.15.42'; prefixo = 24; mascara = '255.255.255.0'; gateway = '192.168.15.1'
         dns = @('192.168.15.1', '8.8.8.8'); mac = 'AA-BB-CC-DD-EE-FF'; velocidade_mbps = 1000
     }
@@ -165,7 +166,19 @@ try {
     Invoke-ConectarWifi
     if ("$($w.FindName('txtWifiStatus').Text)" -match 'SSID') { Write-Host "[4c] conectar Wi-Fi exige SSID" }
     else { Write-Host "    FALHA: conectar Wi-Fi sem SSID nao avisou"; $falhas++ }
-    Show-WizardPasso 4
+
+    # 4c-4. tethering do celular marcado exige a operadora para avancar
+    $w.FindName('chkTetheringCelular').IsChecked = $true
+    Update-TetheringCelular
+    if (-not $w.FindName('cboOperadora').IsEnabled) { Write-Host "    FALHA: campo Operadora nao habilitou"; $falhas++ }
+    $w.FindName('cboOperadora').Text = ''
+    Invoke-WizardProximo
+    if ($Global:WizardStep -eq 3) { Write-Host "[4c] tethering marcado exige a operadora" }
+    else { Write-Host "    FALHA: avancou com tethering sem operadora (step=$($Global:WizardStep))"; $falhas++ }
+    $w.FindName('cboOperadora').Text = 'Vivo'
+    Invoke-WizardProximo
+    if ($Global:WizardStep -eq 4) { Write-Host "[4c] com a operadora informada -> passo 4" }
+    else { Write-Host "    FALHA: nao avancou com a operadora (step=$($Global:WizardStep))"; $falhas++ }
 
     # 4d. passo 4 -> 5 bloqueia antes de rodar o diagnostico
     Invoke-WizardProximo
@@ -224,6 +237,9 @@ try {
         if ($rl -and $rl.ip_local -eq '192.168.15.42' -and $rl.gateway -eq '192.168.15.1' -and @($rl.wireless_redes).Count -ge 1) {
             Write-Host "[5d] JSON traz rede_local: ip=$($rl.ip_local) gw=$($rl.gateway) wifi_redes=$(@($rl.wireless_redes).Count)"
         } else { Write-Host "    FALHA: JSON sem bloco rede_local completo (ip='$($rl.ip_local)')"; $falhas++ }
+        if ($rl.tethering_celular -eq $true -and $rl.operadora -eq 'Vivo') {
+            Write-Host "[5d] rede_local traz o tethering: operadora=$($rl.operadora)"
+        } else { Write-Host "    FALHA: rede_local sem tethering/operadora (t=$($rl.tethering_celular) op='$($rl.operadora)')"; $falhas++ }
     }
     $vok = [char]0x2713
     if ($Global:FeitoSalvar -and "$($w.FindName('chkFimSalvar').Text)" -eq $vok -and $w.FindName('btnTransmitirResultado').IsEnabled -and "$($w.FindName('chkFimTransmitir').Text)" -ne $vok) {
