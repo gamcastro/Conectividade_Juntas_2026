@@ -51,8 +51,8 @@
                                    FontFamily="{DynamicResource Dicon.Display}" FontWeight="Bold"
                                    FontSize="20" Foreground="{DynamicResource Dicon.Text}"/>
                     </StackPanel>
-                    <TextBlock Text="Diagn&#243;stico de Conectividade" Margin="0,4,0,0"
-                               FontFamily="Consolas" FontSize="10"
+                    <TextBlock Text="Diagn&#243;stico de Conectividade &#8212; Juntas Especiais 2026"
+                               Margin="0,4,0,0" FontFamily="Consolas" FontSize="10" TextWrapping="Wrap"
                                Foreground="{DynamicResource Dicon.Text3}"/>
                     <TextBlock x:Name="txtSaudacao" Margin="0,14,0,0" TextWrapping="Wrap"
                                FontSize="13" Foreground="{DynamicResource Dicon.Text2}"/>
@@ -556,7 +556,7 @@
                                                 IsReadOnly="True" Width="80" FontFamily="Consolas"/>
                             <DataGridTextColumn Header="Dire&#231;&#227;o" Binding="{Binding DirecaoTexto}"
                                                 IsReadOnly="True" Width="140"/>
-                            <DataGridTemplateColumn Header="Ideal (vi&#225;vel)" Width="180">
+                            <DataGridTemplateColumn Header="Ideal" Width="180">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <TextBox Margin="3" VerticalContentAlignment="Center" FontFamily="Consolas"
@@ -564,7 +564,7 @@
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
-                            <DataGridTemplateColumn Header="Ressalva (limite)" Width="*">
+                            <DataGridTemplateColumn Header="Limite" Width="*">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <TextBox Margin="3" VerticalContentAlignment="Center" FontFamily="Consolas"

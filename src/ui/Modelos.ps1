@@ -173,7 +173,7 @@ function New-LimiarRow {
     $r.Rotulo        = $Info.rotulo
     $r.Unidade       = $Info.unidade
     $r.Direcao       = $Info.direcao
-    $r.DirecaoTexto  = if ($Info.direcao -eq 'max') { 'menor e melhor' } else { 'maior e melhor' }
+    $r.DirecaoTexto  = if ($Info.direcao -eq 'max') { 'menor ' + [char]0x00E9 + ' melhor' } else { 'maior ' + [char]0x00E9 + ' melhor' }
     $r.LimiarViavel   = [string] $Limiar.$sv
     $r.LimiarRessalva = [string] $Limiar.$sr
     return $r
