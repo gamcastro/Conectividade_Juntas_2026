@@ -15,6 +15,7 @@ $Global:AtualizandoDecisao = $false # guarda para nao confundir set programatico
 $Global:LimiarRows         = $null   # ObservableCollection[LimiarRow] da tela de admin
 $Global:NavegandoPrograma  = $false  # guarda: Show-View mexendo no rail sem disparar handler
 $Global:TemaCarregado      = $false  # MahApps + Application ja inicializados neste processo?
+$Global:MostrarTodasJuntas = $false  # admin: incluir Juntas fora da rota no seletor
 
 $Global:Views = @('viewLogin', 'viewHome', 'viewGuia', 'viewDiag', 'viewAdmin')
 
@@ -176,6 +177,10 @@ function New-JanelaPrincipal {
     $window.FindName('btnRodar').Add_Click({ Invoke-ExecucaoNaJanela })
     $window.FindName('btnAtualizar').Add_Click({ Invoke-AtualizarListaJuntas })
     $window.FindName('cboJunta').Add_SelectionChanged({ Update-ComboLocais })
+    $window.FindName('chkTodasJuntas').Add_Click({
+            $Global:MostrarTodasJuntas = [bool] $Global:JanelaPrincipal.FindName('chkTodasJuntas').IsChecked
+            Update-SeletorJuntas
+        })
     $window.FindName('btnDiagVoltar').Add_Click({ Show-View 'viewHome' })
     $window.FindName('btnSalvarResultado').Add_Click({ Invoke-SalvarResultado })
     $window.FindName('cboDecisaoFinal').Add_SelectionChanged({
@@ -328,9 +333,16 @@ function Enter-Home {
     $w.FindName('btnMenuAdmin').Visibility = $visAdmin
     $w.FindName('navAdmin').Visibility     = $visAdmin
 
+    # seletor de Juntas volta ao padrao "so da rota" a cada troca de usuario
+    $Global:MostrarTodasJuntas = $false
+    $chkTodas = $w.FindName('chkTodasJuntas')
+    $chkTodas.IsChecked  = $false
+    $chkTodas.Visibility = $visAdmin
+
     $rot = $null
     try { $rot = Get-RoteiroDoTecnico -Nome $Sessao.tecnico_nome } catch { Write-Log "Roteiro nao carregado: $_" -Nivel Aviso }
     $Global:RoteiroAtual = $rot
+    Update-SeletorJuntas
 
     $w.FindName('txtHomeRoteiro').Text = if ($rot) {
         '{0}    |    Etapa {1}    |    {2} a {3}    |    {4} dias' -f $rot.rotulo, $rot.etapa, $rot.ida, $rot.retorno, $rot.dias
@@ -583,16 +595,27 @@ function Initialize-SeletorJuntas {
     $w = $Global:JanelaPrincipal
     if (-not $w) { return }
 
-    $locais = @(Get-Juntas)
-    $Global:JuntasCache = $locais
+    $Global:JuntasCache = @(Get-Juntas)
+    $w.FindName('cboLocal').ItemsSource = @()
+    Update-SeletorJuntas
+}
+
+# Popula o combo "Junta Especial": so as Juntas da rota do tecnico logado, a
+# menos que o admin tenha marcado "incluir fora da rota" (ou nao haja roteiro).
+function Update-SeletorJuntas {
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
 
     $cboJunta = $w.FindName('cboJunta')
-    $w.FindName('cboLocal').ItemsSource = @()
+    $locais = @($Global:JuntasCache)
+    if (-not $locais.Count) { $cboJunta.ItemsSource = @(); return }
 
-    if (-not $locais.Count) {
-        $cboJunta.ItemsSource = @()
-        return
+    $rot = $Global:RoteiroAtual
+    $chavesRota = @()
+    if ($rot) {
+        $chavesRota = @($rot.juntas | ForEach-Object { '{0}|{1}' -f $_.zona_eleitoral, $_.municipio_termo })
     }
+    $filtrar = ($chavesRota.Count -gt 0) -and (-not $Global:MostrarTodasJuntas)
 
     $juntas = $locais |
         Group-Object -Property { '{0}|{1}' -f $_.zona_eleitoral, $_.municipio_termo } |
@@ -603,12 +626,17 @@ function Initialize-SeletorJuntas {
                 Zona   = $p.zona_eleitoral
                 Termo  = $p.municipio_termo
                 Sede   = $p.municipio_sede
+                NaRota = ($_.Name -in $chavesRota)
                 Rotulo = 'ZE {0} - {1}  ({2})' -f $p.zona_eleitoral, $p.municipio_termo, $p.municipio_sede
             }
-        } | Sort-Object Zona, Termo
+        }
 
-    $cboJunta.ItemsSource = @($juntas)
-    Write-Log ("Lista de Juntas carregada: {0} Juntas / {1} locais." -f @($juntas).Count, $locais.Count) -Nivel Info
+    if ($filtrar) { $juntas = $juntas | Where-Object { $_.NaRota } }
+    $juntas = @($juntas | Sort-Object @{ Expression = { -not $_.NaRota } }, Zona, Termo)
+
+    $cboJunta.ItemsSource = $juntas
+    $modo = if ($filtrar) { 'rota do tecnico' } elseif ($chavesRota.Count) { 'todas (admin)' } else { 'todas (sem roteiro)' }
+    Write-Log ("Seletor de Juntas: {0} Junta(s) - {1}." -f $juntas.Count, $modo) -Nivel Info
 }
 
 function Update-ComboLocais {

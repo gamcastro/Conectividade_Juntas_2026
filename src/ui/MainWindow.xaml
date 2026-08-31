@@ -370,6 +370,7 @@
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
                         <TextBlock Grid.Row="0" Grid.Column="0" Text="Junta Especial"
@@ -395,6 +396,10 @@
                         </ComboBox>
                         <Button x:Name="btnRodar" Grid.Row="1" Grid.Column="2" Content="Rodar diagn&#243;stico"
                                 Margin="10,0,0,0" Style="{DynamicResource BotaoPrimario}"/>
+
+                        <CheckBox x:Name="chkTodasJuntas" Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2"
+                                  Margin="0,10,0,0" Visibility="Collapsed"
+                                  Content="Incluir Juntas Especiais fora da rota (admin)"/>
                     </Grid>
                 </Border>
 

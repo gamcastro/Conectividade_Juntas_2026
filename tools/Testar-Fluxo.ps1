@@ -50,6 +50,8 @@ $agora = (Get-Date).ToString('o')
             tipo = 'principal'; nome = 'LOCAL PRINCIPAL DE TESTE'; endereco = 'Rua Teste, 1'; tipo_internet = 'Fibra optica'; texto_completo = '' }
         @{ id = 'ZE99-TESTE-CONTINGENCIA'; zona_eleitoral = 99; municipio_sede = 'TESTE'; municipio_termo = 'Teste'
             tipo = 'contingencia'; nome = 'LOCAL DE CONTINGENCIA DE TESTE'; endereco = 'Rua Teste, 2'; tipo_internet = 'Banda larga'; texto_completo = '' }
+        @{ id = 'ZE88-FORA-PRINCIPAL'; zona_eleitoral = 88; municipio_sede = 'FORA'; municipio_termo = 'Fora da Rota'
+            tipo = 'principal'; nome = 'LOCAL FORA DA ROTA'; endereco = 'Rua Fora, 1'; tipo_internet = 'Radio'; texto_completo = '' }
     ) } | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $dataDir 'juntas.json') -Encoding UTF8
 
 @{ atualizado_em = $agora; tecnicos = @(
@@ -81,6 +83,18 @@ try {
     Enter-Sessao
     if ($w.FindName('viewHome').Visibility -ne 'Visible') { Write-Host "[2] FALHA: nao foi para a home"; $falhas++ }
     else { Write-Host "[2] Login OK -> home ($($w.FindName('txtSaudacao').Text))" }
+
+    # 2b. seletor de Juntas filtra pela rota do tecnico (cache tem 2, rota tem 1)
+    $nJrota = @($w.FindName('cboJunta').ItemsSource).Count
+    if ($nJrota -eq 1) { Write-Host "[2b] seletor filtra pela rota: $nJrota Junta (de 2 no cache)" }
+    else { Write-Host "    FALHA: seletor mostrou $nJrota Junta(s) (esperado 1 da rota)"; $falhas++ }
+
+    # 2c. 'incluir Juntas fora da rota' (admin) volta a mostrar todas
+    $Global:MostrarTodasJuntas = $true;  Update-SeletorJuntas
+    $nJtodas = @($w.FindName('cboJunta').ItemsSource).Count
+    $Global:MostrarTodasJuntas = $false; Update-SeletorJuntas
+    if ($nJtodas -eq 2) { Write-Host "[2c] incluir fora da rota: $nJtodas Juntas" }
+    else { Write-Host "    FALHA: incluir fora da rota = $nJtodas (esperado 2)"; $falhas++ }
 
     # 3. guia de bordo
     Show-GuiaBordo
@@ -173,6 +187,8 @@ try {
     Set-Sessao -TecnicoNome $Global:AdminNome -Papel 'admin' | Out-Null
     Enter-Home -Sessao (Get-Sessao)
     if ($w.FindName('btnMenuAdmin').Visibility -ne 'Visible') { Write-Host "[8] FALHA: botao Administracao nao aparece para admin"; $falhas++ }
+    if ($w.FindName('chkTodasJuntas').Visibility -ne 'Visible') { Write-Host "    FALHA: admin sem opcao 'incluir Juntas fora da rota'"; $falhas++ }
+    else { Write-Host "[8] admin ve a opcao de incluir Juntas fora da rota" }
     Show-Admin
     $nLim = $w.FindName('dgLimiares').Items.Count
     Write-Host "[8] Admin: $nLim linha(s) de limiar"

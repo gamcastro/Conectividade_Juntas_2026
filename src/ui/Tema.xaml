@@ -301,6 +301,40 @@
         </Setter>
     </Style>
 
+    <!-- ===== CHECKBOX (dark) ===== -->
+    <Style TargetType="CheckBox">
+        <Setter Property="Foreground" Value="{DynamicResource Dicon.Text2}"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="CheckBox">
+                    <StackPanel Orientation="Horizontal" Background="Transparent">
+                        <Border x:Name="box" Width="16" Height="16" CornerRadius="3" VerticalAlignment="Center"
+                                BorderBrush="{DynamicResource Dicon.Hair}" BorderThickness="1"
+                                Background="{DynamicResource Dicon.CampoBg}">
+                            <Path x:Name="chk" Data="M1,5 L5,9 L11,2" Margin="2"
+                                  Stroke="{DynamicResource Dicon.Deep}" StrokeThickness="2"
+                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round" Visibility="Collapsed"/>
+                        </Border>
+                        <ContentPresenter Margin="8,0,0,0" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="box" Property="Background" Value="{DynamicResource Dicon.Accent}"/>
+                            <Setter TargetName="box" Property="BorderBrush" Value="{DynamicResource Dicon.Accent}"/>
+                            <Setter TargetName="chk" Property="Visibility" Value="Visible"/>
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="box" Property="BorderBrush" Value="{DynamicResource Dicon.Accent}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- ===== NAVEGACAO (rail) ===== -->
     <Style x:Key="NavBotao" TargetType="RadioButton">
         <Setter Property="GroupName" Value="nav"/>
