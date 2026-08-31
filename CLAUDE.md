@@ -22,6 +22,9 @@ Script), em vez de criar um BI/dashboard separado.
 
 ## Stack e componentes
 - **PowerShell** como orquestrador principal
+- **GUI WPF + MahApps.Metro** (`MetroWindow`, tema DICON) — DLLs versionadas em
+  `lib/mahapps/`; tema em `src/ui/Tema.xaml`; fonte Archivo em
+  `assets/marca/tema/fonts/`. Aplicada só na branch `homologacao` por ora.
 - **iperf3** (client Windows) — banda real, contra servidor iperf3 rodando num
   Ubuntu no CPD (via VPN)
 - **Ping nativo do Windows** — latência, jitter e perda

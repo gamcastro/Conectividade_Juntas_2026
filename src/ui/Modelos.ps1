@@ -14,6 +14,10 @@ namespace Conectividade
 '@
 }
 
+# A faixa de severidade e o chip "Sugerida" no painel de resultados sao
+# coloridos direto no XAML: a faixa via {Binding CorFinal} (hex na AvaliacaoRow)
+# e o chip via Style.Triggers por texto (ChipVeredito, em Tema.xaml).
+
 # Linha editavel do painel de resultados. INotifyPropertyChanged e obrigatorio
 # para o binding two-way do DataGrid e para o recalculo ao vivo da decisao.
 if (-not ('Conectividade.AvaliacaoRow' -as [type])) {
@@ -46,7 +50,7 @@ namespace Conectividade
         public string ClasseFinal
         {
             get { return _classeFinal; }
-            set { if (_classeFinal != value) { _classeFinal = value; Raise("ClasseFinal"); Raise("Ajustada"); } }
+            set { if (_classeFinal != value) { _classeFinal = value; Raise("ClasseFinal"); Raise("Ajustada"); Raise("CorFinal"); } }
         }
 
         private string _justificativa = "";
@@ -65,6 +69,17 @@ namespace Conectividade
                 if (_classeAutomatica == "viavel")   return "LightGreen";
                 if (_classeAutomatica == "ressalva") return "Yellow";
                 return "OrangeRed";
+            }
+        }
+
+        // Cor da faixa de severidade no painel (tons escuros da identidade DICON).
+        public string CorFinal
+        {
+            get
+            {
+                if (_classeFinal == "viavel")   return "#4FC177";
+                if (_classeFinal == "ressalva") return "#E8B93E";
+                return "#E8695C";
             }
         }
     }

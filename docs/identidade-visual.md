@@ -3,8 +3,10 @@
 **Guia completo:** [Identidade DICON](https://claude.ai/code/artifact/4543b902-d51c-4c93-a029-3856c77c88c2)
 · **Arquivos da marca:** [`assets/marca/`](../assets/marca/)
 
-> Status: proposta **aprovada**. Ainda **não aplicada à GUI** — os arquivos em
-> `assets/marca/` estão prontos para quando a interface for atualizada.
+> Status: **aplicada à GUI** na branch `homologacao` (ago/2026). A janela usa
+> `MahApps.Metro` (MetroWindow) com o tema DICON em `src/ui/Tema.xaml`; a fonte
+> Archivo vai empacotada em `assets/marca/tema/fonts/Archivo.ttf`. `main` ainda
+> roda a GUI antiga.
 
 ## Conceito
 

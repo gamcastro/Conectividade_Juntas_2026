@@ -35,7 +35,7 @@ O script força modo STA (exigido pelo WPF) e faz auto-elevação UAC.
 |---|---|
 | `config/` | Limiares, ambiente, envio, endpoint do Web App (`juntas.json`), PIN do admin (`admin.json`) |
 | `src/core/` | Log, elevação UAC, processos, ambiente, fluxo, **sessão/login**, **papéis (admin)**, **juntas/tecnicos/roteiros** |
-| `src/ui/` | Janela WPF (`MainWindow.xaml`: shell com login/início/guia/diagnóstico/admin) e code-behind |
+| `src/ui/` | Janela WPF MahApps.Metro (`MainWindow.xaml`: rail + login/início/guia/diagnóstico/admin), tema DICON (`Tema.xaml`) e code-behind |
 | `src/testes/` | Coleta de métricas: latência (ping), banda (iperf3), carregamento web (Selenium) |
 | `src/decisao/` | Motor de decisão que aplica os limiares às métricas |
 | `src/saida/` | Montagem do JSON, gravação local e envio ao Apps Script |
@@ -43,6 +43,7 @@ O script força modo STA (exigido pelo WPF) e faz auto-elevação UAC.
 | `assets/` | Logo `Eleições 2026`; `marca/` = identidade visual do DICON (símbolo, ícone, `.ico`, paleta) |
 | `data/` | Caches locais (gitignored): `juntas.json`, `tecnicos.json`, `roteiros.json`, `sessao.json` |
 | `bin/`, `lib/Selenium/` | Binários portáteis (`iperf3`, drivers) e Selenium .NET |
+| `lib/mahapps/` | DLLs do MahApps.Metro 2.4.10 (+ ControlzEx, Xaml.Behaviors) — versionadas |
 | `resultados/` | `pendentes/` e `enviados/` |
 | `tools/` | `Testar-Gui.ps1`, `Testar-Fluxo.ps1` (headless), `Definir-PIN-Admin.ps1` |
 | `docs/` | Manual do técnico, referência de limiares, contrato do JSON |

@@ -13,6 +13,8 @@ $Global:DecisaoRecalculada = $null
 $Global:DecisaoFinalTocada = $false # tecnico mexeu no combo da decisao final?
 $Global:AtualizandoDecisao = $false # guarda para nao confundir set programatico com clique
 $Global:LimiarRows         = $null   # ObservableCollection[LimiarRow] da tela de admin
+$Global:NavegandoPrograma  = $false  # guarda: Show-View mexendo no rail sem disparar handler
+$Global:TemaCarregado      = $false  # MahApps + Application ja inicializados neste processo?
 
 $Global:Views = @('viewLogin', 'viewHome', 'viewGuia', 'viewDiag', 'viewAdmin')
 
@@ -20,6 +22,31 @@ function Import-Xaml {
     param([string] $Caminho)
     [xml] $xml = Get-Content -Path $Caminho -Raw -Encoding UTF8
     return [Windows.Markup.XamlReader]::Load([Xml.XmlNodeReader]::new($xml))
+}
+
+# Carrega MahApps.Metro (lib/mahapps) e garante um System.Windows.Application,
+# exigido para resolver os URIs pack://application dos dicionarios do tema.
+# Idempotente: roda uma vez por processo.
+function Initialize-Tema {
+    if ($Global:TemaCarregado) { return }
+
+    Add-Type -AssemblyName PresentationFramework
+    Add-Type -AssemblyName PresentationCore
+    Add-Type -AssemblyName WindowsBase
+    Add-Type -AssemblyName System.Xaml
+
+    $lib = Join-Path $Global:RaizApp 'lib\mahapps'
+    foreach ($d in 'ControlzEx.dll', 'Microsoft.Xaml.Behaviors.dll', 'MahApps.Metro.dll') {
+        $dll = Join-Path $lib $d
+        if (-not (Test-Path $dll)) { throw "Dependencia do tema nao encontrada: $dll" }
+        Add-Type -Path $dll
+    }
+
+    if (-not [System.Windows.Application]::Current) {
+        $app = [System.Windows.Application]::new()
+        $app.ShutdownMode = [System.Windows.ShutdownMode]::OnExplicitShutdown
+    }
+    $Global:TemaCarregado = $true
 }
 
 function New-LogoBitmap {
@@ -48,18 +75,89 @@ function Get-PincelClassificacao {
     }
 }
 
+# Pincel nos tons da identidade DICON para a barra de decisao final.
+function Get-PincelVeredito {
+    param([string] $Classificacao)
+    $hex = switch ($Classificacao) {
+        'viavel'              { '#4FC177' }
+        'viavel_com_ressalva' { '#E8B93E' }
+        'inviavel'            { '#E8695C' }
+        default               { '#7D8698' }
+    }
+    $b = [Windows.Media.SolidColorBrush]::new([Windows.Media.ColorConverter]::ConvertFromString($hex))
+    $b.Freeze()
+    return $b
+}
+
+function Get-PalavraVeredito {
+    param([string] $Classificacao)
+    switch ($Classificacao) {
+        'viavel'              { 'VIAVEL' }
+        'viavel_com_ressalva' { 'VIAVEL C/ RESSALVA' }
+        'inviavel'            { 'INVIAVEL' }
+        default               { '--' }
+    }
+}
+
+# Atualiza a faixa + palavra da barra de decisao final.
+function Set-BarraDecisao {
+    param([string] $Classificacao)
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    $pincel = Get-PincelVeredito $Classificacao
+    $pal = $w.FindName('txtDecisaoPalavra')
+    if ($pal) { $pal.Text = Get-PalavraVeredito $Classificacao; $pal.Foreground = $pincel }
+    $stripe = $w.FindName('barraDecisaoStripe')
+    if ($stripe) { $stripe.Background = $pincel }
+}
+
+# Liga/desliga o indicador de progresso (anel + barra) da tela de diagnostico.
+function Set-ProgressoDiag {
+    param([bool] $Ativo)
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    $ring = $w.FindName('ringDiag')
+    if ($ring) {
+        $ring.IsActive   = $Ativo
+        $ring.Visibility = if ($Ativo) { 'Visible' } else { 'Collapsed' }
+    }
+    $bar = $w.FindName('prgProgresso')
+    if ($bar) { $bar.IsIndeterminate = $Ativo }
+}
+
 # ------------------------------------------------------------- SHELL / NAV
 
 function New-JanelaPrincipal {
-    Add-Type -AssemblyName PresentationFramework
-    Add-Type -AssemblyName PresentationCore
-    Add-Type -AssemblyName WindowsBase
+    Initialize-Tema
 
     $window = Import-Xaml (Join-Path $PSScriptRoot 'MainWindow.xaml')
 
-    $estilos = Join-Path $PSScriptRoot 'Estilos.xaml'
-    if (Test-Path $estilos) {
-        $window.Resources.MergedDictionaries.Add((Import-Xaml $estilos))
+    # --- Fontes da identidade: Archivo empacotada (titulos) + Segoe UI (texto) ---
+    $fontDir = (Join-Path $Global:RaizApp 'assets\marca\tema\fonts') + '\'
+    try {
+        $baseUri = [Uri]('file:///' + ($fontDir -replace '\\', '/'))
+        $window.Resources['Dicon.Display'] = [Windows.Media.FontFamily]::new($baseUri, './#Archivo')
+    } catch {
+        $window.Resources['Dicon.Display'] = [Windows.Media.FontFamily]::new('Segoe UI')
+    }
+    $window.Resources['Dicon.Body'] = [Windows.Media.FontFamily]::new('Segoe UI')
+
+    # --- Dicionarios: MahApps (Dark.Blue) primeiro, tema DICON por ultimo ---
+    foreach ($u in @(
+            'pack://application:,,,/MahApps.Metro;component/Styles/Controls.xaml'
+            'pack://application:,,,/MahApps.Metro;component/Styles/Fonts.xaml'
+            'pack://application:,,,/MahApps.Metro;component/Styles/Themes/Dark.Blue.xaml'
+        )) {
+        $rd = [System.Windows.ResourceDictionary]::new()
+        $rd.Source = [Uri] $u
+        $window.Resources.MergedDictionaries.Add($rd)
+    }
+    $window.Resources.MergedDictionaries.Add((Import-Xaml (Join-Path $PSScriptRoot 'Tema.xaml')))
+
+    # --- Icone da janela ---
+    $ico = Join-Path $Global:RaizApp 'assets\marca\dicon.ico'
+    if (Test-Path $ico) {
+        try { $window.Icon = [Windows.Media.Imaging.BitmapFrame]::Create([Uri]::new($ico)) } catch { }
     }
 
     $Global:JanelaPrincipal = $window
@@ -68,7 +166,7 @@ function New-JanelaPrincipal {
 
     $logo = New-LogoBitmap
     if ($logo) {
-        foreach ($n in 'imgLogoLogin', 'imgLogoHome', 'imgLogoTopo') {
+        foreach ($n in 'imgLogoLogin', 'imgLogoHome') {
             $ctrl = $window.FindName($n)
             if ($ctrl) { $ctrl.Source = $logo }
         }
@@ -96,6 +194,12 @@ function New-JanelaPrincipal {
     $window.FindName('btnMenuAdmin').Add_Click({ Show-Admin })
     $window.FindName('btnMenuAtualizar').Add_Click({ Invoke-AtualizarDados })
     $window.FindName('btnTrocarUsuario').Add_Click({ Invoke-TrocarUsuario })
+
+    # rail de navegacao (RadioButtons) - handlers ignoram mudanca programatica
+    $window.FindName('navGuia').Add_Checked({ if (-not $Global:NavegandoPrograma) { Show-GuiaBordo } })
+    $window.FindName('navDiag').Add_Checked({ if (-not $Global:NavegandoPrograma) { Open-DiagnosticoLimpo } })
+    $window.FindName('navAdmin').Add_Checked({ if (-not $Global:NavegandoPrograma) { Show-Admin } })
+    $window.FindName('navAtualizar').Add_Checked({ if (-not $Global:NavegandoPrograma) { Invoke-AtualizarDados } })
 
     # guia / admin
     $window.FindName('btnGuiaVoltar').Add_Click({ Show-View 'viewHome' })
@@ -129,7 +233,16 @@ function Show-View {
     foreach ($v in $Global:Views) {
         $w.FindName($v).Visibility = if ($v -eq $Nome) { 'Visible' } else { 'Collapsed' }
     }
-    $w.FindName('barraTopo').Visibility = if ($Nome -eq 'viewLogin') { 'Collapsed' } else { 'Visible' }
+    $w.FindName('railNav').Visibility = if ($Nome -eq 'viewLogin') { 'Collapsed' } else { 'Visible' }
+
+    # sincroniza o item ativo do rail sem disparar os handlers de navegacao
+    $map = @{ viewGuia = 'navGuia'; viewDiag = 'navDiag'; viewAdmin = 'navAdmin' }
+    $Global:NavegandoPrograma = $true
+    foreach ($nn in 'navGuia', 'navDiag', 'navAdmin', 'navAtualizar') {
+        $rb = $w.FindName($nn)
+        if ($rb) { $rb.IsChecked = ($map[$Nome] -eq $nn) }
+    }
+    $Global:NavegandoPrograma = $false
 }
 
 # ------------------------------------------------------------- LOGIN
@@ -206,9 +319,13 @@ function Enter-Home {
 
     $primeiro = ($Sessao.tecnico_nome -split '\s+')[0]
     $sfx = if ($Sessao.papel -eq 'admin') { '  (administrador)' } else { '' }
-    $w.FindName('txtSaudacao').Text   = "Ola, $primeiro$sfx"
-    $w.FindName('txtHomeTecnico').Text = $Sessao.tecnico_nome
-    $w.FindName('btnMenuAdmin').Visibility = if ($Sessao.papel -eq 'admin') { 'Visible' } else { 'Collapsed' }
+    $w.FindName('txtSaudacao').Text     = "Ola, $primeiro$sfx"
+    $w.FindName('txtRailTecnico').Text  = $Sessao.tecnico_nome
+    $w.FindName('txtHomeTecnico').Text  = "Ola, $primeiro"
+
+    $visAdmin = if ($Sessao.papel -eq 'admin') { 'Visible' } else { 'Collapsed' }
+    $w.FindName('btnMenuAdmin').Visibility = $visAdmin
+    $w.FindName('navAdmin').Visibility     = $visAdmin
 
     $rot = $null
     try { $rot = Get-RoteiroDoTecnico -Nome $Sessao.tecnico_nome } catch { Write-Log "Roteiro nao carregado: $_" -Nivel Aviso }
@@ -218,6 +335,15 @@ function Enter-Home {
         '{0}    |    Etapa {1}    |    {2} a {3}    |    {4} dias' -f $rot.rotulo, $rot.etapa, $rot.ida, $rot.retorno, $rot.dias
     } else {
         'Roteiro nao encontrado no cache. Use "Atualizar dados".'
+    }
+
+    if ($rot) {
+        $nLocais = @($rot.juntas | ForEach-Object { @($_.locais).Count } | Measure-Object -Sum).Sum
+        $w.FindName('txtTileDias').Text   = [string] $rot.dias
+        $w.FindName('txtTileLocais').Text = [string] ([int] $nLocais)
+        $w.FindName('txtTileKm').Text     = [string] $rot.total_km
+    } else {
+        foreach ($t in 'txtTileDias', 'txtTileLocais', 'txtTileKm') { $w.FindName($t).Text = '--' }
     }
 
     Show-View 'viewHome'
@@ -283,7 +409,7 @@ function Open-DiagnosticoLimpo {
     $w.FindName('cboJunta').SelectedIndex = -1   # dispara Update-ComboLocais -> limpa cboLocal
     $w.FindName('cboLocal').ItemsSource = @()
     Clear-PainelResultado
-    $w.FindName('prgProgresso').IsIndeterminate = $false
+    Set-ProgressoDiag $false
     $w.FindName('btnRodar').IsEnabled = $true
 
     Show-View 'viewDiag'
@@ -486,8 +612,8 @@ function Invoke-ExecucaoNaJanela {
         return
     }
 
-    $w.FindName('btnRodar').IsEnabled           = $false
-    $w.FindName('prgProgresso').IsIndeterminate = $true
+    $w.FindName('btnRodar').IsEnabled = $false
+    Set-ProgressoDiag $true
     $Global:LogEntries.Clear()
     Clear-PainelResultado
 
@@ -521,13 +647,14 @@ function Update-VisibilidadeJustDecisao {
     $vis = if ($mostra) { 'Visible' } else { 'Collapsed' }
     $w.FindName('lblJustDecisao').Visibility = $vis
     $w.FindName('txtJustDecisao').Visibility = $vis
+    Set-BarraDecisao $sel
 }
 
 function Complete-Diagnostico {
     param($Payload, $Erro)
     $w = $Global:JanelaPrincipal
 
-    $w.FindName('prgProgresso').IsIndeterminate = $false
+    Set-ProgressoDiag $false
     $w.FindName('btnRodar').IsEnabled = $true
 
     if ($Erro) {
