@@ -5,6 +5,7 @@
     "amostras": 20
   },
   "iperf3": {
+    "_nota": "servidor iperf3 (iperf3 -s) no CPD, alcancavel pela VPN. A ferramenta mede download (-R) e upload; 'reverso' nao e mais usado. Binario: bin/iperf3/iperf3.exe (nao versionado).",
     "servidor": "10.0.0.1",
     "porta": 5201,
     "duracao_s": 10,

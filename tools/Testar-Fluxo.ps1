@@ -305,6 +305,10 @@ try {
     else { Write-Host "[5] apos rodar continua no passo 4 (sem auto-avancar)" }
     if ($w.FindName('btnWizProximo').IsEnabled) { Write-Host "[5] apos rodar, 'Proximo' habilita" }
     else { Write-Host "    FALHA: 'Proximo' seguiu desabilitado apos rodar o diagnostico"; $falhas++ }
+    # card do iperf3 aparece; sem o binario em bin\iperf3\ mostra o erro
+    if ($w.FindName('cardIperfVpn').Visibility -eq 'Visible' -and "$($w.FindName('txtIperfErro').Text)" -match 'iperf3\.exe') {
+        Write-Host "[5] card iperf3 (Fase 2) visivel; sem binario -> erro exibido"
+    } else { Write-Host "    FALHA: card/erro do iperf3 (vis=$($w.FindName('cardIperfVpn').Visibility) erro='$($w.FindName('txtIperfErro').Text)')"; $falhas++ }
     Invoke-WizardProximo
     $decIni = [string] $w.FindName('cboDecisaoFinal').SelectedItem
     if ($Global:WizardStep -ne 5) { Write-Host "    FALHA: Proximo nao foi para o passo 5"; $falhas++ }

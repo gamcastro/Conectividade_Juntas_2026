@@ -214,6 +214,7 @@ function New-JanelaPrincipal {
     $window.FindName('lstLogHome').ItemsSource = $Global:LogHome
 
     Reset-Velocimetro
+    Reset-Velocimetro -Suf 'Vpn'
 
     $logo = New-LogoBitmap
     if ($logo) {
@@ -979,7 +980,8 @@ function Complete-ProbeRedeLocal {
 # Geometria: centro (140,140), raio 110, arco de -135 a +135 graus (270). Escala
 # logaritmica ate 1000 Mbps (compressao estilo Ookla).
 $Global:VeloMaxMbps = 1000.0
-$Global:VeloTick    = 0
+$Global:VeloTick    = 0      # throttle do velocimetro do passo 3 (speedtest)
+$Global:VeloTickVpn = 0      # throttle do velocimetro do passo 4 (iperf3)
 $Global:VeloTicks   = @(0, 10, 50, 100, 250, 500, 1000)
 
 function Get-PontoArco {
@@ -1009,11 +1011,13 @@ function Set-PropAnimada {
     $Alvo.BeginAnimation($Prop, $anim)
 }
 
+# $Suf: '' = velocimetro do passo 3 (speedtest); 'Vpn' = passo 4 (iperf3).
 function Set-TicksVelocimetro {
+    param([string] $Suf = '')
     $w = $Global:JanelaPrincipal
     if (-not $w) { return }
     for ($i = 0; $i -lt $Global:VeloTicks.Count; $i++) {
-        $tb = $w.FindName('tickVelo' + $i)
+        $tb = $w.FindName(('tickVelo{0}{1}' -f $Suf, $i))
         if (-not $tb) { continue }
         $v = [double] $Global:VeloTicks[$i]
         $ang = -135.0 + 270.0 * (Get-FracVelo -Valor $v)
@@ -1025,47 +1029,54 @@ function Set-TicksVelocimetro {
 }
 
 function Reset-Velocimetro {
+    param([string] $Suf = '')
     $w = $Global:JanelaPrincipal
     if (-not $w) { return }
-    $Global:VeloTick = 0
-    $rot = $w.FindName('rotAgulha')
+    if ($Suf -eq 'Vpn') { $Global:VeloTickVpn = 0 } else { $Global:VeloTick = 0 }
+    $rot = $w.FindName('rotAgulha' + $Suf)
     $rot.BeginAnimation([Windows.Media.RotateTransform]::AngleProperty, $null)
     $rot.Angle = -135
-    $seg = $w.FindName('segVelo')
+    $seg = $w.FindName('segVelo' + $Suf)
     $seg.BeginAnimation([Windows.Media.ArcSegment]::PointProperty, $null)
     $seg.Point = [Windows.Point]::new(62.22, 217.78)
     $seg.IsLargeArc = $false
-    $w.FindName('txtVeloNum').Text  = '0'
-    $w.FindName('txtVeloUnid').Text = 'Mbps'
-    $w.FindName('txtVeloFase').Text = ''
-    $w.FindName('prgSpeed').Value   = 0
-    $w.FindName('painelSpeedResultado').Visibility = 'Collapsed'
-    $w.FindName('txtSpeedErro').Visibility = 'Collapsed'
-    $w.FindName('txtSpeedInfo').Text = ''
-    Set-TicksVelocimetro
+    $w.FindName('txtVeloNum' + $Suf).Text  = '0'
+    $w.FindName('txtVeloUnid' + $Suf).Text = 'Mbps'
+    $w.FindName('txtVeloFase' + $Suf).Text = ''
+    $w.FindName('prgSpeed' + $Suf).Value   = 0
+    if ($Suf -eq 'Vpn') {
+        $w.FindName('painelIperfResultado').Visibility = 'Collapsed'
+        $w.FindName('txtIperfErro').Visibility = 'Collapsed'
+        $w.FindName('txtIperfInfo').Text = ''
+    } else {
+        $w.FindName('painelSpeedResultado').Visibility = 'Collapsed'
+        $w.FindName('txtSpeedErro').Visibility = 'Collapsed'
+        $w.FindName('txtSpeedInfo').Text = ''
+    }
+    Set-TicksVelocimetro -Suf $Suf
 }
 
 function Set-VelocimetroValor {
-    param([double] $Valor, [string] $Unidade = 'Mbps', [string] $Fase = '', [double] $Linear = 0)
+    param([double] $Valor, [string] $Unidade = 'Mbps', [string] $Fase = '', [double] $Linear = 0, [string] $Suf = '')
     $w = $Global:JanelaPrincipal
     if (-not $w) { return }
     $frac = Get-FracVelo -Valor $Valor -Linear $Linear
     $ang  = -135.0 + 270.0 * $frac
-    Set-PropAnimada $w.FindName('rotAgulha') ([Windows.Media.RotateTransform]::AngleProperty) $ang
+    Set-PropAnimada $w.FindName('rotAgulha' + $Suf) ([Windows.Media.RotateTransform]::AngleProperty) $ang
     $pt = Get-PontoArco -Cx 140 -Cy 140 -R 110 -AngGraus $ang
-    $seg = $w.FindName('segVelo')
+    $seg = $w.FindName('segVelo' + $Suf)
     $seg.IsLargeArc = ((270.0 * $frac) -gt 180.0)
     Set-PropAnimada $seg ([Windows.Media.ArcSegment]::PointProperty) $pt
     $fmt = if ($Valor -ge 100) { '{0:0}' } elseif ($Valor -ge 10) { '{0:0.0}' } else { '{0:0.00}' }
-    $w.FindName('txtVeloNum').Text  = ($fmt -f $Valor)
-    $w.FindName('txtVeloUnid').Text = $Unidade
-    if ($Fase) { $w.FindName('txtVeloFase').Text = $Fase }
+    $w.FindName('txtVeloNum' + $Suf).Text  = ($fmt -f $Valor)
+    $w.FindName('txtVeloUnid' + $Suf).Text = $Unidade
+    if ($Fase) { $w.FindName('txtVeloFase' + $Suf).Text = $Fase }
 }
 
 function Set-ProgressoSpeed {
-    param([double] $Frac)
+    param([double] $Frac, [string] $Suf = '')
     $w = $Global:JanelaPrincipal
-    if ($w) { $w.FindName('prgSpeed').Value = [Math]::Max(0.0, [Math]::Min(1.0, $Frac)) }
+    if ($w) { $w.FindName('prgSpeed' + $Suf).Value = [Math]::Max(0.0, [Math]::Min(1.0, $Frac)) }
 }
 
 # Recebe um evento JSONL do speedtest.exe (via Write-EventoSpeedtest, na thread de UI).
@@ -1162,6 +1173,84 @@ function Update-SpeedtestPainel {
     $w.FindName('painelSpeedResultado').Visibility = 'Visible'
     # velocimetro final mostra o download
     if ($null -ne $dl) { Set-VelocimetroValor -Valor ([double] $dl) -Unidade 'Mbps' -Fase 'concluido' }
+}
+
+# ------------------------------------------------ PASSO 4: VELOCIMETRO iperf3
+# Recebe um evento do iperf3 (via Write-EventoIperf, na thread de UI). $Evento
+# e um hashtable: fase = download|upload|fim, estado, mbps, t, dur, ...
+function Update-IperfGauge {
+    param($Evento)
+    $w = $Global:JanelaPrincipal
+    if (-not $w -or -not $Evento) { return }
+    $fase = [string] $Evento.fase
+
+    if ($fase -eq 'fim') {
+        Set-ProgressoSpeed -Suf 'Vpn' 1.0
+        Update-IperfPainel -Iperf $Evento
+        return
+    }
+
+    if ($Evento.estado -eq 'inicio') {
+        if ($Evento.servidor) { $w.FindName('txtIperfInfo').Text = 'Servidor iperf3: ' + [string] $Evento.servidor }
+        if ($Evento.dur) { $Global:IperfDur = [double] $Evento.dur }
+        $w.FindName('txtVeloFaseVpn').Text = if ($fase -eq 'upload') { 'Upload...' } else { 'Download...' }
+        return
+    }
+
+    # andamento
+    $base = if ($fase -eq 'upload') { 0.5 } else { 0.0 }
+    $dur  = if ($Global:IperfDur -gt 0) { [double] $Global:IperfDur } else { 10.0 }
+    Set-ProgressoSpeed -Suf 'Vpn' ($base + 0.5 * ([Math]::Min(1.0, [double] $Evento.t / $dur)))
+
+    $agora = [Environment]::TickCount
+    if (($agora - [int] $Global:VeloTickVpn) -ge 80) {
+        $Global:VeloTickVpn = $agora
+        $rot = if ($fase -eq 'upload') { 'Upload (VPN)' } else { 'Download (VPN)' }
+        Set-VelocimetroValor -Suf 'Vpn' -Valor ([double] $Evento.mbps) -Unidade 'Mbps' -Fase $rot
+    }
+}
+
+# Preenche o painel de resultado da Fase 2. -Iperf: hashtable do evento 'fim'
+# OU o $Global:DiagPayload.Iperf; ping/jitter/perda vem de $Global:DiagPayload.Metricas.
+function Update-IperfPainel {
+    param($Iperf)
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    $g   = { param($o, $n) if ($o -and $o.PSObject.Properties[$n]) { $o.($n) } elseif ($o -is [hashtable] -and $o.ContainsKey($n)) { $o[$n] } }
+    $fmt = { param($v) if ($null -eq $v -or "$v" -eq '') { '--' } elseif ([double] $v -ge 100) { '{0:0}' -f $v } else { '{0:0.0}' -f $v } }
+
+    $dl = & $g $Iperf 'download';  if ($null -eq $dl) { $dl = & $g $Iperf 'DownloadMbps' }
+    $ul = & $g $Iperf 'upload';    if ($null -eq $ul) { $ul = & $g $Iperf 'UploadMbps' }
+    $rd = & $g $Iperf 'retrans_down'
+    $ru = & $g $Iperf 'retrans_up'
+    $erro = [string] (& $g $Iperf 'erro'); if (-not $erro) { $erro = [string] (& $g $Iperf 'iperf_erro') }
+    $srv  = [string] (& $g $Iperf 'servidor')
+
+    $w.FindName('runIperfDown').Text = & $fmt $dl
+    $w.FindName('runIperfUp').Text   = & $fmt $ul
+    $rt = @()
+    if ($null -ne $rd) { $rt += "{0} down" -f $rd }
+    if ($null -ne $ru) { $rt += "{0} up" -f $ru }
+    $w.FindName('runIperfRetrans').Text = if ($rt.Count) { $rt -join ' / ' } else { '--' }
+    if ($srv) { $w.FindName('txtIperfServidor').Text = 'Servidor iperf3: ' + $srv }
+
+    # latencia / jitter / perda vem do ping (Test-Latencia), no payload final
+    $m = if ($Global:DiagPayload) { $Global:DiagPayload.Metricas } else { $null }
+    if ($m) {
+        $w.FindName('runIperfPing').Text   = & $fmt $m.LatenciaMediaMs
+        $w.FindName('runIperfJitter').Text = & $fmt $m.JitterMs
+        $w.FindName('runIperfPerda').Text  = if ($null -eq $m.PerdaPercentual) { '--' } else { '{0:0.0}' -f $m.PerdaPercentual }
+    }
+
+    $te = $w.FindName('txtIperfErro')
+    if ($erro -and $null -eq $dl -and $null -eq $ul) {
+        $te.Text = $erro ; $te.Visibility = 'Visible'
+        $w.FindName('painelIperfResultado').Visibility = 'Collapsed'
+    } else {
+        $te.Visibility = 'Collapsed'
+        $w.FindName('painelIperfResultado').Visibility = 'Visible'
+        if ($null -ne $dl) { Set-VelocimetroValor -Suf 'Vpn' -Valor ([double] $dl) -Unidade 'Mbps' -Fase 'concluido' }
+    }
 }
 
 # Botao "Rodar checagem local": teste de velocidade Ookla (speedtest.exe).
@@ -1706,6 +1795,9 @@ function Invoke-ExecucaoNaJanela {
     Set-ProgressoDiag $true
     $Global:LogEntries.Clear()
     Clear-PainelResultado
+    Reset-Velocimetro -Suf 'Vpn'
+    $w.FindName('cardIperfVpn').Visibility = 'Visible'
+    $w.FindName('txtVeloFaseVpn').Text = 'iniciando...'
 
     Start-DiagnosticoAssincrono -Local $selLocal.Dados
 }
@@ -1735,6 +1827,8 @@ function Clear-PainelResultado {
     $w.FindName('txtVpnMotivo').Text = ''
     $w.FindName('txtVpnMotivo').Visibility = 'Collapsed'
     $w.FindName('txtVpnMotivoDica').Visibility = 'Collapsed'
+    $w.FindName('cardIperfVpn').Visibility = 'Collapsed'
+    Reset-Velocimetro -Suf 'Vpn'
     $Global:FeitoSalvar     = $false
     $Global:FeitoTransmitir = $false
     $Global:FeitoExportar   = $false
@@ -1765,6 +1859,7 @@ function Complete-Diagnostico {
         return
     }
     Show-PainelResultado -Payload $Payload
+    if ($Payload.PSObject.Properties['Iperf'] -and $Payload.Iperf) { Update-IperfPainel -Iperf $Payload.Iperf }
     Update-Passo4Nav
     # nao avanca sozinho: o tecnico confere o log e clica em "Proximo".
     Write-Log 'Diagnostico concluido. Revise e clique em "Proximo".' -Nivel Ok

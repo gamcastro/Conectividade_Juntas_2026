@@ -40,8 +40,8 @@ function Invoke-DiagnosticoCompleto {
     } else { Write-Log 'Ping desativado pela configuracao (admin).' -Nivel Aviso; [pscustomobject]@{ LatenciaMediaMs = $null; JitterMs = $null; PerdaPercentual = $null } }
 
     $band = if ($usaBanda) {
-        Test-Banda -Servidor $cfgAmbiente.iperf3.servidor -Porta $cfgAmbiente.iperf3.porta `
-                   -Duracao $cfgAmbiente.iperf3.duracao_s -Reverso:$cfgAmbiente.iperf3.reverso
+        Test-BandaVpn -Servidor $cfgAmbiente.iperf3.servidor -Porta $cfgAmbiente.iperf3.porta `
+                      -Duracao $cfgAmbiente.iperf3.duracao_s
     } else { Write-Log 'Teste de banda (iperf3) desativado pela configuracao (admin).' -Nivel Aviso; [pscustomobject]@{ DownloadMbps = $null; UploadMbps = $null } }
 
     $web = if ($usaWeb) {
@@ -68,6 +68,7 @@ function Invoke-DiagnosticoCompleto {
         Metricas = $metricas
         Decisao  = $decisao
         Local    = $Local
+        Iperf    = $band
     }
 }
 

@@ -25,8 +25,11 @@ Script), em vez de criar um BI/dashboard separado.
 - **GUI WPF + MahApps.Metro** (`MetroWindow`, tema DICON) — DLLs versionadas em
   `lib/mahapps/`; tema em `src/ui/Tema.xaml`; fonte Archivo em
   `assets/marca/tema/fonts/`. Aplicada só na branch `homologacao` por ora.
-- **iperf3** (client Windows) — banda real, contra servidor iperf3 rodando num
-  Ubuntu no CPD (via VPN)
+- **iperf3** (client Windows, `bin/iperf3/iperf3.exe` — não versionado) — banda
+  real pela VPN contra servidor iperf3 num Ubuntu no CPD. `Test-BandaVpn`
+  (`src/testes/Test-Banda.ps1`) roda download (`-R`) e upload (`-f m`), lê a
+  saída linha a linha e transmite cada intervalo (`Write-EventoIperf` →
+  `Update-IperfGauge`) para um **velocímetro** no passo 4, igual ao do Speedtest.
 - **Ping nativo do Windows** — latência, jitter e perda
 - **Fase 1 — rede local (ANTES da VPN do TRE)** (`src/core/RedeLocal.ps1`,
   `Invoke-FaseLocal`): inventário da placa cabeada (LAN conectada? **IP local**,
@@ -84,7 +87,10 @@ bloqueia "Rodar diagnóstico" sem a VPN e mostra **"Abrir o FortiClient"**
 desabilitado** (`Update-Passo4Nav`) até o diagnóstico rodar **ou** o técnico
 marcar **"Não foi possível conectar a VPN"** + motivo (`Set-DiagnosticoVpnImpossivel`
 gera payload sintético INVIÁVEL; vai em `vpn.impossivel/motivo` no JSON e num
-aviso vermelho no relatório); **não** auto-avança ao concluir → 5. resultado por
+aviso vermelho no relatório). "Rodar diagnóstico" → `Invoke-DiagnosticoCompleto`
+(ping + `Test-BandaVpn` + Selenium): a banda iperf3 aparece ao vivo no
+velocímetro do card `cardIperfVpn` (`Update-IperfGauge`/`Update-IperfPainel`).
+**Não** auto-avança ao concluir → 5. resultado por
 métrica → 6. decisão final → 7. conclusão: **Salvar** / **Transmitir** /
 **Exportar relatório (PDF)** + checklist.
 O runspace da fase local / conexão Wi-Fi é o `Start-TarefaRede`
