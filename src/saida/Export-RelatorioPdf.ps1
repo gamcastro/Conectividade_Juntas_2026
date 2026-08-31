@@ -8,6 +8,21 @@ function ConvertTo-HtmlSafe {
     $Texto -replace '&', '&amp;' -replace '<', '&lt;' -replace '>', '&gt;' -replace '"', '&quot;'
 }
 
+# Brasao da Republica como data URI (assets/brasao-republica.png|jpg). Vazio se ausente.
+function Get-BrasaoDataUri {
+    foreach ($n in 'brasao-republica.png', 'brasao.png', 'brasao-republica.jpg', 'brasao.jpg') {
+        $p = Join-Path $Global:RaizApp "assets\$n"
+        if (Test-Path $p) {
+            $mime = if ($p -match '\.jpe?g$') { 'image/jpeg' } else { 'image/png' }
+            try {
+                $b64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($p))
+                return 'data:{0};base64,{1}' -f $mime, $b64
+            } catch { return '' }
+        }
+    }
+    return ''
+}
+
 function Get-CaminhoNavegadorPdf {
     $cands = @(
         (Join-Path ${env:ProgramFiles(x86)} 'Microsoft\Edge\Application\msedge.exe')
@@ -91,6 +106,9 @@ function New-RelatorioHtml {
     $tecnico  = ConvertTo-HtmlSafe ([string] $r.tecnico.nome)
     $geradoEm = (Get-Date).ToString('dd/MM/yyyy HH:mm:ss')
 
+    $brasao    = Get-BrasaoDataUri
+    $imgBrasao = if ($brasao) { '<img class="brasao" src="{0}" alt="">' -f $brasao } else { '' }
+
     # Bloco "Local avaliado" (so mostra o que existir nos dados).
     $uc   = ConvertTo-HtmlSafe (Get-CampoLocal $loc 'unidade_consumidora')
     $resp = Get-CampoLocal $loc 'responsavel'
@@ -121,6 +139,8 @@ function New-RelatorioHtml {
   * { box-sizing: border-box; }
   body { font-family: 'Segoe UI', Arial, sans-serif; color: #1f2430; margin: 32px 36px; font-size: 12px; }
   .cab { display: flex; justify-content: space-between; align-items: flex-start; }
+  .cab .id { display: flex; align-items: flex-start; }
+  .cab .brasao { height: 74px; margin-right: 14px; }
   .cab h1 { font-size: 15px; margin: 0 0 2px; }
   .cab .org { color: #444; font-size: 11px; line-height: 1.5; }
   .cab .data { text-align: right; color: #444; font-size: 11px; white-space: nowrap; }
@@ -142,10 +162,13 @@ function New-RelatorioHtml {
 </head>
 <body>
   <div class="cab">
-    <div>
-      <h1>Justi&ccedil;a Eleitoral</h1>
-      <div class="org">Tribunal Regional Eleitoral do Maranh&atilde;o<br>SEASU-COINF-STIC<br>
-        <b>DICON</b> &mdash; Diagn&oacute;stico de Conectividade &middot; Juntas Especiais 2026</div>
+    <div class="id">
+      $imgBrasao
+      <div>
+        <h1>Justi&ccedil;a Eleitoral</h1>
+        <div class="org">Tribunal Regional Eleitoral do Maranh&atilde;o<br>SEASU-COINF-STIC<br>
+          <b>DICON</b> &mdash; Diagn&oacute;stico de Conectividade &middot; Juntas Especiais 2026</div>
+      </div>
     </div>
     <div class="data">$($quando.ToString('dd/MM/yyyy'))<br>$($quando.ToString('HH:mm:ss'))</div>
   </div>

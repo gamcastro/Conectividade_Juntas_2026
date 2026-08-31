@@ -1,0 +1,69 @@
+zona	tipo	municipio	local	endereco	unidade_consumidora	responsavel	telefone	internet
+24	principal	Santa Quiteria do Maranhão	Fórum de Santa Quiteria do Maranhão	Rua João de Deus, s/n, Centro	10163145	Gabriela Soares Dantas Lopes	(98) 20554251	Fibra óptica
+24	contingencia	Santa Quiteria do Maranhão	Polo UAB (Universidade Aberta do Brasil) de Santa Quitéria do Maranhão	Rua João de Deus, s/n, Centro	004000000219	Gleysdiston Sousa Santos	(98) 97008-9594	Fibra óptica
+17	principal	Benedito Leite	Complexo Educacional de Ensino Fundamental Lucas Coelho	Praça da Alegria, s/nº, Centro, Benedito Leite - MA	000011121985	Gean Saraiva Bezerra	(99) 98456-7850	Fibra óptica
+17	contingencia	Benedito Leite	Escola Municipal Raimundo Alves Feitosa	Praça da Alegria, s/nº, Centro, Benedito Leite - MA	11124690	Gean Saraiva Bezerra	(99) 98456-7851	Fibra óptica
+21	principal	São Francisco do Maranhão	Fórum da Comarca de São Francisco do Maranhão	Rua Dr. Soares de Quadros, Conjunto José Reinaldo	3304-004798-6	Marcelo Domingos da Silva Oliveira	(99) 98401-6139	Internet fornecida pelo TJ/MA
+21	contingencia	São Francisco do Maranhão	Unidade Escolar Estado de São Paulo	Rua Hermes Viana, s/n.º, Centro	3057008286-4	Odair Soares Miranda	(86) 99994-9623	Lenilson Starlink Tel.: 97 98410-9218
+107	principal	Apicum-Açu	Câmara Municipal de Apicum-Açu	Av. Candido Reis, 05 - Centro - 65275-000	374.815.016-88	Márcio Jean Maia Monteiro	(98) 98426-5336	Fibra óptica
+107	contingencia	Apicum-Açu	Prefeitura Municipal de Apicum-Açu	Av. Candido Reis, 05 - Centro - 65275-000	4000006489	Francisco Brito Lucena	(98) 98408-9516	Fibra óptica
+49	principal	Brejo de Areia	Prédio da Assistência Social	Rua Raimundo Santiago, s/nº, Centro, Brejo de Areia	65840801668	Ráulison Francisco Farias do Vale	(99) 98190-7045	Fibra óptica
+49	contingencia	Brejo de Areia	Centro Social	Rua Clemente Franco Marinho, s/nº, Centro, Brejo de Areia	65840801668	Ráulison Francisco Farias do Vale	(99) 98190-7046	Fibra óptica
+43	principal	Monção	Antigo Posto de Atendimento da Justiça Eleitoral em Monção	Praça Presidente Kennedy, 260, Centro, Monção/MA	3020575840	Rafael Coelho Costa	(98) 98771-7634	Fibra óptica
+43	contingencia	Monção	Câmara Municipal de Monção - MA	Rua da Saudade, s/n, Centro, Monção/MA	3.089.250.016-61	Daerlio Barros Oliveira	(98) 99193-4656	Fibra óptica
+68	principal	Pirapemas	Posto de Atendimento	Avenida Viriato Correa, s/nº, Centro, CEP 65460-000	1102-547822-5	Edileusa	(98) 99189-6667	Fibra óptica
+68	contingencia	Pirapemas	Câmara Municipal de Pirapemas	Avenida Des. Joaquim Santos, s/n.º, Centro, CEP 65460-000	3068-009249-0	Merivalda dos Santos Filho	(98) 98577-0690	Fibra óptica
+61	principal	Poção de Pedras	Fórum da Comarca de Poção de Pedras	Rua Manoel Máximo, s/n, Centro	6285126	Paulo Sérgio Silva de Queiroz	(99) 2055 1101	Internet do TJMA
+61	contingencia	Poção de Pedras	Câmara Municipal de Poção de Pedras	Avenida Presidente Kennedy, s/n, Centro, Poção de Pedras	602.815.016-04	Joaquim Elói de Souza Filho	(99) 98524-5243	Fibra óptica
+103	principal	Governador Edison Lobão	Prédio do CRAS	Rua Tiradentes, s/n, Centro	1.426.185.016-89	Karine Sousa Silva	(99) 98411-6013	Fibra óptica
+103	contingencia	Governador Edison Lobão	Prédio do VIVA Procon	Rua Santa Rita, s/n, Centro	1.169.311.016-66	João Vitor Sousa Justino	(99) 98401-7947	Fibra óptica
+46	principal	São João do Paraíso	CEEFM Delfino Aguiar de Azevedo	Av. Argemiro Aguiar de Azevedo, s/n, Centro	12243545	Maria Raimunda da Costa Rocha	(99) 98156-9973	Fibra óptica
+46	contingencia	São João do Paraíso	Esc. Mul. Sebastião Archer	Rua Ceará, s/n, Centro	12249209	Maria José Moreira da Silva	(99) 98105-4366	Fibra óptica
+7	principal	Timbiras	Posto de Atendimento ao Eleitor em Timbiras (MA)	Rua Prefeito Miguel Mesquita, s/n, Centro, Timbiras - MA	CEMAR: 42219355	Sônia Késia de Lima Loiola	(99) 98451-4860	Fibra óptica
+7	contingencia	Timbiras	Fórum Estadual de Timbiras (MA)	Rua das Flores, 113, Timbiras (MA)	CEMAR: 3004674250	Érica Rochelly Uchoa da Silva Melo	(99) 98451-4860	Fibra óptica
+78	principal	São João do Carú	Prefeitura Municipal de São João do Carú	Rua do Limão, s/n, Centro	42163801650	Bruno Cardoso	(98) 99154-6866	Fibra óptica
+78	contingencia	São João do Carú	Escola Estadual Brenha Raposo	Avenida Marinheiro, s/n, Jardim Tropical	3002499630	Maria Antonia do Nascimento Rocha	(98) 98514-5281	Fibra óptica
+54	principal	Joselândia	Prédio da Secretaria de Cultura	Praça do Mercado Central, 192 - Centro	6-085365789	Luma Campos Torres da Costa	(99) 98510-8433	Internet fornecida pela secretaria
+54	contingencia	Joselândia	Fórum da Comarca de Joselândia	Av. Duque de Caxias, s/n - Centro - Joselândia-MA	6243762	Raquel Silva Paiva	(99) 98406-3033	Internet fornecida pela secretaria
+44	principal	Buriti Bravo	Fórum da Justiça Comum de Buriti Bravo	Rua Joaquim Aires, nº 315, Centro, Buriti Bravo/MA	0008641692	Érica Maria Cavalcanti Escobar	(89) 9440-4339	Internet fornecida pela secretaria
+44	contingencia	Buriti Bravo	Câmara Municipal de Vereadores	Av. Máximo Ferreira, s/n - Centro - Buriti Bravo-MA	400000038014	Marineide Brito	(86) 9455-7357	Internet fornecida pela secretaria
+102	principal	Marajá do Sena	Farol da Educação	Avenida Deputado César Bandeira, s/nº, Centro	38709666	Maria do Socorro Cândido dos Santos	(98) 98404-7114	Fibra óptica
+102	contingencia	Marajá do Sena	Câmara Municipal de Marajá do Sena	Avenida Deputado César Bandeira, s/nº, Centro	40000021030	Bismarque Moura Oliveira	(98) 98461-8008	Fibra óptica
+70	principal	Alto Alegre do Pindaré	Teatro Municipal	Avenida João XXII, s/n, Centro - Alto Alegre do Pindaré	4000008732	João da Silva Lago	(98) 98482-0238	Fibra óptica
+70	contingencia	Alto Alegre do Pindaré	Câmara Municipal de Vereadores	Avenida João XXII, s/n, Centro - Alto Alegre do Pindaré	400000013046	Marivalda Paulino	(98) 98409-0963	Fibra óptica
+32	principal	Santo Amaro do Maranhão	Fórum de Justiça da Comarca de Santo Amaro do Maranhão	Rua 28 de Julho, s/n, no Centro da cidade	3703-050097-1	Luciana Quintanilha Pessoa	(98) 98507-3658	Starlink via satélite
+32	contingencia	Santo Amaro do Maranhão	Centro de Ensino Manoel Dias de Sousa	Praça Nossa Senhora da Conceição, s/n, Centro	3012-007829-8	Eliabe Araújo Rodrigues	(98) 98481-6883	Fibra óptica
+97	principal	Fernando Falcão	Unidade Integrada Felicidade de Matos	Rua Emiliano, s/n, Centro	7519060	Ivando de Andrade Pessoa (Diretor)	(99) 98484-5152	Fibra óptica
+97	contingencia	Fernando Falcão	Sala da Justiça de Todos	Rua Emiliano, s/n, Centro	3017071784	Francisco Sousa Matos Júnior	(99) 98545-6136	Fibra óptica
+66	principal	Bom Lugar	Câmara Municipal de Vereadores	Rua Manoel Severo, s/n, Centro	3.263.092.016-29	Amanda Andrade	(99) 98453-9350	Fibra óptica
+66	contingencia	Bom Lugar	Secretaria de Assistência Social	Rua do Cruzeiro, s/n, Centro	2.581.519.016-54	Amanda Andrade	(99) 98453-9351	Fibra óptica
+66	principal	Conceição do Lago-Açu	Secretaria de Comunicação	Av. 10 de Novembro, s/n, Centro	3.450.328.016-63	Mazinho	(98) 99617-7555	Fibra óptica
+66	contingencia	Conceição do Lago-Açu	AGED	Av. 10 de Novembro, s/n, Centro	3.493.925.016-33	Mazinho	(98) 99617-7556	Fibra óptica
+15	principal	Itaipava do Grajaú	Centro de Eventos Marcos Soebe	Rua São Sebastião, s/n, Bairro Novo	11021835929	Ray Silva	(99) 98458-8446	Fibra óptica
+15	contingencia	Itaipava do Grajaú	Termo Judiciário de Itaipava do Grajaú / Defensoria Pública	Rua Grande, s/n, Centro	3705000973-5	Lorrana Arruda	(99) 98557-3757	Fibra óptica
+11	principal	Tasso Fragoso	Centro Administrativo de Tasso Fragoso	Avenida Santos Dumont, s/n, Centro	1.068.635.016-07	Carlos Henrique Gaberlinni	(99) 98104-5028	Fibra óptica
+11	contingencia	Tasso Fragoso	Escola Municipal Vitorino Freire - anexo	Rua Gonçalves Dias, s/n, Centro	30.68-0282207-9	Suelene Soares Lopes	(98) 98105-3221	Banda Larga
+99	principal	Sítio Novo	Viva Procon de Sítio Novo - MA	Rua 7 de Setembro, s/n, Centro - Sítio Novo - MA	3017697691	Marta Teixeira dos Reis Vargas	(98) 98454-8520	Fibra óptica
+99	contingencia	Sítio Novo	Centro de Multiatendimento	Av. Leonardo de Almeida, s/n, Centro - Sítio Novo - MA	1.439.710.016-32	Ernesto Nascimento Franco Neto	(98) 98164-2518	Fibra óptica
+6	principal	Senador Alexandre Costa	Câmara Municipal	Rua Cônego Aderson, nº 09, Bairro Centro	400000026024	Klayton Alves	(99) 98414-7393	Fibra óptica
+6	contingencia	Senador Alexandre Costa	Secretaria Municipal de Educação	R. Vespasiano Ramos, s/n, Centro	3.779.335.0156-93	Vilanyr Macêdo	(99) 98402-5646	Fibra óptica
+58	principal	Buritirana	Secretaria Municipal de Agricultura / Mercado Municipal	Rua Dom Pedro II, Centro, Buritirana/MA	3.144.716.016-59	José Sena de Sousa Filho	(99) 98410-9927	ZION NET
+58	contingencia	Buritirana	Sala do Empreendedor	Rua Dom Pedro II, Centro, Buritirana/MA	3019071110	José Sousa Amâncio	(99) 98410-9928	ZION NET
+64	principal	Amapá do Maranhão	Unidade Integrada Governador Epitácio Cafeteira	Rua Luis Roco, s/n, Bairro Centro - Zona Urbana	223786301606	Gleison Alves da Silva	(98) 98526-9982	Fibra óptica
+64	contingencia	Amapá do Maranhão	Centro Educacional Professora Maria do Socorro Mendonça da Silva	Rua 21 de Abril, s/n, Bairro Centro	50085401670	Adérito Fernando Ferreira Viana	(98) 98445-7829	Fibra óptica
+106	principal	Pedro do Rosário	Posto da Justiça de Todos - TJ/MA	Rua do Sol, s/n, Centro, próximo à Escola José Mousinho	3016819203	Luís Claudio dos Santos Conceição	(98) 98464-0834	Fibra óptica
+106	contingencia	Pedro do Rosário	Câmara Municipal de Vereadores	Avenida Pedro Cunha Mendes, Centro	400000031044	Tiago de Jesus Serra Junior	(98) 98454-0480	Fibra óptica
+105	principal	Formosa da Serra Negra	Centro Administrativo da Prefeitura de Formosa da Serra Negra	Praça Central - Av. Edson Lobão	FS16B003	Guilherme Reis Silva	(99) 98409-6131	Fibra óptica
+105	contingencia	Formosa da Serra Negra	Câmara Municipal de Formosa da Serra Negra	Av. João da Mata e Silva, s/n - Bairro Vila Viana	2216/1851	José de Ribamar da Silva Costa	(99) 98463-5639	Fibra óptica
+30	principal	Mirinzal	Fórum Juiz Sai Luis Chung	Rua Sousandrade, 15a - Bairro Centro, Mirinzal - MA	33040059771	Thalytta Lindoso Barbosa	(98) 2055-4138	Fibra óptica
+30	contingencia	Mirinzal	Unidade Escolar Euclides Ribeiro	Avenida Governador Antônio Dino, s/n, Centro, Mirinzal/MA	1000100397	Michelle Pontes Arpino	(98) 98514-8144	Fibra óptica
+95	principal	Bom Jesus das Selvas	Posto de Atendimento da Justiça Eleitoral	Rua Barra do Corda, nº 193-B, Centro, CEP 65.393-000	3016268304	Maria Lourimar Malheiros Oliveira	(98) 99157-8542	Fornecida pelo local
+95	contingencia	Bom Jesus das Selvas	Polo da Universidade Aberta do Brasil - UAB	Rua Barreirinhas, s/n, Centro, Bom Jesus das Selvas	10498902	Maria Lourimar Malheiros Oliveira	(98) 99157-8543	Fibra óptica
+62	principal	São Domingos do Azeitão	Escola Municipal Helenice Costa Carvalho	BR 230, s/n	30570279439	Josemar Cardoso Reis	(99) 98844-1949	Fibra óptica
+62	contingencia	São Domingos do Azeitão	Centro de Ensino Aquiles Lisboa	Travessa São José, s/n, Centro	30550112880	Joabe de Sousa Santos	(99) 98818-1322	Fibra óptica
+62	principal	São Félix de Balsas	Câmara de Vereadores do Município de São Félix de Balsas	Praça dos 03 Poderes	400000075017	Joelma Martins Silva Passos	(99) 98434-8685	Fibra óptica
+62	contingencia	São Félix de Balsas	Centro de Ensino Henrique Martins	Rua da Rampa	30550212389	Rodolfo Luís de Sousa	(99) 98813-0365	Fibra óptica
+82	principal	São Pedro dos Crentes	Câmara Municipal de Vereadores	Rua Canaã, s/nº, Centro, São Pedro dos Crentes/MA	40000003412	Nailza Pereira de Araújo	(99) 981844861	Fibra óptica
+82	contingencia	São Pedro dos Crentes	Secretaria de Educação	Praça da Independência, s/nº, Centro, São Pedro dos Crentes/MA	4000003366	Nailza Pereira de Araújo	(99) 981844861	Fibra óptica
+98	principal	Cidelândia	Câmara Municipal de Cidelândia	Avenida Senador Henrique de La Roque, nº 941, Centro, Cidelândia - MA, CEP 65.921-000	1.044.032.016-29	Rayllan Guilherme Brito Ribeiro	(99) 98473-2399	Fibra óptica
+98	contingencia	Cidelândia	Prefeitura Municipal de Cidelândia	Avenida Senador Henrique de La Roque, s/n - Centro, Cidelândia - MA, CEP 65921-000	0010528844	Francisco Batista do Nascimento	(99) 99643-1929	Fibra óptica

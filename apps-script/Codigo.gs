@@ -22,6 +22,11 @@
 
 var PLANILHA_JUNTAS_URL    = 'https://docs.google.com/spreadsheets/d/11MqlYAJfJBZ5ywkEe5AaYopNmM4UVToYPXADwPO72Us/edit';
 var ABA_JUNTAS             = 'Página1';
+// Aba estruturada opcional, importada da lista oficial de locais. Colunas
+// (cabecalho, qualquer ordem): zona, tipo, municipio, local, endereco,
+// unidade_consumidora, responsavel, telefone, internet. Se existir, esses
+// campos sobrescrevem (unidade_consumidora) ou completam os do bloco de texto.
+var ABA_LOCAIS             = 'Locais';
 
 var PLANILHA_ROTEIROS_URL  = 'https://docs.google.com/spreadsheets/d/1EQ32sRXiB4b9aXLc52CkONsL6AOUnIxERw4gKlj7ESo/edit';
 var ABA_RESUMO             = 'Resumo';
@@ -122,7 +127,69 @@ function listarJuntas() {
     if (blocoPrincipal)    saida.push(montarLocal(zona, sede, termo, 'principal', blocoPrincipal));
     if (blocoContingencia) saida.push(montarLocal(zona, sede, termo, 'contingencia', blocoContingencia));
   }
+
+  // Enriquece com a aba estruturada (unidade_consumidora e o que faltar).
+  var extras = lerLocaisEstruturados();
+  for (var s = 0; s < saida.length; s++) {
+    var loc = saida[s];
+    var ex = extras[String(loc.zona_eleitoral).replace(/\D/g, '') + '|' + loc.tipo + '|' + chaveMunicipio(loc.municipio_termo)];
+    if (!ex) continue;
+    if (ex.unidade_consumidora) loc.unidade_consumidora = ex.unidade_consumidora;
+    if (ex.responsavel && !loc.responsavel)     loc.responsavel   = ex.responsavel;
+    if (ex.telefone && !loc.telefone)           loc.telefone      = ex.telefone;
+    if (ex.nome && !loc.nome)                   loc.nome          = ex.nome;
+    if (ex.endereco && !loc.endereco)           loc.endereco      = ex.endereco;
+    if (ex.tipo_internet && !loc.tipo_internet) loc.tipo_internet = ex.tipo_internet;
+  }
   return saida;
+}
+
+// Chave de municipio para casar a aba estruturada com o "Termo" da Pagina1.
+function chaveMunicipio(s) {
+  var t = String(s || '').replace(/[\/\-\(]\s*MA\s*\)?\s*$/i, '').replace(/\bMA\b\s*$/i, '');
+  return normalizeMunicipio(t);
+}
+
+function _normTipoLocal(v) {
+  var t = String(v || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  return (t.indexOf('conting') >= 0) ? 'contingencia' : 'principal';
+}
+
+// Le a aba ABA_LOCAIS (se existir) -> mapa "zona|tipo|chaveMunicipio" -> campos.
+function lerLocaisEstruturados() {
+  var map = {};
+  try {
+    var aba = SpreadsheetApp.openByUrl(PLANILHA_JUNTAS_URL).getSheetByName(ABA_LOCAIS);
+    if (!aba || aba.getLastRow() < 2) return map;
+    var dados = aba.getDataRange().getValues();
+
+    var hRow = -1, col = {};
+    for (var i = 0; i < dados.length && hRow < 0; i++) {
+      var lc = dados[i].map(function (c) { return String(c).trim().toLowerCase(); });
+      if (lc.indexOf('zona') >= 0 && lc.indexOf('tipo') >= 0) {
+        hRow = i;
+        for (var k = 0; k < lc.length; k++) if (lc[k]) col[lc[k]] = k;
+      }
+    }
+    if (hRow < 0) return map;
+
+    for (var r = hRow + 1; r < dados.length; r++) {
+      var row = dados[r];
+      var zona = String(row[col['zona']] || '').replace(/\D/g, '');
+      if (!zona) continue;
+      var tipo = _normTipoLocal(row[col['tipo']]);
+      var mun  = (col['municipio'] != null) ? row[col['municipio']] : '';
+      var o = {};
+      if (col['local']               != null) o.nome                = String(row[col['local']] || '').trim();
+      if (col['endereco']            != null) o.endereco            = String(row[col['endereco']] || '').trim();
+      if (col['unidade_consumidora'] != null) o.unidade_consumidora = String(row[col['unidade_consumidora']] || '').trim();
+      if (col['responsavel']         != null) o.responsavel         = String(row[col['responsavel']] || '').trim();
+      if (col['telefone']            != null) o.telefone            = String(row[col['telefone']] || '').trim();
+      if (col['internet']            != null) o.tipo_internet       = String(row[col['internet']] || '').trim();
+      map[zona + '|' + tipo + '|' + chaveMunicipio(mun)] = o;
+    }
+  } catch (e) { /* aba ausente ou sem permissao: ignora */ }
+  return map;
 }
 
 
