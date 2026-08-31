@@ -38,10 +38,10 @@ function Get-CaminhoSpeedtest {
     return $null
 }
 
-# Repassa um evento JSONL do speedtest para a GUI (Update-Speedtest). Usa
-# BeginInvoke com prioridade Background: assincrono (nao trava o runspace) e
-# deixa Render/Input do WPF na frente -> a janela nao "congela" no dilúvio de
-# eventos de progresso.
+# Repassa um evento JSONL do speedtest para a GUI (Update-Speedtest).
+# Invoke SINCRONO (mantem $Evento no escopo p/ o scriptblock) mas em prioridade
+# Background: Render/Input do WPF passam na frente -> janela nao "congela" no
+# dilúvio de eventos, e o runspace fica no ritmo do CLI (~1 evento/100 ms).
 function Write-EventoSpeedtest {
     param($Evento)
     $janela = Get-Variable -Name JanelaPrincipal -Scope Global -ErrorAction SilentlyContinue
@@ -49,7 +49,7 @@ function Write-EventoSpeedtest {
     if (-not $dispatcher) { return }
     $aplicar = { Update-Speedtest $Evento }
     if ($dispatcher.CheckAccess()) { & $aplicar }
-    else { $dispatcher.BeginInvoke([Windows.Threading.DispatcherPriority]::Background, [action] $aplicar) | Out-Null }
+    else { $dispatcher.Invoke([action] $aplicar, [Windows.Threading.DispatcherPriority]::Background) }
 }
 
 # Roda o speedtest.exe lendo o stdout LINHA A LINHA (JSONL). Cada linha valida
