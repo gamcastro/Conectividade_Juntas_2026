@@ -20,6 +20,7 @@ if ([Threading.Thread]::CurrentThread.GetApartmentState() -ne 'STA') {
 $Global:RaizApp    = Split-Path $PSScriptRoot -Parent
 $Global:ArquivoLog = $null
 $Global:ModoTeste  = $true   # nao abrir o PDF/pasta no final do export
+$Global:VpnSimulada = $true  # passo 4: VPN "conectada" (troque p/ testar o gate)
 
 # fase 1 (rede local) simulada: nao mexe na placa de rede real da maquina de teste
 $Global:FaseLocalSimulada = [pscustomobject]@{
@@ -254,12 +255,26 @@ try {
     Invoke-WizardProximo         # 3 -> 4
     if ($Global:WizardStep -ne 4) { Write-Host "    FALHA: nao voltou ao passo 4 apos re-checagem (step=$($Global:WizardStep))"; $falhas++ }
 
-    # 4d. passo 4 -> 5 bloqueia antes de rodar o diagnostico
-    Invoke-WizardProximo
-    if ($Global:WizardStep -ne 4) { Write-Host "[4d] FALHA: avancou sem rodar o diagnostico"; $falhas++ }
-    else { Write-Host "[4d] passo 4 bloqueia antes de rodar" }
+    # 4d. sem VPN: "Rodar diagnostico" desabilitado + botao do FortiClient visivel + rodar bloqueado
+    $Global:VpnSimulada = $false ; Update-EstadoVpn
+    if (-not $w.FindName('btnRodar').IsEnabled -and "$($w.FindName('btnAbrirFortiClient').Visibility)" -eq 'Visible' -and
+        "$($w.FindName('txtDiagVpn').Text)" -match 'FortiClient') {
+        Write-Host "[4d] sem VPN: 'Rodar diagnostico' travado + 'Abrir o FortiClient' visivel"
+    } else { Write-Host "    FALHA: gate de VPN (rodar.en=$($w.FindName('btnRodar').IsEnabled) forti=$($w.FindName('btnAbrirFortiClient').Visibility))"; $falhas++ }
+    Invoke-ExecucaoNaJanela
+    if ($null -eq $Global:DiagRunState -and $null -eq $Global:DiagPayload) { Write-Host "[4d] sem VPN: 'Rodar diagnostico' nao inicia a bateria" }
+    else { Write-Host "    FALHA: rodou o diagnostico sem VPN (runstate=$($null -ne $Global:DiagRunState))"; $falhas++ }
+    $Global:VpnSimulada = $true ; Update-EstadoVpn
+    if ($w.FindName('btnRodar').IsEnabled -and "$($w.FindName('btnAbrirFortiClient').Visibility)" -eq 'Collapsed') {
+        Write-Host "[4d] com VPN: 'Rodar diagnostico' habilita, botao do FortiClient some"
+    } else { Write-Host "    FALHA: VPN conectada nao liberou o rodar"; $falhas++ }
 
-    # 5. roda a bateria -> auto-avanca para o passo 5
+    # 4e. passo 4 -> 5 bloqueia antes de rodar o diagnostico
+    Invoke-WizardProximo
+    if ($Global:WizardStep -ne 4) { Write-Host "[4e] FALHA: avancou sem rodar o diagnostico"; $falhas++ }
+    else { Write-Host "[4e] passo 4 bloqueia antes de rodar" }
+
+    # 5. roda a bateria -> NAO avanca sozinho; o tecnico clica em Proximo
     Invoke-ExecucaoNaJanela
     $deadline = (Get-Date).AddSeconds($TimeoutS)
     $ok = $false
@@ -270,10 +285,14 @@ try {
     }
     Invoke-Pump
     $nLinhas = @($w.FindName('dgAvaliacao').ItemsSource).Count
-    $decIni  = [string] $w.FindName('cboDecisaoFinal').SelectedItem
-    Write-Host "[5] Concluiu: $ok | passo: $($Global:WizardStep) | painel: $nLinhas linhas | decisao: $decIni"
+    Write-Host "[5] Concluiu: $ok | passo: $($Global:WizardStep) | painel: $nLinhas linhas"
     if (-not $ok) { $falhas++ }
-    if ($Global:WizardStep -ne 5) { Write-Host "    FALHA: nao auto-avancou para o passo 5"; $falhas++ }
+    if ($Global:WizardStep -ne 4) { Write-Host "    FALHA: avancou sozinho apos rodar (esperado ficar no passo 4)"; $falhas++ }
+    else { Write-Host "[5] apos rodar continua no passo 4 (sem auto-avancar)" }
+    Invoke-WizardProximo
+    $decIni = [string] $w.FindName('cboDecisaoFinal').SelectedItem
+    if ($Global:WizardStep -ne 5) { Write-Host "    FALHA: Proximo nao foi para o passo 5"; $falhas++ }
+    else { Write-Host "[5] Proximo -> passo 5 | decisao: $decIni" }
     if ($nLinhas -ne 6) { Write-Host "    FALHA: painel deveria ter 6 linhas"; $falhas++ }
     if ($decIni -notin @('viavel', 'viavel_com_ressalva', 'inviavel')) { Write-Host "    FALHA: decisao nao classificou"; $falhas++ }
 
@@ -412,6 +431,7 @@ try {
 finally {
     $Global:PastaDadosOverride = $null
     $Global:FaseLocalSimulada  = $null
+    $Global:VpnSimulada        = $null
     Remove-Item $dataDir -Recurse -Force -EA SilentlyContinue
     # remove os JSON de resultado criados por este teste
     Get-ChildItem $pendDir -Filter *.json -EA SilentlyContinue |

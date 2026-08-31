@@ -35,6 +35,9 @@ if (-not (Get-Variable -Name FaseLocalSimulada -Scope Global -ErrorAction Silent
 if (-not (Get-Variable -Name WifiConectarSimulado -Scope Global -ErrorAction SilentlyContinue)) {
     $Global:WifiConectarSimulado = $null  # testes: resultado fixo p/ Connect-RedeWireless
 }
+if (-not (Get-Variable -Name VpnSimulada -Scope Global -ErrorAction SilentlyContinue)) {
+    $Global:VpnSimulada = $null           # testes: $true/$false forca o estado da VPN
+}
 
 $Global:Views = @('viewLogin', 'viewHome', 'viewGuia', 'viewDiag', 'viewAdmin')
 
@@ -220,6 +223,8 @@ function New-JanelaPrincipal {
 
     # diagnostico
     $window.FindName('btnRodar').Add_Click({ Invoke-ExecucaoNaJanela })
+    $window.FindName('btnAbrirFortiClient').Add_Click({ Invoke-AbrirFortiClient })
+    $window.FindName('btnReverificarVpn').Add_Click({ Invoke-ReverificarVpn })
     $window.FindName('btnAtualizar').Add_Click({ Invoke-AtualizarListaJuntas })
     $window.FindName('cboJunta').Add_SelectionChanged({ Update-ComboLocais })
     $window.FindName('cboLocal').Add_SelectionChanged({ Update-DetalheLocal })
@@ -603,7 +608,7 @@ function Show-WizardPasso {
         4 {
             $sel = $w.FindName('cboLocal').SelectedItem
             $w.FindName('txtDiagLocal').Text = if ($sel) { 'Local: ' + $sel.Rotulo } else { 'Volte e selecione o local.' }
-            $w.FindName('btnRodar').IsEnabled = [bool] $sel
+            Update-EstadoVpn
         }
         6 { Update-DecisaoRecalculada }
         7 { Update-ResumoFim }
@@ -1411,6 +1416,49 @@ function Invoke-AtualizarListaJuntas {
     }
 }
 
+# Passo 4: estado da VPN da JE. Sem VPN -> "Rodar diagnostico" desabilitado e
+# aparecem "Abrir o FortiClient" + "Verificar novamente".
+function Update-EstadoVpn {
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    $sel = $w.FindName('cboLocal').SelectedItem
+    $vpn = Test-VpnAtiva
+
+    $verde    = Get-PincelVeredito 'viavel'
+    $vermelho = Get-PincelVeredito 'inviavel'
+    $tv = $w.FindName('txtDiagVpn'); $dv = $w.FindName('dotVpn')
+    if ($vpn) {
+        $tv.Text = 'VPN da Justica Eleitoral conectada.'
+        $tv.Foreground = $verde ; $dv.Fill = $verde
+    } else {
+        $tv.Text = 'VPN da Justica Eleitoral NAO detectada - conecte pelo FortiClient antes de rodar o diagnostico.'
+        $tv.Foreground = $vermelho ; $dv.Fill = $vermelho
+    }
+    $w.FindName('btnRodar').IsEnabled = [bool] $sel -and $vpn
+    $vis = if ($vpn) { 'Collapsed' } else { 'Visible' }
+    $w.FindName('btnAbrirFortiClient').Visibility = $vis
+    $w.FindName('btnReverificarVpn').Visibility   = $vis
+}
+
+function Invoke-ReverificarVpn { Update-EstadoVpn }
+
+function Invoke-AbrirFortiClient {
+    if ($Global:ModoTeste) { Write-Log 'FortiClient (modo teste, nao abre).' -Nivel Info; return }
+    $exe = Get-CaminhoFortiClient
+    if (-not $exe) {
+        Write-Log 'FortiClient nao encontrado neste computador. Abra a VPN manualmente.' -Nivel Erro
+        $tv = $Global:JanelaPrincipal.FindName('txtDiagVpn')
+        if ($tv) { $tv.Text = 'FortiClient nao encontrado - abra a VPN da JE manualmente e clique em "Verificar novamente".' }
+        return
+    }
+    try {
+        Start-ProcessoNaoElevado -Caminho $exe
+        Write-Log "Abrindo o FortiClient: $exe" -Nivel Info
+    } catch {
+        Write-Log "Falha ao abrir o FortiClient: $_" -Nivel Erro
+    }
+}
+
 function Invoke-ExecucaoNaJanela {
     $w = $Global:JanelaPrincipal
     if (-not $w) { return }
@@ -1418,6 +1466,11 @@ function Invoke-ExecucaoNaJanela {
     $selLocal = $w.FindName('cboLocal').SelectedItem
     if (-not $selLocal) {
         Write-Log 'Selecione a Junta Especial e o local antes de rodar o diagnostico.' -Nivel Aviso
+        return
+    }
+    if (-not (Test-VpnAtiva)) {
+        Write-Log 'VPN da Justica Eleitoral nao conectada. Abra o FortiClient e conecte antes de rodar.' -Nivel Erro
+        Update-EstadoVpn
         return
     }
 
@@ -1480,7 +1533,8 @@ function Complete-Diagnostico {
         return
     }
     Show-PainelResultado -Payload $Payload
-    if ($Global:WizardStep -eq 4) { Show-WizardPasso 5 }
+    # nao avanca sozinho: o tecnico confere o log e clica em "Proximo".
+    Write-Log 'Diagnostico concluido. Revise e clique em "Proximo".' -Nivel Ok
 }
 
 function Show-PainelResultado {

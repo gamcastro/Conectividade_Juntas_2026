@@ -694,9 +694,22 @@
                         <StackPanel Grid.Row="0">
                             <TextBlock x:Name="txtDiagLocal" TextWrapping="Wrap"
                                        Foreground="{DynamicResource Dicon.Text2}"/>
-                            <Button x:Name="btnRodar" Content="Rodar diagn&#243;stico"
-                                    Style="{DynamicResource BotaoPrimario}" HorizontalAlignment="Left"
-                                    Margin="0,12,0,0"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                <Ellipse x:Name="dotVpn" Width="10" Height="10" Margin="0,0,8,0"
+                                         VerticalAlignment="Center" Fill="{DynamicResource Dicon.Text3}"/>
+                                <TextBlock x:Name="txtDiagVpn" TextWrapping="Wrap" VerticalAlignment="Center"
+                                           FontSize="12" Foreground="{DynamicResource Dicon.Text2}"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                                <Button x:Name="btnRodar" Content="Rodar diagn&#243;stico"
+                                        Style="{DynamicResource BotaoPrimario}"/>
+                                <Button x:Name="btnAbrirFortiClient" Content="Abrir o FortiClient"
+                                        Style="{DynamicResource BotaoSecundario}" Margin="10,0,0,0"
+                                        Visibility="Collapsed"/>
+                                <Button x:Name="btnReverificarVpn" Content="Verificar novamente"
+                                        Style="{DynamicResource BotaoFantasma}" Margin="8,0,0,0"
+                                        Visibility="Collapsed"/>
+                            </StackPanel>
                         </StackPanel>
                         <Grid Grid.Row="1" Margin="0,14,0,0">
                             <Grid.ColumnDefinitions>
