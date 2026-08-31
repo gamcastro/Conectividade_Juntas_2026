@@ -572,7 +572,7 @@ function Update-DetalheLocal {
     $d = $sel.Dados
     $w.FindName('txtDetTipo').Text     = if ($d.tipo -eq 'principal') { 'LOCAL PRINCIPAL' } else { 'LOCAL DE CONTINGENCIA' }
     $w.FindName('txtDetNome').Text     = [string] $d.nome
-    $w.FindName('txtDetZE').Text       = 'ZE {0} - {1}  (sede: {2})' -f $d.zona_eleitoral, $d.municipio_termo, $d.municipio_sede
+    $w.FindName('txtDetZE').Text       = Format-RotuloJunta $d.zona_eleitoral $d.municipio_termo $d.municipio_sede
     $w.FindName('txtDetEndereco').Text = [string] $d.endereco
     $w.FindName('txtDetInternet').Text = 'Internet: ' + [string] $d.tipo_internet
 
@@ -780,6 +780,27 @@ function Initialize-SeletorJuntas {
     Update-SeletorJuntas
 }
 
+# Rotulo da Junta no formato "<Municipio termo> - ZE-XXX <Municipio sede>".
+function Format-ZonaNum {
+    param($Zona)
+    $n = 0
+    if ([int]::TryParse([string] $Zona, [ref] $n)) { return '{0:D3}' -f $n }
+    return [string] $Zona
+}
+function Format-MunicipioSede {
+    param([string] $Sede)
+    if ([string]::IsNullOrWhiteSpace($Sede)) { return '' }
+    $conect = 'de', 'da', 'do', 'das', 'dos', 'e'
+    $ti = (Get-Culture).TextInfo
+    (($Sede.ToLower() -split '\s+') | ForEach-Object {
+        if ($_ -in $conect) { $_ } else { $ti.ToTitleCase($_) }
+    }) -join ' '
+}
+function Format-RotuloJunta {
+    param($Zona, [string] $Termo, [string] $Sede)
+    '{0} - ZE-{1} {2}' -f $Termo, (Format-ZonaNum $Zona), (Format-MunicipioSede $Sede)
+}
+
 # Popula o combo "Junta Especial": so as Juntas da rota do tecnico logado, a
 # menos que o admin tenha marcado "incluir fora da rota" (ou nao haja roteiro).
 function Update-SeletorJuntas {
@@ -807,7 +828,7 @@ function Update-SeletorJuntas {
                 Termo  = $p.municipio_termo
                 Sede   = $p.municipio_sede
                 NaRota = ($_.Name -in $chavesRota)
-                Rotulo = 'ZE {0} - {1}  ({2})' -f $p.zona_eleitoral, $p.municipio_termo, $p.municipio_sede
+                Rotulo = Format-RotuloJunta $p.zona_eleitoral $p.municipio_termo $p.municipio_sede
             }
         }
 
