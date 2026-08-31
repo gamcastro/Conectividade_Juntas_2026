@@ -192,7 +192,9 @@ function New-JanelaPrincipal {
 
     $Global:JanelaPrincipal = $window
     $Global:LogEntries.Clear()   # cada abertura da janela comeca com o log limpo
-    $window.FindName('lstLog').ItemsSource = $Global:LogEntries
+    $Global:LogHome.Clear()
+    $window.FindName('lstLog').ItemsSource     = $Global:LogEntries
+    $window.FindName('lstLogHome').ItemsSource = $Global:LogHome
 
     $logo = New-LogoBitmap
     if ($logo) {
@@ -402,6 +404,7 @@ function Enter-Home {
     }
 
     Update-AvisoPendentes
+    $w.FindName('painelLogHome').Visibility = if ($Global:LogHome.Count) { 'Visible' } else { 'Collapsed' }
     Show-View 'viewHome'
 }
 
@@ -1173,6 +1176,7 @@ function Invoke-ReenvioPendentes {
     } finally {
         if ($btn) { $btn.IsEnabled = $true }
         Update-AvisoPendentes
+        $w.FindName('painelLogHome').Visibility = if ($Global:LogHome.Count) { 'Visible' } else { 'Collapsed' }
     }
 }
 

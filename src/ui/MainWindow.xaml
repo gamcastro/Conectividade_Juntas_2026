@@ -225,6 +225,37 @@
 
                     <Image x:Name="imgLogoHome" Height="46" Margin="0,22,0,0" Opacity="0.85"
                            HorizontalAlignment="Center"/>
+
+                    <Border x:Name="painelLogHome" Style="{DynamicResource Faixa}" Margin="0,18,0,0"
+                            Visibility="Collapsed">
+                        <StackPanel>
+                            <TextBlock Text="ATIVIDADE" FontFamily="Consolas" FontSize="9"
+                                       Foreground="{DynamicResource Dicon.Text3}" Margin="0,0,0,4"/>
+                            <ListBox x:Name="lstLogHome" Background="Transparent" BorderThickness="0"
+                                     MaxHeight="132" Foreground="{DynamicResource Dicon.Text2}"
+                                     FontFamily="Consolas" FontSize="11"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                     ScrollViewer.VerticalScrollBarVisibility="Auto">
+                                <ListBox.ItemContainerStyle>
+                                    <Style TargetType="ListBoxItem">
+                                        <Setter Property="Background" Value="Transparent"/>
+                                        <Setter Property="Padding" Value="0,1"/>
+                                        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                    </Style>
+                                </ListBox.ItemContainerStyle>
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding Hora}" Margin="0,0,8,0"
+                                                       Foreground="{DynamicResource Dicon.Text3}"/>
+                                            <TextBlock Text="{Binding Texto}" Foreground="{Binding Cor}"
+                                                       TextWrapping="Wrap"/>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
             </Grid>
 
