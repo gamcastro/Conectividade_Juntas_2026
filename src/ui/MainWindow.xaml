@@ -346,136 +346,167 @@
                         Style="{DynamicResource BotaoFantasma}"/>
             </Grid>
 
-            <!-- ===== DIAGNOSTICO ===== -->
+            <!-- ===== DIAGNOSTICO (assistente de 6 passos) ===== -->
             <Grid x:Name="viewDiag" Visibility="Collapsed">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="*" MinHeight="120"/>
-                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*" MinHeight="140"/>
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
-                <TextBlock Grid.Row="0" Text="Diagn&#243;stico de conectividade"
-                           Style="{DynamicResource TituloTela}"/>
-
-                <Border Grid.Row="1" Style="{DynamicResource Cartao}" Padding="16,14" Margin="0,14,0,0">
-                    <Grid>
+                <!-- cabecalho do assistente -->
+                <StackPanel Grid.Row="0" Margin="0,0,0,14">
+                    <TextBlock x:Name="txtWizTitulo" Text="Informa&#231;&#227;o do teste"
+                               Style="{DynamicResource TituloTela}"/>
+                    <Grid Margin="0,8,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
+                        <TextBlock x:Name="txtWizPasso" Grid.Column="0" Text="Passo 1 de 6"
+                                   FontFamily="Consolas" FontSize="11" VerticalAlignment="Center"
+                                   Margin="0,0,12,0" Foreground="{DynamicResource Dicon.Text3}"/>
+                        <ProgressBar x:Name="prgWizard" Grid.Column="1" Height="4" Minimum="1" Maximum="6"
+                                     Value="1" VerticalAlignment="Center" BorderThickness="0"
+                                     Background="{DynamicResource Dicon.Hair}"
+                                     Foreground="{DynamicResource Dicon.Accent}"/>
+                    </Grid>
+                </StackPanel>
+
+                <!-- area dos passos (empilhados por Visibility) -->
+                <Grid Grid.Row="1">
+
+                    <!-- PASSO 1: informacao do teste -->
+                    <ScrollViewer x:Name="stepInfo" VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">
+                        <Border Style="{DynamicResource Cartao}" Padding="20,18">
+                            <StackPanel>
+                                <TextBlock Text="O que este teste faz" Style="{DynamicResource SecaoTela}"
+                                           Margin="0,0,0,10"/>
+                                <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource Dicon.Text2}"
+                                           LineHeight="21">O DICON mede a conectividade do local a partir
+                                    deste notebook, agora, e classifica a viabilidade da Junta Especial.
+                                    S&#227;o quatro medi&#231;&#245;es:</TextBlock>
+                                <StackPanel Margin="0,12,0,0">
+                                    <TextBlock Foreground="{DynamicResource Dicon.Text2}" TextWrapping="Wrap"
+                                               Margin="0,0,0,6">&#8226;  <Run FontWeight="Bold">Lat&#234;ncia, jitter e perda</Run>  &#8212;  ping contra o servidor da rede da JE.</TextBlock>
+                                    <TextBlock Foreground="{DynamicResource Dicon.Text2}" TextWrapping="Wrap"
+                                               Margin="0,0,0,6">&#8226;  <Run FontWeight="Bold">Banda (download / upload)</Run>  &#8212;  iperf3 contra o servidor no CPD.</TextBlock>
+                                    <TextBlock Foreground="{DynamicResource Dicon.Text2}" TextWrapping="Wrap"
+                                               Margin="0,0,0,6">&#8226;  <Run FontWeight="Bold">Carregamento web</Run>  &#8212;  tempo de abertura do sistema de totaliza&#231;&#227;o (Firefox e Chrome).</TextBlock>
+                                </StackPanel>
+                                <Border Style="{DynamicResource Faixa}" Margin="0,10,0,0">
+                                    <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource Dicon.Ressalva}"
+                                               FontSize="12">Confirme que a VPN da Justi&#231;a Eleitoral est&#225;
+                                        conectada antes de come&#231;ar &#8212; sen&#227;o as medidas n&#227;o
+                                        refletem a rede real.</TextBlock>
+                                </Border>
+                            </StackPanel>
+                        </Border>
+                    </ScrollViewer>
+
+                    <!-- PASSO 2: escolha da Junta Especial -->
+                    <ScrollViewer x:Name="stepJunta" Visibility="Collapsed"
+                                  VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">
+                        <StackPanel>
+                            <Border Style="{DynamicResource Cartao}" Padding="16,14">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Junta Especial"
+                                               Style="{DynamicResource Rotulo}" VerticalAlignment="Center"
+                                               Margin="0,0,12,6"/>
+                                    <ComboBox x:Name="cboJunta" Grid.Row="0" Grid.Column="1" Margin="0,0,0,6"
+                                              MinHeight="32" VerticalContentAlignment="Center">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate><TextBlock Text="{Binding Rotulo}"/></DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
+                                    <Button x:Name="btnAtualizar" Grid.Row="0" Grid.Column="2"
+                                            Content="Atualizar lista" Margin="10,0,0,6"
+                                            Style="{DynamicResource BotaoFantasma}"/>
+
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Local"
+                                               Style="{DynamicResource Rotulo}" VerticalAlignment="Center"
+                                               Margin="0,0,12,0"/>
+                                    <ComboBox x:Name="cboLocal" Grid.Row="1" Grid.Column="1"
+                                              MinHeight="32" VerticalContentAlignment="Center">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate><TextBlock Text="{Binding Rotulo}"/></DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
+
+                                    <CheckBox x:Name="chkTodasJuntas" Grid.Row="2" Grid.Column="1"
+                                              Grid.ColumnSpan="2" Margin="0,10,0,0" Visibility="Collapsed"
+                                              Content="Incluir Juntas Especiais fora da rota (admin)"/>
+                                </Grid>
+                            </Border>
+
+                            <Border x:Name="cardDetalheLocal" Style="{DynamicResource Cartao}"
+                                    Padding="16,14" Margin="0,12,0,0" Visibility="Collapsed">
+                                <StackPanel>
+                                    <TextBlock Text="Local selecionado" Style="{DynamicResource SecaoTela}"
+                                               Margin="0,0,0,8"/>
+                                    <TextBlock x:Name="txtDetTipo" FontWeight="Bold"
+                                               Foreground="{DynamicResource Dicon.Accent}" FontFamily="Consolas"
+                                               FontSize="12"/>
+                                    <TextBlock x:Name="txtDetNome" FontWeight="Bold" Margin="0,2,0,0"
+                                               TextWrapping="Wrap" Foreground="{DynamicResource Dicon.Text}"/>
+                                    <TextBlock x:Name="txtDetZE" Margin="0,2,0,0" FontFamily="Consolas"
+                                               FontSize="11" Foreground="{DynamicResource Dicon.Text3}"/>
+                                    <TextBlock x:Name="txtDetEndereco" Margin="0,2,0,0" TextWrapping="Wrap"
+                                               Foreground="{DynamicResource Dicon.Text2}"/>
+                                    <TextBlock x:Name="txtDetInternet" Margin="0,2,0,0" FontFamily="Consolas"
+                                               FontSize="11" Foreground="{DynamicResource Dicon.Text3}"/>
+                                    <TextBlock x:Name="txtDetTestado" Margin="0,8,0,0" FontFamily="Consolas"
+                                               FontSize="11" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <!-- PASSO 3: rodar o diagnostico -->
+                    <Grid x:Name="stepDiag" Visibility="Collapsed">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
-
-                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Junta Especial"
-                                   Style="{DynamicResource Rotulo}" VerticalAlignment="Center"
-                                   Margin="0,0,12,6"/>
-                        <ComboBox x:Name="cboJunta" Grid.Row="0" Grid.Column="1" Margin="0,0,0,6"
-                                  MinHeight="32" VerticalContentAlignment="Center">
-                            <ComboBox.ItemTemplate>
-                                <DataTemplate><TextBlock Text="{Binding Rotulo}"/></DataTemplate>
-                            </ComboBox.ItemTemplate>
-                        </ComboBox>
-                        <Button x:Name="btnAtualizar" Grid.Row="0" Grid.Column="2" Content="Atualizar lista"
-                                Margin="10,0,0,6" Style="{DynamicResource BotaoFantasma}"/>
-
-                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Local"
-                                   Style="{DynamicResource Rotulo}" VerticalAlignment="Center"
-                                   Margin="0,0,12,0"/>
-                        <ComboBox x:Name="cboLocal" Grid.Row="1" Grid.Column="1"
-                                  MinHeight="32" VerticalContentAlignment="Center">
-                            <ComboBox.ItemTemplate>
-                                <DataTemplate><TextBlock Text="{Binding Rotulo}"/></DataTemplate>
-                            </ComboBox.ItemTemplate>
-                        </ComboBox>
-                        <Button x:Name="btnRodar" Grid.Row="1" Grid.Column="2" Content="Rodar diagn&#243;stico"
-                                Margin="10,0,0,0" Style="{DynamicResource BotaoPrimario}"/>
-
-                        <CheckBox x:Name="chkTodasJuntas" Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2"
-                                  Margin="0,10,0,0" Visibility="Collapsed"
-                                  Content="Incluir Juntas Especiais fora da rota (admin)"/>
-                    </Grid>
-                </Border>
-
-                <Grid Grid.Row="2" Margin="0,12,0,0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-                    <mah:ProgressRing x:Name="ringDiag" Grid.Column="0" Width="20" Height="20"
-                                      IsActive="False" Visibility="Collapsed"
-                                      Foreground="{DynamicResource Dicon.Accent}" Margin="0,0,10,0"/>
-                    <ProgressBar x:Name="prgProgresso" Grid.Column="1" Height="4" VerticalAlignment="Center"
-                                 Minimum="0" Maximum="100" IsIndeterminate="False"
-                                 Background="{DynamicResource Dicon.Hair}"
-                                 Foreground="{DynamicResource Dicon.Accent}" BorderThickness="0"/>
-                </Grid>
-
-                <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto" Margin="0,14,0,0"
-                              Padding="0,0,8,0">
-                    <StackPanel>
-                        <TextBlock Text="Resultado por m&#233;trica" Style="{DynamicResource SecaoTela}"
-                                   Margin="0,0,0,8"/>
-                        <DataGrid x:Name="dgAvaliacao" Style="{DynamicResource GridMetricas}"
-                                  MaxHeight="300" RowHeight="40"
-                                  CanUserResizeRows="False" HeadersVisibility="Column"
-                                  GridLinesVisibility="Horizontal"
-                                  VerticalScrollBarVisibility="Auto">
-                            <DataGrid.Columns>
-                                <DataGridTemplateColumn Header="" Width="6" CanUserResize="False" IsReadOnly="True">
-                                    <DataGridTemplateColumn.CellTemplate>
-                                        <DataTemplate>
-                                            <Border Background="{Binding CorFinal}" CornerRadius="2" Margin="0,3"/>
-                                        </DataTemplate>
-                                    </DataGridTemplateColumn.CellTemplate>
-                                </DataGridTemplateColumn>
-                                <DataGridTextColumn Header="M&#233;trica" Binding="{Binding Rotulo}"
-                                                    IsReadOnly="True" Width="130"/>
-                                <DataGridTextColumn Header="Valor medido" Binding="{Binding ValorTexto}"
-                                                    IsReadOnly="True" Width="110" FontFamily="Consolas"/>
-                                <DataGridTextColumn Header="Faixa aceit&#225;vel" Binding="{Binding Regra}"
-                                                    IsReadOnly="True" Width="250" FontFamily="Consolas"/>
-                                <DataGridTemplateColumn Header="Sugerida" Width="90" IsReadOnly="True">
-                                    <DataGridTemplateColumn.CellTemplate>
-                                        <DataTemplate>
-                                            <TextBlock Text="{Binding ClasseAutomatica}"
-                                                       Style="{DynamicResource ChipVeredito}"/>
-                                        </DataTemplate>
-                                    </DataGridTemplateColumn.CellTemplate>
-                                </DataGridTemplateColumn>
-                                <DataGridTemplateColumn Header="Classifica&#231;&#227;o" Width="150">
-                                    <DataGridTemplateColumn.CellTemplate>
-                                        <DataTemplate>
-                                            <ComboBox Margin="2" VerticalContentAlignment="Center"
-                                                      ItemsSource="{StaticResource classesMetrica}"
-                                                      SelectedItem="{Binding ClasseFinal, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
-                                        </DataTemplate>
-                                    </DataGridTemplateColumn.CellTemplate>
-                                </DataGridTemplateColumn>
-                                <DataGridTemplateColumn Header="Motivo do ajuste" Width="*">
-                                    <DataGridTemplateColumn.CellTemplate>
-                                        <DataTemplate>
-                                            <TextBox Margin="2" TextWrapping="Wrap" AcceptsReturn="True"
-                                                     VerticalContentAlignment="Center"
-                                                     Visibility="{Binding Ajustada, Converter={StaticResource boolVis}}"
-                                                     Text="{Binding Justificativa, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
-                                        </DataTemplate>
-                                    </DataGridTemplateColumn.CellTemplate>
-                                </DataGridTemplateColumn>
-                            </DataGrid.Columns>
-                        </DataGrid>
-
-                        <Expander Header="Detalhes da execu&#231;&#227;o" Margin="0,12,0,0"
-                                  Foreground="{DynamicResource Dicon.Text2}" IsExpanded="False">
+                        <StackPanel Grid.Row="0">
+                            <TextBlock x:Name="txtDiagLocal" TextWrapping="Wrap"
+                                       Foreground="{DynamicResource Dicon.Text2}"/>
+                            <Button x:Name="btnRodar" Content="Rodar diagn&#243;stico"
+                                    Style="{DynamicResource BotaoPrimario}" HorizontalAlignment="Left"
+                                    Margin="0,12,0,0"/>
+                        </StackPanel>
+                        <Grid Grid.Row="1" Margin="0,14,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <mah:ProgressRing x:Name="ringDiag" Grid.Column="0" Width="20" Height="20"
+                                              IsActive="False" Visibility="Collapsed"
+                                              Foreground="{DynamicResource Dicon.Accent}" Margin="0,0,10,0"/>
+                            <ProgressBar x:Name="prgProgresso" Grid.Column="1" Height="4"
+                                         VerticalAlignment="Center" Minimum="0" Maximum="100"
+                                         IsIndeterminate="False" BorderThickness="0"
+                                         Background="{DynamicResource Dicon.Hair}"
+                                         Foreground="{DynamicResource Dicon.Accent}"/>
+                        </Grid>
+                        <Expander Grid.Row="2" Header="Detalhes da execu&#231;&#227;o" Margin="0,14,0,0"
+                                  VerticalAlignment="Top" Foreground="{DynamicResource Dicon.Text2}"
+                                  IsExpanded="True">
                             <Border Background="{DynamicResource Dicon.SurfaceAlt}"
                                     BorderBrush="{DynamicResource Dicon.Hair}" BorderThickness="1"
-                                    CornerRadius="4" Margin="0,8,0,0" Height="200">
+                                    CornerRadius="4" Margin="0,8,0,0" Height="260">
                                 <ListBox x:Name="lstLog" Background="Transparent" BorderThickness="0"
                                          Foreground="{DynamicResource Dicon.Text2}" FontFamily="Consolas"
                                          FontSize="12"
@@ -502,49 +533,160 @@
                                 </ListBox>
                             </Border>
                         </Expander>
-                    </StackPanel>
-                </ScrollViewer>
-
-                <Border Grid.Row="4" Style="{DynamicResource Cartao}" Padding="16,12" Margin="0,14,0,0">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <Border x:Name="barraDecisaoStripe" Grid.Column="0" Width="4" CornerRadius="2"
-                                Background="{DynamicResource Dicon.Text3}" Margin="0,0,14,0"/>
-                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,20,0">
-                            <TextBlock Text="DECIS&#195;O FINAL" FontFamily="Consolas" FontSize="9"
-                                       Foreground="{DynamicResource Dicon.Text3}"/>
-                            <TextBlock x:Name="txtDecisaoPalavra" Text="&#8212;"
-                                       FontFamily="{DynamicResource Dicon.Display}" FontWeight="Bold"
-                                       FontSize="20" Foreground="{DynamicResource Dicon.Text}"/>
-                        </StackPanel>
-                        <ComboBox x:Name="cboDecisaoFinal" Grid.Column="2" Width="200" MinHeight="32"
-                                  VerticalContentAlignment="Center" VerticalAlignment="Center"
-                                  ItemsSource="{StaticResource classesDecisao}"/>
-                        <TextBlock x:Name="lblDecisaoRecalc" Grid.Column="3"
-                                   Foreground="{DynamicResource Dicon.Text3}" VerticalAlignment="Center"
-                                   Margin="14,0" FontFamily="Consolas" FontSize="11"/>
-                        <TextBlock x:Name="lblJustDecisao" Grid.Column="4" Text="Motivo do ajuste:"
-                                   Foreground="{DynamicResource Dicon.Text3}" VerticalAlignment="Center"
-                                   Margin="6,0,6,0" FontSize="12" Visibility="Collapsed"/>
-                        <TextBox x:Name="txtJustDecisao" Grid.Column="5" MinHeight="32"
-                                 VerticalContentAlignment="Center" VerticalAlignment="Center"
-                                 Visibility="Collapsed"/>
                     </Grid>
-                </Border>
 
-                <StackPanel Grid.Row="5" Orientation="Horizontal" Margin="0,14,0,0">
-                    <Button x:Name="btnSalvarResultado" Content="Salvar resultado"
-                            Style="{DynamicResource BotaoSucesso}" IsEnabled="False"/>
-                    <Button x:Name="btnDiagVoltar" Content="Voltar ao in&#237;cio" Margin="10,0,0,0"
+                    <!-- PASSO 4: resultado por metrica -->
+                    <ScrollViewer x:Name="stepResultado" Visibility="Collapsed"
+                                  VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">
+                        <StackPanel>
+                            <TextBlock Style="{DynamicResource SubtituloTela}" Margin="0,0,0,10"
+                                       Text="Ajuste a classifica&#231;&#227;o de uma m&#233;trica se necess&#225;rio &#8212; nesse caso, informe o motivo."/>
+                            <DataGrid x:Name="dgAvaliacao" Style="{DynamicResource GridMetricas}"
+                                      MaxHeight="340" RowHeight="40"
+                                      CanUserResizeRows="False" HeadersVisibility="Column"
+                                      GridLinesVisibility="Horizontal"
+                                      VerticalScrollBarVisibility="Auto">
+                                <DataGrid.Columns>
+                                    <DataGridTemplateColumn Header="" Width="6" CanUserResize="False" IsReadOnly="True">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <Border Background="{Binding CorFinal}" CornerRadius="2" Margin="0,3"/>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                    <DataGridTextColumn Header="M&#233;trica" Binding="{Binding Rotulo}"
+                                                        IsReadOnly="True" Width="130"/>
+                                    <DataGridTextColumn Header="Valor medido" Binding="{Binding ValorTexto}"
+                                                        IsReadOnly="True" Width="110" FontFamily="Consolas"/>
+                                    <DataGridTextColumn Header="Faixa aceit&#225;vel" Binding="{Binding Regra}"
+                                                        IsReadOnly="True" Width="250" FontFamily="Consolas"/>
+                                    <DataGridTemplateColumn Header="Sugerida" Width="90" IsReadOnly="True">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding ClasseAutomatica}"
+                                                           Style="{DynamicResource ChipVeredito}"/>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                    <DataGridTemplateColumn Header="Classifica&#231;&#227;o" Width="150">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <ComboBox Margin="2" VerticalContentAlignment="Center"
+                                                          ItemsSource="{StaticResource classesMetrica}"
+                                                          SelectedItem="{Binding ClasseFinal, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                    <DataGridTemplateColumn Header="Motivo do ajuste" Width="*">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <TextBox Margin="2" TextWrapping="Wrap" AcceptsReturn="True"
+                                                         VerticalContentAlignment="Center"
+                                                         Visibility="{Binding Ajustada, Converter={StaticResource boolVis}}"
+                                                         Text="{Binding Justificativa, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <!-- PASSO 5: decisao final -->
+                    <ScrollViewer x:Name="stepDecisao" Visibility="Collapsed"
+                                  VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">
+                        <StackPanel>
+                            <Border Style="{DynamicResource Cartao}" Padding="16,14">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Border x:Name="barraDecisaoStripe" Grid.Column="0" Width="4"
+                                            CornerRadius="2" Margin="0,0,14,0"
+                                            Background="{DynamicResource Dicon.Text3}"/>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,20,0">
+                                        <TextBlock Text="DECIS&#195;O FINAL" FontFamily="Consolas" FontSize="9"
+                                                   Foreground="{DynamicResource Dicon.Text3}"/>
+                                        <TextBlock x:Name="txtDecisaoPalavra" Text="&#8212;"
+                                                   FontFamily="{DynamicResource Dicon.Display}" FontWeight="Bold"
+                                                   FontSize="20" Foreground="{DynamicResource Dicon.Text}"/>
+                                    </StackPanel>
+                                    <ComboBox x:Name="cboDecisaoFinal" Grid.Column="2" Width="200" MinHeight="32"
+                                              VerticalContentAlignment="Center" VerticalAlignment="Center"
+                                              ItemsSource="{StaticResource classesDecisao}"/>
+                                    <TextBlock x:Name="lblDecisaoRecalc" Grid.Column="3"
+                                               Foreground="{DynamicResource Dicon.Text3}"
+                                               VerticalAlignment="Center" Margin="14,0" FontFamily="Consolas"
+                                               FontSize="11"/>
+                                    <TextBlock x:Name="lblJustDecisao" Grid.Column="4" Text="Motivo do ajuste:"
+                                               Foreground="{DynamicResource Dicon.Text3}"
+                                               VerticalAlignment="Center" Margin="6,0,6,0" FontSize="12"
+                                               Visibility="Collapsed"/>
+                                    <TextBox x:Name="txtJustDecisao" Grid.Column="5" MinHeight="32"
+                                             VerticalContentAlignment="Center" VerticalAlignment="Center"
+                                             Visibility="Collapsed"/>
+                                </Grid>
+                            </Border>
+                            <TextBlock Style="{DynamicResource SubtituloTela}" Margin="0,12,0,0"
+                                       Text="A decis&#227;o final vem do pior caso entre as m&#233;tricas. Voc&#234; pode sobrescrev&#234;-la aqui &#8212; nesse caso, informe o motivo."/>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <!-- PASSO 6: conclusao / exportar -->
+                    <ScrollViewer x:Name="stepFim" Visibility="Collapsed"
+                                  VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">
+                        <Border Style="{DynamicResource Cartao}" Padding="20,18">
+                            <StackPanel>
+                                <TextBlock Text="Diagn&#243;stico conclu&#237;do" Style="{DynamicResource SecaoTela}"/>
+                                <TextBlock x:Name="txtFimLocal" Margin="0,8,0,0" TextWrapping="Wrap"
+                                           Foreground="{DynamicResource Dicon.Text2}"/>
+                                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                                    <TextBlock Text="DECIS&#195;O FINAL" FontFamily="Consolas" FontSize="9"
+                                               VerticalAlignment="Center"
+                                               Foreground="{DynamicResource Dicon.Text3}"/>
+                                    <TextBlock x:Name="txtFimVeredito" Text="&#8212;" Margin="10,0,0,0"
+                                               FontFamily="{DynamicResource Dicon.Display}" FontWeight="Bold"
+                                               FontSize="20" Foreground="{DynamicResource Dicon.Text}"/>
+                                </StackPanel>
+                                <TextBlock Margin="0,12,0,0" TextWrapping="Wrap" FontSize="12"
+                                           Foreground="{DynamicResource Dicon.Text3}">O resultado &#233; salvo
+                                    neste notebook e enviado ao painel quando houver internet
+                                    ("Atualizar dados" / "Reenviar" na tela inicial).</TextBlock>
+                                <StackPanel Orientation="Horizontal" Margin="0,18,0,0">
+                                    <Button x:Name="btnSalvarResultado" Content="Salvar resultado"
+                                            Style="{DynamicResource BotaoSucesso}" IsEnabled="False"/>
+                                    <Button x:Name="btnExportarPdf" Content="Exportar relat&#243;rio (PDF)"
+                                            Style="{DynamicResource BotaoSecundario}" Margin="10,0,0,0"
+                                            IsEnabled="False"/>
+                                </StackPanel>
+                                <TextBlock x:Name="txtFimStatus" Margin="0,12,0,0" TextWrapping="Wrap"
+                                           FontSize="12" Foreground="{DynamicResource Dicon.Text2}"/>
+                            </StackPanel>
+                        </Border>
+                    </ScrollViewer>
+
+                </Grid>
+
+                <!-- rodape: navegacao do assistente -->
+                <Grid Grid.Row="2" Margin="0,14,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <Button x:Name="btnDiagVoltar" Grid.Column="0" Content="Sair do assistente"
                             Style="{DynamicResource BotaoFantasma}"/>
-                </StackPanel>
+                    <Button x:Name="btnWizVoltar" Grid.Column="2" Content="Voltar"
+                            Style="{DynamicResource BotaoSecundario}" Margin="0,0,10,0" IsEnabled="False"/>
+                    <Button x:Name="btnWizProximo" Grid.Column="3" Content="Pr&#243;ximo"
+                            Style="{DynamicResource BotaoPrimario}"/>
+                </Grid>
             </Grid>
 
             <!-- ===== ADMIN (LIMIARES) ===== -->

@@ -16,8 +16,19 @@ $Global:LimiarRows         = $null   # ObservableCollection[LimiarRow] da tela d
 $Global:NavegandoPrograma  = $false  # guarda: Show-View mexendo no rail sem disparar handler
 $Global:TemaCarregado      = $false  # MahApps + Application ja inicializados neste processo?
 $Global:MostrarTodasJuntas = $false  # admin: incluir Juntas fora da rota no seletor
+$Global:WizardStep         = 1       # passo atual do assistente de diagnostico (1..6)
 
 $Global:Views = @('viewLogin', 'viewHome', 'viewGuia', 'viewDiag', 'viewAdmin')
+
+$Global:WizardPassos  = @('stepInfo', 'stepJunta', 'stepDiag', 'stepResultado', 'stepDecisao', 'stepFim')
+$Global:WizardTitulos = @(
+    ('Informa' + [char]0x00E7 + [char]0x00E3 + 'o do teste')
+    'Junta Especial'
+    ('Diagn' + [char]0x00F3 + 'stico')
+    ('Resultado por m' + [char]0x00E9 + 'trica')
+    ('Decis' + [char]0x00E3 + 'o final')
+    ('Conclus' + [char]0x00E3 + 'o')
+)
 
 function Import-Xaml {
     param([string] $Caminho)
@@ -177,10 +188,14 @@ function New-JanelaPrincipal {
     $window.FindName('btnRodar').Add_Click({ Invoke-ExecucaoNaJanela })
     $window.FindName('btnAtualizar').Add_Click({ Invoke-AtualizarListaJuntas })
     $window.FindName('cboJunta').Add_SelectionChanged({ Update-ComboLocais })
+    $window.FindName('cboLocal').Add_SelectionChanged({ Update-DetalheLocal })
     $window.FindName('chkTodasJuntas').Add_Click({
             $Global:MostrarTodasJuntas = [bool] $Global:JanelaPrincipal.FindName('chkTodasJuntas').IsChecked
             Update-SeletorJuntas
         })
+    $window.FindName('btnWizVoltar').Add_Click({ Invoke-WizardVoltar })
+    $window.FindName('btnWizProximo').Add_Click({ Invoke-WizardProximo })
+    $window.FindName('btnExportarPdf').Add_Click({ Invoke-ExportarRelatorio })
     $window.FindName('btnDiagVoltar').Add_Click({ Show-View 'viewHome' })
     $window.FindName('btnSalvarResultado').Add_Click({ Invoke-SalvarResultado })
     $window.FindName('cboDecisaoFinal').Add_SelectionChanged({
@@ -455,9 +470,173 @@ function Show-GuiaBordo {
     Show-View 'viewGuia'
 }
 
-# Abre a tela de diagnostico "limpa": sem log, sem selecao, sem resultado.
-# Usada pelo menu Inicio. (Pelo guia de bordo usa-se Start-DiagnosticoDoGuia,
-# que pre-seleciona o local.)
+# ------------------------------------------------------------- ASSISTENTE (WIZARD)
+
+function Show-WizardPasso {
+    param([int] $N)
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    if ($N -lt 1) { $N = 1 }
+    if ($N -gt 6) { $N = 6 }
+    $Global:WizardStep = $N
+
+    for ($i = 0; $i -lt 6; $i++) {
+        $vis = if ($i -eq ($N - 1)) { 'Visible' } else { 'Collapsed' }
+        $w.FindName($Global:WizardPassos[$i]).Visibility = $vis
+    }
+    $w.FindName('txtWizTitulo').Text = $Global:WizardTitulos[$N - 1]
+    $w.FindName('txtWizPasso').Text  = 'Passo {0} de 6' -f $N
+    $w.FindName('prgWizard').Value   = $N
+
+    $w.FindName('btnWizVoltar').IsEnabled = ($N -gt 1)
+    $prox = $w.FindName('btnWizProximo')
+    $prox.Visibility = if ($N -lt 6) { 'Visible' } else { 'Collapsed' }
+    $prox.Content    = if ($N -eq 5) { 'Concluir' } else { 'Pr' + [char]0x00F3 + 'ximo' }
+
+    switch ($N) {
+        2 { Update-DetalheLocal }
+        3 {
+            $sel = $w.FindName('cboLocal').SelectedItem
+            $w.FindName('txtDiagLocal').Text = if ($sel) { 'Local: ' + $sel.Rotulo } else { 'Volte e selecione o local.' }
+            $w.FindName('btnRodar').IsEnabled = [bool] $sel
+        }
+        5 { Update-DecisaoRecalculada }
+        6 { Update-ResumoFim }
+    }
+}
+
+function Invoke-WizardVoltar {
+    if ($Global:WizardStep -gt 1) { Show-WizardPasso ($Global:WizardStep - 1) }
+}
+
+function Invoke-WizardProximo {
+    $w = $Global:JanelaPrincipal
+    switch ($Global:WizardStep) {
+        1 { Show-WizardPasso 2 }
+        2 {
+            if (-not $w.FindName('cboLocal').SelectedItem) {
+                Write-Log 'Selecione a Junta Especial e o Local para continuar.' -Nivel Aviso
+                return
+            }
+            Show-WizardPasso 3
+        }
+        3 {
+            if (-not $Global:DiagPayload) {
+                Write-Log 'Rode o diagnostico antes de avancar.' -Nivel Aviso
+                return
+            }
+            Show-WizardPasso 4
+        }
+        4 {
+            $falta = Get-JustificativasFaltando -MetricasApenas
+            if ($falta.Count) { Write-Log ('Justificativa obrigatoria em: {0}' -f ($falta -join ', ')) -Nivel Erro; return }
+            Show-WizardPasso 5
+        }
+        5 {
+            $falta = Get-JustificativasFaltando
+            if ($falta.Count) { Write-Log ('Justificativa obrigatoria em: {0}' -f ($falta -join ', ')) -Nivel Erro; return }
+            Show-WizardPasso 6
+        }
+    }
+}
+
+# Lista de itens sem justificativa obrigatoria (metricas ajustadas + decisao).
+function Get-JustificativasFaltando {
+    param([switch] $MetricasApenas)
+    $w = $Global:JanelaPrincipal
+    $falta = @()
+    foreach ($r in @($Global:AvaliacaoRows)) {
+        if (($r.ClasseFinal -ne $r.ClasseAutomatica) -and [string]::IsNullOrWhiteSpace($r.Justificativa)) {
+            $falta += $r.Rotulo
+        }
+    }
+    if (-not $MetricasApenas) {
+        $decFinal = [string] $w.FindName('cboDecisaoFinal').SelectedItem
+        $justDec  = [string] $w.FindName('txtJustDecisao').Text
+        if ($decFinal -and $decFinal -ne $Global:DecisaoRecalculada -and [string]::IsNullOrWhiteSpace($justDec)) {
+            $falta += 'Decisao final'
+        }
+    }
+    return @($falta)
+}
+
+# Preenche o cartao "Local selecionado" no passo 2.
+function Update-DetalheLocal {
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    $sel  = $w.FindName('cboLocal').SelectedItem
+    $card = $w.FindName('cardDetalheLocal')
+    if (-not $card) { return }
+    if (-not $sel) { $card.Visibility = 'Collapsed'; return }
+
+    $d = $sel.Dados
+    $w.FindName('txtDetTipo').Text     = if ($d.tipo -eq 'principal') { 'LOCAL PRINCIPAL' } else { 'LOCAL DE CONTINGENCIA' }
+    $w.FindName('txtDetNome').Text     = [string] $d.nome
+    $w.FindName('txtDetZE').Text       = 'ZE {0} - {1}  (sede: {2})' -f $d.zona_eleitoral, $d.municipio_termo, $d.municipio_sede
+    $w.FindName('txtDetEndereco').Text = [string] $d.endereco
+    $w.FindName('txtDetInternet').Text = 'Internet: ' + [string] $d.tipo_internet
+
+    $feitos = Get-DiagnosticosRealizados -TecnicoNome $Global:SessaoAtual.tecnico_nome
+    $t   = $feitos[[string] $d.id]
+    $lbl = $w.FindName('txtDetTestado')
+    if ($t) {
+        $lbl.Text       = 'Ja diagnosticado em {0:dd/MM/yyyy HH:mm} - {1}' -f $t.Quando, $t.ClassificacaoFinal
+        $lbl.Foreground = Get-PincelVeredito $t.ClassificacaoFinal
+    } else {
+        $cinza = [Windows.Media.SolidColorBrush]::new([Windows.Media.ColorConverter]::ConvertFromString('#7D8698'))
+        $cinza.Freeze()
+        $lbl.Text       = 'Ainda nao diagnosticado neste roteiro.'
+        $lbl.Foreground = $cinza
+    }
+    $card.Visibility = 'Visible'
+}
+
+# Preenche o passo 6 (conclusao).
+function Update-ResumoFim {
+    $w = $Global:JanelaPrincipal
+    $p = $Global:DiagPayload
+    if (-not $p) { return }
+    $dec = [string] $w.FindName('cboDecisaoFinal').SelectedItem
+    $w.FindName('txtFimLocal').Text = 'ZE {0} - {1} / {2} ({3})' -f `
+        $p.Local.zona_eleitoral, $p.Local.municipio_termo, $p.Local.nome, $p.Local.tipo
+    $ver = $w.FindName('txtFimVeredito')
+    $ver.Text       = Get-PalavraVeredito $dec
+    $ver.Foreground = Get-PincelVeredito $dec
+    $w.FindName('btnSalvarResultado').IsEnabled = $true
+    $w.FindName('btnExportarPdf').IsEnabled     = $true
+}
+
+function Invoke-ExportarRelatorio {
+    $w = $Global:JanelaPrincipal
+    if (-not $Global:DiagPayload -or -not $Global:AvaliacaoRows) {
+        Write-Log 'Rode o diagnostico antes de exportar o relatorio.' -Nivel Aviso
+        return
+    }
+    $btn = $w.FindName('btnExportarPdf'); $btn.IsEnabled = $false
+    $st  = $w.FindName('txtFimStatus');  $st.Text = 'Gerando relatorio...'
+    try {
+        $avaliacoes = @()
+        foreach ($r in @($Global:AvaliacaoRows)) {
+            $avaliacoes += @{ metrica = $r.Metrica; classe_final = $r.ClasseFinal; justificativa = [string] $r.Justificativa }
+        }
+        $decFinal = [string] $w.FindName('cboDecisaoFinal').SelectedItem
+        $justDec  = [string] $w.FindName('txtJustDecisao').Text
+        $p = $Global:DiagPayload
+        $res = New-ResultadoJson -Ambiente $p.Ambiente -Metricas $p.Metricas -Decisao $p.Decisao -Local $p.Local `
+            -Avaliacoes $avaliacoes -ClassificacaoFinal @{ final = $decFinal; justificativa = $justDec } `
+            -TecnicoNome ($Global:SessaoAtual.tecnico_nome)
+        $out = Export-RelatorioPdf -Resultado $res
+        $st.Text = "Relatorio salvo: $out"
+        try { Start-Process -FilePath $out } catch { }
+    } catch {
+        $st.Text = "Falha ao exportar: $_"
+        Write-Log "Falha ao exportar relatorio: $_" -Nivel Erro
+    } finally {
+        $btn.IsEnabled = $true
+    }
+}
+
+# Abre o assistente de diagnostico do zero (menu Inicio / rail).
 function Open-DiagnosticoLimpo {
     $w = $Global:JanelaPrincipal
     if (-not $w) { return }
@@ -467,34 +646,35 @@ function Open-DiagnosticoLimpo {
     $w.FindName('cboLocal').ItemsSource = @()
     Clear-PainelResultado
     Set-ProgressoDiag $false
-    $w.FindName('btnRodar').IsEnabled = $true
-
+    Show-WizardPasso 1
     Show-View 'viewDiag'
 }
 
+# Abre o assistente pelo atalho do guia de bordo: comeca no passo 1, mas ja
+# pre-seleciona a Junta/Local que o tecnico clicou.
 function Start-DiagnosticoDoGuia {
     param([string] $LocalId)
     $w = $Global:JanelaPrincipal
 
     $Global:LogEntries.Clear()
     Clear-PainelResultado
+    Set-ProgressoDiag $false
 
     $loc = @($Global:JuntasCache) | Where-Object { $_.id -eq $LocalId } | Select-Object -First 1
-    if (-not $loc) {
-        Write-Log "Local '$LocalId' nao esta no cache de juntas. Atualize os dados." -Nivel Erro
-        Show-View 'viewDiag'
-        return
+    if ($loc) {
+        $chave = '{0}|{1}' -f $loc.zona_eleitoral, $loc.municipio_termo
+        $cboJunta = $w.FindName('cboJunta')
+        $alvo = @($cboJunta.Items) | Where-Object { $_.Chave -eq $chave } | Select-Object -First 1
+        if ($alvo) { $cboJunta.SelectedItem = $alvo }   # dispara Update-ComboLocais
+
+        $cboLocal = $w.FindName('cboLocal')
+        $li = @($cboLocal.Items) | Where-Object { $_.Dados.id -eq $LocalId } | Select-Object -First 1
+        if ($li) { $cboLocal.SelectedItem = $li }
+    } else {
+        Write-Log "Local '$LocalId' nao esta no cache de juntas. Atualize os dados." -Nivel Aviso
     }
 
-    $chave = '{0}|{1}' -f $loc.zona_eleitoral, $loc.municipio_termo
-    $cboJunta = $w.FindName('cboJunta')
-    $alvo = @($cboJunta.Items) | Where-Object { $_.Chave -eq $chave } | Select-Object -First 1
-    if ($alvo) { $cboJunta.SelectedItem = $alvo }   # dispara Update-ComboLocais
-
-    $cboLocal = $w.FindName('cboLocal')
-    $li = @($cboLocal.Items) | Where-Object { $_.Dados.id -eq $LocalId } | Select-Object -First 1
-    if ($li) { $cboLocal.SelectedItem = $li }
-
+    Show-WizardPasso 1
     Show-View 'viewDiag'
 }
 
@@ -710,6 +890,9 @@ function Clear-PainelResultado {
     $w.FindName('txtJustDecisao').Text  = ''
     $w.FindName('lblDecisaoRecalc').Text = ''
     $w.FindName('btnSalvarResultado').IsEnabled = $false
+    $w.FindName('btnExportarPdf').IsEnabled = $false
+    $w.FindName('txtFimStatus').Text = ''
+    $w.FindName('cardDetalheLocal').Visibility = 'Collapsed'
     Update-VisibilidadeJustDecisao
 }
 
@@ -735,6 +918,7 @@ function Complete-Diagnostico {
         return
     }
     Show-PainelResultado -Payload $Payload
+    if ($Global:WizardStep -eq 3) { Show-WizardPasso 4 }
 }
 
 function Show-PainelResultado {
@@ -784,24 +968,19 @@ function Invoke-SalvarResultado {
         return
     }
 
-    $avaliacoes = @()
-    $faltando   = @()
-    foreach ($r in $Global:AvaliacaoRows) {
-        if (($r.ClasseFinal -ne $r.ClasseAutomatica) -and [string]::IsNullOrWhiteSpace($r.Justificativa)) {
-            $faltando += $r.Rotulo
-        }
-        $avaliacoes += @{ metrica = $r.Metrica; classe_final = $r.ClasseFinal; justificativa = [string] $r.Justificativa }
-    }
-
-    $decFinal  = [string] $w.FindName('cboDecisaoFinal').SelectedItem
-    $justDec   = [string] $w.FindName('txtJustDecisao').Text
-    $ajustada  = ($decFinal -and $decFinal -ne $Global:DecisaoRecalculada)
-    if ($ajustada -and [string]::IsNullOrWhiteSpace($justDec)) { $faltando += 'Decisao final' }
-
-    if ($faltando.Count) {
-        Write-Log ("Justificativa obrigatoria em: {0}" -f ($faltando -join ', ')) -Nivel Erro
+    $falta = Get-JustificativasFaltando
+    if ($falta.Count) {
+        Write-Log ("Justificativa obrigatoria em: {0}" -f ($falta -join ', ')) -Nivel Erro
+        $st = $w.FindName('txtFimStatus'); if ($st) { $st.Text = 'Falta justificar: ' + ($falta -join ', ') }
         return
     }
+
+    $avaliacoes = @()
+    foreach ($r in $Global:AvaliacaoRows) {
+        $avaliacoes += @{ metrica = $r.Metrica; classe_final = $r.ClasseFinal; justificativa = [string] $r.Justificativa }
+    }
+    $decFinal = [string] $w.FindName('cboDecisaoFinal').SelectedItem
+    $justDec  = [string] $w.FindName('txtJustDecisao').Text
 
     $w.FindName('btnSalvarResultado').IsEnabled = $false
     try {
@@ -811,6 +990,7 @@ function Invoke-SalvarResultado {
             -ClassificacaoFinal @{ final = $decFinal; justificativa = $justDec } `
             -TecnicoNome ($Global:SessaoAtual.tecnico_nome)
         Write-Log "Resultado salvo: $caminho" -Nivel Ok
+        $st = $w.FindName('txtFimStatus'); if ($st) { $st.Text = 'Resultado salvo. Sera enviado quando houver internet.' }
     } catch {
         Write-Log "Falha ao salvar: $_" -Nivel Erro
         $w.FindName('btnSalvarResultado').IsEnabled = $true

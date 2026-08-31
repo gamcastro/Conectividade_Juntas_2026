@@ -23,6 +23,7 @@ $ordem = @(
     'saida\Save-ResultadoLocal.ps1'
     'saida\Send-Resultado.ps1'
     'saida\Get-DiagnosticosRealizados.ps1'
+    'saida\Export-RelatorioPdf.ps1'
     'core\Fluxo.ps1'
     'ui\Janela-Principal.ps1'
 )

@@ -104,15 +104,32 @@ try {
     Write-Host "[3] Guia: $nTrechos trecho(s), $nJuntas grupo(s) de Junta"
     if ($nTrechos -lt 1 -or $nJuntas -lt 1) { Write-Host "    FALHA: guia sem conteudo"; $falhas++ }
 
-    # 4. diagnostico a partir do guia
+    # 4. assistente pelo atalho do guia: abre no passo 1, Junta/Local pre-selecionados
     Start-DiagnosticoDoGuia -LocalId 'ZE99-TESTE-PRINCIPAL'
-    if ($w.FindName('viewDiag').Visibility -ne 'Visible') { Write-Host "[4] FALHA: nao foi para o diagnostico"; $falhas++ }
-    $selJ = $w.FindName('cboJunta').SelectedItem
+    Invoke-Pump
+    if ($w.FindName('viewDiag').Visibility -ne 'Visible' -or $Global:WizardStep -ne 1) {
+        Write-Host "[4] FALHA: nao abriu o assistente no passo 1 (step=$($Global:WizardStep))"; $falhas++
+    }
     $selL = $w.FindName('cboLocal').SelectedItem
-    if (-not $selJ -or -not $selL) { Write-Host "[4] FALHA: combos nao pre-selecionados"; $falhas++ }
-    else { Write-Host "[4] Diagnostico pre-selecionado: $($selL.Rotulo)" }
+    if (-not $selL) { Write-Host "[4] FALHA: local nao pre-selecionado"; $falhas++ }
+    else { Write-Host "[4] Assistente passo 1, local pre-selecionado: $($selL.Rotulo)" }
 
-    # 5. roda a bateria -> painel de resultados
+    # 4b. passo 1 -> 2: cartao de detalhe do local aparece
+    Invoke-WizardProximo
+    if ($Global:WizardStep -ne 2) { Write-Host "[4b] FALHA: nao foi para o passo 2"; $falhas++ }
+    if ($w.FindName('cardDetalheLocal').Visibility -ne 'Visible') { Write-Host "[4b] FALHA: cartao de detalhe nao apareceu"; $falhas++ }
+    else { Write-Host "[4b] Passo 2: detalhe = '$($w.FindName('txtDetNome').Text)'" }
+
+    # 4c. passo 2 -> 3
+    Invoke-WizardProximo
+    if ($Global:WizardStep -ne 3) { Write-Host "[4c] FALHA: nao foi para o passo 3"; $falhas++ }
+
+    # 4d. passo 3 -> 4 bloqueia antes de rodar o diagnostico
+    Invoke-WizardProximo
+    if ($Global:WizardStep -ne 3) { Write-Host "[4d] FALHA: avancou sem rodar o diagnostico"; $falhas++ }
+    else { Write-Host "[4d] passo 3 bloqueia antes de rodar" }
+
+    # 5. roda a bateria -> auto-avanca para o passo 4
     Invoke-ExecucaoNaJanela
     $deadline = (Get-Date).AddSeconds($TimeoutS)
     $ok = $false
@@ -121,30 +138,36 @@ try {
         Start-Sleep -Milliseconds 150
         if ($null -ne $Global:DiagPayload -and $w.FindName('btnRodar').IsEnabled) { $ok = $true; break }
     }
+    Invoke-Pump
     $nLinhas = @($w.FindName('dgAvaliacao').ItemsSource).Count
     $decIni  = [string] $w.FindName('cboDecisaoFinal').SelectedItem
-    Write-Host "[5] Concluiu: $ok | painel: $nLinhas linhas | decisao: $decIni | log: $($Global:LogEntries.Count)"
+    Write-Host "[5] Concluiu: $ok | passo: $($Global:WizardStep) | painel: $nLinhas linhas | decisao: $decIni"
     if (-not $ok) { $falhas++ }
+    if ($Global:WizardStep -ne 4) { Write-Host "    FALHA: nao auto-avancou para o passo 4"; $falhas++ }
     if ($nLinhas -ne 6) { Write-Host "    FALHA: painel deveria ter 6 linhas"; $falhas++ }
     if ($decIni -notin @('viavel', 'viavel_com_ressalva', 'inviavel')) { Write-Host "    FALHA: decisao nao classificou"; $falhas++ }
 
-    # 5b. override de uma metrica deterministica (Download = sem medida -> inviavel)
+    # 5b. override de metrica + passo 4 -> 5 bloqueia sem justificativa
     $linha = @($Global:AvaliacaoRows) | Where-Object { $_.Rotulo -eq 'Download' } | Select-Object -First 1
     $linha.ClasseFinal = 'viavel'
     Invoke-Pump
-    if (-not $linha.Ajustada) { Write-Host "    FALHA: linha nao marcou Ajustada"; $falhas++ }
-    else { Write-Host "[5b] override Download -> viavel (Ajustada=$($linha.Ajustada))" }
-
-    # 5c. salvar sem justificativa deve bloquear
-    $antesJson = @(Get-ChildItem (Join-Path $Global:RaizApp 'resultados\pendentes') -Filter *.json -EA SilentlyContinue).Count
-    Invoke-SalvarResultado
+    Invoke-WizardProximo
     $ultimoLog = @($Global:LogEntries)[-1].Texto
-    $agoraJson = @(Get-ChildItem (Join-Path $Global:RaizApp 'resultados\pendentes') -Filter *.json -EA SilentlyContinue).Count
-    if ($ultimoLog -notmatch 'Justificativa obrigatoria' -or $agoraJson -ne $antesJson) { Write-Host "    FALHA: salvou sem justificativa"; $falhas++ }
-    else { Write-Host "[5c] salvar sem justificativa bloqueado" }
+    if ($Global:WizardStep -eq 4 -and $ultimoLog -match 'Justificativa obrigatoria') {
+        Write-Host "[5b] passo 4 bloqueia override sem justificativa"
+    } else { Write-Host "    FALHA: passo 4 avancou sem justificativa (step=$($Global:WizardStep))"; $falhas++ }
 
-    # 5d. com justificativa -> salva
+    # 5c. com justificativa -> passos 4 -> 5 -> 6
     $linha.Justificativa = 'Refiz o teste pelo celular e deu 25 Mbps.'
+    Invoke-Pump
+    Invoke-WizardProximo
+    if ($Global:WizardStep -ne 5) { Write-Host "    FALHA: nao foi para o passo 5"; $falhas++ }
+    Invoke-WizardProximo
+    if ($Global:WizardStep -ne 6) { Write-Host "    FALHA: nao foi para o passo 6"; $falhas++ }
+    else { Write-Host "[5c] passos 4->5->6 com justificativa" }
+
+    # 5d. passo 6: salva o resultado
+    $antesJson = @(Get-ChildItem (Join-Path $Global:RaizApp 'resultados\pendentes') -Filter *.json -EA SilentlyContinue).Count
     Invoke-SalvarResultado
     $novos = @(Get-ChildItem (Join-Path $Global:RaizApp 'resultados\pendentes') -Filter *.json -EA SilentlyContinue)
     if ($novos.Count -le $antesJson) { Write-Host "    FALHA: nao gravou o JSON"; $falhas++ }
@@ -155,6 +178,19 @@ try {
         Write-Host "[5d] salvo: tecnico='$($doc.tecnico.nome)' final='$($doc.classificacao.final)' ajustada='$($linhaAlt.metrica)'->'$($linhaAlt.classe_final)'"
         if (-not $okDoc) { Write-Host "    FALHA: JSON incompleto"; $falhas++ }
     }
+
+    # 5d-2. exporta o relatorio (PDF via navegador; HTML se nao houver)
+    $pp  = $Global:DiagPayload
+    $res = New-ResultadoJson -Ambiente $pp.Ambiente -Metricas $pp.Metricas -Decisao $pp.Decisao -Local $pp.Local `
+        -Avaliacoes @(@{ metrica = 'banda_download_mbps'; classe_final = 'viavel'; justificativa = 'teste' }) `
+        -ClassificacaoFinal @{ final = ([string] $w.FindName('cboDecisaoFinal').SelectedItem); justificativa = '' } `
+        -TecnicoNome 'TECNICO HEADLESS'
+    $rel = Export-RelatorioPdf -Resultado $res
+    if ($rel -and (Test-Path $rel)) {
+        Write-Host "[5d] relatorio gerado: $(Split-Path $rel -Leaf)"
+        Remove-Item $rel -Force -EA SilentlyContinue
+        Remove-Item ([IO.Path]::ChangeExtension($rel, '.html')) -Force -EA SilentlyContinue
+    } else { Write-Host "    FALHA: relatorio nao gerado"; $falhas++ }
 
     # 5e. acompanhamento: guia marca o local como testado; home mostra progresso
     Show-GuiaBordo
@@ -169,14 +205,14 @@ try {
     if ($prog.Testados -eq 1 -and $prog.Total -eq 2) { Write-Host "[5e] progresso do roteiro: $($prog.Testados)/$($prog.Total)" }
     else { Write-Host "    FALHA: progresso $($prog.Testados)/$($prog.Total) (esperado 1/2)"; $falhas++ }
 
-    # 6. menu Inicio -> Diagnostico deve abrir limpo (sem selecao, sem log, sem painel)
+    # 6. menu Inicio -> assistente abre limpo no passo 1
     Open-DiagnosticoLimpo
     $selLimpo    = $w.FindName('cboLocal').SelectedItem
     $painelLimpo = ($w.FindName('dgAvaliacao').Items.Count -eq 0) -and ($null -eq $Global:DiagPayload)
-    if ($selLimpo -or $Global:LogEntries.Count -ne 0 -or -not $painelLimpo) {
-        Write-Host "[6] FALHA: nao abriu limpo (sel=$([bool]$selLimpo) log=$($Global:LogEntries.Count) painel=$($w.FindName('dgAvaliacao').Items.Count) payload=$($null -ne $Global:DiagPayload))"
+    if ($selLimpo -or $Global:LogEntries.Count -ne 0 -or -not $painelLimpo -or $Global:WizardStep -ne 1) {
+        Write-Host "[6] FALHA: nao abriu limpo (sel=$([bool]$selLimpo) log=$($Global:LogEntries.Count) painel=$($w.FindName('dgAvaliacao').Items.Count) payload=$($null -ne $Global:DiagPayload) step=$($Global:WizardStep))"
         $falhas++
-    } else { Write-Host "[6] Diagnostico pelo menu abre limpo" }
+    } else { Write-Host "[6] Assistente pelo menu abre limpo no passo 1" }
 
     # 7. trocar usuario
     Invoke-TrocarUsuario
@@ -205,6 +241,8 @@ finally {
     Get-ChildItem $pendDir -Filter *.json -EA SilentlyContinue |
         Where-Object { $_.FullName -notin $pendAntes } |
         Remove-Item -Force -EA SilentlyContinue
+    Get-ChildItem (Join-Path $Global:RaizApp 'relatorios') -Filter '*.*' -EA SilentlyContinue |
+        Where-Object { $_.Name -ne '.gitkeep' } | Remove-Item -Force -EA SilentlyContinue
 }
 
 Write-Host ""

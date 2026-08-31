@@ -49,6 +49,18 @@ Script), em vez de criar um BI/dashboard separado.
   partir de uma pasta única (executável + dependências), sem instalar nada
   extra no notebook de campo
 
+## Assistente de diagnóstico (GUI)
+A tela de Diagnóstico é um **assistente de 6 passos** (`viewDiag` com os painéis
+`stepInfo/stepJunta/stepDiag/stepResultado/stepDecisao/stepFim` alternados por
+`Visibility`; estado em `$Global:WizardStep`, navegação por `Show-WizardPasso` /
+`Invoke-WizardProximo` / `Invoke-WizardVoltar`, com gates de justificativa):
+1. informação do teste → 2. Junta/Local (com cartão de detalhe) → 3. rodar a
+bateria (auto-avança ao concluir) → 4. resultado por métrica → 5. decisão final
+→ 6. conclusão: **Salvar resultado** + **Exportar relatório (PDF)**.
+O relatório (`src/saida/Export-RelatorioPdf.ps1`) monta um HTML no padrão TRE-MA
+e converte com o Edge/Chrome headless (`--print-to-pdf`); sem navegador, salva o
+HTML. Saída em `relatorios/` (gitignored).
+
 ## Envio de resultados
 - **Modo `offline-first`** (`config/envio.json`): "Salvar resultado" grava em
   `resultados/pendentes/`; o envio ao Web App acontece depois — no botão

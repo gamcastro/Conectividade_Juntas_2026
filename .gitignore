@@ -1,6 +1,7 @@
 # Resultados de execução (gerados em campo)
 /resultados/pendentes/*
 /resultados/enviados/*
+/relatorios/*
 /logs/*
 
 # Cache local da lista de Juntas (baixado do Web App)
