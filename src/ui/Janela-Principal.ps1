@@ -1212,9 +1212,10 @@ function Complete-ProbeRedeLocal {
 # Geometria: centro (140,140), raio 110, arco de -135 a +135 graus (270). Escala
 # logaritmica ate 1000 Mbps (compressao estilo Ookla).
 $Global:VeloMaxMbps = 1000.0
-$Global:VeloTick    = 0      # throttle do velocimetro do passo 3 (speedtest)
-$Global:VeloTickVpn = 0      # throttle do velocimetro do passo 4 (iperf3)
-$Global:VeloTicks   = @(0, 10, 50, 100, 250, 500, 1000)
+$Global:VeloTick     = 0     # throttle do velocimetro do passo 3 (speedtest)
+$Global:VeloTickVpn  = 0     # throttle do velocimetro do passo 4 (iperf3)
+$Global:VeloTicks    = @(0, 10, 50, 100, 250, 500, 1000)
+$Global:VeloEmaSpeed = 0     # media exponencial p/ suavizar a "rajada" inicial do speedtest
 
 function Get-PontoArco {
     param([double] $Cx, [double] $Cy, [double] $R, [double] $AngGraus)
@@ -1251,7 +1252,7 @@ function Reset-Velocimetro {
     param([string] $Suf = '')
     $w = $Global:JanelaPrincipal
     if (-not $w) { return }
-    if ($Suf -eq 'Vpn') { $Global:VeloTickVpn = 0 } else { $Global:VeloTick = 0 }
+    if ($Suf -eq 'Vpn') { $Global:VeloTickVpn = 0 } else { $Global:VeloTick = 0; $Global:VeloEmaSpeed = 0 }
     $rot = $w.FindName('rotAgulha' + $Suf)
     $rot.BeginAnimation([Windows.Media.RotateTransform]::AngleProperty, $null)
     $rot.Angle = -135
@@ -1307,6 +1308,24 @@ function Set-VelocimetroValor {
     if ($Fase) { $w.FindName('txtVeloFase' + $Suf).Text = $Fase }
 }
 
+# Velocimetro do speedtest (passo 3) durante download/upload, com anti-"rajada":
+# - ignora os primeiros ~6% de cada fase (as 1as amostras do Ookla sao infladas
+#   - a media acumulada num intervalo minusculo);
+# - depois, media exponencial (EMA) a partir de 0 -> a agulha sobe suave em vez
+#   de saltar pro fim e voltar. O valor final (evento 'result') encaixa exato.
+function Set-VelocimetroSuave {
+    param([double] $Amostra, [double] $Progresso, [string] $Fase)
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    if ($Progresso -lt 0.06) {
+        $Global:VeloEmaSpeed = 0
+        Set-VelocimetroValor -Valor 0 -Unidade 'Mbps' -Fase ($Fase + ' - aquecendo...')
+        return
+    }
+    $Global:VeloEmaSpeed = $Global:VeloEmaSpeed + 0.35 * ($Amostra - $Global:VeloEmaSpeed)
+    Set-VelocimetroValor -Valor $Global:VeloEmaSpeed -Unidade 'Mbps' -Fase $Fase
+}
+
 function Set-ProgressoSpeed {
     param([double] $Frac, [string] $Suf = '')
     $w = $Global:JanelaPrincipal
@@ -1341,12 +1360,14 @@ function Update-Speedtest {
             if ($desenha) { Set-VelocimetroValor -Valor ([double] $Evento.ping.latency) -Unidade 'ms' -Fase 'Ping' -Linear 60 }
         }
         'download' {
-            Set-ProgressoSpeed (0.10 + 0.50 * [double] $Evento.download.progress)
-            if ($desenha) { Set-VelocimetroValor -Valor (ConvertTo-MbpsGui $Evento.download.bandwidth) -Unidade 'Mbps' -Fase 'Download' }
+            $prog = [double] $Evento.download.progress
+            Set-ProgressoSpeed (0.10 + 0.50 * $prog)
+            if ($desenha) { Set-VelocimetroSuave (ConvertTo-MbpsGui $Evento.download.bandwidth) $prog 'Download' }
         }
         'upload' {
-            Set-ProgressoSpeed (0.60 + 0.40 * [double] $Evento.upload.progress)
-            if ($desenha) { Set-VelocimetroValor -Valor (ConvertTo-MbpsGui $Evento.upload.bandwidth) -Unidade 'Mbps' -Fase 'Upload' }
+            $prog = [double] $Evento.upload.progress
+            Set-ProgressoSpeed (0.60 + 0.40 * $prog)
+            if ($desenha) { Set-VelocimetroSuave (ConvertTo-MbpsGui $Evento.upload.bandwidth) $prog 'Upload' }
         }
         'result' {
             Set-ProgressoSpeed 1.0
