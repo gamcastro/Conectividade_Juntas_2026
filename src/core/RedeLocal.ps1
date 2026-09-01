@@ -184,6 +184,8 @@ function Get-AdaptadorWireless {
     $o = [pscustomobject]@{
         presente = $false; nome = ''; status = ''; conectado = $false
         ssid = ''; sinal_pct = $null; redes_disponiveis = @()
+        ipv4 = ''; prefixo = $null; mascara = ''; gateway = ''; dns = @()
+        mac = ''; velocidade_mbps = $null
     }
 
     $wa = $null
@@ -216,6 +218,27 @@ function Get-AdaptadorWireless {
     # 'conectado': placa Up com um SSID (abrir a ferramenta ja conectado conta),
     # ou o estado textual do netsh dizendo conectado.
     $o.conectado = ($o.ssid -ne '') -and (($wa.Status -eq 'Up') -or ($o.status -match 'conect|connected'))
+
+    $o.mac = [string] $wa.MacAddress
+    try { if ($wa.Speed -gt 0) { $o.velocidade_mbps = [math]::Round($wa.Speed / 1000000) } } catch { }
+    # IP IPv4 do Wi-Fi (o IP que o computador recebeu vai no relatorio).
+    try {
+        $ip = Get-NetIPAddress -InterfaceIndex $wa.ifIndex -AddressFamily IPv4 -ErrorAction Stop |
+            Where-Object { $_.IPAddress -notmatch '^169\.254\.' -and $_.IPAddress -ne '127.0.0.1' } |
+            Select-Object -First 1
+        if ($ip) {
+            $o.ipv4    = [string] $ip.IPAddress
+            $o.prefixo = [int] $ip.PrefixLength
+            $o.mascara = ConvertTo-MascaraIpv4 ([int] $ip.PrefixLength)
+        }
+    } catch { }
+    try {
+        $o.gateway = [string] ((Get-NetRoute -InterfaceIndex $wa.ifIndex -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue |
+                    Sort-Object RouteMetric | Select-Object -First 1).NextHop)
+    } catch { }
+    try {
+        $o.dns = @((Get-DnsClientServerAddress -InterfaceIndex $wa.ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue).ServerAddresses)
+    } catch { }
 
     try {
         # dois modos: alguns drivers so listam a rede associada em 'show networks'
@@ -329,16 +352,11 @@ function Test-InternetLocal {
         return [pscustomobject] $r
     }
 
+    # Sem flag de versao de IP: o Ookla CLI 1.x nao aceita (--ip-version / -4 dao
+    # "Unrecognized option"). O IPv4 e resolvido na exibicao (IP local da placa).
     $argv = '--format=jsonl --progress=yes --accept-license --accept-gdpr'
     if ($cfg.speedtest_server_id) { $argv += ' --server-id={0}' -f $cfg.speedtest_server_id }
-    # IP publico em IPv4 (o relatorio mostra o IP; sem isto o Ookla devolve o
-    # IPv6 quando a rede tem os dois). Se o tecnico ja forcou uma versao nos
-    # extra_args, respeita a dele.
-    $extra = [string] $cfg.speedtest_extra_args
-    if ($extra -notmatch '(?i)(--ip-version|(^|\s)-4($|\s)|(^|\s)-6($|\s))') {
-        $argv += ' --ip-version=4'
-    }
-    if ($extra) { $argv += ' ' + $extra }
+    if ($cfg.speedtest_extra_args) { $argv += ' ' + [string] $cfg.speedtest_extra_args }
     Write-Log ("Speedtest (Ookla): {0} {1}" -f $exe, $argv) -Nivel Destaque
 
     $saida = Invoke-SpeedtestStreaming -Caminho $exe -Argumentos $argv -TimeoutS 120

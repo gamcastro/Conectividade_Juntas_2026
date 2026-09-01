@@ -76,25 +76,33 @@ function New-ResultadoJson {
         $lan = Get-Prop $FaseLocal 'Lan'
         $wf  = Get-Prop $FaseLocal 'Wireless'
         $it  = Get-Prop $FaseLocal 'Internet'
+        # placa efetivamente usada: os campos ip/mascara/gateway/dns/mac saem
+        # dela (LAN ou Wi-Fi).
+        $tipoUsado = [string] (Get-Prop $FaseLocal 'TipoUsado')
+        $ativa = if ($tipoUsado -eq 'wifi') { $wf }
+                 elseif ($tipoUsado -eq 'lan') { $lan }
+                 elseif ([string] (Get-Prop $lan 'ipv4')) { $lan }
+                 else { $wf }
         $redeLocal = [pscustomobject]@{
             coletado_em            = (Get-Prop $FaseLocal 'Quando')
             host                   = [string] (Get-Prop $FaseLocal 'Host')
-            placa_usada            = [string] (Get-Prop $FaseLocal 'TipoUsado')
+            placa_usada            = $tipoUsado
             lan_conectada          = [bool] (Get-Prop $lan 'conectado')
             lan_adaptador          = [string] (Get-Prop $lan 'nome')
             lan_descricao          = [string] (Get-Prop $lan 'descricao')
             tethering_celular      = [bool] $Tethering
             operadora              = [string] $Operadora
-            ip_local               = [string] (Get-Prop $lan 'ipv4')
-            mascara                = [string] (Get-Prop $lan 'mascara')
-            gateway                = [string] (Get-Prop $lan 'gateway')
-            dns                    = @(Get-Prop $lan 'dns')
-            mac                    = [string] (Get-Prop $lan 'mac')
-            velocidade_mbps        = (Get-Prop $lan 'velocidade_mbps')
+            ip_local               = [string] (Get-Prop $ativa 'ipv4')
+            mascara                = [string] (Get-Prop $ativa 'mascara')
+            gateway                = [string] (Get-Prop $ativa 'gateway')
+            dns                    = @(Get-Prop $ativa 'dns')
+            mac                    = [string] (Get-Prop $ativa 'mac')
+            velocidade_mbps        = (Get-Prop $ativa 'velocidade_mbps')
             wireless_presente      = [bool] (Get-Prop $wf 'presente')
             wireless_conectado     = [bool] (Get-Prop $wf 'conectado')
             wireless_ssid          = [string] (Get-Prop $wf 'ssid')
             wireless_sinal_pct     = (Get-Prop $wf 'sinal_pct')
+            wireless_ip_local      = [string] (Get-Prop $wf 'ipv4')
             wireless_redes         = @(Get-Prop $wf 'redes_disponiveis')
             speedtest_ok           = [bool] (Get-Prop $it 'speedtest_ok')
             speedtest_erro         = [string] (Get-Prop $it 'speedtest_erro')

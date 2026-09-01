@@ -903,7 +903,6 @@ function Update-PainelFaseLocal {
     $cinza    = [Windows.Media.SolidColorBrush]::new([Windows.Media.ColorConverter]::ConvertFromString('#7D8698'))
     $cinza.Freeze()
 
-    $temWifi = if ($p) { [bool] $p.Wireless.presente } else { Test-TemPlacaWireless }
     $cardWifi = $w.FindName('cardConectarWifi')
 
     if (-not $p) {
@@ -956,6 +955,10 @@ function Update-PainelFaseLocal {
         $tw.Text = 'Sem placa Wi-Fi neste computador'
         $tw.Foreground = $cinza ; $dw.Fill = $cinza
     }
+    Set-LinhaDetalhe $w.FindName('txtLocWifiIp')   'IP na rede local' ([string] $wf.ipv4)
+    Set-LinhaDetalhe $w.FindName('txtLocWifiGw')   'Gateway'          ([string] $wf.gateway)
+    Set-LinhaDetalhe $w.FindName('txtLocWifiMask') 'Mascara'          ([string] $wf.mascara)
+    Set-LinhaDetalhe $w.FindName('txtLocWifiMac')  'MAC'              ([string] $wf.mac)
     $twd = $w.FindName('txtLocWifiDet')
     if ($twd) {
         $twd.Text = if ($wifiUp) {
@@ -1243,7 +1246,7 @@ function Update-Speedtest {
             $srv = $Evento.server
             $ext = if ($Evento.PSObject.Properties['interface'] -and $Evento.interface) { [string] $Evento.interface.externalIp } else { '' }
             $w.FindName('txtSpeedInfo').Text = ('{0}   -   servidor: {1} ({2})   -   IP {3}' -f `
-                    $Evento.isp, $srv.name, $srv.location, $ext)
+                    $Evento.isp, $srv.name, $srv.location, (Get-IpExibicao $ext))
             $w.FindName('txtVeloFase').Text = 'conectando...'
         }
         'ping' {
@@ -1289,6 +1292,25 @@ function ConvertTo-MbpsGui {
     [math]::Round(([double] $BandwidthBytesSeg) * 8 / 1e6, 2)
 }
 
+# IP a exibir no card do speedtest: prioriza IPv4. O Ookla pode devolver o IPv6
+# como "IP externo"; nesse caso mostra o IPv4 local da placa usada.
+function Get-IpExibicao {
+    param([string] $IpExterno)
+    if ($IpExterno -match '^\d{1,3}(\.\d{1,3}){3}$') { return $IpExterno }   # IPv4 publico: usa
+    $p = $Global:FaseLocalPayload
+    $loc = ''
+    if ($p) {
+        $t = [string] $Global:FaseLocalTipo
+        $loc = if ($t -eq 'lan') { [string] $p.Lan.ipv4 }
+               elseif ($t -eq 'wifi') { [string] $p.Wireless.ipv4 }
+               elseif ([string] $p.Lan.ipv4) { [string] $p.Lan.ipv4 }
+               else { [string] $p.Wireless.ipv4 }
+    }
+    if ($loc) { return "$loc (local)" }
+    if ($IpExterno) { return $IpExterno }
+    return ''
+}
+
 # Preenche o painel de resultado do speedtest a partir do payload achatado.
 function Update-SpeedtestPainel {
     param($It)
@@ -1309,7 +1331,7 @@ function Update-SpeedtestPainel {
     $srv = [string] (& $g 'servidor_nome')
     $loc = [string] (& $g 'servidor_local')
     $w.FindName('txtResServidor').Text = 'Servidor: ' + $srv + $(if ($loc) { " - $loc" } else { '' })
-    $w.FindName('txtResIp').Text = 'IP externo: ' + [string] (& $g 'ip_externo')
+    $w.FindName('txtResIp').Text = 'IP: ' + (Get-IpExibicao ([string] (& $g 'ip_externo')))
     $url = [string] (& $g 'resultado_url')
     $tl = $w.FindName('txtResLink')
     $tl.Text = if ($url) { 'Resultado Ookla: ' + $url } else { '' }
@@ -1432,7 +1454,16 @@ function Complete-FaseLocal {
     }
     $Global:FaseLocalPayload = $Payload
     Update-PainelFaseLocal
-    Write-Log 'Rede local checada. Conecte a VPN do TRE e clique em Proximo.' -Nivel Ok
+
+    $it = if ($Payload) { $Payload.Internet } else { $null }
+    if ($it -and $it.speedtest_ok) {
+        Write-Log 'Rede local checada. Conecte a VPN do TRE e clique em Proximo.' -Nivel Ok
+    } elseif ($it -and $it.speedtest_erro) {
+        Write-Log ("Speedtest nao concluiu: {0}" -f $it.speedtest_erro) -Nivel Erro
+        Write-Log 'Voce ainda pode avancar - a falha vai no relatorio.' -Nivel Aviso
+    } else {
+        Write-Log 'Checagem da rede local sem resultado de velocidade.' -Nivel Aviso
+    }
 }
 
 function Invoke-ConectarWifi {
