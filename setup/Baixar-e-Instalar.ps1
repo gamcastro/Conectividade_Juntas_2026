@@ -80,13 +80,15 @@ if ($SemSetup) {
 $setup = Join-Path $Dest 'setup\Instalar-DICON.ps1'
 if (-not (Test-Path $setup)) { throw "Nao encontrei $setup" }
 
-$p = @{}
-if ($Endpoint)      { $p['Endpoint']      = $Endpoint }
-if ($Pin)           { $p['Pin']           = $Pin }
-if ($IperfServidor) { $p['IperfServidor'] = $IperfServidor }
-if ($DepsZip)       { $p['DepsZip']       = $DepsZip }
+# Chama o setup como processo filho, igual ao passo a passo do LEIA-ME
+# (-ExecutionPolicy Bypass), herdando o console para as perguntas do Read-Host.
+$psArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $setup)
+if ($Endpoint)      { $psArgs += @('-Endpoint', $Endpoint) }
+if ($Pin)           { $psArgs += @('-Pin', $Pin) }
+if ($IperfServidor) { $psArgs += @('-IperfServidor', $IperfServidor) }
+if ($DepsZip)       { $psArgs += @('-DepsZip', $DepsZip) }
 
 Write-Host ''
 Write-Host "Rodando o setup..." -ForegroundColor Cyan
 Set-Location $Dest
-& $setup @p
+& powershell.exe @psArgs
