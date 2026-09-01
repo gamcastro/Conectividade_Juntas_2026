@@ -10,21 +10,26 @@ setup cria a partir dos `*.exemplo.json`.
 
 ## Atalho: baixar + instalar num comando (com internet)
 
-No PowerShell (janela normal, com internet), instala em `C:\DICON`:
+No PowerShell (janela normal, com internet). Instala em `C:\DICON`, garante o
+`speedtest.exe` (baixa + desbloqueia) e roda o setup. Se já houver DICON na
+pasta, ele **atualiza** o código em vez de reinstalar.
 
 ```
 iex (irm 'https://raw.githubusercontent.com/gamcastro/Conectividade_Juntas_2026/homologacao/setup/Baixar-e-Instalar.ps1')
 ```
 
-Outra pasta: `$env:DICON_DEST = 'D:\DICON'` antes do comando. Com parametros
-(endpoint, PIN):
+Opções — definir **antes** do comando (todas opcionais):
 
 ```
-& ([scriptblock]::Create((irm 'https://raw.githubusercontent.com/gamcastro/Conectividade_Juntas_2026/homologacao/setup/Baixar-e-Instalar.ps1'))) -Endpoint 'https://.../exec' -Pin 1234
+$env:DICON_DEST     = 'D:\DICON'          # padrão: C:\DICON
+$env:DICON_ENDPOINT = 'https://.../exec'  # URL /exec do Web App (pula a pergunta)
+$env:DICON_PIN      = '1234'              # PIN do admin (pula a pergunta)
+$env:DICON_IPERF    = '10.11.9.20'        # servidor iperf3
+$env:DICON_DEPSZIP  = 'D:\pen\DICON-deps.zip'
 ```
 
-O resto (perguntas do setup, binários, primeira abertura) é igual ao passo a
-passo abaixo.
+O resto (perguntas do setup, demais binários, primeira abertura) é igual ao
+passo a passo abaixo.
 
 ---
 
