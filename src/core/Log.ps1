@@ -53,9 +53,15 @@ function Write-Log {
         & $aplicar
         # Operacoes sincronas na thread de UI (sync, reenvio) travam o redesenho
         # ate terminarem. Um flush aqui faz o feed "ATIVIDADE" atualizar ao vivo.
+        # PRIORIDADE: tem de ser MAIOR que Input (5) - Background (4) fica abaixo
+        # de Input, entao esse Invoke() virava um pump aninhado que processava
+        # eventos de Input pendentes (ex.: um duplo-clique em "Entrar"),
+        # reentrando no MESMO handler no meio da execucao dele (Enter-Sessao
+        # rodando duas vezes empilhado) -> estado inconsistente / "o fluxo nao
+        # era legivel". Render (7) forca o redesenho sem drenar Input.
         if ($dispatcher -and -not $Global:ModoTeste) {
             try {
-                $dispatcher.Invoke([action] { }, [Windows.Threading.DispatcherPriority]::Background)
+                $dispatcher.Invoke([action] { }, [Windows.Threading.DispatcherPriority]::Render)
             } catch { }
         }
     }

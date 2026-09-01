@@ -19,6 +19,7 @@ $Global:MostrarTodasJuntas = $false  # admin: incluir Juntas fora da rota no sel
 $Global:WizardStep         = 1       # passo atual do assistente de diagnostico (1..7)
 $Global:HomeTrabalhoState  = $null   # runspace do "Atualizar dados"/"Reenviar" async
 $Global:TarefaRedeState    = $null   # runspace da fase local / conexao Wi-Fi
+$Global:LoginEmAndamento   = $false   # trava reentrancia de Enter-Sessao (duplo-clique em "Entrar")
 $Global:FaseLocalPayload   = $null   # {Lan;Wireless;Internet;Quando} da fase 1 (sem VPN)
 $Global:FaseLocalTipo      = ''      # placa escolhida no passo 3: '' | 'lan' | 'wifi'
 $Global:FeitoSalvar        = $false  # checklist do passo 7
@@ -374,6 +375,12 @@ function Invoke-BaixarListaLogin {
 }
 
 function Enter-Sessao {
+    if ($Global:LoginEmAndamento) { return }   # ignora duplo-clique em "Entrar"
+    $Global:LoginEmAndamento = $true
+    try { Enter-SessaoInterno } finally { $Global:LoginEmAndamento = $false }
+}
+
+function Enter-SessaoInterno {
     $w = $Global:JanelaPrincipal
     $t = $w.FindName('cboTecnico').SelectedItem
     if (-not $t) { $w.FindName('txtLoginMsg').Text = 'Selecione seu nome.'; return }
