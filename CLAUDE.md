@@ -75,14 +75,28 @@ A tela de Diagnóstico é um **assistente de 7 passos** (`viewDiag` com os pain�
 alternados por `Visibility`; estado em `$Global:WizardStep`, navegação por
 `Show-WizardPasso` / `Invoke-WizardProximo` / `Invoke-WizardVoltar`, com gates de
 justificativa):
+**Multi-meio (hub-and-spoke):** um Local pode ser medido por até 3 **meios** de
+conexão — `lan` (rede cabeada), `wifi_local` (Wi-Fi do próprio local),
+`celular` (Wi-Fi roteada de celular, com operadora). Cada meio gera uma
+**medição** (Fase 1 Ookla + Fase 2 VPN) em `$Global:Medicoes`; meios que não
+servem ao Local são marcados **"não aplicável" + motivo** (`$Global:MeiosNaoAplicaveis`).
+Ao fim, o motor `Get-ConexaoRecomendada` (`src/decisao/Invoke-MotorDecisao.ps1`)
+**recomenda o meio**: candidato = fechou Rede Local + VPN + Fase 2, escolhido por
+melhor veredito e, no empate, maior download pela VPN; se ninguém fechou a VPN,
+recomenda o de maior download na Rede Local, marcado **provisório** e Local
+inviável; nada → "nenhuma". O **veredito final do Local = veredito do meio
+recomendado** (salvo override manual do técnico no combo da decisão final).
+
 1. informação do teste → 2. Junta/Local (com cartão de detalhe) →
-3. **rede local, SEM a VPN**: ao entrar, `Invoke-ProbeRedeLocal`
-(`Invoke-FaseLocal -SemInternet`, async) inventaria as placas com indicador
-verde/vermelho de LAN e Wi-Fi; "Rodar checagem local" (`Invoke-RodarFaseLocal` →
-`Complete-FaseLocal`) só habilita se houver conexão (cabo ou Wi-Fi) e faz o
-teste de internet (ping/DNS/download) num painel próprio; "teste pelo celular"
-(tethering + operadora) só habilita quando NÃO há cabo e existe placa Wi-Fi;
-trocar de Local / voltar ao passo 2 zera a checagem
+3. **rede local, SEM a VPN** — *painel de meios*: `Invoke-ProbeRedeLocal`
+(`Invoke-FaseLocal -SemInternet`, async) inventaria as placas; três cards
+(`cardLan`/`cardWifiPlaca`/`cardCelular`) com badge por meio (NÃO TESTADO /
+TESTADO: <veredito> / NÃO APLICÁVEL), rádio de escolha (`rbUsarLan`/`rbUsarWifi`/
+`rbUsarCelular`) e checkbox "não aplicável" + `txtMotivoNaMeio` (obrigatório).
+"Rodar checagem local" (`Invoke-RodarFaseLocal` → `Complete-FaseLocal`) só
+habilita com conexão e faz o teste de internet (ping/DNS/download Ookla);
+celular exige operadora (`cboOperadoraCel`). Trocar de Local zera todas as
+medições (`Reset-Medicoes`)
 → 4. rodar a bateria **com a VPN**: `Update-EstadoVpn` (via `Test-VpnAtiva`)
 bloqueia "Rodar diagnóstico" sem a VPN e mostra **"Abrir o FortiClient"**
 (`Get-CaminhoFortiClient`) + "Verificar novamente"; **"Próximo" fica
@@ -92,13 +106,21 @@ gera payload sintético INVIÁVEL; vai em `vpn.impossivel/motivo` no JSON e num
 aviso vermelho no relatório). "Rodar diagnóstico" → `Invoke-DiagnosticoCompleto`
 (ping + `Test-BandaVpn` + Selenium): a banda iperf3 aparece ao vivo no
 velocímetro do card `cardIperfVpn` (`Update-IperfGauge`/`Update-IperfPainel`).
-**Não** auto-avança ao concluir → 5. resultado por
-métrica → 6. decisão final → 7. conclusão: **Salvar** / **Transmitir** /
-**Exportar relatório (PDF)** + checklist.
+**Não** auto-avança ao concluir; ao passar do passo 4, `Add-MedicaoAtual`
+registra a medição do meio. O card `cardOutroMeio` ("Testar outro meio neste
+local", `Invoke-TestarOutroMeio`) volta ao passo 3 sem perder as medições
+→ 5. resultado por métrica (do meio atual) → 6. **conexão recomendada**:
+combo `cboConexaoRec` (candidatos + "nenhuma") pré-selecionado por
+`Get-ConexaoRecomendada`, `txtMotivoRec` (**motivo obrigatório**,
+`Test-RecomendacaoValida` é o gate 6→7) e a tabela read-only `dgMedicoes` de
+todas as medições do Local; o card da decisão final continua acima →
+7. conclusão: **Salvar** / **Transmitir** / **Exportar relatório (PDF)** + checklist.
 O runspace da fase local / conexão Wi-Fi é o `Start-TarefaRede`
 (`$Global:TarefaRedeState`, mesmo padrão do `Start-DiagnosticoAssincrono`).
 O `rede_local` entra no JSON de resultado (`New-ResultadoJson -FaseLocal`) e numa
-seção própria do relatório PDF.
+seção própria do relatório PDF; `medicoes[]` + `conexao_recomendada`
+(`-Medicoes` / `-ConexaoRecomendada` / `-MotivoRecomendacao`) trazem o
+multi-meio, com bloco em destaque + tabela de meios no PDF.
 O relatório (`src/saida/Export-RelatorioPdf.ps1`) monta um HTML no padrão TRE-MA
 e converte com o Edge/Chrome headless (`--print-to-pdf`); sem navegador, salva o
 HTML. Saída em `relatorios/` (gitignored).
@@ -110,6 +132,11 @@ HTML. Saída em `relatorios/` (gitignored).
 - Destino: **planilha Google dedicada só a resultados de conectividade**
   (`PLANILHA_RESULTADOS_ID` em `apps-script/Codigo.gs`, aba `Resultados` criada
   pelo próprio script). Web App na **v8** (POST `acao:'resultado'` ativo).
+  `gravarResultado` grava por nome de coluna e inclui `conexao_recomendada` /
+  `operadora_recomendada` / `veredito_recomendado` / `recomendacao_provisoria` /
+  `motivo_recomendacao` (migra planilhas antigas via `insertColumnsBefore`); o
+  JSON completo, com `medicoes[]`, fica na coluna `json`. **Deploy do Web App é
+  manual (clasp) — não implantar sem o admin.**
 - `Send-Resultado` só move para `resultados/enviados/` com resposta
   `{status:'ok'}`; `erro`/`ignorado` mantêm o arquivo em `pendentes/`.
 - Teste: `tools/Testar-Envio.ps1` (HttpListener local simula o Apps Script).
@@ -120,5 +147,9 @@ HTML. Saída em `relatorios/` (gitignored).
   de totalização)
 - Coleta real das métricas da Fase 2 (iperf3 + Selenium + ping) validada ponta a
   ponta (a Fase 1 — rede local — já coleta de verdade)
+- Multi-meio: refatoração na branch `feature/multi-meio-conexao` (rollback:
+  tag `backup-pre-multimeio`); o passo 5 ainda mostra só a medição do meio
+  atual (falta a visão por medição); Selenium/carregamento web segue desativado;
+  "motivo da recomendação" é obrigatório sempre (provisório)
 - Fase 2 do admin: incluir/alterar Locais das Juntas
 - Empacotamento de campo (pasta portátil autocontida)
