@@ -36,8 +36,16 @@ var ABA_ETAPAS             = 'Etapas';
 var PLANILHA_CONFIG_URL    = 'https://docs.google.com/spreadsheets/d/1wAZTeRsbDcFL4lyLF0J9pOmtR-cGElSh93HSpMKTCww/edit';
 var ABA_LIMIARES           = 'Limiares';
 
-var PLANILHA_RESULTADOS_ID = '1FnuGm-4sZHXamsK6WtHBKOIUlIsFobhrq6rhpBTrswk';  // vazio = POST de resultado desativado
-var ABA_RESULTADOS         = 'Resultados';
+// ID da planilha de Resultados. Prioriza a Script Property PLANILHA_RESULTADOS_ID
+// (um projeto por ambiente: producao x homologacao, sem tocar no codigo); se
+// ausente, usa o padrao abaixo. Vazio -> POST de resultado desativado.
+var PLANILHA_RESULTADOS_ID_PADRAO = '1FnuGm-4sZHXamsK6WtHBKOIUlIsFobhrq6rhpBTrswk';
+var ABA_RESULTADOS               = 'Resultados';
+
+function _idResultados() {
+  var p = PropertiesService.getScriptProperties().getProperty('PLANILHA_RESULTADOS_ID');
+  return (p && p.trim()) || PLANILHA_RESULTADOS_ID_PADRAO;
+}
 
 // Direcao de cada metrica: 'max' = menor e melhor; 'min' = maior e melhor.
 var MAP_DIRECAO = {
@@ -88,7 +96,7 @@ function doPost(e) {
     }
 
     // acao 'resultado'
-    if (!PLANILHA_RESULTADOS_ID) {
+    if (!_idResultados()) {
       return _json({ status: 'ignorado', motivo: 'PLANILHA_RESULTADOS_ID nao configurado' });
     }
     gravarResultado(body);
@@ -525,11 +533,20 @@ function setupAdminPin(hashHex) {
   return 'ADMIN_PIN_SHA256 gravado.';
 }
 
+// Define a planilha de Resultados deste projeto Apps Script. Rode 1x no editor:
+//   producao:     setupResultados('1FnuGm-4sZHXamsK6WtHBKOIUlIsFobhrq6rhpBTrswk')
+//   homologacao:  setupResultados('1aihOABaGSnHNIP5BHisR-iI1-OpQWHALLt5jvsUzpWE')
+function setupResultados(sheetId) {
+  if (!sheetId) throw new Error('passe o id: setupResultados("<sheet_id>")');
+  PropertiesService.getScriptProperties().setProperty('PLANILHA_RESULTADOS_ID', String(sheetId).trim());
+  return 'PLANILHA_RESULTADOS_ID = ' + String(sheetId).trim();
+}
+
 
 /* ============================ RESULTADOS (POST) ============================ */
 
 function gravarResultado(dados) {
-  var ss  = SpreadsheetApp.openById(PLANILHA_RESULTADOS_ID);
+  var ss  = SpreadsheetApp.openById(_idResultados());
   var aba = ss.getSheetByName(ABA_RESULTADOS) || ss.insertSheet(ABA_RESULTADOS);
 
   var COLS = ['recebido_em', 'tecnico', 'local_id', 'zona', 'municipio_termo', 'tipo',
