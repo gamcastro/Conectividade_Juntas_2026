@@ -276,6 +276,7 @@ function New-JanelaPrincipal {
     $window.FindName('btnAdminVoltar').Add_Click({ Show-View 'viewHome' })
     $window.FindName('btnSalvarLimiares').Add_Click({ Invoke-SalvarLimiares })
     $window.FindName('btnRecarregarLimiares').Add_Click({ Invoke-RecarregarLimiares })
+    $window.FindName('btnSalvarAmbiente').Add_Click({ Invoke-SalvarAmbiente })
     $window.FindName('lstGuiaJuntas').AddHandler(
         [Windows.Controls.Button]::ClickEvent,
         [Windows.RoutedEventHandler] {
@@ -1512,6 +1513,43 @@ function Initialize-Admin {
     $w.FindName('dgLimiares').ItemsSource = $rows
     $w.FindName('txtPinAdmin').Password = ''
     $w.FindName('lblAdminMsg').Text = ''
+
+    # ambiente de teste (iperf3) - config local
+    $amb = $null
+    try { $amb = Get-Config 'ambiente' } catch { }
+    $ip = if ($amb -and $amb.iperf3) { $amb.iperf3 } else { $null }
+    $w.FindName('txtIperfServidorCfg').Text = if ($ip) { [string] $ip.servidor } else { '' }
+    $w.FindName('txtIperfPortaCfg').Text    = if ($ip -and $ip.porta) { [string] $ip.porta } else { '5201' }
+    $w.FindName('txtIperfDuracaoCfg').Text  = if ($ip -and $ip.duracao_s) { [string] $ip.duracao_s } else { '10' }
+    $w.FindName('lblAmbienteMsg').Text = ''
+}
+
+function Invoke-SalvarAmbiente {
+    $w = $Global:JanelaPrincipal
+    $msg = $w.FindName('lblAmbienteMsg')
+    $vermelho = [Windows.Media.Brushes]::OrangeRed
+
+    $pin = $w.FindName('txtPinAdmin').Password
+    if ([string]::IsNullOrWhiteSpace($pin)) { $msg.Foreground = $vermelho; $msg.Text = 'Digite o PIN do administrador para salvar.'; return }
+    if (-not (Test-PinAdmin $pin))          { $msg.Foreground = $vermelho; $msg.Text = 'PIN incorreto.'; return }
+
+    $srv = ([string] $w.FindName('txtIperfServidorCfg').Text).Trim()
+    $porta = 0; $dur = 0
+    $okP = [int]::TryParse(([string] $w.FindName('txtIperfPortaCfg').Text).Trim(), [ref] $porta)
+    $okD = [int]::TryParse(([string] $w.FindName('txtIperfDuracaoCfg').Text).Trim(), [ref] $dur)
+    if (-not $srv) { $msg.Foreground = $vermelho; $msg.Text = 'Informe o IP ou host do servidor iperf3.'; return }
+    if (-not $okP -or $porta -lt 1 -or $porta -gt 65535) { $msg.Foreground = $vermelho; $msg.Text = 'Porta invalida (1-65535).'; return }
+    if (-not $okD -or $dur -lt 3 -or $dur -gt 60) { $msg.Foreground = $vermelho; $msg.Text = 'Duracao invalida (3-60 s).'; return }
+
+    try {
+        $arq = Save-ConfigAmbiente -Servidor $srv -Porta $porta -Duracao $dur
+        $msg.Foreground = [Windows.Media.Brushes]::LightGreen
+        $msg.Text = "Servidor iperf3 salvo neste computador ($srv`:$porta)."
+        Write-Log "Ambiente iperf3 salvo pelo admin: $srv`:$porta / ${dur}s -> $arq" -Nivel Ok
+    } catch {
+        $msg.Foreground = $vermelho
+        $msg.Text = "Falha ao salvar: $_"
+    }
 }
 
 function Invoke-SalvarLimiares {

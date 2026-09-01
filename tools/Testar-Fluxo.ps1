@@ -434,6 +434,16 @@ try {
     if ($w.FindName('lblAdminMsg').Text -notmatch 'PIN') { Write-Host "    FALHA: salvou limiares sem PIN"; $falhas++ }
     else { Write-Host "[8] salvar limiares sem PIN bloqueado" }
 
+    # 8b. ambiente iperf3: campos carregam da config e "Salvar ambiente" exige PIN
+    $srvCfg = "$($w.FindName('txtIperfServidorCfg').Text)"
+    if ($srvCfg -and "$($w.FindName('txtIperfPortaCfg').Text)" -match '\d') {
+        Write-Host "[8b] admin carrega servidor iperf3: $srvCfg`:$($w.FindName('txtIperfPortaCfg').Text)"
+    } else { Write-Host "    FALHA: campos do servidor iperf3 nao carregaram (srv='$srvCfg')"; $falhas++ }
+    $w.FindName('txtPinAdmin').Password = ''
+    Invoke-SalvarAmbiente
+    if ("$($w.FindName('lblAmbienteMsg').Text)" -match 'PIN') { Write-Host "[8b] salvar ambiente sem PIN bloqueado" }
+    else { Write-Host "    FALHA: salvou ambiente sem PIN ('$($w.FindName('lblAmbienteMsg').Text)')"; $falhas++ }
+
     # 9. metrica desativada sai da bateria (motor)
     $limTest = [pscustomobject]@{
         latencia_ms         = [pscustomobject]@{ viavel_ate = 60; ressalva_ate = 120; ativo = $true }

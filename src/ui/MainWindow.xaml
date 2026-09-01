@@ -1346,9 +1346,49 @@
                                Margin="14,0,0,0" TextWrapping="Wrap" FontSize="12"/>
                 </Grid>
 
-                <Button x:Name="btnAdminVoltar" Grid.Row="4" Content="Voltar ao in&#237;cio"
-                        HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0,14,0,0"
-                        Style="{DynamicResource BotaoFantasma}"/>
+                <StackPanel Grid.Row="4" VerticalAlignment="Top">
+                    <Border Style="{DynamicResource Cartao}" Padding="16,14" Margin="0,16,0,0">
+                        <StackPanel>
+                            <TextBlock Text="Ambiente de teste (iperf3)" Style="{DynamicResource SecaoTela}"
+                                       Margin="0,0,0,4"/>
+                            <TextBlock Text="Endere&#231;o do servidor iperf3 no CPD, alcan&#231;&#225;vel pela VPN. Salvo neste computador (config\ambiente.json)."
+                                       FontSize="11" Foreground="{DynamicResource Dicon.Text3}" TextWrapping="Wrap"
+                                       Margin="0,0,0,10"/>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="Servidor (IP/host)"
+                                           Style="{DynamicResource Rotulo}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                <TextBox x:Name="txtIperfServidorCfg" Grid.Column="1" MinHeight="32"
+                                         FontFamily="Consolas" VerticalContentAlignment="Center"/>
+                                <TextBlock Grid.Column="2" Text="Porta" Style="{DynamicResource Rotulo}"
+                                           VerticalAlignment="Center" Margin="14,0,6,0"/>
+                                <TextBox x:Name="txtIperfPortaCfg" Grid.Column="3" Width="72" MinHeight="32"
+                                         FontFamily="Consolas" VerticalContentAlignment="Center"/>
+                                <TextBlock Grid.Column="4" Text="Dura&#231;&#227;o (s)" Style="{DynamicResource Rotulo}"
+                                           VerticalAlignment="Center" Margin="14,0,6,0"/>
+                                <TextBox x:Name="txtIperfDuracaoCfg" Grid.Column="5" Width="60" MinHeight="32"
+                                         FontFamily="Consolas" VerticalContentAlignment="Center"/>
+                            </Grid>
+                            <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                                <Button x:Name="btnSalvarAmbiente" Content="Salvar ambiente"
+                                        Style="{DynamicResource BotaoSucesso}"/>
+                                <TextBlock x:Name="lblAmbienteMsg" Margin="14,0,0,0" VerticalAlignment="Center"
+                                           TextWrapping="Wrap" FontSize="12"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <Button x:Name="btnAdminVoltar" Content="Voltar ao in&#237;cio"
+                            HorizontalAlignment="Left" Margin="0,16,0,0"
+                            Style="{DynamicResource BotaoFantasma}"/>
+                </StackPanel>
             </Grid>
 
         </Grid>

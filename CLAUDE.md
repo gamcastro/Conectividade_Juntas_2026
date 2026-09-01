@@ -26,7 +26,9 @@ Script), em vez de criar um BI/dashboard separado.
   `lib/mahapps/`; tema em `src/ui/Tema.xaml`; fonte Archivo em
   `assets/marca/tema/fonts/`. Aplicada só na branch `homologacao` por ora.
 - **iperf3** (client Windows, `bin/iperf3/iperf3.exe` — não versionado) — banda
-  real pela VPN contra servidor iperf3 num Ubuntu no CPD. `Test-BandaVpn`
+  real pela VPN contra servidor iperf3 num Ubuntu no CPD (endereço/porta/duração
+  editáveis na tela de **Administração** → `Save-ConfigAmbiente` grava o bloco
+  `iperf3` em `config/ambiente.json` local, PIN do admin). `Test-BandaVpn`
   (`src/testes/Test-Banda.ps1`) roda download (`-R`) e upload (`-f m`), lê a
   saída linha a linha e transmite cada intervalo (`Write-EventoIperf` →
   `Update-IperfGauge`) para um **velocímetro** no passo 4, igual ao do Speedtest.
