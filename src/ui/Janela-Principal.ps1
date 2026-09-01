@@ -258,6 +258,7 @@ function New-JanelaPrincipal {
     $window.FindName('btnTransmitirResultado').Add_Click({ Invoke-TransmitirResultado })
     $window.FindName('btnDiagVoltar').Add_Click({ Show-View 'viewHome' })
     $window.FindName('btnSalvarResultado').Add_Click({ Invoke-SalvarResultado })
+    $window.FindName('btnFinalizarDiag').Add_Click({ Invoke-FinalizarDiagnostico })
     $window.FindName('cboDecisaoFinal').Add_SelectionChanged({
             if (-not $Global:AtualizandoDecisao) { $Global:DecisaoFinalTocada = $true }
             Update-VisibilidadeJustDecisao
@@ -1609,6 +1610,23 @@ function Update-ChecklistFim {
         $t.Text       = if ($it.ok) { [char]0x2713 } else { [char]0x2717 }
         $t.Foreground = if ($it.ok) { $verde } else { $vermelho }
     }
+
+    # "Finalizar": libera quando o resultado ja esta salvo (o essencial). Se
+    # ainda falta transmitir/exportar, uma dica explica o que fica pendente.
+    $btnFim = $w.FindName('btnFinalizarDiag')
+    if ($btnFim) { $btnFim.IsEnabled = [bool] $Global:FeitoSalvar }
+    $dica = $w.FindName('txtFimFinalizarDica')
+    if ($dica) {
+        $falta = @()
+        if (-not $Global:FeitoTransmitir) { $falta += 'transmitir' }
+        if (-not $Global:FeitoExportar)   { $falta += 'exportar o PDF' }
+        if ($Global:FeitoSalvar -and $falta.Count) {
+            $dica.Text = 'Pode finalizar mesmo assim - falta ' + ($falta -join ' e ') + '. A transmissao pendente vai no proximo "Atualizar dados".'
+            $dica.Visibility = 'Visible'
+        } else {
+            $dica.Visibility = 'Collapsed'
+        }
+    }
 }
 
 # Preenche o passo 7 (conclusao).
@@ -1624,38 +1642,91 @@ function Update-ResumoFim {
     $ver.Foreground = Get-PincelVeredito $dec
     $w.FindName('btnSalvarResultado').IsEnabled     = $true
     $w.FindName('btnExportarPdf').IsEnabled         = $true
-    $w.FindName('btnTransmitirResultado').IsEnabled = $Global:FeitoSalvar
+    $w.FindName('btnTransmitirResultado').IsEnabled = ($Global:FeitoSalvar -and -not $Global:FeitoTransmitir)
     Update-ChecklistFim
+}
+
+# Trava os botoes do passo 7 e mostra o anel enquanto transmite (async).
+function Set-FimOcupado {
+    param([bool] $Ocupado)
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    $ring = $w.FindName('ringFim')
+    if ($ring) { $ring.IsActive = $Ocupado; $ring.Visibility = if ($Ocupado) { 'Visible' } else { 'Collapsed' } }
+    foreach ($n in 'btnSalvarResultado', 'btnTransmitirResultado', 'btnExportarPdf', 'btnFinalizarDiag', 'btnWizVoltar') {
+        $c = $w.FindName($n); if ($c) { $c.IsEnabled = -not $Ocupado }
+    }
 }
 
 function Invoke-TransmitirResultado {
     $w = $Global:JanelaPrincipal
+    $st = $w.FindName('txtFimStatus')
     if (-not $Global:UltimoResultadoSalvo -or -not (Test-Path $Global:UltimoResultadoSalvo)) {
         Write-Log 'Salve o resultado antes de transmitir.' -Nivel Aviso
-        $st = $w.FindName('txtFimStatus'); if ($st) { $st.Text = 'Salve o resultado antes de transmitir.' }
+        if ($st) { $st.Text = 'Salve o resultado antes de transmitir.' }
         return
     }
-    $btn = $w.FindName('btnTransmitirResultado'); $btn.IsEnabled = $false
-    $st  = $w.FindName('txtFimStatus'); $st.Text = 'Transmitindo...'
-    try {
-        $cfg = $null
-        try { $cfg = Get-Config 'envio' } catch { }
-        $ok = Send-Resultado -Caminho $Global:UltimoResultadoSalvo -Endpoint $cfg.endpoint_apps_script `
-            -Retentativas ($cfg.retentativas) -IntervaloS ($cfg.intervalo_retentativa_s)
-        if ($ok) {
-            $Global:FeitoTransmitir = $true
-            $st.Text = 'Resultado transmitido ao painel.'
-        } else {
-            $st.Text = 'Nao foi possivel transmitir agora. O resultado fica pendente e vai no proximo "Atualizar dados".'
-            $btn.IsEnabled = $true
-        }
-    } catch {
-        Write-Log "Falha ao transmitir: $_" -Nivel Erro
-        $st.Text = "Falha ao transmitir: $_"
-        $btn.IsEnabled = $true
+    $cfg = $null
+    try { $cfg = Get-Config 'envio' } catch { }
+
+    $st.Text = 'Transmitindo ao painel...'
+    Set-FimOcupado $true
+
+    if ($Global:ModoTeste) {   # testes: sincrono, sem runspace
+        $ok = $false
+        try {
+            $ok = Send-Resultado -Caminho $Global:UltimoResultadoSalvo -Endpoint $cfg.endpoint_apps_script `
+                -Retentativas ($cfg.retentativas) -IntervaloS ($cfg.intervalo_retentativa_s)
+        } catch { Complete-TransmitirResultado $false "$_"; return }
+        Complete-TransmitirResultado $ok $null
+        return
     }
-    Update-ChecklistFim
+
+    Start-TarefaRede `
+        -Script 'Send-Resultado -Caminho $Caminho -Endpoint $Endpoint -Retentativas $Ret -IntervaloS $Int' `
+        -Vars @{
+            Caminho  = $Global:UltimoResultadoSalvo
+            Endpoint = $cfg.endpoint_apps_script
+            Ret      = $cfg.retentativas
+            Int      = $cfg.intervalo_retentativa_s
+        } `
+        -AoConcluir { param($res, $erro) Complete-TransmitirResultado $res $erro }
+}
+
+function Complete-TransmitirResultado {
+    param($Ok, $Erro)
+    Set-FimOcupado $false
+    $w = $Global:JanelaPrincipal
+    $st = $w.FindName('txtFimStatus')
+    if ($Erro) {
+        Write-Log "Falha ao transmitir: $Erro" -Nivel Erro
+        $st.Text = "Falha ao transmitir: $Erro"
+    } elseif ($Ok) {
+        $Global:FeitoTransmitir = $true
+        $st.Text = 'Resultado transmitido ao painel.'
+        Write-Log 'Resultado transmitido ao painel.' -Nivel Ok
+    } else {
+        $st.Text = 'Nao foi possivel transmitir agora. O resultado fica pendente e vai no proximo "Atualizar dados".'
+    }
+    Update-ResumoFim
     Update-AvisoPendentes
+}
+
+# "Finalizar" (passo 7): volta para a tela inicial ja com o progresso do
+# roteiro atualizado. O resultado ja esta salvo localmente.
+function Invoke-FinalizarDiagnostico {
+    if (-not $Global:FeitoSalvar) {
+        $w = $Global:JanelaPrincipal
+        $st = $w.FindName('txtFimStatus'); if ($st) { $st.Text = 'Salve o resultado antes de finalizar.' }
+        return
+    }
+    if (-not $Global:FeitoTransmitir) {
+        Write-Log 'Diagnostico finalizado. A transmissao ficou pendente - vai no proximo "Atualizar dados".' -Nivel Aviso
+    } else {
+        Write-Log 'Diagnostico finalizado.' -Nivel Ok
+    }
+    $Global:WizardStep = 1
+    Enter-Home -Sessao $Global:SessaoAtual
 }
 
 function Invoke-ExportarRelatorio {

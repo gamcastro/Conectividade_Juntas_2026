@@ -389,6 +389,14 @@ try {
         Write-Host "[5d] relatorio exportado ($($w.FindName('txtFimStatus').Text))"
     } else { Write-Host "    FALHA: export nao marcou o checklist (exportar=$($Global:FeitoExportar))"; $falhas++ }
 
+    # 5d-3. "Finalizar" habilita apos salvar e volta para a tela inicial
+    if ($w.FindName('btnFinalizarDiag').IsEnabled) { Write-Host "[5d] botao 'Finalizar' habilitado apos salvar" }
+    else { Write-Host "    FALHA: 'Finalizar' desabilitado com resultado salvo"; $falhas++ }
+    Invoke-FinalizarDiagnostico
+    if ("$($w.FindName('viewHome').Visibility)" -eq 'Visible') { Write-Host "[5d] 'Finalizar' -> volta para a tela inicial" }
+    else { Write-Host "    FALHA: 'Finalizar' nao voltou para a home (viewHome=$($w.FindName('viewHome').Visibility))"; $falhas++ }
+    Show-WizardPasso 7   # volta ao passo 7 para os proximos testes seguirem
+
     # 5e. acompanhamento: guia marca o local como testado; home mostra progresso
     Show-GuiaBordo
     $grpT = @($w.FindName('lstGuiaJuntas').ItemsSource)[0]
