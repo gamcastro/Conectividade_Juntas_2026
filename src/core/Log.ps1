@@ -50,20 +50,14 @@ function Write-Log {
     if ($dispatcher -and -not $dispatcher.CheckAccess()) {
         $dispatcher.Invoke([action] $aplicar)
     } else {
+        # Na thread de UI: so adiciona a entrada. NAO faz mais "flush" via
+        # $dispatcher.Invoke() aninhado - isso virava um pump reentrante que
+        # processava eventos pendentes (clique, render de outra view) no meio de
+        # um handler, causando reentrancia e "o fluxo nao era legivel". O feed
+        # de log atualiza no proximo ciclo natural de render (imperceptivel);
+        # operacao longa na UI deve ser assincrona (Start-TrabalhoHome), nao
+        # depender deste flush.
         & $aplicar
-        # Operacoes sincronas na thread de UI (sync, reenvio) travam o redesenho
-        # ate terminarem. Um flush aqui faz o feed "ATIVIDADE" atualizar ao vivo.
-        # PRIORIDADE: tem de ser MAIOR que Input (5) - Background (4) fica abaixo
-        # de Input, entao esse Invoke() virava um pump aninhado que processava
-        # eventos de Input pendentes (ex.: um duplo-clique em "Entrar"),
-        # reentrando no MESMO handler no meio da execucao dele (Enter-Sessao
-        # rodando duas vezes empilhado) -> estado inconsistente / "o fluxo nao
-        # era legivel". Render (7) forca o redesenho sem drenar Input.
-        if ($dispatcher -and -not $Global:ModoTeste) {
-            try {
-                $dispatcher.Invoke([action] { }, [Windows.Threading.DispatcherPriority]::Render)
-            } catch { }
-        }
     }
 
     # Espelho no console (modo -SemUI) e no arquivo. NUNCA propaga erro: um

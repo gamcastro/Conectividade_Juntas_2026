@@ -327,7 +327,22 @@ function Show-JanelaPrincipal {
         }
         $Global:UiErroUltimo = $msg
         $Global:UiErroCount  = 0
-        try { Write-Log ("Erro nao tratado na interface: {0}" -f $msg) -Nivel Erro } catch { }
+        try {
+            $ex   = $ev.Exception
+            $tipo = try { $ex.GetType().FullName } catch { '?' }
+            $onde = ''
+            try {
+                if ($ex.TargetSite) { $onde = " em {0}.{1}" -f $ex.TargetSite.DeclaringType.Name, $ex.TargetSite.Name }
+                elseif ($ex.StackTrace) { $onde = ' | ' + (($ex.StackTrace -split "`n")[0].Trim()) }
+            } catch { }
+            Write-Log ("Erro nao tratado na interface [{0}]: {1}{2}" -f $tipo, $msg, $onde) -Nivel Erro
+            $inner = $ex.InnerException
+            $guard = 0
+            while ($inner -and $guard -lt 3) {
+                Write-Log ("  causado por [{0}]: {1}" -f $inner.GetType().Name, $inner.Message) -Nivel Erro
+                $inner = $inner.InnerException; $guard++
+            }
+        } catch { }
     })
     $janela.ShowDialog() | Out-Null
 }
@@ -409,8 +424,20 @@ function Enter-SessaoInterno {
         }
     }
 
-    $sessao = Set-Sessao -TecnicoNome $nome -Papel $papel
-    Enter-Home -Sessao $sessao
+    $sessao = $null
+    try { $sessao = Set-Sessao -TecnicoNome $nome -Papel $papel }
+    catch {
+        Write-Log "Falha ao gravar a sessao: $_" -Nivel Aviso
+        $sessao = [pscustomobject]@{ tecnico_nome = $nome; papel = $papel; ultimo_login = (Get-Date).ToString('o') }
+    }
+    # Entrar SEMPRE leva para a tela inicial - um erro num painel de la nao pode
+    # prender o tecnico no login.
+    try { Enter-Home -Sessao $sessao }
+    catch {
+        Write-Log "Falha ao montar a tela inicial: $_" -Nivel Erro
+        $Global:SessaoAtual = $sessao
+        try { Show-View 'viewHome' } catch { }
+    }
 }
 
 function Invoke-TrocarUsuario {
@@ -446,35 +473,44 @@ function Enter-Home {
     $chkTodas.IsChecked  = $false
     $chkTodas.Visibility = 'Collapsed'
 
+    # Tudo daqui pra baixo e "melhor esforco": nada pode impedir o login de
+    # concluir (Show-View 'viewHome' no fim SEMPRE roda).
     $rot = $null
     try { $rot = Get-RoteiroDoTecnico -Nome $Sessao.tecnico_nome } catch { Write-Log "Roteiro nao carregado: $_" -Nivel Aviso }
     $Global:RoteiroAtual = $rot
-    Update-SeletorJuntas
+    try { Update-SeletorJuntas } catch { Write-Log "Seletor de Juntas falhou: $_" -Nivel Aviso }
 
-    $w.FindName('txtHomeRoteiro').Text = if ($rot) {
-        '{0}    |    Etapa {1}    |    {2} a {3}    |    {4} dias' -f $rot.rotulo, $rot.etapa, $rot.ida, $rot.retorno, $rot.dias
-    } else {
-        'Roteiro nao encontrado no cache. Use "Atualizar dados".'
-    }
+    try {
+        $w.FindName('txtHomeRoteiro').Text = if ($rot) {
+            '{0}    |    Etapa {1}    |    {2} a {3}    |    {4} dias' -f $rot.rotulo, $rot.etapa, $rot.ida, $rot.retorno, $rot.dias
+        } else {
+            'Roteiro nao encontrado no cache. Use "Atualizar dados".'
+        }
 
-    if ($rot) {
-        $prog = Get-ProgressoRoteiro -Roteiro $rot -TecnicoNome $Sessao.tecnico_nome
-        $w.FindName('txtTileDias').Text   = [string] $rot.dias
-        $w.FindName('txtTileLocais').Text = [string] $prog.Total
-        $w.FindName('txtTileKm').Text     = [string] $rot.total_km
+        if ($rot) {
+            $prog = $null
+            try { $prog = Get-ProgressoRoteiro -Roteiro $rot -TecnicoNome $Sessao.tecnico_nome } catch { Write-Log "Progresso do roteiro falhou: $_" -Nivel Aviso }
+            $w.FindName('txtTileDias').Text   = [string] $rot.dias
+            $w.FindName('txtTileLocais').Text = if ($prog) { [string] $prog.Total } else { '--' }
+            $w.FindName('txtTileKm').Text     = [string] $rot.total_km
 
-        $w.FindName('txtProgressoRoteiro').Text = '{0} de {1} locais testados' -f $prog.Testados, $prog.Total
-        $pb = $w.FindName('prgProgressoRoteiro')
-        $pb.Maximum = [math]::Max($prog.Total, 1)
-        $pb.Value   = $prog.Testados
-        $w.FindName('painelProgressoRoteiro').Visibility = 'Visible'
-    } else {
-        foreach ($t in 'txtTileDias', 'txtTileLocais', 'txtTileKm') { $w.FindName($t).Text = '--' }
-        $w.FindName('painelProgressoRoteiro').Visibility = 'Collapsed'
-    }
+            if ($prog) {
+                $w.FindName('txtProgressoRoteiro').Text = '{0} de {1} locais testados' -f $prog.Testados, $prog.Total
+                $pb = $w.FindName('prgProgressoRoteiro')
+                $pb.Maximum = [math]::Max($prog.Total, 1)
+                $pb.Value   = $prog.Testados
+                $w.FindName('painelProgressoRoteiro').Visibility = 'Visible'
+            } else {
+                $w.FindName('painelProgressoRoteiro').Visibility = 'Collapsed'
+            }
+        } else {
+            foreach ($t in 'txtTileDias', 'txtTileLocais', 'txtTileKm') { $w.FindName($t).Text = '--' }
+            $w.FindName('painelProgressoRoteiro').Visibility = 'Collapsed'
+        }
+    } catch { Write-Log "Painel do roteiro falhou: $_" -Nivel Aviso }
 
-    Update-AvisoPendentes
-    $w.FindName('painelLogHome').Visibility = if ($Global:LogHome.Count) { 'Visible' } else { 'Collapsed' }
+    try { Update-AvisoPendentes } catch { Write-Log "Aviso de pendentes falhou: $_" -Nivel Aviso }
+    try { $w.FindName('painelLogHome').Visibility = if ($Global:LogHome.Count) { 'Visible' } else { 'Collapsed' } } catch { }
     Show-View 'viewHome'
 }
 
