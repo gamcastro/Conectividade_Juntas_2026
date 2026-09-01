@@ -119,7 +119,14 @@ if ($IperfServidor) {
 # ---------------------------------------------------------------- PIN admin
 Titulo 'PIN do administrador'
 $arqAdmin = Join-Path $Cfg 'admin.json'
-$precisaPin = $Force -or $Pin -or -not (Test-Path $arqAdmin)
+# admin.json pode ter acabado de ser criado do exemplo (hash = placeholder);
+# nesse caso ainda "precisa PIN".
+$hashAtual = ''
+if (Test-Path $arqAdmin) {
+    try { $hashAtual = [string] (Get-Content $arqAdmin -Raw -Encoding UTF8 | ConvertFrom-Json).pin_sha256 } catch { }
+}
+$pinValido  = $hashAtual -match '^[0-9a-fA-F]{64}$'
+$precisaPin = $Force -or $Pin -or -not $pinValido
 if ($precisaPin) {
     if (-not $Pin) {
         $s1 = Read-Host -AsSecureString '  Novo PIN (4-6 digitos)'

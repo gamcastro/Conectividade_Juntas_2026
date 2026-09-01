@@ -24,11 +24,18 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
+# Reencaminhamento dos parametros no relaunch STA / elevacao UAC. NAO usar
+# $args: em script [CmdletBinding()] + StrictMode Latest ele nao existe e
+# lanca "A variavel '$args' nao pode ser recuperada" (sessao de usuario comum).
+$fwdArgs = @()
+if ($SemUI)   { $fwdArgs += '-SemUI' }
+if ($JuntaId) { $fwdArgs += @('-JuntaId', $JuntaId) }
+
 # --- 1. Garante STA (pwsh roda como MTA por padrao) --------------------------
 if ([Threading.Thread]::CurrentThread.GetApartmentState() -ne 'STA') {
     $exe = (Get-Process -Id $PID).Path
     $lista = @('-STA', '-NoProfile', '-ExecutionPolicy', 'Bypass',
-               '-File', ('"{0}"' -f $PSCommandPath)) + $args
+               '-File', ('"{0}"' -f $PSCommandPath)) + $fwdArgs
     Start-Process -FilePath $exe -ArgumentList $lista
     return
 }
@@ -36,7 +43,7 @@ if ([Threading.Thread]::CurrentThread.GetApartmentState() -ne 'STA') {
 # --- 2. Auto-elevacao UAC ---------------------------------------------------
 . "$PSScriptRoot\src\core\Elevacao.ps1"
 if (-not (Test-Administrador)) {
-    Invoke-AutoElevacao -Script $PSCommandPath -Argumentos $args
+    Invoke-AutoElevacao -Script $PSCommandPath -Argumentos $fwdArgs
     return
 }
 

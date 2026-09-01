@@ -1,6 +1,6 @@
-﻿#Requires -Version 5.1
-# =============================================================================
+﻿# =============================================================================
 #  DICON - baixar + extrair + instalar num comando.
+#  (sem #Requires/param(): este script tambem roda via `iex (irm ...)`.)
 #
 #  Uso (PowerShell normal, com internet):
 #      iex (irm 'https://raw.githubusercontent.com/gamcastro/Conectividade_Juntas_2026/homologacao/setup/Baixar-e-Instalar.ps1')
