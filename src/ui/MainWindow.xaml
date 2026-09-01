@@ -293,9 +293,11 @@
                         <ItemsControl x:Name="lstGuiaJuntas">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Border Margin="0,0,0,10" Padding="14">
+                                    <Border Margin="0,0,0,10" Padding="14" CornerRadius="8" BorderThickness="1">
                                         <Border.Style>
-                                            <Style TargetType="Border" BasedOn="{StaticResource Cartao}">
+                                            <Style TargetType="Border">
+                                                <Setter Property="Background" Value="{DynamicResource Dicon.Surface}"/>
+                                                <Setter Property="BorderBrush" Value="{DynamicResource Dicon.Hair}"/>
                                                 <Style.Triggers>
                                                     <DataTrigger Binding="{Binding TodasTestadas}" Value="True">
                                                         <Setter Property="Background" Value="{DynamicResource Dicon.ViavelDim}"/>

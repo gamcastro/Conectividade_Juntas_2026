@@ -309,11 +309,25 @@ function New-JanelaPrincipal {
 function Show-JanelaPrincipal {
     $janela = New-JanelaPrincipal
     # Rede de seguranca: um erro solto numa callback (timer, dispatcher) nao
-    # pode fechar a janela inteira - loga e segue.
+    # pode fechar a janela inteira - loga e segue. Erro de layout/template
+    # repete a cada frame de render; aqui a gente NAO deixa o log virar um
+    # dilúvio (so a 1a ocorrencia de cada mensagem, e no maximo poucas por vez).
+    $Global:UiErroUltimo = ''
+    $Global:UiErroCount  = 0
     $janela.Dispatcher.add_UnhandledException({
         param($fonte, $ev)
-        try { Write-Log ("Erro nao tratado na interface: {0}" -f $ev.Exception.Message) -Nivel Erro } catch { }
         $ev.Handled = $true
+        $msg = "$($ev.Exception.Message)"
+        if ($msg -eq $Global:UiErroUltimo) {
+            $Global:UiErroCount++
+            if ($Global:UiErroCount -eq 3) {
+                try { Write-Log 'Erro na interface se repetindo - parando de registrar (veja o log em disco).' -Nivel Erro } catch { }
+            }
+            return
+        }
+        $Global:UiErroUltimo = $msg
+        $Global:UiErroCount  = 0
+        try { Write-Log ("Erro nao tratado na interface: {0}" -f $msg) -Nivel Erro } catch { }
     })
     $janela.ShowDialog() | Out-Null
 }
