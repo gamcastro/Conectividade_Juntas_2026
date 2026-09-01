@@ -109,7 +109,10 @@ velocímetro do card `cardIperfVpn` (`Update-IperfGauge`/`Update-IperfPainel`).
 **Não** auto-avança ao concluir; ao passar do passo 4, `Add-MedicaoAtual`
 registra a medição do meio. O card `cardOutroMeio` ("Testar outro meio neste
 local", `Invoke-TestarOutroMeio`) volta ao passo 3 sem perder as medições
-→ 5. resultado por métrica (do meio atual) → 6. **conexão recomendada**:
+→ 5. resultado por métrica: com 2+ meios testados, o combo `cboMedicaoPasso5`
+(`Update-SeletorMedicoes`/`Show-MedicaoNoPasso5`/`Invoke-TrocarMedicaoPasso5`)
+alterna qual medição o grid mostra; `Save-AjustesPasso5` grava classe final +
+justificativa na medição **aberta** → 6. **conexão recomendada**:
 combo `cboConexaoRec` (candidatos + "nenhuma") pré-selecionado por
 `Get-ConexaoRecomendada`, `txtMotivoRec` (**motivo obrigatório**,
 `Test-RecomendacaoValida` é o gate 6→7) e a tabela read-only `dgMedicoes` de
@@ -148,8 +151,8 @@ HTML. Saída em `relatorios/` (gitignored).
 - Coleta real das métricas da Fase 2 (iperf3 + Selenium + ping) validada ponta a
   ponta (a Fase 1 — rede local — já coleta de verdade)
 - Multi-meio: refatoração na branch `feature/multi-meio-conexao` (rollback:
-  tag `backup-pre-multimeio`); o passo 5 ainda mostra só a medição do meio
-  atual (falta a visão por medição); Selenium/carregamento web segue desativado;
+  tag `backup-pre-multimeio`), ainda não mesclada em `homologacao`. Falta
+  validar na GUI ponta a ponta; Selenium/carregamento web segue desativado;
   "motivo da recomendação" é obrigatório sempre (provisório)
 - Fase 2 do admin: incluir/alterar Locais das Juntas
 - Empacotamento de campo (pasta portátil autocontida)
