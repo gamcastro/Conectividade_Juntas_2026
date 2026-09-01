@@ -1144,19 +1144,6 @@ function Get-FracVelo {
     [Math]::Max(0.0, [Math]::Min(1.0, $f))
 }
 
-# Anima uma DependencyProperty ate $Para (ms) com easing suave.
-function Set-PropAnimada {
-    param($Alvo, $Prop, $Para, [int] $Ms = 150)
-    $dur = [Windows.Duration] ([TimeSpan]::FromMilliseconds($Ms))
-    $anim = if ($Para -is [Windows.Point]) {
-        [Windows.Media.Animation.PointAnimation]::new([Windows.Point] $Para, $dur)
-    } else {
-        [Windows.Media.Animation.DoubleAnimation]::new([double] $Para, $dur)
-    }
-    $anim.EasingFunction = [Windows.Media.Animation.CubicEase]::new()
-    $Alvo.BeginAnimation($Prop, $anim)
-}
-
 # $Suf: '' = velocimetro do passo 3 (speedtest); 'Vpn' = passo 4 (iperf3).
 function Set-TicksVelocimetro {
     param([string] $Suf = '')
@@ -1208,11 +1195,24 @@ function Set-VelocimetroValor {
     if (-not $w) { return }
     $frac = Get-FracVelo -Valor $Valor -Linear $Linear
     $ang  = -135.0 + 270.0 * $frac
-    Set-PropAnimada $w.FindName('rotAgulha' + $Suf) ([Windows.Media.RotateTransform]::AngleProperty) $ang
-    $pt = Get-PontoArco -Cx 140 -Cy 140 -R 110 -AngGraus $ang
+
+    # Ponteiro E arco desenhados DIRETO (sem animacao), juntos. Antes o arco
+    # usava PointAnimation: ela interpola o extremo em linha reta (sai do
+    # circulo) e o IsLargeArc nao acompanha o meio da animacao -> com um evento
+    # do speedtest a cada ~100 ms cada frame reiniciava a animacao e o arco
+    # ficava "preso" atras do ponteiro. Os eventos ja sao frequentes: encaixar
+    # o valor a cada evento da um movimento fluido, no ritmo do Ookla.
+    $rot = $w.FindName('rotAgulha' + $Suf)
+    if ($rot) {
+        $rot.BeginAnimation([Windows.Media.RotateTransform]::AngleProperty, $null)
+        $rot.Angle = $ang
+    }
     $seg = $w.FindName('segVelo' + $Suf)
-    $seg.IsLargeArc = ((270.0 * $frac) -gt 180.0)
-    Set-PropAnimada $seg ([Windows.Media.ArcSegment]::PointProperty) $pt
+    if ($seg) {
+        $seg.BeginAnimation([Windows.Media.ArcSegment]::PointProperty, $null)
+        $seg.Point      = Get-PontoArco -Cx 140 -Cy 140 -R 110 -AngGraus $ang
+        $seg.IsLargeArc = ((270.0 * $frac) -gt 180.0)
+    }
     $fmt = if ($Valor -ge 100) { '{0:0}' } elseif ($Valor -ge 10) { '{0:0.0}' } else { '{0:0.00}' }
     $w.FindName('txtVeloNum' + $Suf).Text  = ($fmt -f $Valor)
     $w.FindName('txtVeloUnid' + $Suf).Text = $Unidade

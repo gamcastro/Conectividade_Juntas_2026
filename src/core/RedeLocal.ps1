@@ -331,7 +331,14 @@ function Test-InternetLocal {
 
     $argv = '--format=jsonl --progress=yes --accept-license --accept-gdpr'
     if ($cfg.speedtest_server_id) { $argv += ' --server-id={0}' -f $cfg.speedtest_server_id }
-    if ($cfg.speedtest_extra_args) { $argv += ' ' + $cfg.speedtest_extra_args }
+    # IP publico em IPv4 (o relatorio mostra o IP; sem isto o Ookla devolve o
+    # IPv6 quando a rede tem os dois). Se o tecnico ja forcou uma versao nos
+    # extra_args, respeita a dele.
+    $extra = [string] $cfg.speedtest_extra_args
+    if ($extra -notmatch '(?i)(--ip-version|(^|\s)-4($|\s)|(^|\s)-6($|\s))') {
+        $argv += ' --ip-version=4'
+    }
+    if ($extra) { $argv += ' ' + $extra }
     Write-Log ("Speedtest (Ookla): {0} {1}" -f $exe, $argv) -Nivel Destaque
 
     $saida = Invoke-SpeedtestStreaming -Caminho $exe -Argumentos $argv -TimeoutS 120
