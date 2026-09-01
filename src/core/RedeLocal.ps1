@@ -153,26 +153,23 @@ function Get-AdaptadorLan {
 
 # --------------------------------------------------------------- placa Wi-Fi
 # netsh pelo operador de chamada (&): o PowerShell drena o stdout sozinho - sem
-# ProcessStartInfo/StreamReader, que num runspace MTA sem console podia estourar
-# "o fluxo nao era legivel", e sem deadlock de buffer com muitas redes por perto.
+# ProcessStartInfo/StreamReader, que num runspace MTA podia estourar "o fluxo
+# nao era legivel", e sem deadlock de buffer com muitas redes por perto.
+# NAO mexer em [Console]::OutputEncoding aqui: e um estado global do processo e
+# alterar isso de dentro do runspace de fundo corrompia os streams de console
+# do host -> "o fluxo nao era legivel" ao renderizar a janela. Acento em nome
+# de rede pode sair trocado, mas os campos que a gente le (SSID/Sinal/Estado)
+# sao ASCII.
 function Invoke-Netsh {
     param([string[]] $Argumentos, [int] $TimeoutS = 15)
     $netsh = Join-Path $env:SystemRoot 'System32\netsh.exe'
     if (-not (Test-Path $netsh)) { return '' }
-    $prev = $null
     try {
-        try {
-            $oem = [Text.Encoding]::GetEncoding([Globalization.CultureInfo]::CurrentCulture.TextInfo.OEMCodePage)
-            $prev = [Console]::OutputEncoding
-            [Console]::OutputEncoding = $oem
-        } catch { $prev = $null }
         $saida = & $netsh @Argumentos 2>$null
         return [string]::Join("`n", @($saida))
     } catch {
         Write-Log ("netsh {0} falhou: {1}" -f ($Argumentos -join ' '), $_) -Nivel Aviso
         return ''
-    } finally {
-        if ($null -ne $prev) { try { [Console]::OutputEncoding = $prev } catch { } }
     }
 }
 

@@ -305,7 +305,15 @@ function New-JanelaPrincipal {
 }
 
 function Show-JanelaPrincipal {
-    (New-JanelaPrincipal).ShowDialog() | Out-Null
+    $janela = New-JanelaPrincipal
+    # Rede de seguranca: um erro solto numa callback (timer, dispatcher) nao
+    # pode fechar a janela inteira - loga e segue.
+    $janela.Dispatcher.add_UnhandledException({
+        param($fonte, $ev)
+        try { Write-Log ("Erro nao tratado na interface: {0}" -f $ev.Exception.Message) -Nivel Erro } catch { }
+        $ev.Handled = $true
+    })
+    $janela.ShowDialog() | Out-Null
 }
 
 function Show-View {
@@ -503,6 +511,7 @@ function Start-TrabalhoHome {
     $Global:HomeTrabalhoState = @{ PS = $ps; RS = $rs; Handle = $handle; Timer = $timer; AoConcluir = $AoConcluir }
 
     $timer.Add_Tick({
+      try {
         $st = $Global:HomeTrabalhoState
         if ($null -eq $st -or -not $st.Handle.IsCompleted) { return }
         $st.Timer.Stop()
@@ -512,11 +521,15 @@ function Start-TrabalhoHome {
         try {
             $r = $st.PS.EndInvoke($st.Handle) | Select-Object -First 1
             $res = $r.Resultado; $erro = $r.Erro
-        } catch { $erro = "$_" } finally { $st.PS.Dispose(); $st.RS.Dispose() }
+        } catch { $erro = "$_" } finally { try { $st.PS.Dispose(); $st.RS.Dispose() } catch { } }
 
         if ($erro) { Write-Log "Falha: $erro" -Nivel Erro }
         try { & $st.AoConcluir $res $erro } catch { Write-Log "Pos-processamento falhou: $_" -Nivel Erro }
         Set-HomeOcupado $false
+      } catch {
+        try { Write-Log "Tarefa de fundo: falha inesperada ($_)." -Nivel Erro } catch { }
+        try { Set-HomeOcupado $false } catch { }
+      }
     })
     $timer.Start()
 }
@@ -827,6 +840,9 @@ function Start-TarefaRede {
     $Global:TarefaRedeState = @{ PS = $ps; RS = $rs; Handle = $handle; Timer = $timer; AoConcluir = $AoConcluir; Concluido = $false }
 
     $timer.Add_Tick({
+      # Blindagem total: nada aqui pode escapar para o loop do ShowDialog
+      # (senao a janela fecha com "excecao ao chamar ShowDialog").
+      try {
         $st = $Global:TarefaRedeState
         # Concluido: se um tick ja enfileirado disparar de novo (o processamento
         # abaixo demora mais que o intervalo do timer), ele nao pode reprocessar
@@ -841,9 +857,12 @@ function Start-TarefaRede {
         try {
             $r = $st.PS.EndInvoke($st.Handle) | Select-Object -First 1
             $res = $r.Resultado; $erro = $r.Erro
-        } catch { $erro = "$_" } finally { $st.PS.Dispose(); $st.RS.Dispose() }
+        } catch { $erro = "$_" } finally { try { $st.PS.Dispose(); $st.RS.Dispose() } catch { } }
 
         try { & $st.AoConcluir $res $erro } catch { Write-Log "Pos-processamento de rede falhou: $_" -Nivel Erro }
+      } catch {
+        try { Write-Log "Tarefa de rede: falha inesperada ($_)." -Nivel Erro } catch { }
+      }
     })
     $timer.Start()
 }
@@ -2231,6 +2250,7 @@ function Start-DiagnosticoAssincrono {
     $Global:DiagRunState = @{ PS = $ps; RS = $rs; Handle = $handle; Timer = $timer }
 
     $timer.Add_Tick({
+      try {
         $st = $Global:DiagRunState
         if ($null -eq $st -or -not $st.Handle.IsCompleted) { return }
 
@@ -2246,8 +2266,7 @@ function Start-DiagnosticoAssincrono {
         } catch {
             $erro = "$_"
         } finally {
-            $st.PS.Dispose()
-            $st.RS.Dispose()
+            try { $st.PS.Dispose(); $st.RS.Dispose() } catch { }
         }
 
         try {
@@ -2255,6 +2274,9 @@ function Start-DiagnosticoAssincrono {
         } catch {
             Write-Log "Falha ao montar o painel apos o diagnostico: $_" -Nivel Erro
         }
+      } catch {
+        try { Write-Log "Diagnostico: falha inesperada ($_)." -Nivel Erro } catch { }
+      }
     })
     $timer.Start()
 }
