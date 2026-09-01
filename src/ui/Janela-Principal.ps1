@@ -561,7 +561,6 @@ function Show-GuiaBordo {
     if (-not $rot) {
         $w.FindName('txtGuiaTitulo').Text = 'Roteiro nao disponivel'
         $w.FindName('txtGuiaSub').Text    = 'Use "Atualizar dados" com internet.'
-        $w.FindName('lstTrechos').ItemsSource     = @()
         $w.FindName('lstGuiaJuntas').ItemsSource  = @()
         $w.FindName('txtGuiaSemJunta').Text       = ''
         Show-View 'viewGuia'
@@ -571,13 +570,15 @@ function Show-GuiaBordo {
     $w.FindName('txtGuiaTitulo').Text = $rot.rotulo
     $w.FindName('txtGuiaSub').Text = ('Tecnico: {0}    |    Etapa {1}    |    {2} a {3}    |    {4} dias    |    {5} km ({6})' -f `
             $rot.tecnico, $rot.etapa, $rot.ida, $rot.retorno, $rot.dias, $rot.total_km, $rot.total_tempo)
-    $w.FindName('lstTrechos').ItemsSource    = @($rot.trechos)
 
-    # marca cada local com o status do ultimo diagnostico feito pelo tecnico
+    # marca cada local com o status do ultimo diagnostico feito pelo tecnico;
+    # o cartao do local fica verde quando testado, e o cartao da ZE fica verde
+    # quando TODOS os locais dela (principal + contingencia) ja foram testados.
     $feitos = Get-DiagnosticosRealizados -TecnicoNome $Global:SessaoAtual.tecnico_nome
     $cinza  = [Windows.Media.SolidColorBrush]::new([Windows.Media.ColorConverter]::ConvertFromString('#7D8698'))
     $cinza.Freeze()
     foreach ($grupo in @($rot.juntas)) {
+        $todasTestadas = $true
         foreach ($loc in @($grupo.locais)) {
             $d = $feitos[[string] $loc.id]
             if ($d) {
@@ -590,11 +591,15 @@ function Show-GuiaBordo {
                 $txt = 'N' + [char]0x00E3 + 'o testado'
                 $cor = $cinza
                 $bot = 'Rodar diagn' + [char]0x00F3 + 'stico'
+                $todasTestadas = $false
             }
             $loc | Add-Member -NotePropertyName TesteStatus -NotePropertyValue $txt -Force
             $loc | Add-Member -NotePropertyName TesteCor    -NotePropertyValue $cor -Force
             $loc | Add-Member -NotePropertyName BotaoRodar  -NotePropertyValue $bot -Force
+            $loc | Add-Member -NotePropertyName Testado     -NotePropertyValue ([bool] $d) -Force
         }
+        $temLocais = [bool] (@($grupo.locais).Count)
+        $grupo | Add-Member -NotePropertyName TodasTestadas -NotePropertyValue ($temLocais -and $todasTestadas) -Force
     }
     $w.FindName('lstGuiaJuntas').ItemsSource = @($rot.juntas)
 

@@ -21,6 +21,7 @@
     <SolidColorBrush x:Key="Dicon.AccentDim"  Color="#2C3A57"/>
     <SolidColorBrush x:Key="Dicon.Deep"       Color="#0A1428"/>
     <SolidColorBrush x:Key="Dicon.Viavel"     Color="#4FC177"/>
+    <SolidColorBrush x:Key="Dicon.ViavelDim"  Color="#264FC177"/>
     <SolidColorBrush x:Key="Dicon.Ressalva"   Color="#E8B93E"/>
     <SolidColorBrush x:Key="Dicon.Inviavel"   Color="#E8695C"/>
     <SolidColorBrush x:Key="Dicon.Amarelo"    Color="#F2C200"/>

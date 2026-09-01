@@ -288,43 +288,22 @@
 
                 <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">
                     <StackPanel>
-                        <TextBlock Text="Trechos da viagem" Style="{DynamicResource SecaoTela}" Margin="0,0,0,8"/>
-                        <ItemsControl x:Name="lstTrechos">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Grid Margin="0,0,0,2">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <StackPanel Grid.Column="0" Width="18" HorizontalAlignment="Center">
-                                            <Ellipse Width="8" Height="8" Margin="0,6,0,0"
-                                                     Fill="{DynamicResource Dicon.Accent}"/>
-                                            <Rectangle Width="2" Height="22" Fill="{DynamicResource Dicon.Hair}"
-                                                       HorizontalAlignment="Center"/>
-                                        </StackPanel>
-                                        <TextBlock Grid.Column="1" Margin="6,2,0,0" TextWrapping="Wrap"
-                                                   Foreground="{DynamicResource Dicon.Text2}">
-                                            <Run Text="{Binding origem}"/><Run Text="  &#8594;  "/>
-                                            <Run Text="{Binding destino}" FontWeight="Bold"
-                                                 Foreground="{DynamicResource Dicon.Text}"/>
-                                            <Run Text="   "/>
-                                            <Run Text="{Binding distancia_km}" FontFamily="Consolas"
-                                                 Foreground="{DynamicResource Dicon.Text3}"/><Run Text=" km &#183; " Foreground="{DynamicResource Dicon.Text3}"/>
-                                            <Run Text="{Binding tempo}" FontFamily="Consolas"
-                                                 Foreground="{DynamicResource Dicon.Text3}"/>
-                                        </TextBlock>
-                                    </Grid>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-
                         <TextBlock Text="Locais para diagn&#243;stico" Style="{DynamicResource SecaoTela}"
-                                   Margin="0,18,0,8"/>
+                                   Margin="0,0,0,8"/>
                         <ItemsControl x:Name="lstGuiaJuntas">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Border Style="{DynamicResource Cartao}" Margin="0,0,0,10" Padding="14">
+                                    <Border Margin="0,0,0,10" Padding="14">
+                                        <Border.Style>
+                                            <Style TargetType="Border" BasedOn="{StaticResource Cartao}">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding TodasTestadas}" Value="True">
+                                                        <Setter Property="Background" Value="{DynamicResource Dicon.ViavelDim}"/>
+                                                        <Setter Property="BorderBrush" Value="{DynamicResource Dicon.Viavel}"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
                                         <StackPanel>
                                             <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                                                 <Border Style="{DynamicResource Chip}">
@@ -336,11 +315,30 @@
                                                 <TextBlock Text="{Binding municipio_termo}" FontWeight="Bold"
                                                            Margin="10,0,0,0" VerticalAlignment="Center"
                                                            Foreground="{DynamicResource Dicon.Text}"/>
+                                                <TextBlock Margin="10,0,0,0" VerticalAlignment="Center"
+                                                           FontFamily="Consolas" FontSize="11" FontWeight="Bold"
+                                                           Foreground="{DynamicResource Dicon.Viavel}"
+                                                           Visibility="{Binding TodasTestadas, Converter={StaticResource boolVis}}">
+                                                    <Run Text="&#10003; CONCLU&#205;DA"/>
+                                                </TextBlock>
                                             </StackPanel>
                                             <ItemsControl ItemsSource="{Binding locais}">
                                                 <ItemsControl.ItemTemplate>
                                                     <DataTemplate>
-                                                        <Grid Margin="0,5">
+                                                        <Border Margin="0,4" Padding="10,7" CornerRadius="6" BorderThickness="1">
+                                                            <Border.Style>
+                                                                <Style TargetType="Border">
+                                                                    <Setter Property="Background" Value="Transparent"/>
+                                                                    <Setter Property="BorderBrush" Value="Transparent"/>
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding Testado}" Value="True">
+                                                                            <Setter Property="Background" Value="{DynamicResource Dicon.ViavelDim}"/>
+                                                                            <Setter Property="BorderBrush" Value="{DynamicResource Dicon.Viavel}"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </Border.Style>
+                                                        <Grid>
                                                             <Grid.ColumnDefinitions>
                                                                 <ColumnDefinition Width="*"/>
                                                                 <ColumnDefinition Width="Auto"/>
@@ -372,6 +370,7 @@
                                                                     Style="{DynamicResource BotaoSecundario}"
                                                                     Padding="12,7" FontSize="12"/>
                                                         </Grid>
+                                                        </Border>
                                                     </DataTemplate>
                                                 </ItemsControl.ItemTemplate>
                                             </ItemsControl>

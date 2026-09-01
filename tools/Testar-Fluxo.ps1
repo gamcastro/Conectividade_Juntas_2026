@@ -123,10 +123,9 @@ try {
     # 3. guia de bordo
     Show-GuiaBordo
     if ($w.FindName('viewGuia').Visibility -ne 'Visible') { Write-Host "[3] FALHA: nao abriu o guia"; $falhas++ }
-    $nTrechos = @($w.FindName('lstTrechos').ItemsSource).Count
     $nJuntas  = @($w.FindName('lstGuiaJuntas').ItemsSource).Count
-    Write-Host "[3] Guia: $nTrechos trecho(s), $nJuntas grupo(s) de Junta"
-    if ($nTrechos -lt 1 -or $nJuntas -lt 1) { Write-Host "    FALHA: guia sem conteudo"; $falhas++ }
+    Write-Host "[3] Guia: $nJuntas grupo(s) de Junta"
+    if ($nJuntas -lt 1) { Write-Host "    FALHA: guia sem conteudo"; $falhas++ }
 
     # 4. assistente pelo atalho do guia: abre no passo 1, Junta/Local pre-selecionados
     Start-DiagnosticoDoGuia -LocalId 'ZE99-TESTE-PRINCIPAL'
@@ -403,11 +402,14 @@ try {
     Show-GuiaBordo
     $grpT = @($w.FindName('lstGuiaJuntas').ItemsSource)[0]
     $locT = @($grpT.locais) | Where-Object { $_.id -eq 'ZE99-TESTE-PRINCIPAL' } | Select-Object -First 1
-    if ($locT -and "$($locT.TesteStatus)" -match 'Testado' -and "$($locT.BotaoRodar)" -match 'Refazer') {
+    if ($locT -and "$($locT.TesteStatus)" -match 'Testado' -and "$($locT.BotaoRodar)" -match 'Refazer' -and $locT.Testado -eq $true) {
         Write-Host "[5e] guia marca o local como testado: '$($locT.TesteStatus)'"
     } else {
-        Write-Host "    FALHA: guia nao marcou o local como testado (status='$($locT.TesteStatus)')"; $falhas++
+        Write-Host "    FALHA: guia nao marcou o local como testado (status='$($locT.TesteStatus)' Testado=$($locT.Testado))"; $falhas++
     }
+    # so o Principal foi testado (Contingencia ainda nao) -> cartao da ZE ainda nao fica verde
+    if ($grpT.TodasTestadas -eq $false) { Write-Host "[5e] cartao da ZE ainda nao 'concluida' (falta a contingencia)" }
+    else { Write-Host "    FALHA: TodasTestadas deveria ser false (so o principal foi testado)"; $falhas++ }
     $prog = Get-ProgressoRoteiro -Roteiro $Global:RoteiroAtual -TecnicoNome 'TECNICO HEADLESS'
     if ($prog.Testados -eq 1 -and $prog.Total -eq 2) { Write-Host "[5e] progresso do roteiro: $($prog.Testados)/$($prog.Total)" }
     else { Write-Host "    FALHA: progresso $($prog.Testados)/$($prog.Total) (esperado 1/2)"; $falhas++ }
