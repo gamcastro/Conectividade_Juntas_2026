@@ -154,11 +154,19 @@ try {
     $hostTxt = "$($w.FindName('txtLocHost').Text)"
     if ($w.FindName('cardFaseLocal').Visibility -eq 'Visible' -and
         $w.FindName('cardInternetLocal').Visibility -eq 'Collapsed' -and
-        $w.FindName('btnRodarFaseLocal').IsEnabled -and $hostTxt -match 'NB-TESTE-01') {
-        Write-Host "[4c] probe ao entrar: placas mostradas ($hostTxt), internet ainda nao testada"
+        -not $w.FindName('btnRodarFaseLocal').IsEnabled -and $hostTxt -match 'NB-TESTE-01') {
+        Write-Host "[4c] probe ao entrar: placas mostradas ($hostTxt); 'Rodar checagem' travado ate escolher a placa"
     } else { Write-Host "    FALHA: probe do passo 3 (card=$($w.FindName('cardFaseLocal').Visibility) inet=$($w.FindName('cardInternetLocal').Visibility) rodar.en=$($w.FindName('btnRodarFaseLocal').IsEnabled) host='$hostTxt')"; $falhas++ }
 
-    # 4c-1. passo 3 bloqueia antes de rodar a checagem da internet do local
+    # 4c-0. escolher a placa cabeada (LAN) libera "Rodar checagem local"
+    $w.FindName('rbUsarLan').IsChecked = $true
+    Invoke-Pump
+    if ($w.FindName('rbUsarLan').IsEnabled -and $w.FindName('rbUsarWifi').IsEnabled -and
+        $w.FindName('btnRodarFaseLocal').IsEnabled -and $Global:FaseLocalTipo -eq 'lan') {
+        Write-Host "[4c] escolhida a placa LAN -> 'Rodar checagem local' libera"
+    } else { Write-Host "    FALHA: escolha da placa (rbLan.en=$($w.FindName('rbUsarLan').IsEnabled) rbWifi.en=$($w.FindName('rbUsarWifi').IsEnabled) rodar.en=$($w.FindName('btnRodarFaseLocal').IsEnabled) tipo='$($Global:FaseLocalTipo)')"; $falhas++ }
+
+    # 4c-1. passo 3 bloqueia "Proximo" antes de rodar a checagem da internet do local
     Invoke-WizardProximo
     if ($Global:WizardStep -ne 3) { Write-Host "[4c] FALHA: avancou sem testar a internet local"; $falhas++ }
     else { Write-Host "[4c] passo 3 bloqueia antes do teste de internet" }
@@ -166,6 +174,9 @@ try {
     # 4c-2. roda o speedtest (simulado): velocimetro + painel de resultado; avanca p/ passo 4
     Invoke-RodarFaseLocal
     Invoke-Pump
+    if ($Global:FaseLocalPayload.PSObject.Properties['TipoUsado'] -and $Global:FaseLocalPayload.TipoUsado -eq 'lan') {
+        Write-Host "[4c] checagem registrou a placa usada: LAN"
+    } else { Write-Host "    FALHA: TipoUsado nao gravado ('$($Global:FaseLocalPayload.TipoUsado)')"; $falhas++ }
     $it = $Global:FaseLocalPayload.Internet
     if ($it -and $it.speedtest_ok -and $w.FindName('cardInternetLocal').Visibility -eq 'Visible' -and
         "$($w.FindName('painelSpeedResultado').Visibility)" -eq 'Visible') {
@@ -197,18 +208,23 @@ try {
     if (-not $w.FindName('chkTetheringCelular').IsEnabled) { Write-Host "[4c] com LAN conectada: 'teste pelo celular' desabilitado" }
     else { Write-Host "    FALHA: tethering habilitado com LAN conectada"; $falhas++ }
 
-    # 4c-3c. conectar Wi-Fi sem SSID mostra aviso (nao chama netsh)
+    # 4c-3c. escolher "Usar o Wi-Fi" habilita o card de conexao; sem SSID avisa
+    $w.FindName('rbUsarWifi').IsChecked = $true
+    Invoke-Pump
+    if ($w.FindName('cardConectarWifi').IsEnabled -and $Global:FaseLocalTipo -eq 'wifi') {
+        Write-Host "[4c] escolher 'Usar o Wi-Fi' habilita o card 'Conectar a uma rede Wi-Fi'"
+    } else { Write-Host "    FALHA: card Wi-Fi nao habilitou ao escolher (en=$($w.FindName('cardConectarWifi').IsEnabled) tipo='$($Global:FaseLocalTipo)')"; $falhas++ }
     $w.FindName('cboWifiSsid').Text = ''
     Invoke-ConectarWifi
     if ("$($w.FindName('txtWifiStatus').Text)" -match 'SSID') { Write-Host "[4c] conectar Wi-Fi exige SSID" }
     else { Write-Host "    FALHA: conectar Wi-Fi sem SSID nao avisou"; $falhas++ }
 
-    # 4c-4. sem cabo LAN + com Wi-Fi -> "teste pelo celular" habilita e exige operadora
+    # 4c-4. Wi-Fi escolhido mas nao conectado -> checagem travada; ao conectar, libera
     $Global:FaseLocalPayload.Lan.conectado      = $false
     $Global:FaseLocalPayload.Wireless.conectado = $false
     Update-PainelFaseLocal
     if (-not $w.FindName('btnRodarFaseLocal').IsEnabled -and "$($w.FindName('txtLocDica').Visibility)" -eq 'Visible') {
-        Write-Host "[4c] sem LAN e sem Wi-Fi conectado: checagem travada + dica visivel"
+        Write-Host "[4c] Wi-Fi escolhido e nao conectado: checagem travada + dica visivel"
     } else { Write-Host "    FALHA: gate sem conexao (rodar.en=$($w.FindName('btnRodarFaseLocal').IsEnabled) dica=$($w.FindName('txtLocDica').Visibility))"; $falhas++ }
     $Global:FaseLocalPayload.Wireless.conectado = $true
     Update-PainelFaseLocal
@@ -240,10 +256,12 @@ try {
     if ($Global:WizardStep -eq 3 -and $null -ne $Global:FaseLocalPayload -and $null -eq $Global:FaseLocalPayload.Internet) {
         Write-Host "[4c] re-entrou no passo 3 com checagem zerada"
     } else { Write-Host "    FALHA: re-probe ao voltar (step=$($Global:WizardStep))"; $falhas++ }
-    # refaz o cenario "sem LAN, via celular": tethering + operadora + checagem
+    # refaz o cenario "sem LAN, via celular": escolhe Wi-Fi + tethering + operadora + checagem
     $Global:FaseLocalPayload.Lan.conectado      = $false
     $Global:FaseLocalPayload.Wireless.conectado = $true    # conectado ao hotspot do celular
     Update-PainelFaseLocal
+    $w.FindName('rbUsarWifi').IsChecked = $true            # placa escolhida = Wi-Fi (hotspot)
+    Invoke-Pump
     $w.FindName('chkTetheringCelular').IsChecked = $true ; Update-TetheringCelular
     $w.FindName('cboOperadora').Text = 'Vivo'
     Invoke-RodarFaseLocal ; Invoke-Pump

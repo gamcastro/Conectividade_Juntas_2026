@@ -20,6 +20,7 @@ $Global:WizardStep         = 1       # passo atual do assistente de diagnostico 
 $Global:HomeTrabalhoState  = $null   # runspace do "Atualizar dados"/"Reenviar" async
 $Global:TarefaRedeState    = $null   # runspace da fase local / conexao Wi-Fi
 $Global:FaseLocalPayload   = $null   # {Lan;Wireless;Internet;Quando} da fase 1 (sem VPN)
+$Global:FaseLocalTipo      = ''      # placa escolhida no passo 3: '' | 'lan' | 'wifi'
 $Global:FeitoSalvar        = $false  # checklist do passo 7
 $Global:FeitoTransmitir    = $false
 $Global:FeitoExportar      = $false
@@ -251,6 +252,8 @@ function New-JanelaPrincipal {
     $window.FindName('btnRodarFaseLocal').Add_Click({ Invoke-RodarFaseLocal })
     $window.FindName('btnConectarWifi').Add_Click({ Invoke-ConectarWifi })
     $window.FindName('chkTetheringCelular').Add_Click({ Update-TetheringCelular })
+    $window.FindName('rbUsarLan').Add_Checked({ Set-FaseLocalTipo 'lan' })
+    $window.FindName('rbUsarWifi').Add_Checked({ Set-FaseLocalTipo 'wifi' })
     $window.FindName('btnExportarPdf').Add_Click({ Invoke-ExportarRelatorio })
     $window.FindName('btnTransmitirResultado').Add_Click({ Invoke-TransmitirResultado })
     $window.FindName('btnDiagVoltar').Add_Click({ Show-View 'viewHome' })
@@ -729,8 +732,11 @@ function Update-DetalheLocal {
     # ao reentrar no passo 3 uma nova checagem e feita do zero.
     if ($Global:FaseLocalPayload) {
         $Global:FaseLocalPayload = $null
+        $Global:FaseLocalTipo    = ''
         $ck = $w.FindName('chkTetheringCelular'); if ($ck) { $ck.IsChecked = $false }
         $op = $w.FindName('cboOperadora');        if ($op) { $op.Text = '' }
+        $rl = $w.FindName('rbUsarLan');  if ($rl) { $rl.IsChecked = $false }
+        $rw = $w.FindName('rbUsarWifi'); if ($rw) { $rw.IsChecked = $false }
     }
     if (-not $sel) {
         $card.Visibility = 'Collapsed'
@@ -852,9 +858,16 @@ function Set-FaseLocalOcupado {
         $ring.IsActive   = $Ocupado
         $ring.Visibility = if ($Ocupado) { 'Visible' } else { 'Collapsed' }
     }
-    foreach ($n in 'btnRodarFaseLocal', 'btnConectarWifi', 'btnWizProximo', 'btnWizVoltar') {
+    foreach ($n in 'btnRodarFaseLocal', 'btnConectarWifi', 'btnWizProximo', 'btnWizVoltar', 'rbUsarLan', 'rbUsarWifi') {
         $c = $w.FindName($n); if ($c) { $c.IsEnabled = -not $Ocupado }
     }
+}
+
+# Escolha da placa (radio nos cartoes) -> revalida o passo 3.
+function Set-FaseLocalTipo {
+    param([string] $Tipo)
+    $Global:FaseLocalTipo = $Tipo
+    Update-PainelFaseLocal
 }
 
 # Preenche o cartao da placa de rede + regras de habilitacao do passo 3.
@@ -871,19 +884,20 @@ function Update-PainelFaseLocal {
     $cinza    = [Windows.Media.SolidColorBrush]::new([Windows.Media.ColorConverter]::ConvertFromString('#7D8698'))
     $cinza.Freeze()
 
-    # "Conectar a uma rede Wi-Fi" so aparece se o computador tem placa wireless.
     $temWifi = if ($p) { [bool] $p.Wireless.presente } else { Test-TemPlacaWireless }
     $cardWifi = $w.FindName('cardConectarWifi')
-    if ($cardWifi) { $cardWifi.Visibility = if ($temWifi) { 'Visible' } else { 'Collapsed' } }
 
     if (-not $p) {
         if ($card) { $card.Visibility = 'Collapsed' }
         $w.FindName('cardInternetLocal').Visibility = 'Collapsed'
+        if ($cardWifi) { $cardWifi.Visibility = 'Collapsed' }
         $w.FindName('txtLocDica').Visibility = 'Collapsed'
+        $w.FindName('txtLocEscolha').Text = 'Verificando as placas de rede deste computador...'
         $w.FindName('btnRodarFaseLocal').IsEnabled = $false
         $w.FindName('chkTetheringCelular').IsEnabled = $false
         return
     }
+    $w.FindName('txtLocEscolha').Text = 'Escolha qual placa de rede vai usar para a checagem: a cabeada (LAN) ou o Wi-Fi. So depois de escolher e que "Rodar checagem local" libera.'
 
     $lan = $p.Lan; $wf = $p.Wireless; $it = $p.Internet
     $hostNb = if ($p.PSObject.Properties['Host']) { [string] $p.Host } else { '' }
@@ -892,13 +906,13 @@ function Update-PainelFaseLocal {
     $lanUp = [bool] $lan.conectado
     $tl = $w.FindName('txtLocLan'); $dl = $w.FindName('dotLan')
     if ($lanUp) {
-        $tl.Text = 'Cabo de rede (LAN): conectado' + $(if ($lan.nome) { " - $($lan.nome)" } else { '' })
+        $tl.Text = 'Conectada' + $(if ($lan.nome) { " - $($lan.nome)" } else { '' })
         $tl.Foreground = $verde ; $dl.Fill = $verde
     } elseif ($lan.presente) {
-        $tl.Text = 'Cabo de rede (LAN): sem conexao (cabo fora / sem IP)'
+        $tl.Text = 'Placa ativa, sem conexao (cabo fora / sem IP)'
         $tl.Foreground = $vermelho ; $dl.Fill = $vermelho
     } else {
-        $tl.Text = 'Cabo de rede (LAN): nenhuma placa cabeada neste computador'
+        $tl.Text = 'Nenhuma placa cabeada neste computador'
         $tl.Foreground = $cinza ; $dl.Fill = $cinza
     }
 
@@ -912,16 +926,24 @@ function Update-PainelFaseLocal {
     $wifiUp = [bool] $wf.conectado
     $tw = $w.FindName('txtLocWifi'); $dw = $w.FindName('dotWifi')
     if ($wifiUp) {
-        $tw.Text = 'Wi-Fi: conectado a "{0}" ({1}%)' -f $wf.ssid, $wf.sinal_pct
+        $tw.Text = 'Conectada a "{0}" ({1}%)' -f $wf.ssid, $wf.sinal_pct
         $tw.Foreground = $verde ; $dw.Fill = $verde
     } elseif ($wf.presente) {
         $n = (@($wf.redes_disponiveis)).Count
-        $tw.Text = 'Wi-Fi: placa presente, nao conectada' + $(if ($n) { " - $n rede(s) por perto" } else { '' })
+        $tw.Text = 'Placa ativa, nao conectada' + $(if ($n) { " - $n rede(s) por perto" } else { '' })
         $tw.Foreground = if ($lanUp) { $cinza } else { $vermelho }
         $dw.Fill       = if ($lanUp) { $cinza } else { $vermelho }
     } else {
-        $tw.Text = 'Wi-Fi: sem placa wireless neste computador'
+        $tw.Text = 'Sem placa Wi-Fi neste computador'
         $tw.Foreground = $cinza ; $dw.Fill = $cinza
+    }
+    $twd = $w.FindName('txtLocWifiDet')
+    if ($twd) {
+        $twd.Text = if ($wifiUp) {
+            $nn = (@($wf.redes_disponiveis)).Count
+            if ($nn) { "$nn outra(s) rede(s) por perto" } else { '' }
+        } else { '' }
+        $twd.Visibility = if ($twd.Text) { 'Visible' } else { 'Collapsed' }
     }
 
     # card do speedtest: as linhas ja foram transmitidas ao vivo pelo runspace;
@@ -962,9 +984,45 @@ function Update-PainelFaseLocal {
         $lblWifi.Text = $base + ' Escolha na lista ou digite o nome (SSID) se a rede nao aparecer. A senha fica gravada no perfil de Wi-Fi do Windows.'
     }
 
-    # --- regras de habilitacao ------------------------------------------
-    $conectado = $lanUp -or $wifiUp
-    $w.FindName('btnRodarFaseLocal').IsEnabled = $conectado
+    # --- escolha da placa (radio) + regras de habilitacao -----------------
+    $tipo = [string] $Global:FaseLocalTipo
+    $rbL = $w.FindName('rbUsarLan'); $rbW = $w.FindName('rbUsarWifi')
+
+    # cada radio so pode ser marcado se aquela placa da pra usar
+    if ($rbL) { $rbL.IsEnabled = [bool] $lan.conectado }
+    if ($rbW) { $rbW.IsEnabled = [bool] $wf.presente }
+
+    # se a escolha atual deixou de ser valida, desmarca
+    if ($tipo -eq 'lan'  -and -not [bool] $lan.conectado) { $tipo = ''; if ($rbL) { $rbL.IsChecked = $false } }
+    if ($tipo -eq 'wifi' -and -not [bool] $wf.presente)   { $tipo = ''; if ($rbW) { $rbW.IsChecked = $false } }
+    $Global:FaseLocalTipo = $tipo
+
+    # realce do cartao escolhido (borda accent)
+    $accent = $w.TryFindResource('Dicon.Accent')
+    $hair   = $w.TryFindResource('Dicon.Hair')
+    $cdL = $w.FindName('cardLan')
+    if ($cdL) {
+        $cdL.BorderBrush     = if ($tipo -eq 'lan') { $accent } else { $hair }
+        $cdL.BorderThickness = [Windows.Thickness]::new($(if ($tipo -eq 'lan') { 2 } else { 1 }))
+    }
+    $cdW = $w.FindName('cardWifiPlaca')
+    if ($cdW) {
+        $cdW.BorderBrush     = if ($tipo -eq 'wifi') { $accent } else { $hair }
+        $cdW.BorderThickness = [Windows.Thickness]::new($(if ($tipo -eq 'wifi') { 2 } else { 1 }))
+    }
+
+    # "Conectar a uma rede Wi-Fi": aparece se ha placa Wi-Fi; so habilita se
+    # o tecnico escolheu usar o Wi-Fi.
+    if ($cardWifi) {
+        $cardWifi.Visibility = if ($wf.presente) { 'Visible' } else { 'Collapsed' }
+        $cardWifi.IsEnabled  = ($tipo -eq 'wifi')
+        $cardWifi.Opacity    = if ($tipo -eq 'wifi') { 1.0 } else { 0.5 }
+    }
+
+    # botao: precisa de tipo escolhido E daquele caminho conectado
+    $prontoLan  = ($tipo -eq 'lan')  -and $lanUp
+    $prontoWifi = ($tipo -eq 'wifi') -and $wifiUp
+    $w.FindName('btnRodarFaseLocal').IsEnabled = $prontoLan -or $prontoWifi
 
     # "teste pelo celular" so quando NAO ha cabo de rede E existe placa Wi-Fi
     $podeTether = (-not $lanUp) -and [bool] $wf.presente
@@ -974,15 +1032,22 @@ function Update-PainelFaseLocal {
     Update-TetheringCelular
 
     $dica = $w.FindName('txtLocDica')
-    if ($conectado) {
-        $dica.Visibility = 'Collapsed'
-    } elseif ([bool] $wf.presente) {
-        $dica.Text = 'Sem cabo de rede. Conecte-se a uma rede Wi-Fi (a do local ou a do seu celular) para liberar a checagem.'
-        $dica.Visibility = 'Visible'
-    } else {
-        $dica.Text = 'Sem cabo de rede e sem placa Wi-Fi neste computador - nao da para rodar a checagem aqui.'
-        $dica.Visibility = 'Visible'
-    }
+    $msg =
+        if ($prontoLan -or $prontoWifi) { '' }
+        elseif (-not $tipo) {
+            if (-not $lan.conectado -and -not $wf.presente) {
+                'Sem cabo e sem placa Wi-Fi neste computador - nao da para rodar a checagem aqui. Use o teste pelo celular abaixo.'
+            } elseif (-not $lan.conectado -and -not $wf.conectado) {
+                'Marque "Usar o Wi-Fi" e conecte-se a uma rede no card abaixo para liberar a checagem.'
+            } else {
+                'Escolha acima qual placa vai usar (LAN ou Wi-Fi) para liberar a checagem.'
+            }
+        }
+        elseif ($tipo -eq 'wifi' -and -not $wifiUp) { 'Conecte-se a uma rede Wi-Fi no card abaixo para liberar a checagem.' }
+        elseif ($tipo -eq 'lan'  -and -not $lanUp)  { 'A rede cabeada nao esta conectada. Ligue o cabo ou escolha o Wi-Fi.' }
+        else { '' }
+    $dica.Text = $msg
+    $dica.Visibility = if ($msg) { 'Visible' } else { 'Collapsed' }
 
     $card.Visibility = 'Visible'
 }
@@ -1318,11 +1383,14 @@ function Update-IperfPainel {
 # Botao "Rodar checagem local": teste de velocidade Ookla (speedtest.exe).
 function Invoke-RodarFaseLocal {
     $p = $Global:FaseLocalPayload
-    $conectado = $p -and ([bool] $p.Lan.conectado -or [bool] $p.Wireless.conectado)
-    if (-not $conectado) {
-        Write-Log 'Conecte o computador a rede do local (cabo ou Wi-Fi) antes de rodar a checagem.' -Nivel Aviso
+    $tipo = [string] $Global:FaseLocalTipo
+    $ok = ($tipo -eq 'lan'  -and $p -and [bool] $p.Lan.conectado) -or `
+          ($tipo -eq 'wifi' -and $p -and [bool] $p.Wireless.conectado)
+    if (-not $ok) {
+        Write-Log 'Escolha a placa (LAN ou Wi-Fi) e conecte-a antes de rodar a checagem.' -Nivel Aviso
         return
     }
+    Write-Log ("Checagem local pela placa: {0}" -f $(if ($tipo -eq 'lan') { 'rede cabeada (LAN)' } else { 'Wi-Fi' })) -Nivel Info
     Reset-Velocimetro
     $w = $Global:JanelaPrincipal
     if ($w) {
@@ -1340,6 +1408,9 @@ function Complete-FaseLocal {
     param($Payload, $Erro)
     Set-FaseLocalOcupado $false
     if ($Erro) { Write-Log "Checagem da rede local falhou: $Erro" -Nivel Erro; return }
+    if ($Payload -and $Global:FaseLocalTipo) {
+        $Payload | Add-Member -NotePropertyName TipoUsado -NotePropertyValue ([string] $Global:FaseLocalTipo) -Force
+    }
     $Global:FaseLocalPayload = $Payload
     Update-PainelFaseLocal
     Write-Log 'Rede local checada. Conecte a VPN do TRE e clique em Proximo.' -Nivel Ok
@@ -1428,6 +1499,7 @@ function Update-TetheringCelular {
 # Zera o passo 3 (rede local) ao abrir o assistente limpo / pelo guia.
 function Reset-PainelFaseLocal {
     $Global:FaseLocalPayload = $null
+    $Global:FaseLocalTipo    = ''
     Reset-Velocimetro
     $w = $Global:JanelaPrincipal
     if ($w) {
@@ -1437,6 +1509,8 @@ function Reset-PainelFaseLocal {
         $w.FindName('chkTetheringCelular').IsChecked = $false
         $w.FindName('cboOperadora').Text       = ''
         $w.FindName('cboOperadora').IsEnabled  = $false
+        $rl = $w.FindName('rbUsarLan');  if ($rl) { $rl.IsChecked = $false }
+        $rw = $w.FindName('rbUsarWifi'); if ($rw) { $rw.IsChecked = $false }
     }
     Update-PainelFaseLocal
 }

@@ -159,6 +159,10 @@ function New-RelatorioHtml {
         if ($rl.PSObject.Properties['host'] -and $rl.host) {
             $ce += '<div><b>Computador:</b> {0}</div>' -f (ConvertTo-HtmlSafe ([string] $rl.host))
         }
+        if ($rl.PSObject.Properties['placa_usada'] -and $rl.placa_usada) {
+            $pu = if ($rl.placa_usada -eq 'lan') { 'rede cabeada (LAN)' } elseif ($rl.placa_usada -eq 'wifi') { 'Wi-Fi' } else { [string] $rl.placa_usada }
+            $ce += '<div><b>Placa usada na checagem:</b> {0}</div>' -f $pu
+        }
         if ($tether) {
             $op = if ($rl.PSObject.Properties['operadora'] -and $rl.operadora) {
                 ' &mdash; operadora <b>{0}</b>' -f (ConvertTo-HtmlSafe ([string] $rl.operadora))
