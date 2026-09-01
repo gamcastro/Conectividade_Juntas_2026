@@ -954,11 +954,12 @@ function Update-PainelFaseLocal {
     # quando ja estamos num Wi-Fi, o card serve para TROCAR de rede.
     $lblWifi = $w.FindName('txtConectarWifiDica')
     if ($lblWifi) {
-        $lblWifi.Text = if ($wifiUp) {
-            'Ja conectado a "{0}". Use abaixo so para trocar para outra rede. A senha fica gravada no perfil de Wi-Fi do Windows.' -f $wf.ssid
+        $base = if ($wifiUp) {
+            'Ja conectado a "{0}". Use abaixo so se quiser trocar para outra rede.' -f $wf.ssid
         } else {
-            'Use se o local nao tiver cabo. A senha fica gravada no perfil de Wi-Fi do Windows.'
+            'Use se o local nao tiver cabo.'
         }
+        $lblWifi.Text = $base + ' Escolha na lista ou digite o nome (SSID) se a rede nao aparecer. A senha fica gravada no perfil de Wi-Fi do Windows.'
     }
 
     # --- regras de habilitacao ------------------------------------------

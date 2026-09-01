@@ -221,16 +221,27 @@ function Get-AdaptadorWireless {
     $o.conectado = ($o.ssid -ne '') -and (($wa.Status -eq 'Up') -or ($o.status -match 'conect|connected'))
 
     try {
-        $txt2 = Invoke-Netsh -Argumentos @('wlan', 'show', 'networks')
-        $redes = foreach ($ln in ($txt2 -split "`r?`n")) {
-            if ($ln -match '^\s*SSID\s+\d+\s*:\s*(.+?)\s*$') { $Matches[1] }
+        # dois modos: alguns drivers so listam a rede associada em 'show networks'
+        # simples; 'mode=bssid' costuma trazer todas as visiveis.
+        $blob = @(
+            (Invoke-Netsh -Argumentos @('wlan', 'show', 'networks')),
+            (Invoke-Netsh -Argumentos @('wlan', 'show', 'networks', 'mode=bssid'))
+        ) -join "`n"
+        $redes = foreach ($ln in ($blob -split "`r?`n")) {
+            if ($ln -match '^\s*SSID\s+\d+\s*:\s*(.*\S)\s*$') { $Matches[1] }
         }
         # nao lista a rede em que ja estamos: o card "Conectar a rede Wi-Fi"
         # serve para trocar para OUTRA rede.
         $o.redes_disponiveis = @(
-            $redes | Where-Object { $_ -and $_ -ne $o.ssid } | Select-Object -Unique
+            $redes | Where-Object { $_ -and $_ -ne $o.ssid } |
+                Sort-Object -Unique
         )
-    } catch { }
+        Write-Log ("Wi-Fi: {0} rede(s) por perto para trocar{1}" -f `
+            $o.redes_disponiveis.Count, `
+            $(if ($o.redes_disponiveis.Count) { ': ' + ($o.redes_disponiveis -join ', ') } else { '' })) -Nivel Info
+    } catch {
+        Write-Log "Nao consegui listar as redes Wi-Fi por perto: $_" -Nivel Aviso
+    }
     $o
 }
 
