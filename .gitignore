@@ -10,6 +10,8 @@
 # Configs reais — versiona apenas os exemplos
 /config/*.json
 !/config/*.exemplo.json
+# Marcador de canal da instalação (main | homologacao), gravado pelo setup
+/config/canal
 
 # Binários de terceiros (baixados no setup, não versionados)
 /bin/iperf3/*

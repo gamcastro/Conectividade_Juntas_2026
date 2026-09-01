@@ -10,18 +10,35 @@ setup cria a partir dos `*.exemplo.json`.
 
 ## Atalho: baixar + instalar num comando (com internet)
 
-No PowerShell (janela normal, com internet). Instala em `C:\DICON`, garante o
-`speedtest.exe` (baixa + desbloqueia) e roda o setup. Se já houver DICON na
-pasta, ele **atualiza** o código em vez de reinstalar.
+No PowerShell (janela normal, com internet). Baixa o código, garante o
+`speedtest.exe` (baixa + desbloqueia), grava o canal e roda o setup. Se já
+houver DICON na pasta, **atualiza** em vez de reinstalar.
 
+**Homologação** (testes do admin):
 ```
 iex (irm 'https://raw.githubusercontent.com/gamcastro/Conectividade_Juntas_2026/homologacao/setup/Baixar-e-Instalar.ps1')
 ```
 
-Opções — definir **antes** do comando (todas opcionais):
+**Produção** (técnico em campo):
+```
+iex (irm 'https://raw.githubusercontent.com/gamcastro/Conectividade_Juntas_2026/main/setup/Baixar-e-Instalar.ps1')
+```
+
+### Pasta padrão (por canal)
+
+| Canal | D: é disco fixo | só tem C: |
+|---|---|---|
+| produção (`main`) | `D:\Aplic\DICON` | `C:\Aplic\DICON` |
+| homologação | `D:\Aplic\DICON-HOMOLOG` | `C:\Aplic\DICON-HOMOLOG` |
+
+Sobrescreve com `$env:DICON_DEST` antes do comando. O canal fica gravado em
+`config\canal` — daí pra frente é só `.\setup\Atualizar-DICON.ps1` (sem
+parâmetro) e ele puxa sempre do canal certo.
+
+### Outras opções (antes do comando, todas opcionais)
 
 ```
-$env:DICON_DEST     = 'D:\DICON'          # padrão: C:\DICON
+$env:DICON_BRANCH   = 'main'              # força o canal
 $env:DICON_ENDPOINT = 'https://.../exec'  # URL /exec do Web App (pula a pergunta)
 $env:DICON_PIN      = '1234'              # PIN do admin (pula a pergunta)
 $env:DICON_IPERF    = '10.11.9.20'        # servidor iperf3
@@ -95,9 +112,11 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\setup\Instalar-DICON.ps1 -
 powershell -NoProfile -ExecutionPolicy Bypass -File .\setup\Atualizar-DICON.ps1
 ```
 
-Atualiza só o **código** (`src\`, `lib\mahapps\`, `assets\`, `tools\*.ps1`,
+Puxa do canal gravado em `config\canal` (`main` ou `homologacao`). Atualiza só o
+**código** (`src\`, `lib\mahapps\`, `assets\`, `tools\*.ps1`,
 `Iniciar-Diagnostico.*`). **Não** toca em `config\`, `data\`, `bin\`,
-`resultados\` nem `relatorios\`.
+`resultados\` nem `relatorios\`. Para forçar outro canal (raro):
+`... Atualizar-DICON.ps1 -Branch main -Force`.
 
 ---
 

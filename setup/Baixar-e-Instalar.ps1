@@ -2,12 +2,18 @@
 #  DICON - baixar + extrair + instalar num comando.
 #  (sem #Requires/param(): este script tambem roda via `iex (irm ...)`.)
 #
-#  Uso (PowerShell normal, com internet):
+#  HOMOLOGACAO (padrao desta copia, branch homologacao):
 #      iex (irm 'https://raw.githubusercontent.com/gamcastro/Conectividade_Juntas_2026/homologacao/setup/Baixar-e-Instalar.ps1')
+#  PRODUCAO (a copia em main tem $CanalPadrao = 'main'):
+#      iex (irm 'https://raw.githubusercontent.com/gamcastro/Conectividade_Juntas_2026/main/setup/Baixar-e-Instalar.ps1')
 #
-#  Opcoes: definir ANTES do comando (todas opcionais)
-#      $env:DICON_DEST     = 'D:\DICON'          # padrao: C:\DICON
-#      $env:DICON_BRANCH   = 'homologacao'       # padrao: homologacao
+#  Pasta padrao (se D: for disco fixo, senao C:):
+#      producao     -> <D|C>:\Aplic\DICON
+#      homologacao  -> <D|C>:\Aplic\DICON-HOMOLOG
+#  Sobrescreve com  $env:DICON_DEST.
+#
+#  Outras opcoes (definir ANTES do comando, todas opcionais):
+#      $env:DICON_BRANCH   = 'main'              # forca o canal
 #      $env:DICON_ENDPOINT = 'https://.../exec'  # URL /exec do Web App
 #      $env:DICON_PIN      = '1234'              # PIN do admin
 #      $env:DICON_IPERF    = '10.11.9.20'        # servidor iperf3
@@ -19,14 +25,9 @@ $ErrorActionPreference = 'Stop'
 try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 } catch { }
 $ProgressPreference = 'SilentlyContinue'
 
-$Dest     = if ($env:DICON_DEST)   { $env:DICON_DEST }   else { 'C:\DICON' }
-$Branch   = if ($env:DICON_BRANCH) { $env:DICON_BRANCH } else { 'homologacao' }
-$Endpoint = [string] $env:DICON_ENDPOINT
-$Pin      = [string] $env:DICON_PIN
-$Iperf    = [string] $env:DICON_IPERF
-$DepsZip  = [string] $env:DICON_DEPSZIP
-$Repo     = 'https://github.com/gamcastro/Conectividade_Juntas_2026'
-$OoklaZip = 'https://install.speedtest.net/app/cli/ookla-speedtest-1.2.0-win64.zip'
+# Canal desta copia do script. Na branch 'main' este valor e 'main' (o merge
+# homologacao->main deve manter 'main' aqui).
+$CanalPadrao = 'homologacao'
 
 function Save-ZipRemoto {
     param([string] $Url, [string] $OutFile, [int] $Tentativas = 3)
@@ -36,6 +37,28 @@ function Save-ZipRemoto {
     }
     return $false
 }
+
+# Pasta padrao por canal: D:\Aplic\... se D: for disco fixo, senao C:\Aplic\...
+function Get-DestPadrao {
+    param([string] $Canal)
+    $temD = $false
+    try {
+        $temD = [bool]([System.IO.DriveInfo]::GetDrives() |
+            Where-Object { $_.Name -eq 'D:\' -and $_.IsReady -and $_.DriveType -eq 'Fixed' })
+    } catch { }
+    $drive = if ($temD) { 'D:' } else { 'C:' }
+    $nome  = if ($Canal -eq 'main') { 'DICON' } else { 'DICON-HOMOLOG' }
+    return (Join-Path "$drive\Aplic" $nome)
+}
+
+$Branch   = if ($env:DICON_BRANCH) { $env:DICON_BRANCH } else { $CanalPadrao }
+$Dest     = if ($env:DICON_DEST)   { $env:DICON_DEST }   else { Get-DestPadrao $Branch }
+$Endpoint = [string] $env:DICON_ENDPOINT
+$Pin      = [string] $env:DICON_PIN
+$Iperf    = [string] $env:DICON_IPERF
+$DepsZip  = [string] $env:DICON_DEPSZIP
+$Repo     = 'https://github.com/gamcastro/Conectividade_Juntas_2026'
+$OoklaZip = 'https://install.speedtest.net/app/cli/ookla-speedtest-1.2.0-win64.zip'
 
 # --- 1. codigo: instala do zero ou atualiza o que ja existe --------------------
 if (Test-Path (Join-Path $Dest 'src')) {
@@ -62,6 +85,14 @@ if (Test-Path (Join-Path $Dest 'src')) {
     }
     Write-Host "Codigo em $Dest." -ForegroundColor Green
 }
+
+# --- marcador de canal: Atualizar-DICON.ps1 le daqui pra saber de onde puxar --
+try {
+    $cfgDir = Join-Path $Dest 'config'
+    if (-not (Test-Path $cfgDir)) { New-Item -ItemType Directory -Path $cfgDir -Force | Out-Null }
+    Set-Content -Path (Join-Path $cfgDir 'canal') -Value $Branch -Encoding ascii -NoNewline
+    Write-Host "Canal desta instalacao: $Branch" -ForegroundColor Green
+} catch { }
 
 # --- 2. speedtest.exe (Ookla CLI): garante que existe em tools\ e desbloqueia --
 $stExe = Join-Path $Dest 'tools\speedtest.exe'

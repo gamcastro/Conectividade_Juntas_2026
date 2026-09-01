@@ -10,14 +10,15 @@
     sobrescreve apenas as pastas de codigo.
 
 .PARAMETER Branch
-    Branch a puxar (padrao: homologacao).
+    Branch a puxar. Se omitido, usa o canal desta instalacao (config\canal:
+    'main' = producao, 'homologacao' = homologacao); sem o arquivo, homologacao.
 
 .PARAMETER Force
     Com git: descarta alteracoes locais (git reset --hard) antes de puxar.
 #>
 [CmdletBinding()]
 param(
-    [string] $Branch = 'homologacao',
+    [string] $Branch,
     [switch] $Force
 )
 
@@ -27,7 +28,16 @@ $ProgressPreference = 'SilentlyContinue'
 
 $RaizApp = Split-Path $PSScriptRoot -Parent
 $Repo    = 'https://github.com/gamcastro/Conectividade_Juntas_2026'
-Write-Host "Atualizando: $RaizApp  (branch $Branch)" -ForegroundColor Cyan
+
+# Canal desta instalacao (gravado pelo instalador em config\canal).
+if (-not $Branch) {
+    $arqCanal = Join-Path $RaizApp 'config\canal'
+    if (Test-Path $arqCanal) {
+        try { $Branch = ([string] (Get-Content $arqCanal -Raw)).Trim() } catch { }
+    }
+    if (-not $Branch) { $Branch = 'homologacao' }
+}
+Write-Host "Atualizando: $RaizApp  (canal: $Branch)" -ForegroundColor Cyan
 
 $temGit = (Test-Path (Join-Path $RaizApp '.git')) -and [bool](Get-Command git -ErrorAction SilentlyContinue)
 
