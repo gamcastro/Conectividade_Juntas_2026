@@ -32,6 +32,9 @@ $Global:RecomendacaoLocal  = $null   # {meio;operadora;rotulo;veredito;provisori
 $Global:LocalMedicoesId    = ''      # id do local a que as medicoes atuais pertencem
 $Global:MotivoRecomendacao = ''      # justificativa da conexao recomendada (passo 6)
 $Global:AtualizandoRecomendacao = $false  # guarda: set programatico do combo de recomendacao
+$Global:MedicoesPasso5     = @()     # [{idx;med}] das medicoes testaveis no seletor do passo 5
+$Global:MedicaoPasso5Idx   = -1      # indice em $Global:Medicoes da medicao aberta no passo 5 (-1 = ultima)
+$Global:AtualizandoMedicaoP5 = $false # guarda: set programatico do combo de medicoes do passo 5
 
 $Global:FeitoSalvar        = $false  # checklist do passo 7
 $Global:FeitoTransmitir    = $false
@@ -287,6 +290,7 @@ function New-JanelaPrincipal {
             if (-not $Global:AtualizandoDecisao) { $Global:DecisaoFinalTocada = $true }
             Update-VisibilidadeJustDecisao
         })
+    $window.FindName('cboMedicaoPasso5').Add_SelectionChanged({ Invoke-TrocarMedicaoPasso5 })
     $window.FindName('cboConexaoRec').Add_SelectionChanged({
             if (-not $Global:AtualizandoRecomendacao) { Update-ContextoRecomendacao }
         })
@@ -733,6 +737,7 @@ function Show-WizardPasso {
             $w.FindName('txtDiagLocal').Text = if ($sel) { 'Local: ' + $sel.Rotulo } else { 'Volte e selecione o local.' }
             Update-EstadoVpn
         }
+        5 { Update-SeletorMedicoes }
         6 { Update-DecisaoRecalculada; Update-Passo6Recomendacao }
         7 { Update-ResumoFim }
     }
@@ -796,15 +801,9 @@ function Invoke-WizardProximo {
             Show-WizardPasso 5
         }
         5 {
+            Save-AjustesPasso5   # guarda a medicao aberta antes de checar
             $falta = Get-JustificativasFaltando -MetricasApenas
             if ($falta.Count) { Write-Log ('Justificativa obrigatoria em: {0}' -f ($falta -join ', ')) -Nivel Erro; return }
-            # grava os ajustes do tecnico na medicao atual (a ultima da lista)
-            $ajustes = @()
-            foreach ($r in @($Global:AvaliacaoRows)) {
-                $ajustes += @{ metrica = $r.Metrica; classe_final = $r.ClasseFinal; justificativa = [string] $r.Justificativa }
-            }
-            $vfin = if ($Global:DecisaoRecalculada) { [string] $Global:DecisaoRecalculada } else { '' }
-            Update-MedicaoAtualComAjustes -Avaliacoes $ajustes -VeredictoFinal $vfin
             Show-WizardPasso 6
         }
         6 {
@@ -816,7 +815,16 @@ function Invoke-WizardProximo {
     }
 }
 
+# Indice em $Global:Medicoes da medicao aberta no grid do passo 5 (-1 => a ultima).
+function Get-IndiceMedicaoAberta {
+    $meds = @($Global:Medicoes)
+    if (-not $meds.Count) { return -1 }
+    if ($Global:MedicaoPasso5Idx -ge 0 -and $Global:MedicaoPasso5Idx -lt $meds.Count) { return $Global:MedicaoPasso5Idx }
+    return $meds.Count - 1
+}
+
 # Lista de itens sem justificativa obrigatoria (metricas ajustadas + decisao).
+# No multi-meio, tambem confere os ajustes ja salvos nas outras medicoes.
 function Get-JustificativasFaltando {
     param([switch] $MetricasApenas)
     $w = $Global:JanelaPrincipal
@@ -824,6 +832,21 @@ function Get-JustificativasFaltando {
     foreach ($r in @($Global:AvaliacaoRows)) {
         if (($r.ClasseFinal -ne $r.ClasseAutomatica) -and [string]::IsNullOrWhiteSpace($r.Justificativa)) {
             $falta += $r.Rotulo
+        }
+    }
+    $idxAberta = Get-IndiceMedicaoAberta
+    for ($i = 0; $i -lt @($Global:Medicoes).Count; $i++) {
+        if ($i -eq $idxAberta) { continue }   # essa esta no grid, ja conferida acima
+        $m = $Global:Medicoes[$i]
+        if (-not $m -or $m.nao_aplicavel -or -not $m.decisao) { continue }
+        $auto = @{}
+        foreach ($d in @($m.decisao.Detalhes)) { $auto[[string] $d.metrica] = [string] $d.classe }
+        foreach ($a in @($m.avaliacoes)) {
+            $mk = [string] $a.metrica
+            if ($auto.ContainsKey($mk) -and ([string] $a.classe_final -ne $auto[$mk]) -and
+                [string]::IsNullOrWhiteSpace([string] $a.justificativa)) {
+                $falta += ('{0} / {1}' -f $m.rotulo, (Get-RotuloMetrica $mk))
+            }
         }
     }
     if (-not $MetricasApenas) {
@@ -1856,13 +1879,20 @@ function Add-MedicaoAtual {
     Write-Log ("Medicao registrada: {0} -> {1}" -f $med.rotulo, $med.veredito) -Nivel Info
 }
 
-# Marca/atualiza a medicao atual com os ajustes do tecnico no passo 5.
-function Update-MedicaoAtualComAjustes {
-    param($Avaliacoes, [string] $VeredictoFinal)
-    if (-not @($Global:Medicoes).Count) { return }
-    $med = @($Global:Medicoes)[-1]
-    $med.avaliacoes = @($Avaliacoes)
-    if ($VeredictoFinal) { $med.veredito = $VeredictoFinal }
+# Persiste os ajustes do grid do passo 5 (classe final + justificativa por
+# metrica) na medicao aberta e recalcula o veredito dela (pior caso).
+function Save-AjustesPasso5 {
+    if (-not $Global:AvaliacaoRows) { return }
+    $idx = Get-IndiceMedicaoAberta
+    if ($idx -lt 0) { return }
+    $med = @($Global:Medicoes)[$idx]
+    if (-not $med) { return }
+    $aj = @()
+    foreach ($r in @($Global:AvaliacaoRows)) {
+        $aj += @{ metrica = $r.Metrica; classe_final = $r.ClasseFinal; justificativa = [string] $r.Justificativa }
+    }
+    $med.avaliacoes = @($aj)
+    if ($Global:DecisaoRecalculada) { $med.veredito = [string] $Global:DecisaoRecalculada }
 }
 
 # Recomendacao de conexao para o local (a partir das medicoes registradas).
@@ -2030,6 +2060,8 @@ function Reset-Medicoes {
     $Global:MeiosNaoAplicaveis = @{}
     $Global:RecomendacaoLocal  = $null
     $Global:MotivoRecomendacao = ''
+    $Global:MedicoesPasso5     = @()
+    $Global:MedicaoPasso5Idx   = -1
 }
 
 # Comeca uma nova rodada de medicao (outro meio) sem perder as anteriores.
@@ -2702,7 +2734,9 @@ function Clear-PainelResultado {
     $Global:AvaliacaoRows      = $null
     $Global:DecisaoRecalculada = $null
     $Global:DecisaoFinalTocada = $false
+    $Global:MedicaoPasso5Idx   = -1
 
+    $bm = $w.FindName('boxMedicaoPasso5'); if ($bm) { $bm.Visibility = 'Collapsed' }
     $w.FindName('dgAvaliacao').ItemsSource = @()
     $Global:AtualizandoDecisao = $true
     $w.FindName('cboDecisaoFinal').SelectedItem = $null
@@ -2757,7 +2791,7 @@ function Complete-Diagnostico {
 }
 
 function Show-PainelResultado {
-    param($Payload)
+    param($Payload, [hashtable] $Overrides)
     $w = $Global:JanelaPrincipal
     $Global:DiagPayload        = $Payload
     $Global:DecisaoFinalTocada = $false
@@ -2765,6 +2799,11 @@ function Show-PainelResultado {
     $rows = [System.Collections.ObjectModel.ObservableCollection[object]]::new()
     foreach ($d in @($Payload.Decisao.Detalhes)) {
         $row = New-AvaliacaoRow -Detalhe $d
+        if ($Overrides -and $Overrides.ContainsKey([string] $d.metrica)) {
+            $o = $Overrides[[string] $d.metrica]
+            if ($o.classe_final) { $row.ClasseFinal = [string] $o.classe_final }
+            $row.Justificativa = [string] $o.justificativa
+        }
         $rows.Add($row)
         $row.add_PropertyChanged({
                 param($s, $e)
@@ -2786,6 +2825,80 @@ function Show-PainelResultado {
     $w.FindName('txtJustDecisao').Text = ''
     $w.FindName('btnSalvarResultado').IsEnabled = $true
     Update-DecisaoRecalculada
+}
+
+# Passo 5: monta o seletor de medicoes (so aparece com 2+ meios testados) e
+# abre a medicao correspondente ao meio que acabou de rodar.
+function Update-SeletorMedicoes {
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    $box = $w.FindName('boxMedicaoPasso5')
+    $cbo = $w.FindName('cboMedicaoPasso5')
+
+    $pares = @()
+    for ($i = 0; $i -lt @($Global:Medicoes).Count; $i++) {
+        $m = $Global:Medicoes[$i]
+        if ($m -and -not $m.nao_aplicavel -and $m.decisao) {
+            $pares += [pscustomobject]@{ idx = $i; med = $m }
+        }
+    }
+    $Global:MedicoesPasso5 = $pares
+
+    if ($pares.Count -eq 0) {
+        if ($box) { $box.Visibility = 'Collapsed' }
+        $Global:MedicaoPasso5Idx = -1
+        return
+    }
+    if ($pares.Count -eq 1) {
+        if ($box) { $box.Visibility = 'Collapsed' }
+        $Global:MedicaoPasso5Idx = $pares[0].idx
+        return
+    }
+
+    if ($box) { $box.Visibility = 'Visible' }
+    # abre na ultima medicao registrada, ou na que ja estava aberta
+    $sel = $pares.Count - 1
+    if ($Global:MedicaoPasso5Idx -ge 0) {
+        for ($k = 0; $k -lt $pares.Count; $k++) {
+            if ($pares[$k].idx -eq $Global:MedicaoPasso5Idx) { $sel = $k }
+        }
+    }
+    $Global:AtualizandoMedicaoP5 = $true
+    $cbo.ItemsSource   = @($pares | ForEach-Object { '{0}  -  {1}' -f $_.med.rotulo, (Get-PalavraVeredito $_.med.veredito) })
+    $cbo.SelectedIndex = $sel
+    $Global:AtualizandoMedicaoP5 = $false
+
+    Show-MedicaoNoPasso5 -Par $pares[$sel]
+}
+
+# Renderiza no grid do passo 5 a medicao escolhida (com os ajustes ja salvos).
+function Show-MedicaoNoPasso5 {
+    param($Par)
+    $m = $Par.med
+    $Global:MedicaoPasso5Idx = $Par.idx
+
+    $localRef = if ($Global:DiagPayload) { $Global:DiagPayload.Local } else { $null }
+    $payload = [pscustomobject]@{
+        Ambiente = $m.ambiente
+        Metricas = $m.metricas
+        Decisao  = $m.decisao
+        Local    = $localRef
+        Iperf    = $m.iperf
+    }
+    $ovr = @{}
+    foreach ($a in @($m.avaliacoes)) { if ($a -and $a.metrica) { $ovr[[string] $a.metrica] = $a } }
+    Show-PainelResultado -Payload $payload -Overrides $ovr
+}
+
+# Handler do combo de medicoes do passo 5: salva a aberta e mostra a escolhida.
+function Invoke-TrocarMedicaoPasso5 {
+    if ($Global:AtualizandoMedicaoP5) { return }
+    $w = $Global:JanelaPrincipal
+    $i = $w.FindName('cboMedicaoPasso5').SelectedIndex
+    $pares = @($Global:MedicoesPasso5)
+    if ($i -lt 0 -or $i -ge $pares.Count) { return }
+    Save-AjustesPasso5
+    Show-MedicaoNoPasso5 -Par $pares[$i]
 }
 
 function Update-DecisaoRecalculada {

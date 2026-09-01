@@ -362,6 +362,51 @@ try {
         Write-Host "[5b] passo 5 bloqueia override sem justificativa"
     } else { Write-Host "    FALHA: passo 5 avancou sem justificativa (step=$($Global:WizardStep))"; $falhas++ }
 
+    # 5b-2. multi-meio: seletor de medicoes no passo 5 (2+ meios testados)
+    $medBase = @($Global:Medicoes)[-1]
+    $medLan = [pscustomobject]@{
+        meio = 'lan'; operadora = ''; rotulo = 'Rede cabeada (LAN)'
+        nao_aplicavel = $false; motivo_na = ''
+        fase_local = $medBase.fase_local; rede_local_ok = $true; rede_local_download = 120
+        vpn_conectou = $true; vpn_motivo = ''; vpn_download = 40
+        metricas = $medBase.metricas; fase2_ok = $true
+        decisao = $medBase.decisao; iperf = $medBase.iperf; ambiente = $medBase.ambiente
+        avaliacoes = @(); veredito = [string] $medBase.decisao.Classificacao; quando = (Get-Date).ToString('o')
+    }
+    $Global:Medicoes = @(@($Global:Medicoes) + $medLan)
+    Show-WizardPasso 5
+    Invoke-Pump
+    $boxVis = "$($w.FindName('boxMedicaoPasso5').Visibility)"
+    $nOpc = @($w.FindName('cboMedicaoPasso5').ItemsSource).Count
+    if ($boxVis -eq 'Visible' -and $nOpc -eq 2) { Write-Host "[5b] multi-meio: seletor de medicoes visivel com $nOpc opcoes" }
+    else { Write-Host "    FALHA: seletor de medicoes do passo 5 (vis=$boxVis opc=$nOpc)"; $falhas++ }
+    $idxAntes  = $Global:MedicaoPasso5Idx
+    $selInicial = $w.FindName('cboMedicaoPasso5').SelectedIndex
+    $novoSel   = if ($selInicial -eq 0) { 1 } else { 0 }
+    $w.FindName('cboMedicaoPasso5').SelectedIndex = $novoSel
+    Invoke-Pump
+    if ($Global:MedicaoPasso5Idx -ne $idxAntes -and @($Global:AvaliacaoRows).Count -eq 6) {
+        Write-Host "[5b] troca de medicao re-renderiza o grid (idx $idxAntes -> $($Global:MedicaoPasso5Idx))"
+    } else { Write-Host "    FALHA: troca de medicao no passo 5 (idx=$($Global:MedicaoPasso5Idx) linhas=$(@($Global:AvaliacaoRows).Count))"; $falhas++ }
+    $lnLan = @($Global:AvaliacaoRows) | Where-Object { $_.Rotulo -eq 'Latencia' } | Select-Object -First 1
+    $lnLan.ClasseFinal = 'inviavel'; $lnLan.Justificativa = 'teste multi-meio'
+    Invoke-Pump
+    $outroSel = if ($novoSel -eq 0) { 1 } else { 0 }
+    $w.FindName('cboMedicaoPasso5').SelectedIndex = $outroSel ; Invoke-Pump
+    $w.FindName('cboMedicaoPasso5').SelectedIndex = $novoSel ; Invoke-Pump
+    $lnLan2 = @($Global:AvaliacaoRows) | Where-Object { $_.Rotulo -eq 'Latencia' } | Select-Object -First 1
+    if ("$($lnLan2.ClasseFinal)" -eq 'inviavel' -and "$($lnLan2.Justificativa)" -eq 'teste multi-meio') {
+        Write-Host "[5b] ajuste por medicao persiste ao alternar no seletor"
+    } else { Write-Host "    FALHA: ajuste da medicao nao persistiu (cf='$($lnLan2.ClasseFinal)' just='$($lnLan2.Justificativa)')"; $falhas++ }
+    # limpa: volta ao meio unico e re-renderiza para o resto do teste seguir igual
+    $Global:Medicoes = @(@($Global:Medicoes) | Where-Object { $_.meio -ne 'lan' })
+    $Global:MedicaoPasso5Idx = -1
+    Show-MedicaoNoPasso5 -Par ([pscustomobject]@{ idx = 0; med = @($Global:Medicoes)[-1] })
+    Invoke-Pump
+    $linha = @($Global:AvaliacaoRows) | Where-Object { $_.Rotulo -eq 'Download' } | Select-Object -First 1
+    $linha.ClasseFinal = 'viavel'
+    Invoke-Pump
+
     # 5c. com justificativa -> passo 5 -> 6
     $linha.Justificativa = 'Refiz o teste pelo celular e deu 25 Mbps.'
     Invoke-Pump

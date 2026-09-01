@@ -1198,6 +1198,13 @@
                         <StackPanel>
                             <TextBlock Style="{DynamicResource SubtituloTela}" Margin="0,0,0,10"
                                        Text="Ajuste a classifica&#231;&#227;o de uma m&#233;trica se necess&#225;rio &#8212; nesse caso, informe o motivo."/>
+                            <StackPanel x:Name="boxMedicaoPasso5" Orientation="Horizontal" Margin="0,0,0,10"
+                                        Visibility="Collapsed">
+                                <TextBlock Text="Medi&#231;&#227;o:" VerticalAlignment="Center" Margin="0,0,8,0"
+                                           Foreground="{DynamicResource Dicon.Text3}" FontSize="12"/>
+                                <ComboBox x:Name="cboMedicaoPasso5" MinWidth="340" MinHeight="30"
+                                          VerticalContentAlignment="Center"/>
+                            </StackPanel>
                             <TextBlock x:Name="txtMetricasDesativadas" Margin="0,0,0,8" TextWrapping="Wrap"
                                        FontFamily="Consolas" FontSize="11" Visibility="Collapsed"
                                        Foreground="{DynamicResource Dicon.Ressalva}"/>
