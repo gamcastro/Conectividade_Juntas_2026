@@ -266,6 +266,16 @@ function New-JanelaPrincipal {
     $window.FindName('chkTetheringCelular').Add_Click({ Update-TetheringCelular })
     $window.FindName('rbUsarLan').Add_Checked({ Set-FaseLocalTipo 'lan' })
     $window.FindName('rbUsarWifi').Add_Checked({ Set-FaseLocalTipo 'wifi' })
+    $window.FindName('rbUsarCelular').Add_Checked({ Set-FaseLocalTipo 'celular' })
+    $window.FindName('cboOperadoraCel').Add_LostFocus({
+            $w2 = $Global:JanelaPrincipal
+            $w2.FindName('cboOperadora').Text = ([string] $w2.FindName('cboOperadoraCel').Text).Trim()
+            Update-PainelFaseLocal
+        })
+    foreach ($n in 'chkNaLan', 'chkNaWifi', 'chkNaCelular') {
+        $window.FindName($n).Add_Click({ Update-NaoAplicavelMeio })
+    }
+    $window.FindName('txtMotivoNaMeio').Add_LostFocus({ Update-NaoAplicavelMeio })
     $window.FindName('btnJaConecteiWifi').Add_Click({ Invoke-VerificarWifiBandeja })
     $window.FindName('btnExportarPdf').Add_Click({ Invoke-ExportarRelatorio })
     $window.FindName('btnTransmitirResultado').Add_Click({ Invoke-TransmitirResultado })
@@ -738,12 +748,22 @@ function Invoke-WizardProximo {
         }
         3 {
             $p = $Global:FaseLocalPayload
-            if (-not $p -or $null -eq $p.Internet) {
-                Write-Log 'Rode a checagem da internet do local antes de avancar.' -Nivel Aviso
+            # todos os 3 meios marcados "nao aplicavel" -> nada a testar, vai ao resultado
+            $todosNA = $Global:MeiosNaoAplicaveis.ContainsKey('lan') -and
+                       $Global:MeiosNaoAplicaveis.ContainsKey('wifi_local') -and
+                       $Global:MeiosNaoAplicaveis.ContainsKey('celular')
+            if ($todosNA -and -not @($Global:Medicoes | Where-Object { -not $_.nao_aplicavel }).Count) {
+                Write-Log 'Todos os meios marcados como nao aplicaveis - o local sera registrado como inviavel.' -Nivel Aviso
+                Set-DiagnosticoVpnImpossivel -Motivo 'Nenhum meio de conexao se aplica a este local.'
+                Show-WizardPasso 5
                 return
             }
-            if ([bool] $w.FindName('chkTetheringCelular').IsChecked -and
-                -not ([string] $w.FindName('cboOperadora').Text).Trim()) {
+            if (-not $p -or $null -eq $p.Internet) {
+                Write-Log 'Rode a checagem da internet do local (ou marque os meios como nao aplicaveis) antes de avancar.' -Nivel Aviso
+                return
+            }
+            if ($Global:FaseLocalTipo -eq 'celular' -and
+                -not ([string] $w.FindName('cboOperadoraCel').Text).Trim()) {
                 Write-Log 'Informe a operadora do celular usado no roteamento.' -Nivel Aviso
                 return
             }
@@ -833,8 +853,9 @@ function Update-DetalheLocal {
         $Global:FaseLocalTipo    = ''
         $ck = $w.FindName('chkTetheringCelular'); if ($ck) { $ck.IsChecked = $false }
         $op = $w.FindName('cboOperadora');        if ($op) { $op.Text = '' }
-        $rl = $w.FindName('rbUsarLan');  if ($rl) { $rl.IsChecked = $false }
-        $rw = $w.FindName('rbUsarWifi'); if ($rw) { $rw.IsChecked = $false }
+        foreach ($n in 'rbUsarLan', 'rbUsarWifi', 'rbUsarCelular') {
+            $c = $w.FindName($n); if ($c) { $c.IsChecked = $false }
+        }
     }
     if (-not $sel) {
         $card.Visibility = 'Collapsed'
@@ -983,6 +1004,41 @@ function Set-FaseLocalOcupado {
 function Set-FaseLocalTipo {
     param([string] $Tipo)
     $Global:FaseLocalTipo = $Tipo
+    $w = $Global:JanelaPrincipal
+    if ($w) {
+        # o "meio celular" e a antiga marca de tethering: mantem o estado legado
+        # coerente para todo o codigo a jusante (JSON, Complete-ConectarWifi...).
+        $ck = $w.FindName('chkTetheringCelular')
+        if ($ck) { $ck.IsChecked = ($Tipo -eq 'celular') }
+        if ($Tipo -eq 'celular') {
+            $w.FindName('cboOperadora').Text = ([string] $w.FindName('cboOperadoraCel').Text).Trim()
+        }
+    }
+    Update-PainelFaseLocal
+}
+
+# chkNaLan/Wifi/Celular + o campo de motivo: marca/desmarca meios "nao aplicaveis".
+function Update-NaoAplicavelMeio {
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    $map = @{ chkNaLan = 'lan'; chkNaWifi = 'wifi_local'; chkNaCelular = 'celular' }
+    $motivo = ([string] $w.FindName('txtMotivoNaMeio').Text).Trim()
+    $algumMarcado = $false
+    foreach ($ctl in $map.Keys) {
+        $meio = $map[$ctl]
+        $marcado = [bool] $w.FindName($ctl).IsChecked
+        if ($marcado) {
+            $algumMarcado = $true
+            if ($motivo) { Set-MeioNaoAplicavel -Meio $meio -Motivo $motivo }
+        } elseif ($Global:MeiosNaoAplicaveis.ContainsKey($meio)) {
+            $Global:MeiosNaoAplicaveis.Remove($meio)
+            $Global:Medicoes = @($Global:Medicoes | Where-Object { -not ($_.meio -eq $meio -and $_.nao_aplicavel) })
+        }
+    }
+    $vis = if ($algumMarcado) { 'Visible' } else { 'Collapsed' }
+    $w.FindName('txtMotivoNaMeio').Visibility = $vis
+    $w.FindName('txtMotivoNaDica').Visibility = $vis
+    if (-not $algumMarcado) { $w.FindName('txtMotivoNaMeio').Text = '' }
     Update-PainelFaseLocal
 }
 
@@ -1012,7 +1068,7 @@ function Update-PainelFaseLocal {
         $w.FindName('chkTetheringCelular').IsEnabled = $false
         return
     }
-    $w.FindName('txtLocEscolha').Text = 'Escolha qual placa de rede vai usar para a checagem: a cabeada (LAN) ou o Wi-Fi. So depois de escolher e que "Rodar checagem local" libera.'
+    $w.FindName('txtLocEscolha').Text = 'Escolha o meio de conexao a testar nesta rodada. Voce pode testar mais de um meio no mesmo local; marque os que nao se aplicam.'
 
     $lan = $p.Lan; $wf = $p.Wireless; $it = $p.Internet
     $hostNb = if ($p.PSObject.Properties['Host']) { [string] $p.Host } else { '' }
@@ -1105,67 +1161,86 @@ function Update-PainelFaseLocal {
         $lblWifi.Text = $base + ' Escolha na lista ou digite o nome (SSID). Se a rede ja estiver salva no Windows, pode deixar a senha em branco.'
     }
 
-    # --- escolha da placa (radio) + regras de habilitacao -----------------
+    # cartao "celular": conexao Wi-Fi (o roteamento usa a mesma placa)
+    $tcel = $w.FindName('txtLocCel')
+    if ($tcel) {
+        $tcel.Text = if ($wifiUp) { 'Conectado a "{0}" ({1}%)' -f $wf.ssid, $wf.sinal_pct }
+                     elseif ($wf.presente) { 'Placa Wi-Fi ativa, nao conectada. Conecte a rede do celular.' }
+                     else { 'Sem placa Wi-Fi neste computador.' }
+        $tcel.Foreground = if ($wifiUp) { $verde } else { $cinza }
+    }
+
+    # --- badges de estado dos 3 meios (a partir das medicoes) -------------
+    $estadoMeio = {
+        param($meio)
+        if ($Global:MeiosNaoAplicaveis.ContainsKey($meio)) { return @{ txt = 'NAO APLICAVEL'; cor = $cinza } }
+        $m = @($Global:Medicoes | Where-Object { $_.meio -eq $meio -and -not $_.nao_aplicavel } | Select-Object -Last 1)
+        if ($m) {
+            return @{ txt = 'TESTADO: ' + (Get-PalavraVeredito $m.veredito).ToUpper(); cor = (Get-PincelVeredito $m.veredito) }
+        }
+        @{ txt = 'NAO TESTADO'; cor = $cinza }
+    }
+    foreach ($par in @(@('badgeLan', 'lan'), @('badgeWifi', 'wifi_local'), @('badgeCelular', 'celular'))) {
+        $b = $w.FindName($par[0])
+        if ($b) { $e = & $estadoMeio $par[1]; $b.Text = $e.txt; $b.Foreground = $e.cor }
+    }
+    # sincroniza os checkboxes "nao aplicavel" com o estado
+    foreach ($par in @(@('chkNaLan', 'lan'), @('chkNaWifi', 'wifi_local'), @('chkNaCelular', 'celular'))) {
+        $c = $w.FindName($par[0])
+        if ($c) { $c.IsChecked = $Global:MeiosNaoAplicaveis.ContainsKey($par[1]) }
+    }
+
+    # --- escolha do meio (radio) + regras de habilitacao -----------------
     $tipo = [string] $Global:FaseLocalTipo
-    $rbL = $w.FindName('rbUsarLan'); $rbW = $w.FindName('rbUsarWifi')
+    $rbL = $w.FindName('rbUsarLan'); $rbW = $w.FindName('rbUsarWifi'); $rbC = $w.FindName('rbUsarCelular')
+    $naLan = $Global:MeiosNaoAplicaveis.ContainsKey('lan')
+    $naWf  = $Global:MeiosNaoAplicaveis.ContainsKey('wifi_local')
+    $naCel = $Global:MeiosNaoAplicaveis.ContainsKey('celular')
 
-    # cada radio so pode ser marcado se aquela placa da pra usar
-    if ($rbL) { $rbL.IsEnabled = [bool] $lan.conectado }
-    if ($rbW) { $rbW.IsEnabled = [bool] $wf.presente }
+    if ($rbL) { $rbL.IsEnabled = [bool] $lan.conectado -and -not $naLan }
+    if ($rbW) { $rbW.IsEnabled = [bool] $wf.presente   -and -not $naWf  }
+    if ($rbC) { $rbC.IsEnabled = [bool] $wf.presente   -and -not $naCel }
 
-    # se a escolha atual deixou de ser valida, desmarca
-    if ($tipo -eq 'lan'  -and -not [bool] $lan.conectado) { $tipo = ''; if ($rbL) { $rbL.IsChecked = $false } }
-    if ($tipo -eq 'wifi' -and -not [bool] $wf.presente)   { $tipo = ''; if ($rbW) { $rbW.IsChecked = $false } }
+    if ($tipo -eq 'lan'     -and $rbL -and -not $rbL.IsEnabled) { $tipo = ''; $rbL.IsChecked = $false }
+    if ($tipo -eq 'wifi'    -and $rbW -and -not $rbW.IsEnabled) { $tipo = ''; $rbW.IsChecked = $false }
+    if ($tipo -eq 'celular' -and $rbC -and -not $rbC.IsEnabled) { $tipo = ''; $rbC.IsChecked = $false }
     $Global:FaseLocalTipo = $tipo
 
-    # realce do cartao escolhido (borda accent)
+    # realce + esmaecimento do cartao (borda accent no escolhido; opaco no NA)
     $accent = $w.TryFindResource('Dicon.Accent')
     $hair   = $w.TryFindResource('Dicon.Hair')
-    $cdL = $w.FindName('cardLan')
-    if ($cdL) {
-        $cdL.BorderBrush     = if ($tipo -eq 'lan') { $accent } else { $hair }
-        $cdL.BorderThickness = [Windows.Thickness]::new($(if ($tipo -eq 'lan') { 2 } else { 1 }))
-    }
-    $cdW = $w.FindName('cardWifiPlaca')
-    if ($cdW) {
-        $cdW.BorderBrush     = if ($tipo -eq 'wifi') { $accent } else { $hair }
-        $cdW.BorderThickness = [Windows.Thickness]::new($(if ($tipo -eq 'wifi') { 2 } else { 1 }))
+    foreach ($par in @(@('cardLan', 'lan', $naLan), @('cardWifiPlaca', 'wifi', $naWf), @('cardCelular', 'celular', $naCel))) {
+        $cd = $w.FindName($par[0])
+        if (-not $cd) { continue }
+        $sel = ($tipo -eq $par[1])
+        $cd.BorderBrush     = if ($sel) { $accent } else { $hair }
+        $cd.BorderThickness = [Windows.Thickness]::new($(if ($sel) { 2 } else { 1 }))
+        $cd.Opacity         = if ($par[2]) { 0.5 } else { 1.0 }
     }
 
-    # "Conectar a uma rede Wi-Fi": aparece se ha placa Wi-Fi; so habilita se
-    # o tecnico escolheu usar o Wi-Fi.
+    # "Conectar a uma rede Wi-Fi": relevante p/ Wi-Fi do local e p/ celular
+    $usaWifiCard = ($tipo -eq 'wifi' -or $tipo -eq 'celular')
     if ($cardWifi) {
         $cardWifi.Visibility = if ($wf.presente) { 'Visible' } else { 'Collapsed' }
-        $cardWifi.IsEnabled  = ($tipo -eq 'wifi')
-        $cardWifi.Opacity    = if ($tipo -eq 'wifi') { 1.0 } else { 0.5 }
+        $cardWifi.IsEnabled  = $usaWifiCard
+        $cardWifi.Opacity    = if ($usaWifiCard) { 1.0 } else { 0.5 }
     }
 
-    # botao: precisa de tipo escolhido E daquele caminho conectado
-    $prontoLan  = ($tipo -eq 'lan')  -and $lanUp
-    $prontoWifi = ($tipo -eq 'wifi') -and $wifiUp
-    $w.FindName('btnRodarFaseLocal').IsEnabled = $prontoLan -or $prontoWifi
-
-    # "teste pelo celular" so quando NAO ha cabo de rede E existe placa Wi-Fi
-    $podeTether = (-not $lanUp) -and [bool] $wf.presente
-    $chk = $w.FindName('chkTetheringCelular')
-    $chk.IsEnabled = $podeTether
-    if (-not $podeTether -and $chk.IsChecked) { $chk.IsChecked = $false }
-    Update-TetheringCelular
+    # botao "Rodar checagem local": meio escolhido E aquela via conectada
+    $operCel  = ([string] $w.FindName('cboOperadoraCel').Text).Trim()
+    $prontoLan  = ($tipo -eq 'lan')     -and $lanUp
+    $prontoWifi = ($tipo -eq 'wifi')    -and $wifiUp
+    $prontoCel  = ($tipo -eq 'celular') -and $wifiUp -and $operCel
+    $w.FindName('btnRodarFaseLocal').IsEnabled = $prontoLan -or $prontoWifi -or $prontoCel
 
     $dica = $w.FindName('txtLocDica')
     $msg =
-        if ($prontoLan -or $prontoWifi) { '' }
-        elseif (-not $tipo) {
-            if (-not $lan.conectado -and -not $wf.presente) {
-                'Sem cabo e sem placa Wi-Fi neste computador - nao da para rodar a checagem aqui. Use o teste pelo celular abaixo.'
-            } elseif (-not $lan.conectado -and -not $wf.conectado) {
-                'Marque "Usar o Wi-Fi" e conecte-se a uma rede no card abaixo para liberar a checagem.'
-            } else {
-                'Escolha acima qual placa vai usar (LAN ou Wi-Fi) para liberar a checagem.'
-            }
-        }
-        elseif ($tipo -eq 'wifi' -and -not $wifiUp) { 'Conecte-se a uma rede Wi-Fi no card abaixo para liberar a checagem.' }
-        elseif ($tipo -eq 'lan'  -and -not $lanUp)  { 'A rede cabeada nao esta conectada. Ligue o cabo ou escolha o Wi-Fi.' }
+        if ($prontoLan -or $prontoWifi -or $prontoCel) { '' }
+        elseif (-not $tipo) { 'Escolha um meio de conexao nos cartoes acima (ou marque os que nao se aplicam a este local).' }
+        elseif ($tipo -eq 'wifi'    -and -not $wifiUp) { 'Conecte-se a rede Wi-Fi do local no card abaixo para liberar a checagem.' }
+        elseif ($tipo -eq 'celular' -and -not $wifiUp) { 'Conecte-se a rede roteada do celular no card abaixo para liberar a checagem.' }
+        elseif ($tipo -eq 'celular' -and -not $operCel) { 'Informe a operadora do celular no cartao do meio Celular.' }
+        elseif ($tipo -eq 'lan'     -and -not $lanUp)  { 'A rede cabeada nao esta conectada. Ligue o cabo ou escolha outro meio.' }
         else { '' }
     $dica.Text = $msg
     $dica.Visibility = if ($msg) { 'Visible' } else { 'Collapsed' }
@@ -1570,13 +1645,14 @@ function Update-IperfPainel {
 function Invoke-RodarFaseLocal {
     $p = $Global:FaseLocalPayload
     $tipo = [string] $Global:FaseLocalTipo
-    $ok = ($tipo -eq 'lan'  -and $p -and [bool] $p.Lan.conectado) -or `
-          ($tipo -eq 'wifi' -and $p -and [bool] $p.Wireless.conectado)
+    $ok = ($tipo -eq 'lan'     -and $p -and [bool] $p.Lan.conectado) -or `
+          ($tipo -eq 'wifi'    -and $p -and [bool] $p.Wireless.conectado) -or `
+          ($tipo -eq 'celular' -and $p -and [bool] $p.Wireless.conectado)
     if (-not $ok) {
-        Write-Log 'Escolha a placa (LAN ou Wi-Fi) e conecte-a antes de rodar a checagem.' -Nivel Aviso
+        Write-Log 'Escolha o meio (LAN, Wi-Fi do local ou celular) e conecte-o antes de rodar a checagem.' -Nivel Aviso
         return
     }
-    Write-Log ("Checagem local pela placa: {0}" -f $(if ($tipo -eq 'lan') { 'rede cabeada (LAN)' } else { 'Wi-Fi' })) -Nivel Info
+    Write-Log ("Checagem local pelo meio: {0}" -f (Get-RotuloMeio (Get-MeioDoPasso3).meio (Get-MeioDoPasso3).operadora)) -Nivel Info
     Reset-Velocimetro
     $w = $Global:JanelaPrincipal
     if ($w) {
@@ -1717,16 +1793,15 @@ function Update-TetheringCelular {
 
 # ------------------------------------------------------- MULTI-MEIO (medicoes)
 
-# Meio + operadora escolhidos no passo 3 (radio de placa + tethering).
+# Meio + operadora escolhidos no passo 3 (radio dos 3 cartoes).
 function Get-MeioDoPasso3 {
     $w = $Global:JanelaPrincipal
-    $tether = [bool] $w.FindName('chkTetheringCelular').IsChecked
-    if ($tether) {
-        return @{ meio = 'celular'; operadora = ([string] $w.FindName('cboOperadora').Text).Trim() }
+    switch ($Global:FaseLocalTipo) {
+        'lan'     { @{ meio = 'lan';        operadora = '' } }
+        'wifi'    { @{ meio = 'wifi_local'; operadora = '' } }
+        'celular' { @{ meio = 'celular';    operadora = ([string] $w.FindName('cboOperadoraCel').Text).Trim() } }
+        default   { @{ meio = ''; operadora = '' } }
     }
-    if ($Global:FaseLocalTipo -eq 'lan')  { return @{ meio = 'lan';        operadora = '' } }
-    if ($Global:FaseLocalTipo -eq 'wifi') { return @{ meio = 'wifi_local'; operadora = '' } }
-    return @{ meio = ''; operadora = '' }
 }
 
 # Monta a medicao da rodada atual a partir do estado corrente (Fase 1 + Fase 2).
@@ -1846,8 +1921,13 @@ function Reset-PainelFaseLocal {
         $w.FindName('chkTetheringCelular').IsChecked = $false
         $w.FindName('cboOperadora').Text       = ''
         $w.FindName('cboOperadora').IsEnabled  = $false
-        $rl = $w.FindName('rbUsarLan');  if ($rl) { $rl.IsChecked = $false }
-        $rw = $w.FindName('rbUsarWifi'); if ($rw) { $rw.IsChecked = $false }
+        $w.FindName('cboOperadoraCel').Text    = ''
+        foreach ($n in 'rbUsarLan', 'rbUsarWifi', 'rbUsarCelular', 'chkNaLan', 'chkNaWifi', 'chkNaCelular') {
+            $c = $w.FindName($n); if ($c) { $c.IsChecked = $false }
+        }
+        $w.FindName('txtMotivoNaMeio').Text = ''
+        $w.FindName('txtMotivoNaMeio').Visibility = 'Collapsed'
+        $w.FindName('txtMotivoNaDica').Visibility = 'Collapsed'
     }
     Update-PainelFaseLocal
 }

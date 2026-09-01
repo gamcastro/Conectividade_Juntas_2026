@@ -205,15 +205,11 @@ try {
     if ($w.FindName('cardConectarWifi').Visibility -eq 'Visible') { Write-Host "[4c] com placa Wi-Fi: card de conexao aparece" }
     else { Write-Host "    FALHA: card Wi-Fi oculto com placa"; $falhas++ }
 
-    # 4c-3b. LAN conectada -> "teste pelo celular" fica DESABILITADO
-    if (-not $w.FindName('chkTetheringCelular').IsEnabled) { Write-Host "[4c] com LAN conectada: 'teste pelo celular' desabilitado" }
-    else { Write-Host "    FALHA: tethering habilitado com LAN conectada"; $falhas++ }
-
-    # 4c-3c. escolher "Usar o Wi-Fi" habilita o card de conexao; sem SSID avisa
+    # 4c-3c. escolher "Usar o Wi-Fi do local" habilita o card de conexao; sem SSID avisa
     $w.FindName('rbUsarWifi').IsChecked = $true
     Invoke-Pump
     if ($w.FindName('cardConectarWifi').IsEnabled -and $Global:FaseLocalTipo -eq 'wifi') {
-        Write-Host "[4c] escolher 'Usar o Wi-Fi' habilita o card 'Conectar a uma rede Wi-Fi'"
+        Write-Host "[4c] escolher 'Usar o Wi-Fi do local' habilita o card 'Conectar a uma rede Wi-Fi'"
     } else { Write-Host "    FALHA: card Wi-Fi nao habilitou ao escolher (en=$($w.FindName('cardConectarWifi').IsEnabled) tipo='$($Global:FaseLocalTipo)')"; $falhas++ }
     $w.FindName('cboWifiSsid').Text = ''
     Invoke-ConectarWifi
@@ -229,42 +225,63 @@ try {
     } else { Write-Host "    FALHA: gate sem conexao (rodar.en=$($w.FindName('btnRodarFaseLocal').IsEnabled) dica=$($w.FindName('txtLocDica').Visibility))"; $falhas++ }
     $Global:FaseLocalPayload.Wireless.conectado = $true
     Update-PainelFaseLocal
-    if ($w.FindName('chkTetheringCelular').IsEnabled -and $w.FindName('btnRodarFaseLocal').IsEnabled) {
-        Write-Host "[4c] sem LAN + Wi-Fi conectado: tethering habilita e a checagem libera"
-    } else { Write-Host "    FALHA: gate sem LAN+wifi (tether.en=$($w.FindName('chkTetheringCelular').IsEnabled) rodar.en=$($w.FindName('btnRodarFaseLocal').IsEnabled))"; $falhas++ }
-    $w.FindName('chkTetheringCelular').IsChecked = $true
-    Update-TetheringCelular
-    if (-not $w.FindName('cboOperadora').IsEnabled) { Write-Host "    FALHA: campo Operadora nao habilitou"; $falhas++ }
-    $w.FindName('cboOperadora').Text = ''
-    Invoke-WizardProximo
-    if ($Global:WizardStep -eq 3) { Write-Host "[4c] tethering marcado exige a operadora" }
-    else { Write-Host "    FALHA: avancou com tethering sem operadora (step=$($Global:WizardStep))"; $falhas++ }
-    $w.FindName('cboOperadora').Text = 'Vivo'
-    $Global:FaseLocalPayload.Lan.conectado = $true   # restaura o fixture (compartilhado) p/ o JSON e proximos testes
-    Invoke-WizardProximo
-    if ($Global:WizardStep -eq 4) { Write-Host "[4c] com a operadora informada -> passo 4" }
-    else { Write-Host "    FALHA: nao avancou com a operadora (step=$($Global:WizardStep))"; $falhas++ }
+    if ($w.FindName('btnRodarFaseLocal').IsEnabled) {
+        Write-Host "[4c] sem LAN + Wi-Fi do local conectado: checagem libera"
+    } else { Write-Host "    FALHA: gate Wi-Fi do local (rodar.en=$($w.FindName('btnRodarFaseLocal').IsEnabled))"; $falhas++ }
 
-    # 4c-5. voltar ao passo 2 e retornar LIMPA a checagem e o tethering
+    # 4c-4b. meio "Celular": exige operadora
+    $w.FindName('rbUsarCelular').IsChecked = $true
+    Invoke-Pump
+    $w.FindName('cboOperadoraCel').Text = ''
+    Update-PainelFaseLocal
+    if (-not $w.FindName('btnRodarFaseLocal').IsEnabled) { Write-Host "[4c] meio Celular sem operadora: checagem travada" }
+    else { Write-Host "    FALHA: Celular liberou sem operadora"; $falhas++ }
+    Invoke-WizardProximo
+    if ($Global:WizardStep -eq 3) { Write-Host "[4c] Celular sem operadora nao avanca" }
+    else { Write-Host "    FALHA: avancou sem operadora (step=$($Global:WizardStep))"; $falhas++ }
+    $w.FindName('cboOperadoraCel').Text = 'Vivo'
+    Set-FaseLocalTipo 'celular'
+    Invoke-Pump
+    if ($w.FindName('btnRodarFaseLocal').IsEnabled -and $Global:FaseLocalTipo -eq 'celular') {
+        Write-Host "[4c] Celular + Wi-Fi conectado + operadora -> checagem libera"
+    } else { Write-Host "    FALHA: Celular nao liberou (rodar.en=$($w.FindName('btnRodarFaseLocal').IsEnabled) tipo='$($Global:FaseLocalTipo)')"; $falhas++ }
+
+    # 4c-4c. "nao aplicavel": marca a LAN e ela some da escolha
+    $w.FindName('chkNaLan').IsChecked = $true
+    $w.FindName('txtMotivoNaMeio').Text = 'sem ponto de rede na sala'
+    Update-NaoAplicavelMeio
+    if ($Global:MeiosNaoAplicaveis.ContainsKey('lan') -and -not $w.FindName('rbUsarLan').IsEnabled) {
+        Write-Host "[4c] LAN marcada 'nao aplicavel' -> radio desabilitado"
+    } else { Write-Host "    FALHA: 'nao aplicavel' nao pegou (chave=$($Global:MeiosNaoAplicaveis.ContainsKey('lan')) rb.en=$($w.FindName('rbUsarLan').IsEnabled))"; $falhas++ }
+    $w.FindName('chkNaLan').IsChecked = $false ; Update-NaoAplicavelMeio
+
+    # volta para Wi-Fi do local e avanca
+    $Global:FaseLocalPayload.Lan.conectado = $true   # restaura o fixture
+    $w.FindName('rbUsarWifi').IsChecked = $true
+    Invoke-Pump
+    Invoke-WizardProximo
+    if ($Global:WizardStep -eq 4) { Write-Host "[4c] Wi-Fi do local -> passo 4" }
+    else { Write-Host "    FALHA: nao avancou (step=$($Global:WizardStep))"; $falhas++ }
+
+    # 4c-5. voltar ao passo 2 e retornar LIMPA a checagem e os meios
     Invoke-WizardVoltar          # 4 -> 3
     Invoke-WizardVoltar          # 3 -> 2  (Update-DetalheLocal invalida a checagem)
-    if ($null -eq $Global:FaseLocalPayload -and -not $w.FindName('chkTetheringCelular').IsChecked -and
-        -not ([string] $w.FindName('cboOperadora').Text)) {
-        Write-Host "[4c] voltar ao passo 2 limpa a ultima checagem e o tethering"
-    } else { Write-Host "    FALHA: passo 2 nao limpou (payload=$($null -ne $Global:FaseLocalPayload) tether=$($w.FindName('chkTetheringCelular').IsChecked) op='$($w.FindName('cboOperadora').Text)')"; $falhas++ }
+    if ($null -eq $Global:FaseLocalPayload -and [string]::IsNullOrEmpty($Global:FaseLocalTipo)) {
+        Write-Host "[4c] voltar ao passo 2 limpa a ultima checagem"
+    } else { Write-Host "    FALHA: passo 2 nao limpou (payload=$($null -ne $Global:FaseLocalPayload) tipo='$($Global:FaseLocalTipo)')"; $falhas++ }
     Invoke-WizardProximo         # 2 -> 3: novo probe
     Invoke-Pump
     if ($Global:WizardStep -eq 3 -and $null -ne $Global:FaseLocalPayload -and $null -eq $Global:FaseLocalPayload.Internet) {
         Write-Host "[4c] re-entrou no passo 3 com checagem zerada"
     } else { Write-Host "    FALHA: re-probe ao voltar (step=$($Global:WizardStep))"; $falhas++ }
-    # refaz o cenario "sem LAN, via celular": escolhe Wi-Fi + tethering + operadora + checagem
+    # refaz "via celular": escolhe o meio Celular + operadora + checagem
     $Global:FaseLocalPayload.Lan.conectado      = $false
     $Global:FaseLocalPayload.Wireless.conectado = $true    # conectado ao hotspot do celular
     Update-PainelFaseLocal
-    $w.FindName('rbUsarWifi').IsChecked = $true            # placa escolhida = Wi-Fi (hotspot)
+    $w.FindName('cboOperadoraCel').Text = 'Vivo'
+    $w.FindName('rbUsarCelular').IsChecked = $true
+    Set-FaseLocalTipo 'celular'
     Invoke-Pump
-    $w.FindName('chkTetheringCelular').IsChecked = $true ; Update-TetheringCelular
-    $w.FindName('cboOperadora').Text = 'Vivo'
     Invoke-RodarFaseLocal ; Invoke-Pump
     Invoke-WizardProximo         # 3 -> 4
     if ($Global:WizardStep -ne 4) { Write-Host "    FALHA: nao voltou ao passo 4 apos re-checagem (step=$($Global:WizardStep))"; $falhas++ }

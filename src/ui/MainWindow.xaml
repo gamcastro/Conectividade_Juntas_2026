@@ -545,21 +545,28 @@
 
                             <TextBlock x:Name="txtLocEscolha" Margin="0,8,0,0" TextWrapping="Wrap" FontSize="12"
                                        Foreground="{DynamicResource Dicon.Text2}"
-                                       Text="Escolha qual placa de rede vai usar para a checagem: a cabeada (LAN) ou o Wi-Fi."/>
+                                       Text="Escolha o meio de conexao a testar nesta rodada (LAN, Wi-Fi do local ou roteamento do celular). Voce pode testar mais de um meio no mesmo local."/>
 
-                            <!-- escolha da placa: 2 cartoes lado a lado -->
+                            <!-- escolha do meio: 3 cartoes lado a lado -->
                             <Grid x:Name="cardFaseLocal" Margin="0,8,0,0" Visibility="Collapsed">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="14"/>
+                                    <ColumnDefinition Width="12"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="12"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
 
                                 <Border x:Name="cardLan" Grid.Column="0" Style="{DynamicResource Cartao}"
                                         Padding="16,14" VerticalAlignment="Stretch">
                                     <StackPanel>
+                                        <TextBlock x:Name="badgeLan" FontFamily="Consolas" FontSize="10" FontWeight="Bold"
+                                                   Margin="0,0,0,6" Foreground="{DynamicResource Dicon.Text3}"
+                                                   Text="NAO TESTADO"/>
                                         <RadioButton x:Name="rbUsarLan" GroupName="tipoPlaca"
                                                      Content="Usar a rede cabeada (LAN)" FontWeight="Bold"/>
+                                        <CheckBox x:Name="chkNaLan" Margin="0,6,0,0" FontSize="11"
+                                                  Content="Nao se aplica a este local"/>
                                         <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
                                             <Ellipse x:Name="dotLan" Width="10" Height="10" Margin="0,0,8,0"
                                                      VerticalAlignment="Center" Fill="{DynamicResource Dicon.Text3}"/>
@@ -593,8 +600,13 @@
                                 <Border x:Name="cardWifiPlaca" Grid.Column="2" Style="{DynamicResource Cartao}"
                                         Padding="16,14" VerticalAlignment="Stretch">
                                     <StackPanel>
+                                        <TextBlock x:Name="badgeWifi" FontFamily="Consolas" FontSize="10" FontWeight="Bold"
+                                                   Margin="0,0,0,6" Foreground="{DynamicResource Dicon.Text3}"
+                                                   Text="NAO TESTADO"/>
                                         <RadioButton x:Name="rbUsarWifi" GroupName="tipoPlaca"
-                                                     Content="Usar o Wi-Fi" FontWeight="Bold"/>
+                                                     Content="Usar o Wi-Fi do local" FontWeight="Bold"/>
+                                        <CheckBox x:Name="chkNaWifi" Margin="0,6,0,0" FontSize="11"
+                                                  Content="Nao se aplica a este local"/>
                                         <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
                                             <Ellipse x:Name="dotWifi" Width="10" Height="10" Margin="0,0,8,0"
                                                      VerticalAlignment="Center" Fill="{DynamicResource Dicon.Text3}"/>
@@ -616,9 +628,46 @@
                                                    Foreground="{DynamicResource Dicon.Text3}" Visibility="Collapsed"/>
                                     </StackPanel>
                                 </Border>
+
+                                <Border x:Name="cardCelular" Grid.Column="4" Style="{DynamicResource Cartao}"
+                                        Padding="16,14" VerticalAlignment="Stretch">
+                                    <StackPanel>
+                                        <TextBlock x:Name="badgeCelular" FontFamily="Consolas" FontSize="10" FontWeight="Bold"
+                                                   Margin="0,0,0,6" Foreground="{DynamicResource Dicon.Text3}"
+                                                   Text="NAO TESTADO"/>
+                                        <RadioButton x:Name="rbUsarCelular" GroupName="tipoPlaca"
+                                                     Content="Roteamento do celular" FontWeight="Bold"/>
+                                        <CheckBox x:Name="chkNaCelular" Margin="0,6,0,0" FontSize="11"
+                                                  Content="Nao se aplica a este local"/>
+                                        <TextBlock x:Name="txtCelDica" Margin="0,10,0,0" TextWrapping="Wrap" FontSize="11"
+                                                   Foreground="{DynamicResource Dicon.Text3}"
+                                                   Text="Ligue o roteamento no celular, conecte a rede dele pelo card abaixo (ou pela bandeja) e informe a operadora."/>
+                                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                            <TextBlock Text="Operadora" Style="{DynamicResource Rotulo}"
+                                                       VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                            <ComboBox x:Name="cboOperadoraCel" IsEditable="True" MinHeight="32" Width="150"
+                                                      VerticalContentAlignment="Center">
+                                                <sys:String>Claro</sys:String>
+                                                <sys:String>Vivo</sys:String>
+                                                <sys:String>TIM</sys:String>
+                                                <sys:String>Oi</sys:String>
+                                            </ComboBox>
+                                        </StackPanel>
+                                        <TextBlock x:Name="txtLocCel" Margin="0,8,0,0" FontFamily="Consolas"
+                                                   FontSize="11" TextWrapping="Wrap"
+                                                   Foreground="{DynamicResource Dicon.Text3}"/>
+                                    </StackPanel>
+                                </Border>
                             </Grid>
 
-                            <!-- linha de baixo: rodar a checagem (abaixo dos 2 cards) -->
+                            <TextBox x:Name="txtMotivoNaMeio" Margin="0,10,0,0" MinHeight="52" TextWrapping="Wrap"
+                                     AcceptsReturn="True" VerticalContentAlignment="Top" Padding="8,6"
+                                     Visibility="Collapsed"/>
+                            <TextBlock x:Name="txtMotivoNaDica" Margin="0,4,0,0" FontSize="11" TextWrapping="Wrap"
+                                       Foreground="{DynamicResource Dicon.Text3}" Visibility="Collapsed"
+                                       Text="Diga por que este meio nao se aplica (ex.: sem ponto de rede na sala; longe do rack)."/>
+
+                            <!-- linha de baixo: rodar a checagem do meio escolhido -->
                             <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
                                 <Button x:Name="btnRodarFaseLocal" Content="Rodar checagem local"
                                         Style="{DynamicResource BotaoPrimario}" IsEnabled="False"/>
@@ -858,7 +907,8 @@
                                 </StackPanel>
                             </Border>
 
-                            <Border Style="{DynamicResource Cartao}" Padding="16,14" Margin="0,12,0,0">
+                            <Border x:Name="cardTetheringLegado" Style="{DynamicResource Cartao}" Padding="16,14" Margin="0,12,0,0"
+                                    Visibility="Collapsed">
                                 <StackPanel>
                                     <TextBlock Text="Sem rede no local? Teste pelo celular"
                                                Style="{DynamicResource SecaoTela}" Margin="0,0,0,8"/>
