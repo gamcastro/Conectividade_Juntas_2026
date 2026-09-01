@@ -382,6 +382,8 @@ try {
     if ($Global:FeitoSalvar -and "$($w.FindName('chkFimSalvar').Text)" -eq $vok -and $w.FindName('btnTransmitirResultado').IsEnabled -and "$($w.FindName('chkFimTransmitir').Text)" -ne $vok) {
         Write-Host "[5d] checklist: Salvar=OK, Transmitir habilitado e pendente"
     } else { Write-Host "    FALHA: checklist do passo 6 (salvar=$($Global:FeitoSalvar) transmitir.en=$($w.FindName('btnTransmitirResultado').IsEnabled))"; $falhas++ }
+    if (-not $w.FindName('btnFinalizarDiag').IsEnabled) { Write-Host "[5d] 'Finalizar' ainda travado (falta exportar o PDF)" }
+    else { Write-Host "    FALHA: 'Finalizar' liberou so com Salvar (sem Exportar)"; $falhas++ }
 
     # 5d-2. exporta o relatorio pelo botao -> checklist "Exportar" fica verde
     Invoke-ExportarRelatorio
@@ -389,9 +391,9 @@ try {
         Write-Host "[5d] relatorio exportado ($($w.FindName('txtFimStatus').Text))"
     } else { Write-Host "    FALHA: export nao marcou o checklist (exportar=$($Global:FeitoExportar))"; $falhas++ }
 
-    # 5d-3. "Finalizar" habilita apos salvar e volta para a tela inicial
-    if ($w.FindName('btnFinalizarDiag').IsEnabled) { Write-Host "[5d] botao 'Finalizar' habilitado apos salvar" }
-    else { Write-Host "    FALHA: 'Finalizar' desabilitado com resultado salvo"; $falhas++ }
+    # 5d-3. "Finalizar" so habilita apos Salvar + Exportar (Transmitir pode ficar pendente)
+    if ($w.FindName('btnFinalizarDiag').IsEnabled) { Write-Host "[5d] botao 'Finalizar' habilitado (salvo + exportado)" }
+    else { Write-Host "    FALHA: 'Finalizar' desabilitado com resultado salvo + exportado"; $falhas++ }
     Invoke-FinalizarDiagnostico
     if ("$($w.FindName('viewHome').Visibility)" -eq 'Visible') { Write-Host "[5d] 'Finalizar' -> volta para a tela inicial" }
     else { Write-Host "    FALHA: 'Finalizar' nao voltou para a home (viewHome=$($w.FindName('viewHome').Visibility))"; $falhas++ }

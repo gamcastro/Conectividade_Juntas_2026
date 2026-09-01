@@ -1611,17 +1611,21 @@ function Update-ChecklistFim {
         $t.Foreground = if ($it.ok) { $verde } else { $vermelho }
     }
 
-    # "Finalizar": libera quando o resultado ja esta salvo (o essencial). Se
-    # ainda falta transmitir/exportar, uma dica explica o que fica pendente.
+    # "Finalizar": exige Salvar + Exportar (o essencial e o registro em PDF).
+    # Transmitir pode ficar pendente - vai sozinho no proximo "Atualizar dados".
+    $prontoFim = [bool] $Global:FeitoSalvar -and [bool] $Global:FeitoExportar
     $btnFim = $w.FindName('btnFinalizarDiag')
-    if ($btnFim) { $btnFim.IsEnabled = [bool] $Global:FeitoSalvar }
+    if ($btnFim) { $btnFim.IsEnabled = $prontoFim }
     $dica = $w.FindName('txtFimFinalizarDica')
     if ($dica) {
-        $falta = @()
-        if (-not $Global:FeitoTransmitir) { $falta += 'transmitir' }
-        if (-not $Global:FeitoExportar)   { $falta += 'exportar o PDF' }
-        if ($Global:FeitoSalvar -and $falta.Count) {
-            $dica.Text = 'Pode finalizar mesmo assim - falta ' + ($falta -join ' e ') + '. A transmissao pendente vai no proximo "Atualizar dados".'
+        if ($prontoFim -and -not $Global:FeitoTransmitir) {
+            $dica.Text = 'Pode finalizar mesmo assim - a transmissao pendente vai no proximo "Atualizar dados".'
+            $dica.Visibility = 'Visible'
+        } elseif (-not $prontoFim) {
+            $falta = @()
+            if (-not $Global:FeitoSalvar)   { $falta += 'salvar o resultado' }
+            if (-not $Global:FeitoExportar) { $falta += 'exportar o relatorio (PDF)' }
+            $dica.Text = 'Falta ' + ($falta -join ' e ') + ' para liberar o "Finalizar".'
             $dica.Visibility = 'Visible'
         } else {
             $dica.Visibility = 'Collapsed'
@@ -1715,9 +1719,10 @@ function Complete-TransmitirResultado {
 # "Finalizar" (passo 7): volta para a tela inicial ja com o progresso do
 # roteiro atualizado. O resultado ja esta salvo localmente.
 function Invoke-FinalizarDiagnostico {
-    if (-not $Global:FeitoSalvar) {
+    if (-not ($Global:FeitoSalvar -and $Global:FeitoExportar)) {
         $w = $Global:JanelaPrincipal
-        $st = $w.FindName('txtFimStatus'); if ($st) { $st.Text = 'Salve o resultado antes de finalizar.' }
+        $st = $w.FindName('txtFimStatus')
+        if ($st) { $st.Text = 'Salve o resultado e exporte o relatorio (PDF) antes de finalizar.' }
         return
     }
     if (-not $Global:FeitoTransmitir) {
