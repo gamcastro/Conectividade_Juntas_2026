@@ -171,6 +171,7 @@ function New-RelatorioHtml {
         }
         $ce += '<div><b>Placa de rede (LAN):</b> {0}</div>' -f $lanS
         if ($rl.ip_local)        { $ce += '<div><b>IP na rede local:</b> {0}</div>' -f (ConvertTo-HtmlSafe ([string] $rl.ip_local)) }
+        if ($rl.PSObject.Properties['ip_origem'] -and $rl.ip_origem) { $ce += '<div><b>Obten&ccedil;&atilde;o do IP:</b> {0}</div>' -f (ConvertTo-HtmlSafe ([string] $rl.ip_origem)) }
         if ($rl.mascara)         { $ce += '<div><b>M&aacute;scara:</b> {0}</div>' -f (ConvertTo-HtmlSafe ([string] $rl.mascara)) }
         if ($rl.gateway)         { $ce += '<div><b>Gateway:</b> {0}</div>' -f (ConvertTo-HtmlSafe ([string] $rl.gateway)) }
         if (@($rl.dns).Count)    { $ce += '<div><b>DNS:</b> {0}</div>' -f (ConvertTo-HtmlSafe ((@($rl.dns)) -join ', ')) }

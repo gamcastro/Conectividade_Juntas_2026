@@ -29,13 +29,13 @@ $Global:FaseLocalSimulada = [pscustomobject]@{
         presente = $true; nome = 'Ethernet'; descricao = 'Realtek PCIe GbE Family Controller'
         status = 'Up'; conectado = $true
         ipv4 = '192.168.15.42'; prefixo = 24; mascara = '255.255.255.0'; gateway = '192.168.15.1'
-        dns = @('192.168.15.1', '8.8.8.8'); mac = 'AA-BB-CC-DD-EE-FF'; velocidade_mbps = 1000
+        dns = @('192.168.15.1', '8.8.8.8'); ip_origem = 'DHCP'; mac = 'AA-BB-CC-DD-EE-FF'; velocidade_mbps = 1000
     }
     Wireless = [pscustomobject]@{
         presente = $true; nome = 'Wi-Fi'; status = 'Disconnected'; conectado = $false
         ssid = ''; sinal_pct = $null; redes_disponiveis = @('JE-CAMPO', 'VIVO-2G')
         ipv4 = '192.168.15.42'; prefixo = 24; mascara = '255.255.255.0'; gateway = '192.168.15.1'
-        dns = @('192.168.15.1'); mac = '11-22-33-44-55-66'; velocidade_mbps = 300
+        dns = @('192.168.15.1'); ip_origem = 'DHCP'; mac = '11-22-33-44-55-66'; velocidade_mbps = 300
     }
     Internet = [pscustomobject]@{
         speedtest_ok = $true; speedtest_erro = ''

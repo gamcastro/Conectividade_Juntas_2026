@@ -944,6 +944,7 @@ function Update-PainelFaseLocal {
     Set-LinhaDetalhe $w.FindName('txtLocDns')     'DNS'              ((@($lan.dns)) -join ', ')
     Set-LinhaDetalhe $w.FindName('txtLocMac')     'MAC'              ([string] $lan.mac)
     Set-LinhaDetalhe $w.FindName('txtLocVel')     'Enlace'          $(if ($lan.velocidade_mbps) { "$($lan.velocidade_mbps) Mbps" } else { '' })
+    Set-LinhaDetalhe $w.FindName('txtLocOrigem')  'Obtencao do IP'   ([string] $lan.ip_origem)
 
     $wifiUp = [bool] $wf.conectado
     $tw = $w.FindName('txtLocWifi'); $dw = $w.FindName('dotWifi')
@@ -963,6 +964,7 @@ function Update-PainelFaseLocal {
     Set-LinhaDetalhe $w.FindName('txtLocWifiGw')   'Gateway'          ([string] $wf.gateway)
     Set-LinhaDetalhe $w.FindName('txtLocWifiMask') 'Mascara'          ([string] $wf.mascara)
     Set-LinhaDetalhe $w.FindName('txtLocWifiMac')  'MAC'              ([string] $wf.mac)
+    Set-LinhaDetalhe $w.FindName('txtLocWifiOrigem') 'Obtencao do IP' ([string] $wf.ip_origem)
     $twd = $w.FindName('txtLocWifiDet')
     if ($twd) {
         $twd.Text = if ($wifiUp) {
@@ -1526,8 +1528,17 @@ function Complete-ConectarWifi {
                 conectado         = $true
                 ssid              = [string] $Res.ssid
                 sinal_pct         = $Res.sinal_pct
-                nome              = if ($wfBase -and $wfBase.PSObject.Properties['nome']) { $wfBase.nome } else { $null }
-                redes_disponiveis = if ($wfBase -and $wfBase.PSObject.Properties['redes_disponiveis']) { $wfBase.redes_disponiveis } else { @() }
+                nome              = if ($wfBase) { $wfBase.nome } else { '' }
+                redes_disponiveis = if ($wfBase) { @($wfBase.redes_disponiveis) } else { @() }
+                ipv4              = if ($wfBase) { [string] $wfBase.ipv4 } else { '' }
+                prefixo           = if ($wfBase) { $wfBase.prefixo } else { $null }
+                mascara           = if ($wfBase) { [string] $wfBase.mascara } else { '' }
+                gateway           = if ($wfBase) { [string] $wfBase.gateway } else { '' }
+                dns               = if ($wfBase) { @($wfBase.dns) } else { @() }
+                ip_origem         = if ($wfBase) { [string] $wfBase.ip_origem } else { '' }
+                mac               = if ($wfBase) { [string] $wfBase.mac } else { '' }
+                velocidade_mbps   = if ($wfBase) { $wfBase.velocidade_mbps } else { $null }
+                status            = 'Up'
             }
             Internet = $null
             Quando   = (Get-Date).ToString('o')

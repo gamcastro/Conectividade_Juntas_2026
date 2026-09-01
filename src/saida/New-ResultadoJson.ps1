@@ -93,6 +93,7 @@ function New-ResultadoJson {
             tethering_celular      = [bool] $Tethering
             operadora              = [string] $Operadora
             ip_local               = [string] (Get-Prop $ativa 'ipv4')
+            ip_origem              = [string] (Get-Prop $ativa 'ip_origem')
             mascara                = [string] (Get-Prop $ativa 'mascara')
             gateway                = [string] (Get-Prop $ativa 'gateway')
             dns                    = @(Get-Prop $ativa 'dns')

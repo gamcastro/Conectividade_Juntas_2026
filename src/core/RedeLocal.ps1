@@ -97,11 +97,24 @@ function ConvertTo-MascaraIpv4 {
     '{0}.{1}.{2}.{3}' -f (($m -shr 24) -band 255), (($m -shr 16) -band 255), (($m -shr 8) -band 255), ($m -band 255)
 }
 
+# PrefixOrigin do Get-NetIPAddress -> rotulo. Dhcp = DHCP; Manual = IP fixo.
+function Format-OrigemIp {
+    param($Origem)
+    switch ("$Origem") {
+        'Dhcp'                { 'DHCP' }
+        'Manual'              { 'IP fixo (manual)' }
+        'WellKnown'           { 'automatico (APIPA)' }
+        'RouterAdvertisement' { 'anuncio de roteador' }
+        ''                    { '' }
+        default               { "$Origem" }
+    }
+}
+
 function Get-AdaptadorLan {
     $vazio = [pscustomobject]@{
         presente = $false; nome = ''; descricao = ''; status = ''; conectado = $false
         ipv4 = ''; prefixo = $null; mascara = ''; gateway = ''; dns = @()
-        mac = ''; velocidade_mbps = $null
+        ip_origem = ''; mac = ''; velocidade_mbps = $null
     }
 
     $lan = $null
@@ -123,6 +136,7 @@ function Get-AdaptadorLan {
         status   = [string] $lan.Status
         conectado = $false
         ipv4 = ''; prefixo = $null; mascara = ''; gateway = ''; dns = @()
+        ip_origem = ''
         mac  = [string] $lan.MacAddress
         velocidade_mbps = $null
     }
@@ -137,6 +151,7 @@ function Get-AdaptadorLan {
                 $o.ipv4      = [string] $ip.IPAddress
                 $o.prefixo   = [int] $ip.PrefixLength
                 $o.mascara   = ConvertTo-MascaraIpv4 ([int] $ip.PrefixLength)
+                $o.ip_origem  = Format-OrigemIp $ip.PrefixOrigin
                 $o.conectado = $true
             }
         } catch { }
@@ -185,7 +200,7 @@ function Get-AdaptadorWireless {
         presente = $false; nome = ''; status = ''; conectado = $false
         ssid = ''; sinal_pct = $null; redes_disponiveis = @()
         ipv4 = ''; prefixo = $null; mascara = ''; gateway = ''; dns = @()
-        mac = ''; velocidade_mbps = $null
+        ip_origem = ''; mac = ''; velocidade_mbps = $null
     }
 
     $wa = $null
@@ -227,9 +242,10 @@ function Get-AdaptadorWireless {
             Where-Object { $_.IPAddress -notmatch '^169\.254\.' -and $_.IPAddress -ne '127.0.0.1' } |
             Select-Object -First 1
         if ($ip) {
-            $o.ipv4    = [string] $ip.IPAddress
-            $o.prefixo = [int] $ip.PrefixLength
-            $o.mascara = ConvertTo-MascaraIpv4 ([int] $ip.PrefixLength)
+            $o.ipv4      = [string] $ip.IPAddress
+            $o.prefixo   = [int] $ip.PrefixLength
+            $o.mascara   = ConvertTo-MascaraIpv4 ([int] $ip.PrefixLength)
+            $o.ip_origem = Format-OrigemIp $ip.PrefixOrigin
         }
     } catch { }
     try {

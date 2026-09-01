@@ -583,6 +583,9 @@
                                         <TextBlock x:Name="txtLocVel" Margin="18,2,0,0" FontFamily="Consolas"
                                                    FontSize="11" Foreground="{DynamicResource Dicon.Text3}"
                                                    Visibility="Collapsed"/>
+                                        <TextBlock x:Name="txtLocOrigem" Margin="18,2,0,0" FontFamily="Consolas"
+                                                   FontSize="11" Foreground="{DynamicResource Dicon.Text3}"
+                                                   Visibility="Collapsed"/>
                                     </StackPanel>
                                 </Border>
 
@@ -604,6 +607,8 @@
                                         <TextBlock x:Name="txtLocWifiMask" Margin="18,2,0,0" FontFamily="Consolas"
                                                    FontSize="11" Foreground="{DynamicResource Dicon.Text3}" Visibility="Collapsed"/>
                                         <TextBlock x:Name="txtLocWifiMac" Margin="18,2,0,0" FontFamily="Consolas"
+                                                   FontSize="11" Foreground="{DynamicResource Dicon.Text3}" Visibility="Collapsed"/>
+                                        <TextBlock x:Name="txtLocWifiOrigem" Margin="18,2,0,0" FontFamily="Consolas"
                                                    FontSize="11" Foreground="{DynamicResource Dicon.Text3}" Visibility="Collapsed"/>
                                         <TextBlock x:Name="txtLocWifiDet" Margin="18,4,0,0" FontFamily="Consolas"
                                                    FontSize="11" TextWrapping="Wrap"
