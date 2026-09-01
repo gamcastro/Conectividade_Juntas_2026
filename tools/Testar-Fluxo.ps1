@@ -184,7 +184,7 @@ try {
         "$($w.FindName('painelSpeedResultado').Visibility)" -eq 'Visible') {
         Write-Host "[4c] speedtest OK: card + painel de resultado visiveis"
     } else { Write-Host "    FALHA: speedtest nao completou (ok=$($it.speedtest_ok) card=$($w.FindName('cardInternetLocal').Visibility) painel=$($w.FindName('painelSpeedResultado').Visibility))"; $falhas++ }
-    $rd = "$($w.FindName('runResDown').Text)"; $rp = "$($w.FindName('txtResIsp').Text)"
+    $rd = "$($w.FindName('runResDown').Text)"; $rp = "$($w.FindName('runConnProvedor').Text)"
     if ($rd -match '85' -and "$($w.FindName('runResUp').Text)" -match '29' -and $rp -match 'BARREIRAS NET') {
         Write-Host "[4c] resultado: down=$rd Mbps  up=$($w.FindName('runResUp').Text)  provedor='$rp'"
     } else { Write-Host "    FALHA: painel de resultado do speedtest (down='$rd' isp='$rp')"; $falhas++ }

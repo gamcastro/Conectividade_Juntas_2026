@@ -1191,7 +1191,9 @@ function Reset-Velocimetro {
     } else {
         $w.FindName('painelSpeedResultado').Visibility = 'Collapsed'
         $w.FindName('txtSpeedErro').Visibility = 'Collapsed'
-        $w.FindName('txtSpeedInfo').Text = ''
+        foreach ($n in 'runConnProvedor', 'runConnServidor', 'runConnIp') {
+            $r = $w.FindName($n); if ($r) { $r.Text = '' }
+        }
     }
     Set-TicksVelocimetro -Suf $Suf
 }
@@ -1249,8 +1251,10 @@ function Update-Speedtest {
         'testStart' {
             $srv = $Evento.server
             $ext = if ($Evento.PSObject.Properties['interface'] -and $Evento.interface) { [string] $Evento.interface.externalIp } else { '' }
-            $w.FindName('txtSpeedInfo').Text = ('{0}   -   servidor: {1} ({2})   -   IP {3}' -f `
-                    $Evento.isp, $srv.name, $srv.location, (Get-IpExibicao $ext))
+            $loc = [string] $srv.location
+            Set-SpeedConn -Provedor ([string] $Evento.isp) `
+                          -Servidor ([string] $srv.name + $(if ($loc) { " ($loc)" } else { '' })) `
+                          -Ip (Get-IpExibicao $ext)
             $w.FindName('txtVeloFase').Text = 'conectando...'
         }
         'ping' {
@@ -1315,6 +1319,18 @@ function Get-IpExibicao {
     return ''
 }
 
+# Bloco vertical "Provedor / Servidor / IP" no topo do card do speedtest.
+function Set-SpeedConn {
+    param([string] $Provedor, [string] $Servidor, [string] $Ip)
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    $par = @{ runConnProvedor = $Provedor; runConnServidor = $Servidor; runConnIp = $Ip }
+    foreach ($n in $par.Keys) {
+        $r = $w.FindName($n)
+        if ($r) { $r.Text = [string] $par[$n] }
+    }
+}
+
 # Preenche o painel de resultado do speedtest a partir do payload achatado.
 function Update-SpeedtestPainel {
     param($It)
@@ -1331,11 +1347,11 @@ function Update-SpeedtestPainel {
     $perda = & $g 'perda_pct'
     $w.FindName('runResPerda').Text  = if ($null -eq $perda) { '--' } else { '{0:0.0}' -f $perda }
 
-    $w.FindName('txtResIsp').Text = 'Provedor: ' + [string] (& $g 'isp')
     $srv = [string] (& $g 'servidor_nome')
     $loc = [string] (& $g 'servidor_local')
-    $w.FindName('txtResServidor').Text = 'Servidor: ' + $srv + $(if ($loc) { " - $loc" } else { '' })
-    $w.FindName('txtResIp').Text = 'IP: ' + (Get-IpExibicao ([string] (& $g 'ip_externo')))
+    Set-SpeedConn -Provedor ([string] (& $g 'isp')) `
+                  -Servidor ($srv + $(if ($loc) { " ($loc)" } else { '' })) `
+                  -Ip (Get-IpExibicao ([string] (& $g 'ip_externo')))
     $url = [string] (& $g 'resultado_url')
     $tl = $w.FindName('txtResLink')
     $tl.Text = if ($url) { 'Resultado Ookla: ' + $url } else { '' }
