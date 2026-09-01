@@ -60,11 +60,15 @@ function Write-Log {
         }
     }
 
-    # Espelho no console (modo -SemUI) e no arquivo.
-    Write-Host ("{0}  {1}" -f $hora, $Mensagem)
+    # Espelho no console (modo -SemUI) e no arquivo. NUNCA propaga erro: um
+    # console em estado ruim (host de runspace, stream fechado -> "o fluxo nao
+    # era legivel") nao pode derrubar quem chamou o log.
+    try { Write-Host ("{0}  {1}" -f $hora, $Mensagem) } catch { }
     $arq = Get-Variable -Name ArquivoLog -Scope Global -ErrorAction SilentlyContinue
     if ($arq -and $arq.Value) {
-        "{0}  [{1}]  {2}" -f $hora, $Nivel, $Mensagem |
-            Add-Content -Path $arq.Value -Encoding UTF8
+        try {
+            "{0}  [{1}]  {2}" -f $hora, $Nivel, $Mensagem |
+                Add-Content -Path $arq.Value -Encoding UTF8 -ErrorAction Stop
+        } catch { }
     }
 }

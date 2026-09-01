@@ -859,9 +859,13 @@ function Start-TarefaRede {
             $res = $r.Resultado; $erro = $r.Erro
         } catch { $erro = "$_" } finally { try { $st.PS.Dispose(); $st.RS.Dispose() } catch { } }
 
-        try { & $st.AoConcluir $res $erro } catch { Write-Log "Pos-processamento de rede falhou: $_" -Nivel Erro }
+        try { & $st.AoConcluir $res $erro } catch {
+            Write-Log "Pos-processamento de rede falhou: $_" -Nivel Erro
+            try { Set-FaseLocalOcupado $false } catch { }   # nao deixa o passo 3 travado
+        }
       } catch {
         try { Write-Log "Tarefa de rede: falha inesperada ($_)." -Nivel Erro } catch { }
+        try { Set-FaseLocalOcupado $false } catch { }
       }
     })
     $timer.Start()

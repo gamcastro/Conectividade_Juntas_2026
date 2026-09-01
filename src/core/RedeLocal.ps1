@@ -52,40 +52,40 @@ function Write-EventoSpeedtest {
     else { $dispatcher.Invoke([action] $aplicar, [Windows.Threading.DispatcherPriority]::Background) }
 }
 
-# Roda o speedtest.exe lendo o stdout LINHA A LINHA (JSONL). Cada linha valida
-# vira um objeto; eventos de progresso vao ao vivo para a GUI. Devolve a lista
-# de eventos + a saida de erro.
+# Roda o speedtest.exe pelo operador de chamada (&), lendo o stdout JSONL
+# LINHA A LINHA pelo pipeline do PowerShell (que drena sozinho). Nao usa
+# [Diagnostics.Process].StandardOutput nem [IO.StreamReader] - esses estouram
+# "o fluxo nao era legivel" dentro do runspace MTA da checagem. Cada linha
+# valida vira um objeto e vai ao vivo para o velocimetro da GUI.
 function Invoke-SpeedtestStreaming {
     param([string] $Caminho, [string] $Argumentos, [int] $TimeoutS = 100)
     $eventos = New-Object System.Collections.Generic.List[object]
-    $psi = [Diagnostics.ProcessStartInfo]::new()
-    $psi.FileName               = $Caminho
-    $psi.Arguments              = $Argumentos
-    $psi.RedirectStandardOutput = $true
-    $psi.RedirectStandardError  = $true
-    $psi.UseShellExecute        = $false
-    $psi.CreateNoWindow         = $true
-    # o speedtest.exe emite JSON em UTF-8 (nomes de servidor com acento).
-    $psi.StandardOutputEncoding = [Text.Encoding]::UTF8
-    $psi.StandardErrorEncoding  = [Text.Encoding]::UTF8
-    $stderr = ''
+    $errBuf  = New-Object System.Collections.Generic.List[string]
+
+    # a string vem pre-montada ('--format=jsonl --progress=yes ...'); o & precisa
+    # de argumentos separados.
+    $argArr = @($Argumentos -split '\s+' | Where-Object { $_ })
+
     try {
-        $p = [Diagnostics.Process]::Start($psi)
-        $errTask = $p.StandardError.ReadToEndAsync()
-        while ($null -ne ($ln = $p.StandardOutput.ReadLine())) {
-            $t = $ln.Trim()
-            if ($t -eq '' -or $t[0] -ne '{') { continue }
+        & $Caminho @argArr 2>&1 | ForEach-Object {
+            if ($_ -is [System.Management.Automation.ErrorRecord]) {
+                $s = [string] $_
+                if ($s.Trim()) { $errBuf.Add($s.Trim()) }
+                return
+            }
+            $t = ([string] $_).Trim()
+            if ($t -eq '' -or $t[0] -ne '{') { return }
             $obj = $null
-            try { $obj = $t | ConvertFrom-Json } catch { continue }
+            try { $obj = $t | ConvertFrom-Json } catch { return }
             if ($obj -and $obj.PSObject.Properties['type']) {
                 $eventos.Add($obj)
                 Write-EventoSpeedtest $obj
             }
         }
-        if (-not $p.WaitForExit($TimeoutS * 1000)) { try { $p.Kill() } catch { } }
-        try { $stderr = $errTask.Result } catch { }
-    } catch { $stderr = "$_" }
-    [pscustomobject]@{ Eventos = $eventos; Erro = $stderr }
+    } catch {
+        $errBuf.Add("$_")
+    }
+    [pscustomobject]@{ Eventos = $eventos; Erro = ($errBuf -join "`n") }
 }
 
 # --------------------------------------------------------------- placa LAN

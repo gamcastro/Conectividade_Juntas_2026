@@ -14,26 +14,25 @@ function Write-EventoIperf {
     else { $dispatcher.Invoke([action] $aplicar, [Windows.Threading.DispatcherPriority]::Background) }
 }
 
-# Roda uma passada do iperf3 (um sentido) lendo o stdout linha a linha.
+# Roda uma passada do iperf3 (um sentido) pelo operador de chamada (&), lendo o
+# stdout linha a linha pelo pipeline. Nao usa [Diagnostics.Process]/StreamReader
+# (estoura "o fluxo nao era legivel" no runspace MTA).
 #   -Fase: 'download' (com -R) ou 'upload'
 function Invoke-IperfStreaming {
     param([string] $Iperf, [string] $Argumentos, [string] $Fase, [int] $Duracao = 10)
     $r = [pscustomobject]@{ ok = $false; mbps = $null; retrans = $null; erro = '' }
-    $psi = [Diagnostics.ProcessStartInfo]::new()
-    $psi.FileName               = $Iperf
-    $psi.Arguments              = $Argumentos
-    $psi.RedirectStandardOutput = $true
-    $psi.RedirectStandardError  = $true
-    $psi.UseShellExecute        = $false
-    $psi.CreateNoWindow         = $true
 
     $reSum = '^\[\s*\d+\]\s+[\d.]+-[\d.]+\s+sec\s+[\d.]+\s+\wBytes\s+([\d.]+)\s+Mbits/sec(?:\s+(\d+))?\s+(sender|receiver)\s*$'
     $reInt = '^\[\s*\d+\]\s+[\d.]+-\s*([\d.]+)\s+sec\s+[\d.]+\s+\wBytes\s+([\d.]+)\s+Mbits/sec'
+    $argArr = @($Argumentos -split '\s+' | Where-Object { $_ })
     try {
-        $p = [Diagnostics.Process]::Start($psi)
-        $errAsync = $p.StandardError.ReadToEndAsync()
-        while ($null -ne ($ln = $p.StandardOutput.ReadLine())) {
-            $t = $ln.TrimEnd()
+        & $Iperf @argArr 2>&1 | ForEach-Object {
+            if ($_ -is [System.Management.Automation.ErrorRecord]) {
+                $s = ([string] $_).Trim()
+                if ($s -match 'error|refused|unable|failed' -and -not $r.erro) { $r.erro = $s }
+                return
+            }
+            $t = ([string] $_).TrimEnd()
             if ($t -match $reSum) {
                 if ($Matches[3] -eq 'receiver') { $r.mbps = [double] $Matches[1] }
                 elseif ($Matches[2]) { $r.retrans = [int] $Matches[2] }
@@ -43,12 +42,7 @@ function Invoke-IperfStreaming {
             }
             elseif ($t -match 'iperf3:\s*error\s*-\s*(.+)$') { $r.erro = $Matches[1].Trim() }
         }
-        if (-not $p.WaitForExit(($Duracao + 25) * 1000)) { try { $p.Kill() } catch { } }
-        $se = try { $errAsync.Result } catch { '' }
-        if (-not $r.erro -and $se -and $se.Trim()) {
-            $r.erro = @($se -split "`r?`n" | Where-Object { $_ -match 'error|refused|unable|failed' } | Select-Object -First 1)
-        }
-    } catch { $r.erro = "$_" }
+    } catch { if (-not $r.erro) { $r.erro = "$_" } }
     if ($null -ne $r.mbps) { $r.ok = $true }
     $r
 }
