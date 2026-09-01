@@ -1352,10 +1352,6 @@ function Update-SpeedtestPainel {
     Set-SpeedConn -Provedor ([string] (& $g 'isp')) `
                   -Servidor ($srv + $(if ($loc) { " ($loc)" } else { '' })) `
                   -Ip (Get-IpExibicao ([string] (& $g 'ip_externo')))
-    $url = [string] (& $g 'resultado_url')
-    $tl = $w.FindName('txtResLink')
-    $tl.Text = if ($url) { 'Resultado Ookla: ' + $url } else { '' }
-    $tl.Visibility = if ($url) { 'Visible' } else { 'Collapsed' }
 
     $w.FindName('txtSpeedErro').Visibility = 'Collapsed'
     $w.FindName('painelSpeedResultado').Visibility = 'Visible'

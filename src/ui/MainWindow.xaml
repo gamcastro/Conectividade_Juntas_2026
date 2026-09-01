@@ -738,7 +738,6 @@
                                         <Grid.RowDefinitions>
                                             <RowDefinition Height="Auto"/>
                                             <RowDefinition Height="Auto"/>
-                                            <RowDefinition Height="Auto"/>
                                         </Grid.RowDefinitions>
 
                                         <UniformGrid Grid.Row="0" Rows="1" Columns="2">
@@ -808,10 +807,6 @@
                                                 </TextBlock>
                                             </StackPanel>
                                         </UniformGrid>
-
-                                        <TextBlock x:Name="txtResLink" Grid.Row="2" Margin="0,10,0,0" TextWrapping="Wrap"
-                                                   FontFamily="Consolas" FontSize="10.5"
-                                                   Foreground="{DynamicResource Dicon.Text3}"/>
                                     </Grid>
                                 </StackPanel>
                             </Border>
