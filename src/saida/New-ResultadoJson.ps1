@@ -37,7 +37,12 @@ function New-ResultadoJson {
         [string]   $Operadora,
         # Nao foi possivel conectar a VPN da JE no local (bateria nao rodou).
         [bool]     $VpnImpossivel,
-        [string]   $VpnMotivo
+        [string]   $VpnMotivo,
+        # Multi-meio: lista de medicoes (uma por meio de conexao) e a
+        # recomendacao final (objeto de Get-ConexaoRecomendada). Opcionais.
+        $Medicoes,
+        $ConexaoRecomendada,
+        [string]   $MotivoRecomendacao
     )
 
     # index metrica -> override do tecnico
@@ -120,6 +125,51 @@ function New-ResultadoJson {
         }
     }
 
+    # --- multi-meio: medicoes + recomendacao ------------------------------
+    $medicoesJson = @()
+    foreach ($m in @($Medicoes)) {
+        if (-not $m) { continue }
+        $mIt  = Get-Prop (Get-Prop $m 'fase_local') 'Internet'
+        $mMet = Get-Prop $m 'metricas'
+        $medicoesJson += [pscustomobject]@{
+            meio                 = [string] (Get-Prop $m 'meio')
+            operadora            = [string] (Get-Prop $m 'operadora')
+            rotulo               = [string] (Get-Prop $m 'rotulo')
+            nao_aplicavel        = [bool] (Get-Prop $m 'nao_aplicavel')
+            motivo_nao_aplicavel = [string] (Get-Prop $m 'motivo_na')
+            rede_local_ok        = [bool] (Get-Prop $m 'rede_local_ok')
+            rede_local_download  = (Get-Prop $m 'rede_local_download')
+            rede_local_provedor  = [string] (Get-Prop $mIt 'isp')
+            vpn_conectou         = [bool] (Get-Prop $m 'vpn_conectou')
+            vpn_motivo           = [string] (Get-Prop $m 'vpn_motivo')
+            vpn_download_mbps     = (Get-Prop $mMet 'BandaDownloadMbps')
+            vpn_upload_mbps       = (Get-Prop $mMet 'BandaUploadMbps')
+            latencia_ms           = (Get-Prop $mMet 'LatenciaMediaMs')
+            jitter_ms             = (Get-Prop $mMet 'JitterMs')
+            perda_percentual      = (Get-Prop $mMet 'PerdaPercentual')
+            veredito             = [string] (Get-Prop $m 'veredito')
+            quando               = [string] (Get-Prop $m 'quando')
+        }
+    }
+
+    $recJson = $null
+    if ($ConexaoRecomendada) {
+        $recJson = [pscustomobject]@{
+            meio       = [string] (Get-Prop $ConexaoRecomendada 'meio')
+            operadora  = [string] (Get-Prop $ConexaoRecomendada 'operadora')
+            rotulo     = [string] (Get-Prop $ConexaoRecomendada 'rotulo')
+            veredito   = [string] (Get-Prop $ConexaoRecomendada 'veredito')
+            provisoria = [bool] (Get-Prop $ConexaoRecomendada 'provisoria')
+            base       = [string] (Get-Prop $ConexaoRecomendada 'base')
+            motivo     = [string] $MotivoRecomendacao
+        }
+        # a decisao final do local passa a ser o veredito do meio recomendado,
+        # salvo override explicito do tecnico.
+        if (-not ($ClassificacaoFinal -and $ClassificacaoFinal.final)) {
+            $finalDecisao = [string] (Get-Prop $ConexaoRecomendada 'veredito')
+        }
+    }
+
     [pscustomobject]@{
         versao_ferramenta = $Global:VersaoApp
         coletado_em       = (Get-Date).ToString('o')
@@ -140,6 +190,8 @@ function New-ResultadoJson {
         }
         rede_local        = $redeLocal
         vpn               = [pscustomobject]@{ impossivel = [bool] $VpnImpossivel; motivo = [string] $VpnMotivo }
+        medicoes          = @($medicoesJson)
+        conexao_recomendada = $recJson
         ambiente          = $Ambiente
         metricas          = [pscustomobject]@{
             latencia_ms         = $Metricas.LatenciaMediaMs
