@@ -804,11 +804,16 @@ function Start-TarefaRede {
     $handle = $ps.BeginInvoke()
     $timer = [Windows.Threading.DispatcherTimer]::new()
     $timer.Interval = [TimeSpan]::FromMilliseconds(200)
-    $Global:TarefaRedeState = @{ PS = $ps; RS = $rs; Handle = $handle; Timer = $timer; AoConcluir = $AoConcluir }
+    $Global:TarefaRedeState = @{ PS = $ps; RS = $rs; Handle = $handle; Timer = $timer; AoConcluir = $AoConcluir; Concluido = $false }
 
     $timer.Add_Tick({
         $st = $Global:TarefaRedeState
-        if ($null -eq $st -or -not $st.Handle.IsCompleted) { return }
+        # Concluido: se um tick ja enfileirado disparar de novo (o processamento
+        # abaixo demora mais que o intervalo do timer), ele nao pode reprocessar
+        # o mesmo slot -> senao dava EndInvoke/Dispose em dobro ("o fluxo nao era
+        # legivel").
+        if ($null -eq $st -or $st.Concluido -or -not $st.Handle.IsCompleted) { return }
+        $st.Concluido = $true
         $st.Timer.Stop()
         $Global:TarefaRedeState = $null
 
@@ -971,7 +976,29 @@ function Invoke-ProbeRedeLocal {
 function Complete-ProbeRedeLocal {
     param($Payload, $Erro)
     Set-FaseLocalOcupado $false
-    if ($Erro) { Write-Log "Checagem de rede falhou: $Erro" -Nivel Erro; return }
+
+    $ant = $Global:FaseLocalPayload
+    $antWifiOk = $ant -and $ant.PSObject.Properties['Parcial'] -and $ant.Parcial -and [bool] $ant.Wireless.conectado
+
+    if ($Erro) {
+        # Se o re-probe falhou mas ja havia uma conexao Wi-Fi confirmada
+        # (estado parcial), mantem o que temos - a checagem local ainda roda.
+        if ($antWifiOk) {
+            Write-Log "Nao consegui reinventariar as placas ($Erro). Uso a conexao Wi-Fi ja confirmada." -Nivel Aviso
+        } else {
+            Write-Log "Checagem de rede falhou: $Erro" -Nivel Erro
+        }
+        return
+    }
+
+    # netsh pode ainda nao reportar 'conectado' logo apos o connect: se acabamos
+    # de confirmar o Wi-Fi, preserva o flag/ssid no inventario novo.
+    if ($antWifiOk -and $Payload -and $Payload.Wireless -and -not [bool] $Payload.Wireless.conectado) {
+        $Payload.Wireless.conectado = $true
+        if (-not $Payload.Wireless.ssid) { $Payload.Wireless.ssid = $ant.Wireless.ssid }
+        if (-not $Payload.Wireless.sinal_pct) { $Payload.Wireless.sinal_pct = $ant.Wireless.sinal_pct }
+    }
+
     $Global:FaseLocalPayload = $Payload
     Update-PainelFaseLocal
 }
@@ -1313,8 +1340,41 @@ function Complete-ConectarWifi {
     if ($Res -and $Res.ok) {
         $st.Text = [string] $Res.mensagem
         Write-Log ("Wi-Fi conectado: {0}" -f $Res.mensagem) -Nivel Ok
-        $Global:FaseLocalPayload = $null
-        Invoke-ProbeRedeLocal   # re-inventaria as placas com a nova conexao
+
+        # Registra JA a conexao Wi-Fi no estado (nao espera o re-probe async):
+        # a checagem local nao pode ficar travada se o inventario falhar. Parte
+        # do payload anterior (LAN, redes vistas) e so vira o Wi-Fi p/ conectado.
+        $ant     = $Global:FaseLocalPayload
+        $lanBase = if ($ant -and $ant.PSObject.Properties['Lan']) { $ant.Lan } else { $null }
+        $wfBase  = if ($ant -and $ant.PSObject.Properties['Wireless']) { $ant.Wireless } else { $null }
+        $Global:FaseLocalPayload = [pscustomobject]@{
+            Host     = $env:COMPUTERNAME
+            Lan      = $lanBase
+            Wireless = [pscustomobject]@{
+                presente          = $true
+                conectado         = $true
+                ssid              = [string] $Res.ssid
+                sinal_pct         = $Res.sinal_pct
+                nome              = if ($wfBase -and $wfBase.PSObject.Properties['nome']) { $wfBase.nome } else { $null }
+                redes_disponiveis = if ($wfBase -and $wfBase.PSObject.Properties['redes_disponiveis']) { $wfBase.redes_disponiveis } else { @() }
+            }
+            Internet = $null
+            Quando   = (Get-Date).ToString('o')
+            Parcial  = $true
+        }
+        Update-PainelFaseLocal
+
+        # Re-inventaria as placas FORA deste tick: chamar Start-TarefaRede aqui
+        # dentro (aninhado no tick de Connect-RedeWireless) deixava dois
+        # DispatcherTimer polindo o mesmo slot -> EndInvoke apos Dispose
+        # ("o fluxo nao era legivel"). BeginInvoke deixa o tick atual terminar.
+        if ($w) {
+            $w.Dispatcher.BeginInvoke(
+                [Windows.Threading.DispatcherPriority]::Background,
+                [action] { Invoke-ProbeRedeLocal }) | Out-Null
+        } else {
+            Invoke-ProbeRedeLocal
+        }
     } else {
         $st.Text = if ($Res) { [string] $Res.mensagem } else { 'Nao foi possivel conectar.' }
         Write-Log ("Wi-Fi nao conectou: {0}" -f $st.Text) -Nivel Aviso
