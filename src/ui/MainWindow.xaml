@@ -908,9 +908,10 @@
 
                             <CheckBox x:Name="chkVpnImpossivel" Margin="0,16,0,0"
                                       Content="N&#227;o foi poss&#237;vel conectar a VPN da JE neste local"/>
-                            <TextBox x:Name="txtVpnMotivo" Margin="0,8,0,0" MinHeight="34" MaxWidth="620"
-                                     HorizontalAlignment="Left" TextWrapping="Wrap" AcceptsReturn="True"
-                                     VerticalContentAlignment="Center" Visibility="Collapsed"/>
+                            <TextBox x:Name="txtVpnMotivo" Margin="0,8,0,0" MinHeight="110" MaxWidth="860"
+                                     HorizontalAlignment="Stretch" TextWrapping="Wrap" AcceptsReturn="True"
+                                     AcceptsTab="False" VerticalContentAlignment="Top"
+                                     VerticalScrollBarVisibility="Auto" Padding="8,6" Visibility="Collapsed"/>
                             <TextBlock x:Name="txtVpnMotivoDica" Margin="0,4,0,0" FontSize="11" TextWrapping="Wrap"
                                        Foreground="{DynamicResource Dicon.Text3}" Visibility="Collapsed"
                                        Text="Descreva o que impediu a conex&#227;o (FortiClient, credencial, link...). Vai no relat&#243;rio; o local fica registrado como INVI&#193;VEL."/>
