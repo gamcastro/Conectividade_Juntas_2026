@@ -532,27 +532,66 @@ function gravarResultado(dados) {
   var ss  = SpreadsheetApp.openById(PLANILHA_RESULTADOS_ID);
   var aba = ss.getSheetByName(ABA_RESULTADOS) || ss.insertSheet(ABA_RESULTADOS);
 
+  var COLS = ['recebido_em', 'tecnico', 'local_id', 'zona', 'municipio_termo', 'tipo',
+    'classificacao_final', 'classificacao_automatica', 'ajustada',
+    'conexao_recomendada', 'operadora_recomendada', 'veredito_recomendado',
+    'recomendacao_provisoria', 'motivo_recomendacao',
+    'latencia_ms', 'jitter_ms', 'perda_%', 'download_mbps', 'upload_mbps', 'carregamento_s', 'json'];
+
   if (aba.getLastRow() === 0) {
-    aba.appendRow(['recebido_em', 'tecnico', 'local_id', 'zona', 'municipio_termo', 'tipo',
-      'classificacao_final', 'classificacao_automatica', 'ajustada',
-      'latencia_ms', 'jitter_ms', 'perda_%', 'download_mbps', 'upload_mbps', 'carregamento_s', 'json']);
+    aba.appendRow(COLS);
+  } else {
+    // migracao: planilha de versao anterior nao tem as colunas multi-meio.
+    var head = aba.getRange(1, 1, 1, aba.getLastColumn()).getValues()[0];
+    if (head.indexOf('conexao_recomendada') === -1) {
+      var novas = ['conexao_recomendada', 'operadora_recomendada', 'veredito_recomendado',
+        'recomendacao_provisoria', 'motivo_recomendacao'];
+      var jsonIdx = head.indexOf('json');
+      var at = (jsonIdx === -1) ? head.length + 1 : jsonIdx + 1;  // antes da coluna 'json'
+      aba.insertColumnsBefore(at, novas.length);
+      aba.getRange(1, at, 1, novas.length).setValues([novas]);
+    }
   }
 
   var m = dados.metricas || {};
   var l = dados.local || {};
   var c = dados.classificacao || {};
+  var r = dados.conexao_recomendada || {};
   // compat: versao antiga mandava classificacao como string
   var cFinal = (typeof c === 'string') ? c : (c.final || '');
   var cAuto  = (typeof c === 'string') ? c : (c.automatica || '');
   var cAdj   = (typeof c === 'object') ? !!c.ajustada : false;
-  aba.appendRow([
-    new Date(), (dados.tecnico || {}).nome || '', l.id || '', l.zona_eleitoral || '',
-    l.municipio_termo || '', l.tipo || '',
-    cFinal, cAuto, cAdj,
-    m.latencia_ms, m.jitter_ms, m.perda_percentual,
-    m.banda_download_mbps, m.banda_upload_mbps, m.carregamento_web_s,
-    JSON.stringify(dados)
-  ]);
+
+  var valores = {
+    'recebido_em': new Date(),
+    'tecnico': (dados.tecnico || {}).nome || '',
+    'local_id': l.id || '',
+    'zona': l.zona_eleitoral || '',
+    'municipio_termo': l.municipio_termo || '',
+    'tipo': l.tipo || '',
+    'classificacao_final': cFinal,
+    'classificacao_automatica': cAuto,
+    'ajustada': cAdj,
+    'conexao_recomendada': r.rotulo || r.meio || '',
+    'operadora_recomendada': r.operadora || '',
+    'veredito_recomendado': r.veredito || '',
+    'recomendacao_provisoria': !!r.provisoria,
+    'motivo_recomendacao': r.motivo || '',
+    'latencia_ms': m.latencia_ms,
+    'jitter_ms': m.jitter_ms,
+    'perda_%': m.perda_percentual,
+    'download_mbps': m.banda_download_mbps,
+    'upload_mbps': m.banda_upload_mbps,
+    'carregamento_s': m.carregamento_web_s,
+    'json': JSON.stringify(dados)
+  };
+
+  // grava por nome de coluna, tolerando ordem/idade diferentes da planilha.
+  var head2 = aba.getRange(1, 1, 1, aba.getLastColumn()).getValues()[0];
+  var linha = head2.map(function (nome) {
+    return Object.prototype.hasOwnProperty.call(valores, nome) ? valores[nome] : '';
+  });
+  aba.appendRow(linha);
 }
 
 
