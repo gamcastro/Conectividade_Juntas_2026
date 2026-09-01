@@ -281,16 +281,66 @@ function Get-AdaptadorWireless {
     $o
 }
 
-# Conecta a uma rede Wi-Fi WPA2-PSK criando um perfil temporario e chamando
-# netsh wlan connect. Roda num runspace (nao na thread de UI).
+# True se o Windows ja tem um perfil salvo para esse SSID (netsh wlan show
+# profiles). A linha e "<algo> Profile/Perfil ... : <nome>" em qualquer idioma.
+function Test-PerfilWifiSalvo {
+    param([string] $Ssid)
+    try {
+        $txt = Invoke-Netsh -Argumentos @('wlan', 'show', 'profiles')
+        foreach ($ln in ($txt -split "`r?`n")) {
+            if ($ln -match '(?i)(profile|perfil).*:\s*(.+?)\s*$') {
+                if ($Matches[2] -eq $Ssid) { return $true }
+            }
+        }
+    } catch { }
+    $false
+}
+
+# Autenticacao anunciada pela rede visivel (WPA2PSK x WPA3SAE). Um perfil
+# WPA2PSK nao associa numa rede WPA3-only (hotspot de Android novo).
+function Get-AutenticacaoRedeWifi {
+    param([string] $Ssid)
+    try {
+        $txt = Invoke-Netsh -Argumentos @('wlan', 'show', 'networks', 'mode=bssid')
+        $noBloco = $false
+        foreach ($ln in ($txt -split "`r?`n")) {
+            if ($ln -match '^\s*SSID\s+\d+\s*:\s*(.*\S)\s*$') {
+                $noBloco = ($Matches[1] -eq $Ssid)
+            } elseif ($noBloco -and $ln -match '(?i)(autentica|authentication)\S*\s*:\s*(.+?)\s*$') {
+                if ($Matches[2] -match 'WPA3') { return 'WPA3SAE' }
+                return 'WPA2PSK'
+            }
+        }
+    } catch { }
+    'WPA2PSK'
+}
+
+# Conecta a uma rede Wi-Fi. Se o Windows ja tem o perfil salvo, usa ele (foi o
+# que funcionou na bandeja) - NAO sobrescreve com um perfil nosso. Se nao, cria
+# um perfil temporario com a autenticacao certa (WPA2/WPA3) e o remove se
+# falhar. Roda num runspace (nao na thread de UI).
 function Connect-RedeWireless {
     param(
         [Parameter(Mandatory)] [string] $Ssid,
-        [Parameter(Mandatory)] [string] $Senha,
-        [int] $TimeoutS = 25
+        [string] $Senha = '',
+        [int] $TimeoutS = 40
     )
-    $esc = { param($s) [Security.SecurityElement]::Escape($s) }
-    $xml = @"
+    $tmp = $null
+    $criouPerfil = $false
+    try {
+        if (Test-PerfilWifiSalvo -Ssid $Ssid) {
+            Write-Log ("Wi-Fi: usando o perfil ja salvo no Windows para '{0}'." -f $Ssid) -Nivel Info
+        } else {
+            if ($Senha.Length -lt 8) {
+                return [pscustomobject]@{
+                    ok = $false; ssid = $Ssid; sinal_pct = $null
+                    mensagem = ('A rede "{0}" nao esta salva no Windows - informe a senha (8+ caracteres).' -f $Ssid)
+                }
+            }
+            $auth = Get-AutenticacaoRedeWifi -Ssid $Ssid
+            Write-Log ("Wi-Fi: criando perfil para '{0}' ({1})." -f $Ssid, $auth) -Nivel Info
+            $esc = { param($s) [Security.SecurityElement]::Escape($s) }
+            $xml = @"
 <?xml version="1.0"?>
 <WLANProfile xmlns="http://www.microsoft.com/networking/WLAN/profile/v1">
   <name>$(& $esc $Ssid)</name>
@@ -298,15 +348,17 @@ function Connect-RedeWireless {
   <connectionType>ESS</connectionType>
   <connectionMode>auto</connectionMode>
   <MSM><security>
-    <authEncryption><authentication>WPA2PSK</authentication><encryption>AES</encryption><useOneX>false</useOneX></authEncryption>
+    <authEncryption><authentication>$auth</authentication><encryption>AES</encryption><useOneX>false</useOneX></authEncryption>
     <sharedKey><keyType>passPhrase</keyType><protected>false</protected><keyMaterial>$(& $esc $Senha)</keyMaterial></sharedKey>
   </security></MSM>
 </WLANProfile>
 "@
-    $tmp = Join-Path ([IO.Path]::GetTempPath()) ('dicon-wifi-{0}.xml' -f ([guid]::NewGuid().ToString('N')))
-    [IO.File]::WriteAllText($tmp, $xml, [Text.UTF8Encoding]::new($false))
-    try {
-        Invoke-Netsh -Argumentos @('wlan', 'add', 'profile', ('filename="{0}"' -f $tmp), 'user=current') | Out-Null
+            $tmp = Join-Path ([IO.Path]::GetTempPath()) ('dicon-wifi-{0}.xml' -f ([guid]::NewGuid().ToString('N')))
+            [IO.File]::WriteAllText($tmp, $xml, [Text.UTF8Encoding]::new($false))
+            Invoke-Netsh -Argumentos @('wlan', 'add', 'profile', ('filename="{0}"' -f $tmp), 'user=current') | Out-Null
+            $criouPerfil = $true
+        }
+
         Invoke-Netsh -Argumentos @('wlan', 'connect', ('name="{0}"' -f $Ssid), ('ssid="{0}"' -f $Ssid)) | Out-Null
 
         $fim = (Get-Date).AddSeconds($TimeoutS)
@@ -321,12 +373,17 @@ function Connect-RedeWireless {
             }
         } while ((Get-Date) -lt $fim)
 
+        # falhou: se foi um perfil nosso, remove p/ nao deixar a rede quebrada
+        if ($criouPerfil) {
+            Invoke-Netsh -Argumentos @('wlan', 'delete', 'profile', ('name="{0}"' -f $Ssid)) | Out-Null
+        }
+        $dica = if ($criouPerfil) { 'Confira a senha' } else { 'Tente reconectar pela bandeja do Windows' }
         [pscustomobject]@{
             ok = $false; ssid = $Ssid; sinal_pct = $null
-            mensagem = ('Nao conectou a "{0}" em {1}s. Confira a senha e o alcance.' -f $Ssid, $TimeoutS)
+            mensagem = ('Nao conectou a "{0}" em {1}s. {2} e o alcance.' -f $Ssid, $TimeoutS, $dica)
         }
     } finally {
-        Remove-Item $tmp -Force -ErrorAction SilentlyContinue
+        if ($tmp) { Remove-Item $tmp -Force -ErrorAction SilentlyContinue }
     }
 }
 

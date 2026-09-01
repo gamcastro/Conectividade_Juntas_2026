@@ -1036,7 +1036,7 @@ function Update-PainelFaseLocal {
         } else {
             'Use se o local nao tiver cabo.'
         }
-        $lblWifi.Text = $base + ' Escolha na lista ou digite o nome (SSID) se a rede nao aparecer. A senha fica gravada no perfil de Wi-Fi do Windows.'
+        $lblWifi.Text = $base + ' Escolha na lista ou digite o nome (SSID). Se a rede ja estiver salva no Windows, pode deixar a senha em branco.'
     }
 
     # --- escolha da placa (radio) + regras de habilitacao -----------------
@@ -1517,9 +1517,13 @@ function Invoke-ConectarWifi {
     $senha = $w.FindName('pwdWifiSenha').Password
     $st = $w.FindName('txtWifiStatus')
     $temWifi = if ($Global:FaseLocalPayload) { [bool] $Global:FaseLocalPayload.Wireless.presente } else { Test-TemPlacaWireless }
-    if (-not $temWifi)       { $st.Text = 'Este computador nao tem placa de rede Wi-Fi.'; return }
-    if (-not $ssid)          { $st.Text = 'Informe o nome (SSID) da rede Wi-Fi.'; return }
-    if ($senha.Length -lt 8) { $st.Text = 'A senha do Wi-Fi precisa ter ao menos 8 caracteres.'; return }
+    if (-not $temWifi) { $st.Text = 'Este computador nao tem placa de rede Wi-Fi.'; return }
+    if (-not $ssid)    { $st.Text = 'Informe o nome (SSID) da rede Wi-Fi.'; return }
+    # senha em branco e permitido: se a rede ja estiver salva no Windows, o
+    # Connect-RedeWireless usa o perfil salvo. Senha digitada porem curta = erro.
+    if ($senha.Length -gt 0 -and $senha.Length -lt 8) {
+        $st.Text = 'A senha do Wi-Fi precisa ter ao menos 8 caracteres.'; return
+    }
 
     Set-FaseLocalOcupado $true
     $st.Text = "Conectando a '$ssid'..."
