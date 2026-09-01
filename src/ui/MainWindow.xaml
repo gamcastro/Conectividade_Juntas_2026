@@ -69,6 +69,9 @@
                     </Border>
                     <Button x:Name="btnTrocarUsuario" Content="Trocar usu&#225;rio"
                             Style="{DynamicResource BotaoFantasma}" HorizontalAlignment="Stretch"/>
+                    <TextBlock x:Name="txtRailVersao" Margin="0,8,0,0" HorizontalAlignment="Center"
+                               FontFamily="Consolas" FontSize="9"
+                               Foreground="{DynamicResource Dicon.Text3}"/>
                 </StackPanel>
 
                 <StackPanel VerticalAlignment="Top" Margin="0,18,0,0">
@@ -133,6 +136,8 @@
                                 <TextBlock Text="Diagn&#243;stico de Conectividade &#8212; Juntas Especiais 2026"
                                            FontFamily="Consolas" FontSize="10" TextWrapping="Wrap"
                                            Foreground="{DynamicResource Dicon.Text3}"/>
+                                <TextBlock x:Name="txtLoginVersao" FontFamily="Consolas" FontSize="10"
+                                           Margin="0,2,0,0" Foreground="{DynamicResource Dicon.Text3}"/>
                             </StackPanel>
                         </StackPanel>
 

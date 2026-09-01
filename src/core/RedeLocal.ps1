@@ -152,11 +152,28 @@ function Get-AdaptadorLan {
 }
 
 # --------------------------------------------------------------- placa Wi-Fi
+# netsh pelo operador de chamada (&): o PowerShell drena o stdout sozinho - sem
+# ProcessStartInfo/StreamReader, que num runspace MTA sem console podia estourar
+# "o fluxo nao era legivel", e sem deadlock de buffer com muitas redes por perto.
 function Invoke-Netsh {
     param([string[]] $Argumentos, [int] $TimeoutS = 15)
     $netsh = Join-Path $env:SystemRoot 'System32\netsh.exe'
     if (-not (Test-Path $netsh)) { return '' }
-    [string] (Invoke-ProcessoComSaida -Caminho $netsh -Argumentos $Argumentos -TimeoutS $TimeoutS)
+    $prev = $null
+    try {
+        try {
+            $oem = [Text.Encoding]::GetEncoding([Globalization.CultureInfo]::CurrentCulture.TextInfo.OEMCodePage)
+            $prev = [Console]::OutputEncoding
+            [Console]::OutputEncoding = $oem
+        } catch { $prev = $null }
+        $saida = & $netsh @Argumentos 2>$null
+        return [string]::Join("`n", @($saida))
+    } catch {
+        Write-Log ("netsh {0} falhou: {1}" -f ($Argumentos -join ' '), $_) -Nivel Aviso
+        return ''
+    } finally {
+        if ($null -ne $prev) { try { [Console]::OutputEncoding = $prev } catch { } }
+    }
 }
 
 # Checagem rapida (so Get-NetAdapter, sem netsh) - a GUI usa ao entrar no passo 3.
@@ -183,6 +200,14 @@ function Get-AdaptadorWireless {
     $o.nome     = [string] $wa.Name
     $o.status   = [string] $wa.Status
 
+    # 1) Deteccao de conexao por CIM (sem netsh): o nome do perfil de rede numa
+    #    placa Wi-Fi E o SSID. Robusto mesmo se o netsh falhar no runspace.
+    try {
+        $prof = Get-NetConnectionProfile -InterfaceIndex $wa.ifIndex -ErrorAction Stop
+        if ($prof -and $prof.Name) { $o.ssid = [string] $prof.Name }
+    } catch { }
+
+    # 2) netsh so refina (sinal %, estado textual, e a lista de redes por perto).
     try {
         $txt = Invoke-Netsh -Argumentos @('wlan', 'show', 'interfaces')
         foreach ($ln in ($txt -split "`r?`n")) {
@@ -191,9 +216,9 @@ function Get-AdaptadorWireless {
             elseif ($ln -match '^\s*(Sinal|Signal)\s*:\s*(\d+)\s*%')  { $o.sinal_pct = [int] $Matches[2] }
         }
     } catch { }
-    # 'conectado' tambem se o Windows ja reporta a placa como Up com um SSID
-    # (abrir a ferramenta ja conectado a uma rede tem de contar como conectado).
-    $o.conectado = ($o.ssid -ne '') -and (($o.status -match 'conect|connected') -or ($wa.Status -eq 'Up'))
+    # 'conectado': placa Up com um SSID (abrir a ferramenta ja conectado conta),
+    # ou o estado textual do netsh dizendo conectado.
+    $o.conectado = ($o.ssid -ne '') -and (($wa.Status -eq 'Up') -or ($o.status -match 'conect|connected'))
 
     try {
         $txt2 = Invoke-Netsh -Argumentos @('wlan', 'show', 'networks')

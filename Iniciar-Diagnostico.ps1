@@ -54,6 +54,7 @@ $pastaLog = Split-Path $Global:ArquivoLog -Parent
 if (-not (Test-Path $pastaLog)) { New-Item -ItemType Directory -Path $pastaLog -Force | Out-Null }
 
 Import-Module "$PSScriptRoot\src\Conectividade.psd1" -Force
+Write-Host ("DICON v{0}" -f $Global:VersaoApp) -ForegroundColor Cyan
 
 # --- 5. Dispara ---------------------------------------------------------
 if ($SemUI) {

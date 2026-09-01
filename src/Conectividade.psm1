@@ -33,7 +33,8 @@ foreach ($rel in $ordem) {
     . (Join-Path $PSScriptRoot $rel)
 }
 
-# Versao exposta no JSON de resultado.
-$Global:VersaoApp = '0.1.0'
+# Versao do DICON. Fonte unica: barra lateral + login da GUI, JSON de resultado
+# e relatorio PDF. Manter em sincronia com ModuleVersion em Conectividade.psd1.
+$Global:VersaoApp = '0.4.0'
 
 Export-ModuleMember -Function '*-*'

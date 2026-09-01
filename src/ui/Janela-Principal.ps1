@@ -224,6 +224,14 @@ function New-JanelaPrincipal {
         }
     }
 
+    $ver = if (Get-Variable -Name VersaoApp -Scope Global -ErrorAction SilentlyContinue) { $Global:VersaoApp } else { '' }
+    if ($ver) {
+        foreach ($n in 'txtRailVersao', 'txtLoginVersao') {
+            $ctrl = $window.FindName($n)
+            if ($ctrl) { $ctrl.Text = "DICON v$ver" }
+        }
+    }
+
     # diagnostico
     $window.FindName('btnRodar').Add_Click({ Invoke-ExecucaoNaJanela })
     $window.FindName('btnAbrirFortiClient').Add_Click({ Invoke-AbrirFortiClient })
@@ -796,9 +804,15 @@ function Start-TarefaRede {
     $ps.Runspace = $rs
     [void] $ps.AddScript({
         param($sbTexto)
-        Import-Module (Join-Path $RaizApp 'src\Conectividade.psd1') -Force
-        try { [pscustomobject]@{ Resultado = (& ([scriptblock]::Create($sbTexto))); Erro = $null } }
-        catch { [pscustomobject]@{ Resultado = $null; Erro = "$_" } }
+        # tudo dentro do try: falha ao importar o modulo tem de voltar como
+        # texto de erro, nao derrubar o pipeline (que reaparece como "o fluxo
+        # nao era legivel" no EndInvoke).
+        try {
+            Import-Module (Join-Path $RaizApp 'src\Conectividade.psd1') -Force -ErrorAction Stop
+            [pscustomobject]@{ Resultado = (& ([scriptblock]::Create($sbTexto))); Erro = $null }
+        } catch {
+            [pscustomobject]@{ Resultado = $null; Erro = "$_" }
+        }
     }).AddArgument($Script)
 
     $handle = $ps.BeginInvoke()
@@ -996,10 +1010,18 @@ function Complete-ProbeRedeLocal {
         # (estado parcial), mantem o que temos - a checagem local ainda roda.
         if ($antWifiOk) {
             Write-Log "Nao consegui reinventariar as placas ($Erro). Uso a conexao Wi-Fi ja confirmada." -Nivel Aviso
-        } else {
-            Write-Log "Checagem de rede falhou: $Erro" -Nivel Erro
+            return
         }
-        return
+        Write-Log "Inventario em segundo plano falhou ($Erro). Tentando aqui mesmo..." -Nivel Aviso
+        # Ultima tentativa, sincrona na thread de UI (so consultas de placa,
+        # rapido): assim o passo 3 nao fica preso sem cartao.
+        try {
+            $Payload = Invoke-FaseLocal -SemInternet
+        } catch {
+            Write-Log "Checagem de rede falhou: $_" -Nivel Erro
+            return
+        }
+        if (-not $Payload) { Write-Log 'Checagem de rede falhou: sem retorno.' -Nivel Erro; return }
     }
 
     # netsh pode ainda nao reportar 'conectado' logo apos o connect: se acabamos

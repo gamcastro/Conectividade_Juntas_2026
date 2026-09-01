@@ -76,7 +76,15 @@ if ($temGit) {
 }
 
 Get-ChildItem -Path $RaizApp -Recurse -File -ErrorAction SilentlyContinue | Unblock-File -ErrorAction SilentlyContinue
+
+$verNova = ''
+try {
+    $psm1 = Get-Content -Raw (Join-Path $RaizApp 'src\Conectividade.psm1') -ErrorAction Stop
+    if ($psm1 -match "VersaoApp\s*=\s*'([^']+)'") { $verNova = $Matches[1] }
+} catch { }
+
 Write-Host ''
+if ($verNova) { Write-Host ("Codigo agora na versao DICON v{0}." -f $verNova) -ForegroundColor Green }
 Write-Host "Pronto. config\, data\, bin\ e resultados\ foram preservados." -ForegroundColor Green
 Write-Host "Se o Chrome/Firefox mudou de versao, rode: .\setup\Instalar-DICON.ps1 -PularDeps:`$false -Force" -ForegroundColor DarkGray
 Write-Host "Abrir: .\Iniciar-Diagnostico.bat" -ForegroundColor White
