@@ -19,10 +19,14 @@ function Start-ProcessoNaoElevado {
 function Invoke-ProcessoComSaida {
     <#
       Executa um binario e devolve o stdout como string, aguardando o termino
-      com timeout. Usado pelos testes (ex.: iperf3 -J).
+      com timeout. Usado pelos testes (ex.: iperf3 -J) e pelo inventario de rede
+      (netsh wlan ...).
 
-      TODO: para saidas grandes, ler stdout/stderr de forma assincrona para
-      evitar deadlock de buffer. Suficiente para o JSON compacto do iperf3.
+      stdout/stderr sao lidos de forma ASSINCRONA (ReadToEndAsync) ANTES do
+      WaitForExit: se nao, uma saida maior que o buffer do pipe (~4 KB - acontece
+      com 'netsh wlan show networks' num local com muitas redes) trava o processo
+      filho no write, o WaitForExit estoura o timeout e o stream fica sem ser
+      lido ("o fluxo nao era legivel" ao tentar ler depois).
     #>
     param(
         [Parameter(Position = 0)] [string] $Caminho,
@@ -49,15 +53,27 @@ function Invoke-ProcessoComSaida {
         $psi.StandardErrorEncoding  = $Encoding
     }
 
-    $p = [Diagnostics.Process]::Start($psi)
-    if (-not $p.WaitForExit($TimeoutS * 1000)) {
-        try { $p.Kill() } catch { }
-        Write-Log "Processo excedeu ${TimeoutS}s e foi encerrado: $Caminho" -Nivel Erro
-        return $null
-    }
+    $p = $null
+    try {
+        $p = [Diagnostics.Process]::Start($psi)
+        $tOut = $p.StandardOutput.ReadToEndAsync()
+        $tErr = $p.StandardError.ReadToEndAsync()
 
-    $saida = $p.StandardOutput.ReadToEnd()
-    $erro  = $p.StandardError.ReadToEnd()
-    if ($erro.Trim()) { Write-Log $erro.Trim() -Nivel Aviso }
-    return $saida
+        if (-not $p.WaitForExit($TimeoutS * 1000)) {
+            try { $p.Kill() } catch { }
+            Write-Log "Processo excedeu ${TimeoutS}s e foi encerrado: $Caminho" -Nivel Erro
+            return $null
+        }
+
+        try { [void] [Threading.Tasks.Task]::WaitAll(([Threading.Tasks.Task[]] @($tOut, $tErr)), 5000) } catch { }
+        $saida = if ($tOut.Status -eq 'RanToCompletion') { $tOut.Result } else { '' }
+        $erro  = if ($tErr.Status -eq 'RanToCompletion') { $tErr.Result } else { '' }
+        if ($erro -and $erro.Trim()) { Write-Log $erro.Trim() -Nivel Aviso }
+        return $saida
+    } catch {
+        Write-Log "Falha ao executar ${Caminho}: $_" -Nivel Erro
+        return $null
+    } finally {
+        if ($p) { try { $p.Dispose() } catch { } }
+    }
 }

@@ -932,8 +932,19 @@ function Update-PainelFaseLocal {
     if ($cbo) {
         $atual = [string] $cbo.Text
         $cbo.ItemsSource = @($wf.redes_disponiveis)
-        if ($atual)       { $cbo.Text = $atual }
-        elseif ($wf.ssid) { $cbo.Text = $wf.ssid }
+        # nao pre-seleciona a rede em que ja estamos (a lista tambem ja a exclui);
+        # so restaura o que o tecnico tinha digitado.
+        if ($atual -and $atual -ne $wf.ssid) { $cbo.Text = $atual } else { $cbo.Text = '' }
+    }
+
+    # quando ja estamos num Wi-Fi, o card serve para TROCAR de rede.
+    $lblWifi = $w.FindName('txtConectarWifiDica')
+    if ($lblWifi) {
+        $lblWifi.Text = if ($wifiUp) {
+            'Ja conectado a "{0}". Use abaixo so para trocar para outra rede. A senha fica gravada no perfil de Wi-Fi do Windows.' -f $wf.ssid
+        } else {
+            'Use se o local nao tiver cabo. A senha fica gravada no perfil de Wi-Fi do Windows.'
+        }
     }
 
     # --- regras de habilitacao ------------------------------------------

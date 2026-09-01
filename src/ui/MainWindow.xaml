@@ -783,8 +783,7 @@
                                 <StackPanel>
                                     <TextBlock Text="Conectar a uma rede Wi-Fi" Style="{DynamicResource SecaoTela}"
                                                Margin="0,0,0,8"/>
-                                    <TextBlock Text="Use se o local n&#227;o tiver cabo. A senha fica gravada no
-                                               perfil de Wi-Fi do Windows." TextWrapping="Wrap" FontSize="11"
+                                    <TextBlock x:Name="txtConectarWifiDica" Text="Use se o local n&#227;o tiver cabo. A senha fica gravada no perfil de Wi-Fi do Windows." TextWrapping="Wrap" FontSize="11"
                                                Foreground="{DynamicResource Dicon.Text3}" Margin="0,0,0,8"/>
                                     <Grid>
                                         <Grid.ColumnDefinitions>

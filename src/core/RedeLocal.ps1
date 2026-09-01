@@ -183,19 +183,29 @@ function Get-AdaptadorWireless {
     $o.nome     = [string] $wa.Name
     $o.status   = [string] $wa.Status
 
-    $txt = Invoke-Netsh -Argumentos @('wlan', 'show', 'interfaces')
-    foreach ($ln in ($txt -split "`r?`n")) {
-        if     ($ln -match '^\s*SSID\s*:\s*(.+?)\s*$')            { $o.ssid = $Matches[1] }
-        elseif ($ln -match '^\s*(Estado|State)\s*:\s*(.+?)\s*$')  { $o.status = $Matches[2] }
-        elseif ($ln -match '^\s*(Sinal|Signal)\s*:\s*(\d+)\s*%')  { $o.sinal_pct = [int] $Matches[2] }
-    }
-    $o.conectado = ($o.ssid -ne '') -and ($o.status -match 'conect|connected')
+    try {
+        $txt = Invoke-Netsh -Argumentos @('wlan', 'show', 'interfaces')
+        foreach ($ln in ($txt -split "`r?`n")) {
+            if     ($ln -match '^\s*SSID\s*:\s*(.+?)\s*$')            { $o.ssid = $Matches[1] }
+            elseif ($ln -match '^\s*(Estado|State)\s*:\s*(.+?)\s*$')  { $o.status = $Matches[2] }
+            elseif ($ln -match '^\s*(Sinal|Signal)\s*:\s*(\d+)\s*%')  { $o.sinal_pct = [int] $Matches[2] }
+        }
+    } catch { }
+    # 'conectado' tambem se o Windows ja reporta a placa como Up com um SSID
+    # (abrir a ferramenta ja conectado a uma rede tem de contar como conectado).
+    $o.conectado = ($o.ssid -ne '') -and (($o.status -match 'conect|connected') -or ($wa.Status -eq 'Up'))
 
-    $txt2 = Invoke-Netsh -Argumentos @('wlan', 'show', 'networks')
-    $redes = foreach ($ln in ($txt2 -split "`r?`n")) {
-        if ($ln -match '^\s*SSID\s+\d+\s*:\s*(.+?)\s*$') { $Matches[1] }
-    }
-    $o.redes_disponiveis = @($redes | Where-Object { $_ } | Select-Object -Unique)
+    try {
+        $txt2 = Invoke-Netsh -Argumentos @('wlan', 'show', 'networks')
+        $redes = foreach ($ln in ($txt2 -split "`r?`n")) {
+            if ($ln -match '^\s*SSID\s+\d+\s*:\s*(.+?)\s*$') { $Matches[1] }
+        }
+        # nao lista a rede em que ja estamos: o card "Conectar a rede Wi-Fi"
+        # serve para trocar para OUTRA rede.
+        $o.redes_disponiveis = @(
+            $redes | Where-Object { $_ -and $_ -ne $o.ssid } | Select-Object -Unique
+        )
+    } catch { }
     $o
 }
 
@@ -357,7 +367,14 @@ function Invoke-FaseLocal {
 
     Write-Log 'Fase 1 - rede local do local (SEM a VPN do TRE)' -Nivel Destaque
 
-    $lan = Get-AdaptadorLan
+    try { $lan = Get-AdaptadorLan } catch {
+        Write-Log "Inventario da placa cabeada falhou: $_" -Nivel Aviso
+        $lan = [pscustomobject]@{
+            presente = $false; nome = ''; descricao = ''; status = ''; conectado = $false
+            ipv4 = ''; prefixo = $null; mascara = ''; gateway = ''; dns = @()
+            mac = ''; velocidade_mbps = $null
+        }
+    }
     if ($lan.conectado) {
         Write-Log ("Placa LAN '{0}': conectada - IP {1} / gateway {2}" -f $lan.nome, $lan.ipv4, $lan.gateway) -Nivel Ok
     } elseif ($lan.presente) {
@@ -369,7 +386,13 @@ function Invoke-FaseLocal {
         Write-Log 'A placa de rede ativa parece ser roteamento de celular - marque a operadora no assistente.' -Nivel Info
     }
 
-    $wf = Get-AdaptadorWireless
+    try { $wf = Get-AdaptadorWireless } catch {
+        Write-Log "Inventario da placa Wi-Fi falhou: $_" -Nivel Aviso
+        $wf = [pscustomobject]@{
+            presente = $false; nome = ''; status = ''; conectado = $false
+            ssid = ''; sinal_pct = $null; redes_disponiveis = @()
+        }
+    }
     if ($wf.conectado) {
         Write-Log ("Wi-Fi: conectado a '{0}' ({1}%)." -f $wf.ssid, $wf.sinal_pct) -Nivel Info
     } elseif ($wf.presente) {
