@@ -1192,6 +1192,19 @@ function Complete-ProbeRedeLocal {
 
     $Global:FaseLocalPayload = $Payload
     Update-PainelFaseLocal
+
+    # fecha o status do card "Conectar a rede Wi-Fi" (ex.: apos "Ja conectei
+    # pela bandeja") com o resultado do inventario.
+    $w = $Global:JanelaPrincipal
+    $stw = if ($w) { $w.FindName('txtWifiStatus') } else { $null }
+    if ($stw -and "$($stw.Text)" -match 'Verificando|Conectando') {
+        $wf = if ($Payload) { $Payload.Wireless } else { $null }
+        if ($wf -and [bool] $wf.conectado) {
+            $stw.Text = 'Conectado a "{0}"{1}.' -f $wf.ssid, $(if ($wf.sinal_pct) { " ($($wf.sinal_pct)%)" } else { '' })
+        } else {
+            $stw.Text = 'Ainda sem conexao Wi-Fi. Conecte pela bandeja do Windows e clique em "Ja conectei pela bandeja".'
+        }
+    }
 }
 
 # Rola cada coluna do teste de internet para o fim quando chega linha nova.

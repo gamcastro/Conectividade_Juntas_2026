@@ -60,10 +60,11 @@ function Write-Log {
         & $aplicar
     }
 
-    # Espelho no console (modo -SemUI) e no arquivo. NUNCA propaga erro: um
-    # console em estado ruim (host de runspace, stream fechado -> "o fluxo nao
-    # era legivel") nao pode derrubar quem chamou o log.
-    try { Write-Host ("{0}  {1}" -f $hora, $Mensagem) } catch { }
+    # Espelho no console e no arquivo. Usa [Console]::Out (stdout do processo)
+    # em vez de Write-Host: assim as chamadas feitas de dentro de um runspace
+    # tambem aparecem na janela do PowerShell. NUNCA propaga erro.
+    try { [Console]::Out.WriteLine("{0}  {1}" -f $hora, $Mensagem) }
+    catch { try { Write-Host ("{0}  {1}" -f $hora, $Mensagem) } catch { } }
     $arq = Get-Variable -Name ArquivoLog -Scope Global -ErrorAction SilentlyContinue
     if ($arq -and $arq.Value) {
         try {
