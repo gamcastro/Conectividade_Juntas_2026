@@ -255,6 +255,7 @@ function New-JanelaPrincipal {
     $window.FindName('chkTetheringCelular').Add_Click({ Update-TetheringCelular })
     $window.FindName('rbUsarLan').Add_Checked({ Set-FaseLocalTipo 'lan' })
     $window.FindName('rbUsarWifi').Add_Checked({ Set-FaseLocalTipo 'wifi' })
+    $window.FindName('btnJaConecteiWifi').Add_Click({ Invoke-VerificarWifiBandeja })
     $window.FindName('btnExportarPdf').Add_Click({ Invoke-ExportarRelatorio })
     $window.FindName('btnTransmitirResultado').Add_Click({ Invoke-TransmitirResultado })
     $window.FindName('btnDiagVoltar').Add_Click({ Show-View 'viewHome' })
@@ -944,7 +945,7 @@ function Set-FaseLocalOcupado {
         $ring.IsActive   = $Ocupado
         $ring.Visibility = if ($Ocupado) { 'Visible' } else { 'Collapsed' }
     }
-    foreach ($n in 'btnRodarFaseLocal', 'btnConectarWifi', 'btnWizProximo', 'btnWizVoltar', 'rbUsarLan', 'rbUsarWifi') {
+    foreach ($n in 'btnRodarFaseLocal', 'btnConectarWifi', 'btnJaConecteiWifi', 'btnWizProximo', 'btnWizVoltar', 'rbUsarLan', 'rbUsarWifi') {
         $c = $w.FindName($n); if ($c) { $c.IsEnabled = -not $Ocupado }
     }
 }
@@ -1545,6 +1546,17 @@ function Complete-FaseLocal {
     } else {
         Write-Log 'Checagem da rede local sem resultado de velocidade.' -Nivel Aviso
     }
+}
+
+# "Ja conectei pela bandeja": so re-inventaria as placas para pegar a conexao
+# feita pelo Windows (o Connect-RedeWireless do DICON as vezes nao pega em
+# notebook com o tecnico logado num usuario e o DICON elevado noutro).
+function Invoke-VerificarWifiBandeja {
+    $w = $Global:JanelaPrincipal
+    $st = $w.FindName('txtWifiStatus'); if ($st) { $st.Text = 'Verificando a conexao...' }
+    Write-Log 'Verificando a conexao Wi-Fi feita pela bandeja do Windows...' -Nivel Info
+    $Global:FaseLocalPayload = $null
+    Invoke-ProbeRedeLocal
 }
 
 function Invoke-ConectarWifi {
