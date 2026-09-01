@@ -31,6 +31,7 @@ $Global:MeiosNaoAplicaveis = @{}     # meio -> motivo ("cabo nao alcanca a sala"
 $Global:RecomendacaoLocal  = $null   # {meio;operadora;rotulo;veredito;provisoria;base}
 $Global:LocalMedicoesId    = ''      # id do local a que as medicoes atuais pertencem
 $Global:MotivoRecomendacao = ''      # justificativa da conexao recomendada (passo 6)
+$Global:AtualizandoRecomendacao = $false  # guarda: set programatico do combo de recomendacao
 
 $Global:FeitoSalvar        = $false  # checklist do passo 7
 $Global:FeitoTransmitir    = $false
@@ -285,6 +286,12 @@ function New-JanelaPrincipal {
     $window.FindName('cboDecisaoFinal').Add_SelectionChanged({
             if (-not $Global:AtualizandoDecisao) { $Global:DecisaoFinalTocada = $true }
             Update-VisibilidadeJustDecisao
+        })
+    $window.FindName('cboConexaoRec').Add_SelectionChanged({
+            if (-not $Global:AtualizandoRecomendacao) { Update-ContextoRecomendacao }
+        })
+    $window.FindName('txtMotivoRec').Add_TextChanged({
+            $Global:MotivoRecomendacao = [string] $Global:JanelaPrincipal.FindName('txtMotivoRec').Text
         })
 
     # login
@@ -726,7 +733,7 @@ function Show-WizardPasso {
             $w.FindName('txtDiagLocal').Text = if ($sel) { 'Local: ' + $sel.Rotulo } else { 'Volte e selecione o local.' }
             Update-EstadoVpn
         }
-        6 { Update-DecisaoRecalculada }
+        6 { Update-DecisaoRecalculada; Update-Passo6Recomendacao }
         7 { Update-ResumoFim }
     }
 }
@@ -1826,6 +1833,7 @@ function New-MedicaoAtual {
         rede_local_download = (& { if ($it -and $it.PSObject.Properties['download_mbps']) { $it.download_mbps } else { $null } })
         vpn_conectou        = $vpnConectou
         vpn_motivo          = if ($vpnImpossivel) { ([string] $w.FindName('txtVpnMotivo').Text).Trim() } else { '' }
+        vpn_download        = (& { if ($dp -and $dp.Metricas) { $dp.Metricas.BandaDownloadMbps } else { $null } })
         metricas            = if ($dp) { $dp.Metricas } else { $null }
         fase2_ok            = $vpnConectou
         decisao             = if ($dp) { $dp.Decisao } else { $null }
@@ -1864,15 +1872,137 @@ function Get-RecomendacaoLocal {
     return $Global:RecomendacaoLocal
 }
 
-# Gate do passo 6 -> 7: por ora so exige >= 1 medicao. O seletor manual + o
-# "motivo obrigatorio" entram junto com o XAML do passo 6 (proxima etapa).
+# Texto "12,3 Mbps" (ou "-" se nao houver numero).
+function Get-TextoMbps {
+    param($Valor)
+    if ($null -eq $Valor -or "$Valor" -eq '') { return '-' }
+    try { return ('{0:N1} Mbps' -f [double] $Valor) } catch { return "$Valor" }
+}
+
+# Itens do combo "Conexao recomendada" (passo 6): os meios que passaram nas
+# duas checagens (Rede Local + VPN + Fase 2); no fallback, os que ao menos
+# rodaram a Rede Local. Sempre com a opcao "Nenhuma" ao final.
+function Get-OpcoesRecomendacao {
+    $meds = @($Global:Medicoes | Where-Object { $_ -and -not $_.nao_aplicavel -and $_.veredito -ne 'nao_testado' })
+    $cand = @($meds | Where-Object { $_.rede_local_ok -and $_.vpn_conectou -and $_.fase2_ok })
+    if (-not $cand.Count) { $cand = @($meds | Where-Object { $_.rede_local_ok }) }
+    $rotulos = @($cand | ForEach-Object { [string] $_.rotulo } | Select-Object -Unique)
+    return @($rotulos + (Get-RotuloMeio 'nenhuma' ''))
+}
+
+# Reconstroi o objeto de recomendacao a partir do rotulo escolhido no combo.
+function Resolve-RecomendacaoSelecionada {
+    param([string] $Rotulo)
+    $nenhuma = Get-RotuloMeio 'nenhuma' ''
+    if (-not $Rotulo -or $Rotulo -eq $nenhuma) {
+        return [pscustomobject]@{
+            meio = 'nenhuma'; operadora = ''; rotulo = $nenhuma
+            veredito = 'inviavel'; provisoria = $false; base = 'nenhuma'
+        }
+    }
+    $med = @($Global:Medicoes | Where-Object { $_ -and -not $_.nao_aplicavel -and [string] $_.rotulo -eq $Rotulo }) |
+        Select-Object -First 1
+    if (-not $med) {
+        if ($Global:RecomendacaoLocal) { return $Global:RecomendacaoLocal }
+        return [pscustomobject]@{ meio = 'nenhuma'; operadora = ''; rotulo = $nenhuma
+            veredito = 'inviavel'; provisoria = $false; base = 'nenhuma' }
+    }
+    $fechouVpn = [bool] $med.vpn_conectou -and [bool] $med.fase2_ok
+    [pscustomobject]@{
+        meio       = [string] $med.meio
+        operadora  = [string] $med.operadora
+        rotulo     = [string] $med.rotulo
+        veredito   = if ($fechouVpn) { [string] $med.veredito } else { 'inviavel' }
+        provisoria = (-not $fechouVpn)
+        base       = if ($fechouVpn) { 'vpn' } else { 'rede_local' }
+    }
+}
+
+# Preenche o passo 6: combo da conexao recomendada (pre-selecao automatica),
+# frase de contexto, motivo e a tabela de medicoes.
+function Update-Passo6Recomendacao {
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+
+    Get-RecomendacaoLocal | Out-Null
+    $rec  = $Global:RecomendacaoLocal
+    $opts = Get-OpcoesRecomendacao
+
+    $cbo = $w.FindName('cboConexaoRec')
+    $Global:AtualizandoRecomendacao = $true
+    $cbo.ItemsSource = $opts
+    $alvo = if ($rec) { [string] $rec.rotulo } else { '' }
+    if ($opts -contains $alvo) { $cbo.SelectedItem = $alvo }
+    elseif ($opts.Count)       { $cbo.SelectedItem = $opts[0] }
+    $Global:AtualizandoRecomendacao = $false
+
+    $w.FindName('txtMotivoRec').Text = [string] $Global:MotivoRecomendacao
+
+    Update-ContextoRecomendacao
+    Update-TabelaMedicoes
+}
+
+# Frase abaixo do combo: de onde veio a sugestao e qual o veredito resultante.
+function Update-ContextoRecomendacao {
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    $sel = [string] $w.FindName('cboConexaoRec').SelectedItem
+    $obj = Resolve-RecomendacaoSelecionada -Rotulo $sel
+    $lbl = $w.FindName('lblRecContexto')
+    if (-not $lbl) { return }
+    $base = switch ($obj.base) {
+        'vpn'        { 'passou na checagem de Rede Local e na VPN' }
+        'rede_local' { 'PROVISORIA - nenhum meio fechou a VPN; baseada so no teste de Rede Local (local fica INVIAVEL)' }
+        default      { 'nenhum meio de conexao pode ser usado neste local' }
+    }
+    $lbl.Text = 'Veredito do local por esta conexao: {0}. ({1})' -f (Get-RotuloVeredito $obj.veredito), $base
+}
+
+# Tabela read-only das medicoes feitas no local (passo 6).
+function Update-TabelaMedicoes {
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    $linhas = [System.Collections.ObjectModel.ObservableCollection[object]]::new()
+    foreach ($m in @($Global:Medicoes)) {
+        if (-not $m) { continue }
+        $rl = if ($m.nao_aplicavel) { 'n/a' }
+              elseif ($m.rede_local_ok) { Get-TextoMbps $m.rede_local_download }
+              else { 'nao rodou' }
+        $vpn = if ($m.nao_aplicavel) { '-' }
+               elseif ($m.vpn_conectou) { 'conectou' }
+               else { 'nao' }
+        $vpndl = if ($m.nao_aplicavel -or -not $m.vpn_conectou) { '-' } else { Get-TextoMbps $m.vpn_download }
+        $ver = if ($m.nao_aplicavel) { 'nao aplicavel - ' + [string] $m.motivo_na } else { Get-RotuloVeredito $m.veredito }
+        $linhas.Add([pscustomobject]@{
+            Meio = [string] $m.rotulo; RedeLocal = $rl; Vpn = $vpn; VpnDown = $vpndl; Veredito = $ver
+        })
+    }
+    $w.FindName('dgMedicoes').ItemsSource = $linhas
+}
+
+# Gate do passo 6 -> 7: exige a escolha da conexao recomendada e o motivo
+# (obrigatorio por enquanto). Grava a escolha em $Global:RecomendacaoLocal.
 function Test-RecomendacaoValida {
-    if (-not @($Global:Medicoes | Where-Object { -not $_.nao_aplicavel }).Count -and
-        -not @($Global:Medicoes | Where-Object { $_.nao_aplicavel }).Count) {
+    $w = $Global:JanelaPrincipal
+    if (-not @($Global:Medicoes | Where-Object { $_ }).Count) {
         Write-Log 'Rode a bateria em pelo menos um meio (ou marque os meios como nao aplicaveis) antes de concluir.' -Nivel Aviso
         return $false
     }
-    Get-RecomendacaoLocal | Out-Null
+    $sel = [string] $w.FindName('cboConexaoRec').SelectedItem
+    if (-not $sel) {
+        Write-Log 'Escolha a conexao recomendada para este local.' -Nivel Erro
+        return $false
+    }
+    $motivo = ([string] $w.FindName('txtMotivoRec').Text).Trim()
+    if (-not $motivo) {
+        Write-Log 'Informe o motivo da recomendacao (obrigatorio).' -Nivel Erro
+        return $false
+    }
+    $Global:MotivoRecomendacao = $motivo
+    $Global:RecomendacaoLocal  = Resolve-RecomendacaoSelecionada -Rotulo $sel
+    Write-Log ('Conexao recomendada: {0} -> {1}{2}' -f `
+        $Global:RecomendacaoLocal.rotulo, (Get-RotuloVeredito $Global:RecomendacaoLocal.veredito),
+        (& { if ($Global:RecomendacaoLocal.provisoria) { ' (provisoria)' } else { '' } })) -Nivel Ok
     return $true
 }
 
@@ -1885,7 +2015,7 @@ function Set-MeioNaoAplicavel {
         meio = $Meio; operadora = ''; rotulo = Get-RotuloMeio $Meio ''
         nao_aplicavel = $true; motivo_na = $Motivo
         fase_local = $null; rede_local_ok = $false; rede_local_download = $null
-        vpn_conectou = $false; vpn_motivo = ''; metricas = $null; fase2_ok = $false
+        vpn_conectou = $false; vpn_motivo = ''; vpn_download = $null; metricas = $null; fase2_ok = $false
         decisao = $null; iperf = $null; ambiente = $null; avaliacoes = @()
         veredito = 'nao_testado'; quando = (Get-Date).ToString('o')
     }
@@ -1977,9 +2107,17 @@ function Update-ResumoFim {
     $w = $Global:JanelaPrincipal
     $p = $Global:DiagPayload
     if (-not $p) { return }
-    $dec = [string] $w.FindName('cboDecisaoFinal').SelectedItem
-    $w.FindName('txtFimLocal').Text = 'ZE {0} - {1} / {2} ({3})' -f `
+    $rec = $Global:RecomendacaoLocal
+    # a decisao final do local passa a ser o veredito do meio recomendado.
+    $dec = if ($rec) { [string] $rec.veredito } else { [string] $w.FindName('cboDecisaoFinal').SelectedItem }
+    $txt = 'ZE {0} - {1} / {2} ({3})' -f `
         $p.Local.zona_eleitoral, $p.Local.municipio_termo, $p.Local.nome, $p.Local.tipo
+    if ($rec) {
+        $txt += "`nConexao recomendada: " + [string] $rec.rotulo
+        if ($rec.provisoria) { $txt += '  (provisoria - nenhum meio fechou a VPN)' }
+        if ($Global:MotivoRecomendacao) { $txt += "`nMotivo: " + [string] $Global:MotivoRecomendacao }
+    }
+    $w.FindName('txtFimLocal').Text = $txt
     $ver = $w.FindName('txtFimVeredito')
     $ver.Text       = Get-PalavraVeredito $dec
     $ver.Foreground = Get-PincelVeredito $dec
@@ -2685,7 +2823,9 @@ function Invoke-SalvarResultado {
     foreach ($r in $Global:AvaliacaoRows) {
         $avaliacoes += @{ metrica = $r.Metrica; classe_final = $r.ClasseFinal; justificativa = [string] $r.Justificativa }
     }
-    $decFinal = [string] $w.FindName('cboDecisaoFinal').SelectedItem
+    # multi-meio: a decisao final do local vem do meio recomendado, salvo se o
+    # tecnico tiver sobrescrito o combo da decisao final na mao.
+    $decFinal = if ($Global:DecisaoFinalTocada) { [string] $w.FindName('cboDecisaoFinal').SelectedItem } else { '' }
     $justDec  = [string] $w.FindName('txtJustDecisao').Text
 
     $w.FindName('btnSalvarResultado').IsEnabled = $false

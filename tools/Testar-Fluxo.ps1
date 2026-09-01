@@ -362,14 +362,36 @@ try {
         Write-Host "[5b] passo 5 bloqueia override sem justificativa"
     } else { Write-Host "    FALHA: passo 5 avancou sem justificativa (step=$($Global:WizardStep))"; $falhas++ }
 
-    # 5c. com justificativa -> passos 5 -> 6 -> 7
+    # 5c. com justificativa -> passo 5 -> 6
     $linha.Justificativa = 'Refiz o teste pelo celular e deu 25 Mbps.'
     Invoke-Pump
     Invoke-WizardProximo
     if ($Global:WizardStep -ne 6) { Write-Host "    FALHA: nao foi para o passo 6"; $falhas++ }
+
+    # 5c-2. passo 6: seletor da conexao recomendada + tabela de medicoes
+    $optsRec = @($w.FindName('cboConexaoRec').ItemsSource)
+    $selRec  = [string] $w.FindName('cboConexaoRec').SelectedItem
+    if ($optsRec.Count -ge 1 -and $selRec) { Write-Host "[5c] passo 6: recomendacao pre-selecionada = '$selRec' ($($optsRec.Count) opcao/oes)" }
+    else { Write-Host "    FALHA: combo da conexao recomendada vazio (opts=$($optsRec.Count) sel='$selRec')"; $falhas++ }
+    $nMed = @($w.FindName('dgMedicoes').ItemsSource).Count
+    if ($nMed -ge 1) { Write-Host "[5c] passo 6: tabela de medicoes com $nMed linha(s)" }
+    else { Write-Host "    FALHA: tabela de medicoes vazia"; $falhas++ }
+
+    # 5c-3. passo 6 -> 7 bloqueia sem o motivo da recomendacao
+    $w.FindName('txtMotivoRec').Text = ''
+    Invoke-Pump
     Invoke-WizardProximo
-    if ($Global:WizardStep -ne 7) { Write-Host "    FALHA: nao foi para o passo 7"; $falhas++ }
-    else { Write-Host "[5c] passos 5->6->7 com justificativa" }
+    $ultimoLog = @($Global:LogEntries)[-1].Texto
+    if ($Global:WizardStep -eq 6 -and $ultimoLog -match 'motivo da recomendacao') {
+        Write-Host "[5c] passo 6 bloqueia sem o motivo da recomendacao"
+    } else { Write-Host "    FALHA: passo 6 avancou sem o motivo (step=$($Global:WizardStep))"; $falhas++ }
+
+    # 5c-4. com o motivo -> passo 7
+    $w.FindName('txtMotivoRec').Text = 'Cabo nao alcanca a sala; melhor download foi pelo celular Vivo.'
+    Invoke-Pump
+    Invoke-WizardProximo
+    if ($Global:WizardStep -ne 7) { Write-Host "    FALHA: nao foi para o passo 7 com o motivo"; $falhas++ }
+    else { Write-Host "[5c] passos 5->6->7 (com justificativa + motivo da recomendacao)" }
 
     # 5d. passo 6: salva o resultado -> checklist "Salvar" fica verde, "Transmitir" habilita
     $antesJson = @(Get-ChildItem (Join-Path $Global:RaizApp 'resultados\pendentes') -Filter *.json -EA SilentlyContinue).Count
@@ -393,6 +415,12 @@ try {
         } else { Write-Host "    FALHA: rede_local sem tethering/operadora (t=$($rl.tethering_celular) op='$($rl.operadora)')"; $falhas++ }
         if ($doc.vpn -and $doc.vpn.impossivel -eq $false) { Write-Host "[5d] JSON traz bloco vpn (impossivel=false neste teste)" }
         else { Write-Host "    FALHA: JSON sem bloco vpn"; $falhas++ }
+        $rec = $doc.conexao_recomendada
+        if ($rec -and $rec.rotulo -and $rec.veredito -and $rec.motivo -match 'celular' -and @($doc.medicoes).Count -ge 1) {
+            Write-Host "[5d] JSON traz conexao_recomendada='$($rec.rotulo)' veredito='$($rec.veredito)' base='$($rec.base)' + $(@($doc.medicoes).Count) medicao(oes)"
+        } else { Write-Host "    FALHA: JSON sem conexao_recomendada/medicoes (rotulo='$($rec.rotulo)' motivo='$($rec.motivo)' meds=$(@($doc.medicoes).Count))"; $falhas++ }
+        if ("$($doc.classificacao.final)" -eq "$($rec.veredito)") { Write-Host "[5d] decisao final do local = veredito do meio recomendado ('$($doc.classificacao.final)')" }
+        else { Write-Host "    FALHA: classificacao.final ('$($doc.classificacao.final)') != veredito recomendado ('$($rec.veredito)')"; $falhas++ }
     }
     $vok = [char]0x2713
     if ($Global:FeitoSalvar -and "$($w.FindName('chkFimSalvar').Text)" -eq $vok -and $w.FindName('btnTransmitirResultado').IsEnabled -and "$($w.FindName('chkFimTransmitir').Text)" -ne $vok) {
