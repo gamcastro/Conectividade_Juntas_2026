@@ -18,22 +18,17 @@ function Start-ProcessoNaoElevado {
 
 function Invoke-ProcessoComSaida {
     <#
-      Executa um binario e devolve o stdout como string, aguardando o termino
-      com timeout. Usado pelos testes (ex.: iperf3 -J) e pelo inventario de rede
-      (netsh wlan ...).
-
-      stdout/stderr sao lidos de forma ASSINCRONA (ReadToEndAsync) ANTES do
-      WaitForExit: se nao, uma saida maior que o buffer do pipe (~4 KB - acontece
-      com 'netsh wlan show networks' num local com muitas redes) trava o processo
-      filho no write, o WaitForExit estoura o timeout e o stream fica sem ser
-      lido ("o fluxo nao era legivel" ao tentar ler depois).
+      Roda um binario e aguarda o termino com timeout. NAO captura stdout
+      (o unico chamador - Export-RelatorioPdf com o navegador headless - so
+      precisa do arquivo gerado). Usa Start-Process -PassThru + WaitForExit,
+      sem redirecionar streams: assim nao ha [IO.StreamReader] sobre pipe, que
+      estoura "o fluxo nao era legivel" no runspace MTA.
     #>
     param(
         [Parameter(Position = 0)] [string] $Caminho,
         [string[]] $Argumentos = @(),
         [int] $TimeoutS = 60,
-        # Encoding do stdout/stderr. Util p/ apps de console (ping.exe usa OEM).
-        [System.Text.Encoding] $Encoding
+        [System.Text.Encoding] $Encoding   # mantido por compatibilidade; ignorado
     )
 
     if (-not (Test-Path $Caminho)) {
@@ -41,39 +36,18 @@ function Invoke-ProcessoComSaida {
         return $null
     }
 
-    $psi = [Diagnostics.ProcessStartInfo]::new()
-    $psi.FileName               = $Caminho
-    $psi.Arguments              = ($Argumentos -join ' ')
-    $psi.RedirectStandardOutput = $true
-    $psi.RedirectStandardError  = $true
-    $psi.UseShellExecute        = $false
-    $psi.CreateNoWindow         = $true
-    if ($Encoding) {
-        $psi.StandardOutputEncoding = $Encoding
-        $psi.StandardErrorEncoding  = $Encoding
-    }
+    $sp = @{ FilePath = $Caminho; NoNewWindow = $true; PassThru = $true; ErrorAction = 'Stop' }
+    $joined = ($Argumentos -join ' ')          # o chamador ja poe as aspas dos paths
+    if ($joined) { $sp['ArgumentList'] = $joined }
 
-    $p = $null
     try {
-        $p = [Diagnostics.Process]::Start($psi)
-        $tOut = $p.StandardOutput.ReadToEndAsync()
-        $tErr = $p.StandardError.ReadToEndAsync()
-
+        $p = Start-Process @sp
         if (-not $p.WaitForExit($TimeoutS * 1000)) {
             try { $p.Kill() } catch { }
             Write-Log "Processo excedeu ${TimeoutS}s e foi encerrado: $Caminho" -Nivel Erro
-            return $null
         }
-
-        try { [void] [Threading.Tasks.Task]::WaitAll(([Threading.Tasks.Task[]] @($tOut, $tErr)), 5000) } catch { }
-        $saida = if ($tOut.Status -eq 'RanToCompletion') { $tOut.Result } else { '' }
-        $erro  = if ($tErr.Status -eq 'RanToCompletion') { $tErr.Result } else { '' }
-        if ($erro -and $erro.Trim()) { Write-Log $erro.Trim() -Nivel Aviso }
-        return $saida
     } catch {
         Write-Log "Falha ao executar ${Caminho}: $_" -Nivel Erro
-        return $null
-    } finally {
-        if ($p) { try { $p.Dispose() } catch { } }
     }
+    return $null
 }

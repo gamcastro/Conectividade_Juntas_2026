@@ -1766,8 +1766,11 @@ function Invoke-ExportarRelatorio {
         Write-Log 'Rode o diagnostico antes de exportar o relatorio.' -Nivel Aviso
         return
     }
-    $btn = $w.FindName('btnExportarPdf'); $btn.IsEnabled = $false
-    $st  = $w.FindName('txtFimStatus');  $st.Text = 'Gerando relatorio...'
+    $st = $w.FindName('txtFimStatus'); $st.Text = 'Gerando relatorio (PDF)...'
+
+    # monta o JSON aqui (le controles da UI); a conversao pesada (navegador
+    # headless) roda em segundo plano com o mesmo anel do "Transmitir".
+    $res = $null
     try {
         $avaliacoes = @()
         foreach ($r in @($Global:AvaliacaoRows)) {
@@ -1783,17 +1786,39 @@ function Invoke-ExportarRelatorio {
             -Operadora (([string] $w.FindName('cboOperadora').Text).Trim()) `
             -VpnImpossivel ([bool] $w.FindName('chkVpnImpossivel').IsChecked) `
             -VpnMotivo (([string] $w.FindName('txtVpnMotivo').Text).Trim())
-        $out = Export-RelatorioPdf -Resultado $res
-        $Global:FeitoExportar = $true
-        $st.Text = "Relatorio salvo: $out"
-        if (-not $Global:ModoTeste) { try { Start-Process -FilePath $out } catch { } }
     } catch {
-        $st.Text = "Falha ao exportar: $_"
-        Write-Log "Falha ao exportar relatorio: $_" -Nivel Erro
-    } finally {
-        $btn.IsEnabled = $true
+        $st.Text = "Falha ao montar o relatorio: $_"
+        Write-Log "Falha ao montar o relatorio: $_" -Nivel Erro
+        return
     }
-    Update-ChecklistFim
+
+    Set-FimOcupado $true
+
+    if ($Global:ModoTeste) {
+        try { $out = Export-RelatorioPdf -Resultado $res } catch { Complete-ExportarRelatorio $null "$_"; return }
+        Complete-ExportarRelatorio $out $null
+        return
+    }
+
+    Start-TarefaRede -Script 'Export-RelatorioPdf -Resultado $Res' -Vars @{ Res = $res } `
+        -AoConcluir { param($out, $erro) Complete-ExportarRelatorio $out $erro }
+}
+
+function Complete-ExportarRelatorio {
+    param($Saida, $Erro)
+    Set-FimOcupado $false
+    $w = $Global:JanelaPrincipal
+    $st = $w.FindName('txtFimStatus')
+    if ($Erro) {
+        $st.Text = "Falha ao exportar: $Erro"
+        Write-Log "Falha ao exportar relatorio: $Erro" -Nivel Erro
+    } else {
+        $Global:FeitoExportar = $true
+        $st.Text = "Relatorio salvo: $Saida"
+        Write-Log "Relatorio salvo: $Saida" -Nivel Ok
+        if (-not $Global:ModoTeste -and $Saida) { try { Start-Process -FilePath $Saida } catch { } }
+    }
+    Update-ResumoFim
 }
 
 # Abre o assistente de diagnostico do zero (menu Inicio / rail).
