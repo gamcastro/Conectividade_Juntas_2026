@@ -8,6 +8,26 @@ setup cria a partir dos `*.exemplo.json`.
 
 ---
 
+## Atalho: baixar + instalar num comando (com internet)
+
+No PowerShell (janela normal, com internet), instala em `C:\DICON`:
+
+```
+iex (irm 'https://raw.githubusercontent.com/gamcastro/Conectividade_Juntas_2026/homologacao/setup/Baixar-e-Instalar.ps1')
+```
+
+Outra pasta: `$env:DICON_DEST = 'D:\DICON'` antes do comando. Com parametros
+(endpoint, PIN):
+
+```
+& ([scriptblock]::Create((irm 'https://raw.githubusercontent.com/gamcastro/Conectividade_Juntas_2026/homologacao/setup/Baixar-e-Instalar.ps1'))) -Endpoint 'https://.../exec' -Pin 1234
+```
+
+O resto (perguntas do setup, binários, primeira abertura) é igual ao passo a
+passo abaixo.
+
+---
+
 ## Passo a passo (com internet)
 
 1. **Baixar a pasta**

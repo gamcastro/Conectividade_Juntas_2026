@@ -121,6 +121,65 @@ function New-RelatorioHtml {
             (ConvertTo-HtmlSafe (($desat | ForEach-Object { Get-RotuloMetrica $_ }) -join ', '))
     } else { '' }
 
+    # Bloco "Conexao recomendada" + tabela dos meios testados (multi-meio).
+    $rec  = if ($r.PSObject.Properties['conexao_recomendada']) { $r.conexao_recomendada } else { $null }
+    $meds = @(if ($r.PSObject.Properties['medicoes']) { $r.medicoes })
+
+    $blocoRecomendacao = ''
+    if ($rec -and $rec.rotulo) {
+        $corRec = Get-CorVeredito $rec.veredito
+        $prov = if ($rec.provisoria) {
+            '<br><span style="font-weight:400">Recomenda&ccedil;&atilde;o provis&oacute;ria &mdash; nenhum meio fechou a VPN da Justi&ccedil;a Eleitoral neste local.</span>'
+        } else { '' }
+        $motRec = if ($rec.motivo) {
+            '<p class="small"><b>Motivo da recomenda&ccedil;&atilde;o:</b> ' + (ConvertTo-HtmlSafe ([string] $rec.motivo)) + '</p>'
+        } else { '' }
+        $blocoRecomendacao = @"
+  <h2>Conex&atilde;o recomendada para este local</h2>
+  <div class="final" style="border-color:$corRec;color:$corRec">$(ConvertTo-HtmlSafe ([string] $rec.rotulo)) &mdash; $(ConvertTo-HtmlSafe (Get-RotuloVeredito $rec.veredito))$prov</div>
+  $motRec
+"@
+    }
+
+    $blocoMeios = ''
+    if ($meds.Count) {
+        $trs = foreach ($m in $meds) {
+            $na = ($m.PSObject.Properties['nao_aplicavel']) -and $m.nao_aplicavel
+            $rlTxt = if ($na) { '&mdash;' }
+                     elseif ($m.rede_local_ok) {
+                         if ($null -ne $m.rede_local_download) { '{0:N1} Mbps' -f [double] $m.rede_local_download } else { 'ok' }
+                     } else { 'n&atilde;o rodou' }
+            $vpnTxt = if ($na) { '&mdash;' } elseif ($m.vpn_conectou) { 'conectou' } else { 'n&atilde;o' }
+            $dlTxt  = if (-not $na -and $null -ne $m.vpn_download_mbps) { '{0:N1} Mbps' -f [double] $m.vpn_download_mbps } else { '&mdash;' }
+            $verTxt = if ($na) {
+                'n&atilde;o aplic&aacute;vel' + $(if ($m.motivo_nao_aplicavel) { ' &mdash; ' + (ConvertTo-HtmlSafe ([string] $m.motivo_nao_aplicavel)) } else { '' })
+            } else {
+                '<span style="color:{0};font-weight:600">{1}</span>' -f (Get-CorVeredito $m.veredito), (ConvertTo-HtmlSafe (Get-RotuloVeredito $m.veredito))
+            }
+            $eh = if ($rec -and -not $rec.provisoria -and ([string] $m.rotulo -eq [string] $rec.rotulo) -and -not $na) { ' style="background:#eef6ff"' } else { '' }
+            @"
+      <tr$eh>
+        <td>$(ConvertTo-HtmlSafe ([string] $m.rotulo))</td>
+        <td class="mono">$rlTxt</td>
+        <td>$vpnTxt</td>
+        <td class="mono">$dlTxt</td>
+        <td class="small">$verTxt</td>
+      </tr>
+"@
+        }
+        $blocoMeios = @"
+  <h2>Meios de conex&atilde;o testados neste local</h2>
+  <table>
+    <thead>
+      <tr><th>Meio</th><th>Rede local (Ookla)</th><th>VPN</th><th>Download VPN</th><th>Veredito</th></tr>
+    </thead>
+    <tbody>
+$($trs -join "`n")
+    </tbody>
+  </table>
+"@
+    }
+
     $brasao    = Get-BrasaoDataUri
     $imgBrasao = if ($brasao) { '<img class="brasao" src="{0}" alt="">' -f $brasao } else { '' }
 
@@ -249,6 +308,7 @@ function New-RelatorioHtml {
   <div class="final">Decis&atilde;o final: $rotFinal</div>
   $justFinal
   $vpnBanner
+$blocoRecomendacao
 
   <h2>Local avaliado</h2>
   <div class="grid2">
@@ -256,6 +316,7 @@ function New-RelatorioHtml {
   </div>
 
 $blocoRedeLocal
+$blocoMeios
   <h2>M&eacute;tricas medidas</h2>
   <table>
     <thead>

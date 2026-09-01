@@ -13,6 +13,99 @@ function Get-ClassificacaoFinal {
     else                                   { return 'viavel' }
 }
 
+# ----------------------------------------------------------------------------
+# RECOMENDACAO DE CONEXAO (regra multi-meio)
+#
+# Cada local pode ter varias "medicoes", uma por meio de conexao. A ferramenta
+# recomenda qual meio a Junta Especial deve usar naquele local.
+# ----------------------------------------------------------------------------
+
+# Rotulo de exibicao de um meio.
+function Get-RotuloMeio {
+    param([string] $Meio, [string] $Operadora)
+    switch ($Meio) {
+        'lan'        { 'Rede cabeada (LAN)' }
+        'wifi_local' { 'Wi-Fi do proprio local' }
+        'celular'    { if ($Operadora) { "Wi-Fi roteada de celular - $Operadora" } else { 'Wi-Fi roteada de celular' } }
+        'nenhuma'    { 'Nenhuma - local inviavel por qualquer meio' }
+        default      { [string] $Meio }
+    }
+}
+
+# Ordem para o pior caso: viavel < ressalva < inviavel < (sem veredito).
+function Get-RankVeredito {
+    param([string] $V)
+    switch ($V) {
+        'viavel'              { 0 }
+        'viavel_com_ressalva' { 1 }
+        'ressalva'            { 1 }
+        'inviavel'            { 2 }
+        default               { 3 }
+    }
+}
+
+# Escolhe o meio de conexao recomendado a partir das medicoes do local.
+# Cada $Medicao (pscustomobject) precisa expor:
+#   meio              'lan' | 'wifi_local' | 'celular'
+#   operadora         string (so p/ celular)
+#   nao_aplicavel     bool  (o meio nao pode ser usado nesse local)
+#   veredito          'viavel' | 'viavel_com_ressalva' | 'inviavel' | 'nao_testado'
+#   rede_local_ok     bool  (a checagem de Rede Local / Ookla rodou e deu numero)
+#   rede_local_download  Mbps | $null
+#   vpn_conectou      bool  (a VPN conectou por esse meio)
+#   fase2_ok          bool  (a bateria com VPN - iperf3 + ping - rodou)
+#   vpn_download      Mbps | $null
+#
+# Regra:
+#   1) candidato = fechou Rede Local + VPN + Fase 2. Recomenda o de melhor
+#      veredito; desempate = maior download pela VPN.
+#   2) se NINGUEM fechou a VPN mas algum rodou a Rede Local -> recomenda o de
+#      maior download na Rede Local, marcado como PROVISORIO e local inviavel.
+#   3) nada -> "nenhuma".
+function Get-ConexaoRecomendada {
+    param([object[]] $Medicoes)
+
+    $validas = @($Medicoes | Where-Object { $_ -and -not [bool] $_.nao_aplicavel -and $_.veredito -ne 'nao_testado' })
+
+    $cand = @($validas | Where-Object { [bool] $_.rede_local_ok -and [bool] $_.vpn_conectou -and [bool] $_.fase2_ok })
+    if ($cand.Count) {
+        $rec = $cand |
+            Sort-Object `
+                @{ Expression = { Get-RankVeredito ([string] $_.veredito) } }, `
+                @{ Expression = { if ($null -eq $_.vpn_download) { -1 } else { [double] $_.vpn_download } }; Descending = $true } |
+            Select-Object -First 1
+        return [pscustomobject]@{
+            meio       = [string] $rec.meio
+            operadora  = [string] $rec.operadora
+            rotulo     = Get-RotuloMeio ([string] $rec.meio) ([string] $rec.operadora)
+            veredito   = [string] $rec.veredito
+            provisoria = $false
+            base       = 'vpn'
+        }
+    }
+
+    $comRl = @($validas | Where-Object { [bool] $_.rede_local_ok })
+    if ($comRl.Count) {
+        $rec = $comRl |
+            Sort-Object @{ Expression = { if ($null -eq $_.rede_local_download) { -1 } else { [double] $_.rede_local_download } }; Descending = $true } |
+            Select-Object -First 1
+        return [pscustomobject]@{
+            meio       = [string] $rec.meio
+            operadora  = [string] $rec.operadora
+            rotulo     = Get-RotuloMeio ([string] $rec.meio) ([string] $rec.operadora)
+            veredito   = 'inviavel'   # nao fechou a bateria com a VPN
+            provisoria = $true
+            base       = 'rede_local'
+        }
+    }
+
+    return [pscustomobject]@{
+        meio = 'nenhuma'; operadora = ''
+        rotulo = Get-RotuloMeio 'nenhuma' ''
+        veredito = 'inviavel'; provisoria = $false; base = 'nenhuma'
+    }
+}
+
 function Invoke-MotorDecisao {
     param(
         [psobject] $Metricas,

@@ -205,15 +205,11 @@ try {
     if ($w.FindName('cardConectarWifi').Visibility -eq 'Visible') { Write-Host "[4c] com placa Wi-Fi: card de conexao aparece" }
     else { Write-Host "    FALHA: card Wi-Fi oculto com placa"; $falhas++ }
 
-    # 4c-3b. LAN conectada -> "teste pelo celular" fica DESABILITADO
-    if (-not $w.FindName('chkTetheringCelular').IsEnabled) { Write-Host "[4c] com LAN conectada: 'teste pelo celular' desabilitado" }
-    else { Write-Host "    FALHA: tethering habilitado com LAN conectada"; $falhas++ }
-
-    # 4c-3c. escolher "Usar o Wi-Fi" habilita o card de conexao; sem SSID avisa
+    # 4c-3c. escolher "Usar o Wi-Fi do local" habilita o card de conexao; sem SSID avisa
     $w.FindName('rbUsarWifi').IsChecked = $true
     Invoke-Pump
     if ($w.FindName('cardConectarWifi').IsEnabled -and $Global:FaseLocalTipo -eq 'wifi') {
-        Write-Host "[4c] escolher 'Usar o Wi-Fi' habilita o card 'Conectar a uma rede Wi-Fi'"
+        Write-Host "[4c] escolher 'Usar o Wi-Fi do local' habilita o card 'Conectar a uma rede Wi-Fi'"
     } else { Write-Host "    FALHA: card Wi-Fi nao habilitou ao escolher (en=$($w.FindName('cardConectarWifi').IsEnabled) tipo='$($Global:FaseLocalTipo)')"; $falhas++ }
     $w.FindName('cboWifiSsid').Text = ''
     Invoke-ConectarWifi
@@ -229,42 +225,63 @@ try {
     } else { Write-Host "    FALHA: gate sem conexao (rodar.en=$($w.FindName('btnRodarFaseLocal').IsEnabled) dica=$($w.FindName('txtLocDica').Visibility))"; $falhas++ }
     $Global:FaseLocalPayload.Wireless.conectado = $true
     Update-PainelFaseLocal
-    if ($w.FindName('chkTetheringCelular').IsEnabled -and $w.FindName('btnRodarFaseLocal').IsEnabled) {
-        Write-Host "[4c] sem LAN + Wi-Fi conectado: tethering habilita e a checagem libera"
-    } else { Write-Host "    FALHA: gate sem LAN+wifi (tether.en=$($w.FindName('chkTetheringCelular').IsEnabled) rodar.en=$($w.FindName('btnRodarFaseLocal').IsEnabled))"; $falhas++ }
-    $w.FindName('chkTetheringCelular').IsChecked = $true
-    Update-TetheringCelular
-    if (-not $w.FindName('cboOperadora').IsEnabled) { Write-Host "    FALHA: campo Operadora nao habilitou"; $falhas++ }
-    $w.FindName('cboOperadora').Text = ''
-    Invoke-WizardProximo
-    if ($Global:WizardStep -eq 3) { Write-Host "[4c] tethering marcado exige a operadora" }
-    else { Write-Host "    FALHA: avancou com tethering sem operadora (step=$($Global:WizardStep))"; $falhas++ }
-    $w.FindName('cboOperadora').Text = 'Vivo'
-    $Global:FaseLocalPayload.Lan.conectado = $true   # restaura o fixture (compartilhado) p/ o JSON e proximos testes
-    Invoke-WizardProximo
-    if ($Global:WizardStep -eq 4) { Write-Host "[4c] com a operadora informada -> passo 4" }
-    else { Write-Host "    FALHA: nao avancou com a operadora (step=$($Global:WizardStep))"; $falhas++ }
+    if ($w.FindName('btnRodarFaseLocal').IsEnabled) {
+        Write-Host "[4c] sem LAN + Wi-Fi do local conectado: checagem libera"
+    } else { Write-Host "    FALHA: gate Wi-Fi do local (rodar.en=$($w.FindName('btnRodarFaseLocal').IsEnabled))"; $falhas++ }
 
-    # 4c-5. voltar ao passo 2 e retornar LIMPA a checagem e o tethering
+    # 4c-4b. meio "Celular": exige operadora
+    $w.FindName('rbUsarCelular').IsChecked = $true
+    Invoke-Pump
+    $w.FindName('cboOperadoraCel').Text = ''
+    Update-PainelFaseLocal
+    if (-not $w.FindName('btnRodarFaseLocal').IsEnabled) { Write-Host "[4c] meio Celular sem operadora: checagem travada" }
+    else { Write-Host "    FALHA: Celular liberou sem operadora"; $falhas++ }
+    Invoke-WizardProximo
+    if ($Global:WizardStep -eq 3) { Write-Host "[4c] Celular sem operadora nao avanca" }
+    else { Write-Host "    FALHA: avancou sem operadora (step=$($Global:WizardStep))"; $falhas++ }
+    $w.FindName('cboOperadoraCel').Text = 'Vivo'
+    Set-FaseLocalTipo 'celular'
+    Invoke-Pump
+    if ($w.FindName('btnRodarFaseLocal').IsEnabled -and $Global:FaseLocalTipo -eq 'celular') {
+        Write-Host "[4c] Celular + Wi-Fi conectado + operadora -> checagem libera"
+    } else { Write-Host "    FALHA: Celular nao liberou (rodar.en=$($w.FindName('btnRodarFaseLocal').IsEnabled) tipo='$($Global:FaseLocalTipo)')"; $falhas++ }
+
+    # 4c-4c. "nao aplicavel": marca a LAN e ela some da escolha
+    $w.FindName('chkNaLan').IsChecked = $true
+    $w.FindName('txtMotivoNaMeio').Text = 'sem ponto de rede na sala'
+    Update-NaoAplicavelMeio
+    if ($Global:MeiosNaoAplicaveis.ContainsKey('lan') -and -not $w.FindName('rbUsarLan').IsEnabled) {
+        Write-Host "[4c] LAN marcada 'nao aplicavel' -> radio desabilitado"
+    } else { Write-Host "    FALHA: 'nao aplicavel' nao pegou (chave=$($Global:MeiosNaoAplicaveis.ContainsKey('lan')) rb.en=$($w.FindName('rbUsarLan').IsEnabled))"; $falhas++ }
+    $w.FindName('chkNaLan').IsChecked = $false ; Update-NaoAplicavelMeio
+
+    # volta para Wi-Fi do local e avanca
+    $Global:FaseLocalPayload.Lan.conectado = $true   # restaura o fixture
+    $w.FindName('rbUsarWifi').IsChecked = $true
+    Invoke-Pump
+    Invoke-WizardProximo
+    if ($Global:WizardStep -eq 4) { Write-Host "[4c] Wi-Fi do local -> passo 4" }
+    else { Write-Host "    FALHA: nao avancou (step=$($Global:WizardStep))"; $falhas++ }
+
+    # 4c-5. voltar ao passo 2 e retornar LIMPA a checagem e os meios
     Invoke-WizardVoltar          # 4 -> 3
     Invoke-WizardVoltar          # 3 -> 2  (Update-DetalheLocal invalida a checagem)
-    if ($null -eq $Global:FaseLocalPayload -and -not $w.FindName('chkTetheringCelular').IsChecked -and
-        -not ([string] $w.FindName('cboOperadora').Text)) {
-        Write-Host "[4c] voltar ao passo 2 limpa a ultima checagem e o tethering"
-    } else { Write-Host "    FALHA: passo 2 nao limpou (payload=$($null -ne $Global:FaseLocalPayload) tether=$($w.FindName('chkTetheringCelular').IsChecked) op='$($w.FindName('cboOperadora').Text)')"; $falhas++ }
+    if ($null -eq $Global:FaseLocalPayload -and [string]::IsNullOrEmpty($Global:FaseLocalTipo)) {
+        Write-Host "[4c] voltar ao passo 2 limpa a ultima checagem"
+    } else { Write-Host "    FALHA: passo 2 nao limpou (payload=$($null -ne $Global:FaseLocalPayload) tipo='$($Global:FaseLocalTipo)')"; $falhas++ }
     Invoke-WizardProximo         # 2 -> 3: novo probe
     Invoke-Pump
     if ($Global:WizardStep -eq 3 -and $null -ne $Global:FaseLocalPayload -and $null -eq $Global:FaseLocalPayload.Internet) {
         Write-Host "[4c] re-entrou no passo 3 com checagem zerada"
     } else { Write-Host "    FALHA: re-probe ao voltar (step=$($Global:WizardStep))"; $falhas++ }
-    # refaz o cenario "sem LAN, via celular": escolhe Wi-Fi + tethering + operadora + checagem
+    # refaz "via celular": escolhe o meio Celular + operadora + checagem
     $Global:FaseLocalPayload.Lan.conectado      = $false
     $Global:FaseLocalPayload.Wireless.conectado = $true    # conectado ao hotspot do celular
     Update-PainelFaseLocal
-    $w.FindName('rbUsarWifi').IsChecked = $true            # placa escolhida = Wi-Fi (hotspot)
+    $w.FindName('cboOperadoraCel').Text = 'Vivo'
+    $w.FindName('rbUsarCelular').IsChecked = $true
+    Set-FaseLocalTipo 'celular'
     Invoke-Pump
-    $w.FindName('chkTetheringCelular').IsChecked = $true ; Update-TetheringCelular
-    $w.FindName('cboOperadora').Text = 'Vivo'
     Invoke-RodarFaseLocal ; Invoke-Pump
     Invoke-WizardProximo         # 3 -> 4
     if ($Global:WizardStep -ne 4) { Write-Host "    FALHA: nao voltou ao passo 4 apos re-checagem (step=$($Global:WizardStep))"; $falhas++ }
@@ -345,14 +362,81 @@ try {
         Write-Host "[5b] passo 5 bloqueia override sem justificativa"
     } else { Write-Host "    FALHA: passo 5 avancou sem justificativa (step=$($Global:WizardStep))"; $falhas++ }
 
-    # 5c. com justificativa -> passos 5 -> 6 -> 7
+    # 5b-2. multi-meio: seletor de medicoes no passo 5 (2+ meios testados)
+    $medBase = @($Global:Medicoes)[-1]
+    $medLan = [pscustomobject]@{
+        meio = 'lan'; operadora = ''; rotulo = 'Rede cabeada (LAN)'
+        nao_aplicavel = $false; motivo_na = ''
+        fase_local = $medBase.fase_local; rede_local_ok = $true; rede_local_download = 120
+        vpn_conectou = $true; vpn_motivo = ''; vpn_download = 40
+        metricas = $medBase.metricas; fase2_ok = $true
+        decisao = $medBase.decisao; iperf = $medBase.iperf; ambiente = $medBase.ambiente
+        avaliacoes = @(); veredito = [string] $medBase.decisao.Classificacao; quando = (Get-Date).ToString('o')
+    }
+    $Global:Medicoes = @(@($Global:Medicoes) + $medLan)
+    Show-WizardPasso 5
+    Invoke-Pump
+    $boxVis = "$($w.FindName('boxMedicaoPasso5').Visibility)"
+    $nOpc = @($w.FindName('cboMedicaoPasso5').ItemsSource).Count
+    if ($boxVis -eq 'Visible' -and $nOpc -eq 2) { Write-Host "[5b] multi-meio: seletor de medicoes visivel com $nOpc opcoes" }
+    else { Write-Host "    FALHA: seletor de medicoes do passo 5 (vis=$boxVis opc=$nOpc)"; $falhas++ }
+    $idxAntes  = $Global:MedicaoPasso5Idx
+    $selInicial = $w.FindName('cboMedicaoPasso5').SelectedIndex
+    $novoSel   = if ($selInicial -eq 0) { 1 } else { 0 }
+    $w.FindName('cboMedicaoPasso5').SelectedIndex = $novoSel
+    Invoke-Pump
+    if ($Global:MedicaoPasso5Idx -ne $idxAntes -and @($Global:AvaliacaoRows).Count -eq 6) {
+        Write-Host "[5b] troca de medicao re-renderiza o grid (idx $idxAntes -> $($Global:MedicaoPasso5Idx))"
+    } else { Write-Host "    FALHA: troca de medicao no passo 5 (idx=$($Global:MedicaoPasso5Idx) linhas=$(@($Global:AvaliacaoRows).Count))"; $falhas++ }
+    $lnLan = @($Global:AvaliacaoRows) | Where-Object { $_.Rotulo -eq 'Latencia' } | Select-Object -First 1
+    $lnLan.ClasseFinal = 'inviavel'; $lnLan.Justificativa = 'teste multi-meio'
+    Invoke-Pump
+    $outroSel = if ($novoSel -eq 0) { 1 } else { 0 }
+    $w.FindName('cboMedicaoPasso5').SelectedIndex = $outroSel ; Invoke-Pump
+    $w.FindName('cboMedicaoPasso5').SelectedIndex = $novoSel ; Invoke-Pump
+    $lnLan2 = @($Global:AvaliacaoRows) | Where-Object { $_.Rotulo -eq 'Latencia' } | Select-Object -First 1
+    if ("$($lnLan2.ClasseFinal)" -eq 'inviavel' -and "$($lnLan2.Justificativa)" -eq 'teste multi-meio') {
+        Write-Host "[5b] ajuste por medicao persiste ao alternar no seletor"
+    } else { Write-Host "    FALHA: ajuste da medicao nao persistiu (cf='$($lnLan2.ClasseFinal)' just='$($lnLan2.Justificativa)')"; $falhas++ }
+    # limpa: volta ao meio unico e re-renderiza para o resto do teste seguir igual
+    $Global:Medicoes = @(@($Global:Medicoes) | Where-Object { $_.meio -ne 'lan' })
+    $Global:MedicaoPasso5Idx = -1
+    Show-MedicaoNoPasso5 -Par ([pscustomobject]@{ idx = 0; med = @($Global:Medicoes)[-1] })
+    Invoke-Pump
+    $linha = @($Global:AvaliacaoRows) | Where-Object { $_.Rotulo -eq 'Download' } | Select-Object -First 1
+    $linha.ClasseFinal = 'viavel'
+    Invoke-Pump
+
+    # 5c. com justificativa -> passo 5 -> 6
     $linha.Justificativa = 'Refiz o teste pelo celular e deu 25 Mbps.'
     Invoke-Pump
     Invoke-WizardProximo
     if ($Global:WizardStep -ne 6) { Write-Host "    FALHA: nao foi para o passo 6"; $falhas++ }
+
+    # 5c-2. passo 6: seletor da conexao recomendada + tabela de medicoes
+    $optsRec = @($w.FindName('cboConexaoRec').ItemsSource)
+    $selRec  = [string] $w.FindName('cboConexaoRec').SelectedItem
+    if ($optsRec.Count -ge 1 -and $selRec) { Write-Host "[5c] passo 6: recomendacao pre-selecionada = '$selRec' ($($optsRec.Count) opcao/oes)" }
+    else { Write-Host "    FALHA: combo da conexao recomendada vazio (opts=$($optsRec.Count) sel='$selRec')"; $falhas++ }
+    $nMed = @($w.FindName('dgMedicoes').ItemsSource).Count
+    if ($nMed -ge 1) { Write-Host "[5c] passo 6: tabela de medicoes com $nMed linha(s)" }
+    else { Write-Host "    FALHA: tabela de medicoes vazia"; $falhas++ }
+
+    # 5c-3. passo 6 -> 7 bloqueia sem o motivo da recomendacao
+    $w.FindName('txtMotivoRec').Text = ''
+    Invoke-Pump
     Invoke-WizardProximo
-    if ($Global:WizardStep -ne 7) { Write-Host "    FALHA: nao foi para o passo 7"; $falhas++ }
-    else { Write-Host "[5c] passos 5->6->7 com justificativa" }
+    $ultimoLog = @($Global:LogEntries)[-1].Texto
+    if ($Global:WizardStep -eq 6 -and $ultimoLog -match 'motivo da recomendacao') {
+        Write-Host "[5c] passo 6 bloqueia sem o motivo da recomendacao"
+    } else { Write-Host "    FALHA: passo 6 avancou sem o motivo (step=$($Global:WizardStep))"; $falhas++ }
+
+    # 5c-4. com o motivo -> passo 7
+    $w.FindName('txtMotivoRec').Text = 'Cabo nao alcanca a sala; melhor download foi pelo celular Vivo.'
+    Invoke-Pump
+    Invoke-WizardProximo
+    if ($Global:WizardStep -ne 7) { Write-Host "    FALHA: nao foi para o passo 7 com o motivo"; $falhas++ }
+    else { Write-Host "[5c] passos 5->6->7 (com justificativa + motivo da recomendacao)" }
 
     # 5d. passo 6: salva o resultado -> checklist "Salvar" fica verde, "Transmitir" habilita
     $antesJson = @(Get-ChildItem (Join-Path $Global:RaizApp 'resultados\pendentes') -Filter *.json -EA SilentlyContinue).Count
@@ -376,6 +460,16 @@ try {
         } else { Write-Host "    FALHA: rede_local sem tethering/operadora (t=$($rl.tethering_celular) op='$($rl.operadora)')"; $falhas++ }
         if ($doc.vpn -and $doc.vpn.impossivel -eq $false) { Write-Host "[5d] JSON traz bloco vpn (impossivel=false neste teste)" }
         else { Write-Host "    FALHA: JSON sem bloco vpn"; $falhas++ }
+        $rec = $doc.conexao_recomendada
+        if ($rec -and $rec.rotulo -and $rec.veredito -and $rec.motivo -match 'celular' -and @($doc.medicoes).Count -ge 1) {
+            Write-Host "[5d] JSON traz conexao_recomendada='$($rec.rotulo)' veredito='$($rec.veredito)' base='$($rec.base)' + $(@($doc.medicoes).Count) medicao(oes)"
+        } else { Write-Host "    FALHA: JSON sem conexao_recomendada/medicoes (rotulo='$($rec.rotulo)' motivo='$($rec.motivo)' meds=$(@($doc.medicoes).Count))"; $falhas++ }
+        if ("$($doc.classificacao.final)" -eq "$($rec.veredito)") { Write-Host "[5d] decisao final do local = veredito do meio recomendado ('$($doc.classificacao.final)')" }
+        else { Write-Host "    FALHA: classificacao.final ('$($doc.classificacao.final)') != veredito recomendado ('$($rec.veredito)')"; $falhas++ }
+        $htmlRel = New-RelatorioHtml -Resultado $doc
+        if ($htmlRel -match 'Conex&atilde;o recomendada para este local' -and $htmlRel -match 'Meios de conex&atilde;o testados') {
+            Write-Host "[5d] relatorio HTML traz o bloco de conexao recomendada + tabela de meios"
+        } else { Write-Host "    FALHA: relatorio HTML sem os blocos multi-meio"; $falhas++ }
     }
     $vok = [char]0x2713
     if ($Global:FeitoSalvar -and "$($w.FindName('chkFimSalvar').Text)" -eq $vok -and $w.FindName('btnTransmitirResultado').IsEnabled -and "$($w.FindName('chkFimTransmitir').Text)" -ne $vok) {
