@@ -51,9 +51,8 @@ if (-not (Test-Administrador)) {
             return   # a instancia elevada assume
         }
     }
-    Write-Warning ('DICON sem privilegio de administrador: conectar a uma rede Wi-Fi ' +
-        'pela ferramenta fica indisponivel (use a bandeja do Windows). O restante do ' +
-        'diagnostico funciona normalmente.')
+    Write-Warning ('DICON sem privilegio de administrador. O diagnostico funciona ' +
+        'normalmente; conecte o Wi-Fi do local pela bandeja do Windows.')
 }
 
 # --- 3. Encoding UTF-8 -----------------------------------------------------

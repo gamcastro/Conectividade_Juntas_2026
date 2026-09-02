@@ -100,6 +100,18 @@ try {
     if ($w.FindName('viewLogin').Visibility -ne 'Visible') { Write-Host "    FALHA: nao abriu no login"; $falhas++ }
     else { Write-Host "[1] Abriu na tela de login" }
 
+    # 1b. selo de ambiente: existe e segue o canal (config\canal). Sem o arquivo
+    # (repo/testes) o canal e 'main' -> selos ocultos.
+    $canalT = Get-CanalInstalacao
+    $bl = $w.FindName('badgeHomologLogin'); $br = $w.FindName('badgeHomologRail')
+    if (-not $bl -or -not $br) { Write-Host "    FALHA: selos de homologacao ausentes no XAML"; $falhas++ }
+    else {
+        $espera = if ($canalT -eq 'homologacao') { 'Visible' } else { 'Collapsed' }
+        if ("$($bl.Visibility)" -eq $espera -and "$($br.Visibility)" -eq $espera) {
+            Write-Host "[1b] selo de ambiente coerente com o canal '$canalT' ($espera)"
+        } else { Write-Host "    FALHA: selo de ambiente (canal=$canalT login=$($bl.Visibility) rail=$($br.Visibility))"; $falhas++ }
+    }
+
     # 2. login
     $cbo = $w.FindName('cboTecnico')
     if ($cbo.Items.Count -lt 1) { Write-Host "[2] FALHA: cboTecnico vazio"; $falhas++ }
@@ -107,6 +119,15 @@ try {
     Enter-Sessao
     if ($w.FindName('viewHome').Visibility -ne 'Visible') { Write-Host "[2] FALHA: nao foi para a home"; $falhas++ }
     else { Write-Host "[2] Login OK -> home ($($w.FindName('txtSaudacao').Text))" }
+
+    # 2c-versao. aviso de versao nova no rodape do rail
+    Update-AvisoVersao '99.99.99'
+    if ("$($w.FindName('btnAtualizarApp').Visibility)" -eq 'Visible' -and "$($w.FindName('btnAtualizarApp').Content)" -match '99\.99\.99') {
+        Write-Host "[2c] versao nova -> botao 'Atualizar' aparece no rail"
+    } else { Write-Host "    FALHA: aviso de versao nova"; $falhas++ }
+    Update-AvisoVersao $Global:VersaoApp
+    if ("$($w.FindName('btnAtualizarApp').Visibility)" -eq 'Collapsed') { Write-Host "[2c] mesma versao -> botao oculto" }
+    else { Write-Host "    FALHA: botao 'Atualizar' nao sumiu com a mesma versao"; $falhas++ }
 
     # 2d. menu lateral recolhe/expande
     $lRail0 = $w.FindName('railNav').Width
@@ -157,11 +178,21 @@ try {
     if (@($w.FindName('cboFiltroZE').ItemsSource).Count -ge 2 -and @($w.FindName('cboFiltroMun').ItemsSource).Count -ge 2) {
         Write-Host "[3b] combos ZE/municipio populados"
     } else { Write-Host "    FALHA: combos de filtro vazios"; $falhas++ }
-    $w.FindName('dgLocais').SelectedIndex = 0
+    # a grade precisa selecionar a LINHA inteira (SelectedItem != null ao clicar);
+    # com SelectionUnit=Cell do estilo GridMetricas, clicar nao abria nada.
+    $dg = $w.FindName('dgLocais')
+    if ("$($dg.SelectionUnit)" -eq 'FullRow') { Write-Host "[3b] grade seleciona a linha inteira (FullRow)" }
+    else { Write-Host "    FALHA: dgLocais SelectionUnit='$($dg.SelectionUnit)' (esperado FullRow)"; $falhas++ }
+    $dg.SelectedItem = @($dg.ItemsSource)[0]   # o que um clique de mouse faz
     Invoke-Pump
-    if ("$($w.FindName('cardLocalDetalhe').Visibility)" -eq 'Visible' -and "$($w.FindName('txtLocDetNome').Text)") {
-        Write-Host "[3b] selecionar um local mostra o cartao de detalhe"
-    } else { Write-Host "    FALHA: cartao de detalhe do local nao apareceu"; $falhas++ }
+    if ("$($w.FindName('viewLocalDetalhe').Visibility)" -eq 'Visible' -and "$($w.FindName('txtLDPNome').Text)") {
+        Write-Host "[3b] clicar num local abre a ficha completa ($($w.FindName('txtLDPNome').Text))"
+    } else { Write-Host "    FALHA: ficha completa do local nao abriu (vis=$($w.FindName('viewLocalDetalhe').Visibility))"; $falhas++ }
+    Invoke-VoltarAosLocais
+    Invoke-Pump
+    if ("$($w.FindName('viewLocais').Visibility)" -eq 'Visible' -and $w.FindName('dgLocais').SelectedIndex -lt 0) {
+        Write-Host "[3b] 'voltar aos locais' retorna para a lista e limpa a selecao"
+    } else { Write-Host "    FALHA: nao voltou para a lista de locais"; $falhas++ }
     Show-View 'viewHome'
 
     # 4. assistente pelo atalho do guia: abre no passo 1, Junta/Local pre-selecionados
@@ -195,6 +226,15 @@ try {
         -not $w.FindName('btnRodarFaseLocal').IsEnabled -and $hostTxt -match 'NB-TESTE-01') {
         Write-Host "[4c] probe ao entrar: placas mostradas ($hostTxt); 'Rodar checagem' travado ate escolher a placa"
     } else { Write-Host "    FALHA: probe do passo 3 (card=$($w.FindName('cardFaseLocal').Visibility) inet=$($w.FindName('cardInternetLocal').Visibility) rodar.en=$($w.FindName('btnRodarFaseLocal').IsEnabled) host='$hostTxt')"; $falhas++ }
+
+    # 4c-0b. botao "reler placas" reinventaria sem sair do passo 3
+    $antHost = "$($w.FindName('txtLocHost').Text)"
+    Invoke-RelerPlacas
+    Invoke-Pump
+    if ($Global:WizardStep -eq 3 -and $w.FindName('cardFaseLocal').Visibility -eq 'Visible' -and
+        "$($w.FindName('txtLocHost').Text)" -eq $antHost) {
+        Write-Host "[4c] 'reler placas' reinventaria e mantem o passo 3"
+    } else { Write-Host "    FALHA: 'reler placas' (step=$($Global:WizardStep) card=$($w.FindName('cardFaseLocal').Visibility))"; $falhas++ }
 
     # 4c-0. escolher a placa cabeada (LAN) libera "Rodar checagem local"
     $w.FindName('rbUsarLan').IsChecked = $true
@@ -232,26 +272,36 @@ try {
 
     Show-WizardPasso 3
 
-    # 4c-3. sem placa Wi-Fi -> some o card "Conectar a uma rede Wi-Fi"
+    # 4c-3. sem placa Wi-Fi -> some o card informativo "conecte pelo Windows"
     $Global:FaseLocalPayload.Wireless.presente = $false
     Update-PainelFaseLocal
-    if ($w.FindName('cardConectarWifi').Visibility -eq 'Collapsed') { Write-Host "[4c] sem placa Wi-Fi: card de conexao some" }
+    if ($w.FindName('cardWifiBandeja').Visibility -eq 'Collapsed') { Write-Host "[4c] sem placa Wi-Fi: card 'conecte pelo Windows' some" }
     else { Write-Host "    FALHA: card Wi-Fi visivel sem placa"; $falhas++ }
     $Global:FaseLocalPayload.Wireless.presente = $true
     Update-PainelFaseLocal
-    if ($w.FindName('cardConectarWifi').Visibility -eq 'Visible') { Write-Host "[4c] com placa Wi-Fi: card de conexao aparece" }
+    if ($w.FindName('cardWifiBandeja').Visibility -eq 'Visible') { Write-Host "[4c] com placa Wi-Fi: card 'conecte pelo Windows' aparece" }
     else { Write-Host "    FALHA: card Wi-Fi oculto com placa"; $falhas++ }
 
-    # 4c-3c. escolher "Usar o Wi-Fi do local" habilita o card de conexao; sem SSID avisa
+    # 4c-3c. escolher "Usar o Wi-Fi do local"
     $w.FindName('rbUsarWifi').IsChecked = $true
     Invoke-Pump
-    if ($w.FindName('cardConectarWifi').IsEnabled -and $Global:FaseLocalTipo -eq 'wifi') {
-        Write-Host "[4c] escolher 'Usar o Wi-Fi do local' habilita o card 'Conectar a uma rede Wi-Fi'"
-    } else { Write-Host "    FALHA: card Wi-Fi nao habilitou ao escolher (en=$($w.FindName('cardConectarWifi').IsEnabled) tipo='$($Global:FaseLocalTipo)')"; $falhas++ }
-    $w.FindName('cboWifiSsid').Text = ''
-    Invoke-ConectarWifi
-    if ("$($w.FindName('txtWifiStatus').Text)" -match 'SSID') { Write-Host "[4c] conectar Wi-Fi exige SSID" }
-    else { Write-Host "    FALHA: conectar Wi-Fi sem SSID nao avisou"; $falhas++ }
+    if ($Global:FaseLocalTipo -eq 'wifi') { Write-Host "[4c] meio 'Wi-Fi do local' selecionado" }
+    else { Write-Host "    FALHA: nao selecionou o meio Wi-Fi (tipo='$($Global:FaseLocalTipo)')"; $falhas++ }
+
+    # 4c-3d. Wi-Fi desconectado -> o painel limpa IP/gateway/mascara/MAC/origem da placa Wi-Fi
+    $wifiIpOrig  = $Global:FaseLocalPayload.Wireless.ipv4
+    $wifiMacOrig = $Global:FaseLocalPayload.Wireless.mac
+    $Global:FaseLocalPayload.Wireless.conectado = $false
+    $Global:FaseLocalPayload.Wireless.ipv4      = '10.9.9.9'
+    $Global:FaseLocalPayload.Wireless.mac       = 'AA-BB-CC-DD-EE-FF'
+    Update-PainelFaseLocal
+    if ("$($w.FindName('txtLocWifiIp').Visibility)" -eq 'Collapsed' -and "$($w.FindName('txtLocWifiMac').Visibility)" -eq 'Collapsed') {
+        Write-Host "[4c] Wi-Fi desconectado: IP/MAC da placa Wi-Fi ficam limpos no painel"
+    } else { Write-Host "    FALHA: dados da placa Wi-Fi visiveis sem conexao (ip=$($w.FindName('txtLocWifiIp').Visibility))"; $falhas++ }
+    $Global:FaseLocalPayload.Wireless.ipv4      = $wifiIpOrig
+    $Global:FaseLocalPayload.Wireless.mac       = $wifiMacOrig
+    $Global:FaseLocalPayload.Wireless.conectado = $true
+    Update-PainelFaseLocal
 
     # 4c-4. Wi-Fi escolhido mas nao conectado -> checagem travada; ao conectar, libera
     $Global:FaseLocalPayload.Lan.conectado      = $false

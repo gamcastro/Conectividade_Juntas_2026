@@ -48,18 +48,16 @@ if (-not (Get-Variable -Name ModoTeste -Scope Global -ErrorAction SilentlyContin
 if (-not (Get-Variable -Name FaseLocalSimulada -Scope Global -ErrorAction SilentlyContinue)) {
     $Global:FaseLocalSimulada = $null     # testes: payload fixo p/ a fase local
 }
-if (-not (Get-Variable -Name WifiConectarSimulado -Scope Global -ErrorAction SilentlyContinue)) {
-    $Global:WifiConectarSimulado = $null  # testes: resultado fixo p/ Connect-RedeWireless
-}
 if (-not (Get-Variable -Name VpnSimulada -Scope Global -ErrorAction SilentlyContinue)) {
     $Global:VpnSimulada = $null           # testes: $true/$false forca o estado da VPN
 }
 
-$Global:Views = @('viewLogin', 'viewHome', 'viewGuia', 'viewLocais', 'viewDiag', 'viewAdmin')
+$Global:Views = @('viewLogin', 'viewHome', 'viewGuia', 'viewLocais', 'viewLocalDetalhe', 'viewDiag', 'viewAdmin')
 
 $Global:LocaisTecnico            = @()      # locais do roteiro do tecnico (achatados)
 $Global:AtualizandoFiltroLocais  = $false   # guarda: preenchimento programatico dos combos
 $Global:RailRecolhido            = $false   # menu lateral recolhido (so icones)?
+$Global:VersaoNova               = ''       # versao mais recente no canal (se > a atual)
 
 $Global:WizardPassos  = @('stepInfo', 'stepJunta', 'stepLocal', 'stepDiag', 'stepResultado', 'stepDecisao', 'stepFim')
 $Global:WizardTitulos = @(
@@ -252,6 +250,18 @@ function New-JanelaPrincipal {
         }
     }
 
+    # Marca de ambiente: em 'homologacao' mostra os selos (login + rail) e poe o
+    # sufixo no titulo da janela, pra ninguem confundir com o DICON de producao.
+    $Global:CanalApp = try { Get-CanalInstalacao } catch { 'main' }
+    if ($Global:CanalApp -eq 'homologacao') {
+        foreach ($n in 'badgeHomologLogin', 'badgeHomologRail') {
+            $b = $window.FindName($n); if ($b) { $b.Visibility = 'Visible' }
+        }
+        try { $window.Title = "$($window.Title)  -  HOMOLOGACAO" } catch { }
+        $lv = $window.FindName('txtLoginVersao')
+        if ($lv) { $lv.Text = "DICON v$ver - homologacao" }
+    }
+
     # diagnostico
     $window.FindName('btnRodar').Add_Click({ Invoke-ExecucaoNaJanela })
     $window.FindName('btnAbrirFortiClient').Add_Click({ Invoke-AbrirFortiClient })
@@ -270,7 +280,7 @@ function New-JanelaPrincipal {
     $window.FindName('btnWizProximo').Add_Click({ Invoke-WizardProximo })
     $window.FindName('btnRefazerTeste').Add_Click({ Invoke-WizardProximo })
     $window.FindName('btnRodarFaseLocal').Add_Click({ Invoke-RodarFaseLocal })
-    $window.FindName('btnConectarWifi').Add_Click({ Invoke-ConectarWifi })
+    $window.FindName('btnRelerPlacas').Add_Click({ Invoke-RelerPlacas })
     $window.FindName('chkTetheringCelular').Add_Click({ Update-TetheringCelular })
     $window.FindName('rbUsarLan').Add_Checked({ Set-FaseLocalTipo 'lan' })
     $window.FindName('rbUsarWifi').Add_Checked({ Set-FaseLocalTipo 'wifi' })
@@ -284,7 +294,6 @@ function New-JanelaPrincipal {
         $window.FindName($n).Add_Click({ Update-NaoAplicavelMeio })
     }
     $window.FindName('txtMotivoNaMeio').Add_LostFocus({ Update-NaoAplicavelMeio })
-    $window.FindName('btnJaConecteiWifi').Add_Click({ Invoke-VerificarWifiBandeja })
     $window.FindName('btnExportarPdf').Add_Click({ Invoke-ExportarRelatorio })
     $window.FindName('btnTransmitirResultado').Add_Click({ Invoke-TransmitirResultado })
     $window.FindName('btnDiagVoltar').Add_Click({ Show-View 'viewHome' })
@@ -316,6 +325,7 @@ function New-JanelaPrincipal {
     $window.FindName('btnTrocarUsuario').Add_Click({ Invoke-TrocarUsuario })
 
     $window.FindName('btnRailToggle').Add_Click({ Invoke-ToggleRail })
+    $window.FindName('btnAtualizarApp').Add_Click({ Invoke-AtualizarApp })
 
     # rail de navegacao (RadioButtons) - handlers ignoram mudanca programatica
     $window.FindName('navGuia').Add_Checked({ if (-not $Global:NavegandoPrograma) { Show-GuiaBordo } })
@@ -326,10 +336,11 @@ function New-JanelaPrincipal {
 
     # locais de vistoria
     $window.FindName('btnLocaisVoltar').Add_Click({ Show-View 'viewHome' })
+    $window.FindName('btnLocalDetalheVoltar').Add_Click({ Invoke-VoltarAosLocais })
     $window.FindName('txtBuscaLocais').Add_TextChanged({ Update-LocaisFiltrados })
     $window.FindName('cboFiltroZE').Add_SelectionChanged({ if (-not $Global:AtualizandoFiltroLocais) { Update-LocaisFiltrados } })
     $window.FindName('cboFiltroMun').Add_SelectionChanged({ if (-not $Global:AtualizandoFiltroLocais) { Update-LocaisFiltrados } })
-    $window.FindName('dgLocais').Add_SelectionChanged({ Update-LocalDetalheView })
+    $window.FindName('dgLocais').Add_SelectionChanged({ Invoke-AbrirLocalDetalhe })
 
     # guia / admin
     $window.FindName('btnGuiaVoltar').Add_Click({ Show-View 'viewHome' })
@@ -404,7 +415,7 @@ function Show-View {
     $w.FindName('railNav').Visibility = if ($Nome -eq 'viewLogin') { 'Collapsed' } else { 'Visible' }
 
     # sincroniza o item ativo do rail sem disparar os handlers de navegacao
-    $map = @{ viewGuia = 'navGuia'; viewLocais = 'navLocais'; viewDiag = 'navDiag'; viewAdmin = 'navAdmin' }
+    $map = @{ viewGuia = 'navGuia'; viewLocais = 'navLocais'; viewLocalDetalhe = 'navLocais'; viewDiag = 'navDiag'; viewAdmin = 'navAdmin' }
     $Global:NavegandoPrograma = $true
     foreach ($nn in 'navGuia', 'navLocais', 'navDiag', 'navAdmin', 'navAtualizar') {
         $rb = $w.FindName($nn)
@@ -431,6 +442,57 @@ function Set-RailRecolhido {
 function Invoke-ToggleRail {
     $Global:RailRecolhido = -not $Global:RailRecolhido
     Set-RailRecolhido $Global:RailRecolhido
+}
+
+# ---------------------------------------------------------- ATUALIZACAO DA FERRAMENTA
+
+# Checa (async, best-effort) se ha versao nova no canal desta instalacao.
+function Test-AtualizacaoApp {
+    if ($Global:ModoTeste -or $Global:TarefaRedeState) { return }
+    Start-TarefaRede -Script 'Get-VersaoRemota' -AoConcluir {
+        param($res, $erro)
+        if (-not $erro -and $res) { Update-AvisoVersao ([string] $res) }
+    }
+}
+
+# Mostra/oculta o botao "Atualizar" no rodape do rail conforme a versao remota.
+function Update-AvisoVersao {
+    param([string] $Remota)
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    $b = $w.FindName('btnAtualizarApp')
+    if (-not $b) { return }
+    $temNova = $false
+    try { $temNova = [version] $Remota -gt [version] $Global:VersaoApp }
+    catch { $temNova = ($Remota -and $Remota -ne $Global:VersaoApp) }
+    if ($temNova) {
+        $Global:VersaoNova = $Remota
+        $b.Content    = ([char]0x2B06) + " Atualizar (v$Remota)"
+        $b.Visibility = 'Visible'
+        Write-Log ("Versao nova do DICON disponivel: v{0} (voce esta na v{1}). Clique em 'Atualizar' no menu." -f $Remota, $Global:VersaoApp) -Nivel Aviso
+    } else {
+        $Global:VersaoNova = ''
+        $b.Visibility = 'Collapsed'
+    }
+}
+
+# Fecha o DICON e abre o Atualizar-DICON.ps1 numa janela propria.
+function Invoke-AtualizarApp {
+    $w = $Global:JanelaPrincipal
+    $upd = Join-Path $Global:RaizApp 'setup\Atualizar-DICON.ps1'
+    if (-not (Test-Path $upd)) { Write-Log 'setup\Atualizar-DICON.ps1 nao encontrado nesta instalacao.' -Nivel Erro; return }
+    $alvo = if ($Global:VersaoNova) { " para a v$($Global:VersaoNova)" } else { '' }
+    $msg  = "Atualizar o DICON$alvo?`n`nA ferramenta vai fechar e o atualizador abre numa janela. " +
+            "Quando terminar, reabra o DICON pelo atalho da area de trabalho."
+    $r = [System.Windows.MessageBox]::Show($w, $msg, 'Atualizar DICON',
+        [System.Windows.MessageBoxButton]::YesNo, [System.Windows.MessageBoxImage]::Question)
+    if ($r -ne [System.Windows.MessageBoxResult]::Yes) { return }
+    try {
+        Start-Process powershell.exe -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-NoExit', '-File', $upd, '-Force')
+        $w.Close()
+    } catch {
+        Write-Log "Nao consegui abrir o atualizador: $_" -Nivel Erro
+    }
 }
 
 # ------------------------------------------------------------- LOGIN
@@ -606,6 +668,7 @@ function Enter-Home {
 
     try { Update-AvisoPendentes } catch { Write-Log "Aviso de pendentes falhou: $_" -Nivel Aviso }
     try { $w.FindName('painelLogHome').Visibility = if ($Global:LogHome.Count) { 'Visible' } else { 'Collapsed' } } catch { }
+    try { Test-AtualizacaoApp } catch { }   # checa versao nova (best-effort, silencioso)
     Show-View 'viewHome'
 }
 
@@ -700,7 +763,7 @@ function Invoke-AtualizarDados {
     } -AoConcluir {
         param($res, $erro)
         Initialize-SeletorJuntas
-        if ($Global:SessaoAtual) { Enter-Home -Sessao $Global:SessaoAtual }
+        if ($Global:SessaoAtual) { Enter-Home -Sessao $Global:SessaoAtual }   # Enter-Home ja checa versao nova
     }
 }
 
@@ -797,7 +860,7 @@ function Initialize-Locais {
     $rot = $Global:RoteiroAtual
 
     $w.FindName('txtLocaisSub').Text = if ($rot) {
-        'Roteiro {0} - {1}    |    {2} local(is) de vistoria' -f $rot.numero, $rot.tecnico, @($Global:LocaisTecnico).Count
+        'Roteiro {0} - {1}    |    {2} local(is)    |    clique num local para abrir a ficha completa' -f $rot.numero, $rot.tecnico, @($Global:LocaisTecnico).Count
     } else {
         'Roteiro nao disponivel neste computador. Use "Atualizar dados" com internet.'
     }
@@ -849,36 +912,51 @@ function Update-LocaisFiltrados {
         })
     }
 
+    $Global:AtualizandoFiltroLocais = $true
     $w.FindName('dgLocais').ItemsSource = @($lista)
+    $Global:AtualizandoFiltroLocais = $false
     $w.FindName('txtLocaisContagem').Text = '{0} de {1}' -f @($lista).Count, @($Global:LocaisTecnico).Count
-    Update-LocalDetalheView
 }
 
-# Cartao de detalhe do local selecionado na grade.
-function Update-LocalDetalheView {
+# Clicar numa linha da grade abre a ficha completa do local (tela dedicada).
+function Invoke-AbrirLocalDetalhe {
+    if ($Global:AtualizandoFiltroLocais) { return }
     $w = $Global:JanelaPrincipal
     if (-not $w) { return }
     $d = $w.FindName('dgLocais').SelectedItem
-    $card = $w.FindName('cardLocalDetalhe')
-    if (-not $d) { $card.Visibility = 'Collapsed'; return }
-    $card.Visibility = 'Visible'
+    if (-not $d) { return }
 
-    $w.FindName('txtLocDetTipo').Text = if ("$($d.tipo)" -eq 'principal') { 'LOCAL PRINCIPAL' } else { 'LOCAL DE CONTINGENCIA' }
-    $w.FindName('txtLocDetNome').Text = [string] $d.nome
-    $w.FindName('txtLocDetZE').Text   = Format-RotuloJunta $d.zona_eleitoral $d.municipio_termo $d.municipio_sede
-    Set-LinhaDetalhe $w.FindName('txtLocDetEndereco') ('Endere' + [char]0x00E7 + 'o') ([string] $d.endereco)
-    Set-LinhaDetalhe $w.FindName('txtLocDetInternet') 'Tipo de internet' ([string] $d.tipo_internet)
-    Set-LinhaDetalhe $w.FindName('txtLocDetUC') 'Unidade consumidora' ([string] (Get-CampoLocal $d 'unidade_consumidora'))
+    $w.FindName('txtLDPTipo').Text = if ("$($d.tipo)" -eq 'principal') { 'LOCAL PRINCIPAL' } else { 'LOCAL DE CONTINGENCIA' }
+    $w.FindName('txtLDPNome').Text = [string] $d.nome
+    $w.FindName('txtLDPZE').Text   = Format-RotuloJunta $d.zona_eleitoral $d.municipio_termo $d.municipio_sede
+
+    Set-LinhaDetalhe $w.FindName('txtLDPEndereco') ('Endere' + [char]0x00E7 + 'o') ([string] $d.endereco)
+    Set-LinhaDetalhe $w.FindName('txtLDPInternet') 'Tipo de internet' ([string] $d.tipo_internet)
+    Set-LinhaDetalhe $w.FindName('txtLDPUC') 'Unidade consumidora' ([string] (Get-CampoLocal $d 'unidade_consumidora'))
 
     $resp = [string] (Get-CampoLocal $d 'responsavel')
     $func = [string] (Get-CampoLocal $d 'funcao')
     if ($func) { $resp = '{0} ({1})' -f $resp, $func }
-    Set-LinhaDetalhe $w.FindName('txtLocDetResponsavel') ('Respons' + [char]0x00E1 + 'vel') $resp
-    Set-LinhaDetalhe $w.FindName('txtLocDetTelefone') 'Telefone/WhatsApp' ([string] (Get-CampoLocal $d 'telefone'))
+    Set-LinhaDetalhe $w.FindName('txtLDPResponsavel') ('Respons' + [char]0x00E1 + 'vel') $resp
+    Set-LinhaDetalhe $w.FindName('txtLDPTelefone') 'Telefone/WhatsApp' ([string] (Get-CampoLocal $d 'telefone'))
 
     $comp = [string] (Get-CampoLocal $d 'texto_completo')
-    $tc = $w.FindName('txtLocDetCompleto')
-    if ($comp) { $tc.Text = $comp; $tc.Visibility = 'Visible' } else { $tc.Visibility = 'Collapsed' }
+    $tc   = $w.FindName('txtLDPCompleto')
+    $card = $w.FindName('cardLDPCompleto')
+    if ($comp) { $tc.Text = $comp; $card.Visibility = 'Visible' } else { $card.Visibility = 'Collapsed' }
+
+    Show-View 'viewLocalDetalhe'
+}
+
+# "Voltar aos locais": limpa a selecao (para reabrir a mesma linha depois) e
+# volta para a lista com os filtros preservados.
+function Invoke-VoltarAosLocais {
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    $Global:AtualizandoFiltroLocais = $true
+    $w.FindName('dgLocais').SelectedIndex = -1
+    $Global:AtualizandoFiltroLocais = $false
+    Show-View 'viewLocais'
 }
 
 # ------------------------------------------------------------- ASSISTENTE (WIZARD)
@@ -1205,7 +1283,8 @@ function Set-FaseLocalOcupado {
         $ring.IsActive   = $Ocupado
         $ring.Visibility = if ($Ocupado) { 'Visible' } else { 'Collapsed' }
     }
-    foreach ($n in 'btnRodarFaseLocal', 'btnConectarWifi', 'btnJaConecteiWifi', 'btnWizProximo', 'btnWizVoltar', 'rbUsarLan', 'rbUsarWifi') {
+    foreach ($n in 'btnRodarFaseLocal', 'btnRelerPlacas',
+        'btnWizProximo', 'btnWizVoltar', 'rbUsarLan', 'rbUsarWifi') {
         $c = $w.FindName($n); if ($c) { $c.IsEnabled = -not $Ocupado }
     }
 }
@@ -1217,7 +1296,7 @@ function Set-FaseLocalTipo {
     $w = $Global:JanelaPrincipal
     if ($w) {
         # o "meio celular" e a antiga marca de tethering: mantem o estado legado
-        # coerente para todo o codigo a jusante (JSON, Complete-ConectarWifi...).
+        # coerente para todo o codigo a jusante (JSON, relatorio...).
         $ck = $w.FindName('chkTetheringCelular')
         if ($ck) { $ck.IsChecked = ($Tipo -eq 'celular') }
         if ($Tipo -eq 'celular') {
@@ -1266,7 +1345,7 @@ function Update-PainelFaseLocal {
     $cinza    = [Windows.Media.SolidColorBrush]::new([Windows.Media.ColorConverter]::ConvertFromString('#7D8698'))
     $cinza.Freeze()
 
-    $cardWifi = $w.FindName('cardConectarWifi')
+    $cardWifi = $w.FindName('cardWifiBandeja')
 
     if (-not $p) {
         if ($card) { $card.Visibility = 'Collapsed' }
@@ -1319,11 +1398,12 @@ function Update-PainelFaseLocal {
         $tw.Text = 'Sem placa Wi-Fi neste computador'
         $tw.Foreground = $cinza ; $dw.Fill = $cinza
     }
-    Set-LinhaDetalhe $w.FindName('txtLocWifiIp')   'IP na rede local' ([string] $wf.ipv4)
-    Set-LinhaDetalhe $w.FindName('txtLocWifiGw')   'Gateway'          ([string] $wf.gateway)
-    Set-LinhaDetalhe $w.FindName('txtLocWifiMask') 'Mascara'          ([string] $wf.mascara)
-    Set-LinhaDetalhe $w.FindName('txtLocWifiMac')  'MAC'              ([string] $wf.mac)
-    Set-LinhaDetalhe $w.FindName('txtLocWifiOrigem') 'Obtencao do IP' ([string] $wf.ip_origem)
+    # sem Wi-Fi associado -> nao mostra IP/gateway/mascara/MAC/origem (evita dado velho)
+    Set-LinhaDetalhe $w.FindName('txtLocWifiIp')   'IP na rede local' $(if ($wifiUp) { [string] $wf.ipv4 } else { '' })
+    Set-LinhaDetalhe $w.FindName('txtLocWifiGw')   'Gateway'          $(if ($wifiUp) { [string] $wf.gateway } else { '' })
+    Set-LinhaDetalhe $w.FindName('txtLocWifiMask') 'Mascara'          $(if ($wifiUp) { [string] $wf.mascara } else { '' })
+    Set-LinhaDetalhe $w.FindName('txtLocWifiMac')  'MAC'              $(if ($wifiUp) { [string] $wf.mac } else { '' })
+    Set-LinhaDetalhe $w.FindName('txtLocWifiOrigem') 'Obtencao do IP' $(if ($wifiUp) { [string] $wf.ip_origem } else { '' })
     $twd = $w.FindName('txtLocWifiDet')
     if ($twd) {
         $twd.Text = if ($wifiUp) {
@@ -1349,26 +1429,6 @@ function Update-PainelFaseLocal {
         }
     } else {
         $ci.Visibility = 'Collapsed'
-    }
-
-    $cbo = $w.FindName('cboWifiSsid')
-    if ($cbo) {
-        $atual = [string] $cbo.Text
-        $cbo.ItemsSource = @($wf.redes_disponiveis)
-        # nao pre-seleciona a rede em que ja estamos (a lista tambem ja a exclui);
-        # so restaura o que o tecnico tinha digitado.
-        if ($atual -and $atual -ne $wf.ssid) { $cbo.Text = $atual } else { $cbo.Text = '' }
-    }
-
-    # quando ja estamos num Wi-Fi, o card serve para TROCAR de rede.
-    $lblWifi = $w.FindName('txtConectarWifiDica')
-    if ($lblWifi) {
-        $base = if ($wifiUp) {
-            'Ja conectado a "{0}". Use abaixo so se quiser trocar para outra rede.' -f $wf.ssid
-        } else {
-            'Use se o local nao tiver cabo.'
-        }
-        $lblWifi.Text = $base + ' Escolha na lista ou digite o nome (SSID). Se a rede ja estiver salva no Windows, pode deixar a senha em branco.'
     }
 
     # cartao "celular": conexao Wi-Fi (o roteamento usa a mesma placa)
@@ -1428,12 +1488,9 @@ function Update-PainelFaseLocal {
         $cd.Opacity         = if ($par[2]) { 0.5 } else { 1.0 }
     }
 
-    # "Conectar a uma rede Wi-Fi": relevante p/ Wi-Fi do local e p/ celular
-    $usaWifiCard = ($tipo -eq 'wifi' -or $tipo -eq 'celular')
+    # card informativo "conecte pelo Windows": so aparece se ha placa Wi-Fi
     if ($cardWifi) {
         $cardWifi.Visibility = if ($wf.presente) { 'Visible' } else { 'Collapsed' }
-        $cardWifi.IsEnabled  = $usaWifiCard
-        $cardWifi.Opacity    = if ($usaWifiCard) { 1.0 } else { 0.5 }
     }
 
     # botao "Rodar checagem local": meio escolhido E aquela via conectada
@@ -1459,6 +1516,22 @@ function Update-PainelFaseLocal {
 }
 
 # Probe rapido ao ENTRAR no passo 3: so inventaria as placas (sem internet).
+# Botao de recarregar (canto da tela do passo 3): reinventaria as placas -
+# pega cabo plugado/desplugado e mudanca de Wi-Fi sem sair do passo.
+function Invoke-RelerPlacas {
+    if ($Global:TarefaRedeState) {
+        Write-Log 'Aguarde a checagem em andamento terminar.' -Nivel Aviso
+        return
+    }
+    $p = $Global:FaseLocalPayload
+    if ($p -and $p.PSObject.Properties['Internet'] -and $p.Internet) {
+        Write-Log 'Relendo as placas - o teste de velocidade anterior sera descartado; rode a checagem de novo.' -Nivel Aviso
+    } else {
+        Write-Log 'Relendo o status das placas de rede...' -Nivel Info
+    }
+    Invoke-ProbeRedeLocal
+}
+
 function Invoke-ProbeRedeLocal {
     if ($Global:FaseLocalSimulada) {
         $s = $Global:FaseLocalSimulada
@@ -1506,19 +1579,6 @@ function Complete-ProbeRedeLocal {
 
     $Global:FaseLocalPayload = $Payload
     Update-PainelFaseLocal
-
-    # fecha o status do card "Conectar a rede Wi-Fi" (ex.: apos "Ja conectei
-    # pela bandeja") com o resultado do inventario.
-    $w = $Global:JanelaPrincipal
-    $stw = if ($w) { $w.FindName('txtWifiStatus') } else { $null }
-    if ($stw -and "$($stw.Text)" -match 'Verificando|Conectando') {
-        $wf = if ($Payload) { $Payload.Wireless } else { $null }
-        if ($wf -and [bool] $wf.conectado) {
-            $stw.Text = 'Conectado a "{0}"{1}.' -f $wf.ssid, $(if ($wf.sinal_pct) { " ($($wf.sinal_pct)%)" } else { '' })
-        } else {
-            $stw.Text = 'Ainda sem conexao Wi-Fi. Conecte pela bandeja do Windows e clique em "Ja conectei pela bandeja".'
-        }
-    }
 }
 
 # Rola cada coluna do teste de internet para o fim quando chega linha nova.
@@ -1897,100 +1957,6 @@ function Complete-FaseLocal {
     }
 }
 
-# "Ja conectei pela bandeja": so re-inventaria as placas para pegar a conexao
-# feita pelo Windows (o Connect-RedeWireless do DICON as vezes nao pega em
-# notebook com o tecnico logado num usuario e o DICON elevado noutro).
-function Invoke-VerificarWifiBandeja {
-    $w = $Global:JanelaPrincipal
-    $st = $w.FindName('txtWifiStatus'); if ($st) { $st.Text = 'Verificando a conexao...' }
-    Write-Log 'Verificando a conexao Wi-Fi feita pela bandeja do Windows...' -Nivel Info
-    $Global:FaseLocalPayload = $null
-    Invoke-ProbeRedeLocal
-}
-
-function Invoke-ConectarWifi {
-    $w = $Global:JanelaPrincipal
-    $ssid  = ([string] $w.FindName('cboWifiSsid').Text).Trim()
-    $senha = $w.FindName('pwdWifiSenha').Password
-    $st = $w.FindName('txtWifiStatus')
-    $temWifi = if ($Global:FaseLocalPayload) { [bool] $Global:FaseLocalPayload.Wireless.presente } else { Test-TemPlacaWireless }
-    if (-not $temWifi) { $st.Text = 'Este computador nao tem placa de rede Wi-Fi.'; return }
-    if (-not $ssid)    { $st.Text = 'Informe o nome (SSID) da rede Wi-Fi.'; return }
-    # senha em branco e permitido: se a rede ja estiver salva no Windows, o
-    # Connect-RedeWireless usa o perfil salvo. Senha digitada porem curta = erro.
-    if ($senha.Length -gt 0 -and $senha.Length -lt 8) {
-        $st.Text = 'A senha do Wi-Fi precisa ter ao menos 8 caracteres.'; return
-    }
-
-    Set-FaseLocalOcupado $true
-    $st.Text = "Conectando a '$ssid'..."
-    Write-Log "Conectando ao Wi-Fi '$ssid' pela ferramenta..." -Nivel Info
-
-    if ($Global:WifiConectarSimulado) { Complete-ConectarWifi $Global:WifiConectarSimulado $null; return }
-    Start-TarefaRede -Script 'Connect-RedeWireless -Ssid $ssid -Senha $senha' `
-        -Vars @{ ssid = $ssid; senha = $senha } `
-        -AoConcluir { param($res, $erro) Complete-ConectarWifi $res $erro }
-}
-
-function Complete-ConectarWifi {
-    param($Res, $Erro)
-    $w = $Global:JanelaPrincipal
-    $st = $w.FindName('txtWifiStatus')
-    Set-FaseLocalOcupado $false
-    if ($Erro) { $st.Text = "Falha ao conectar: $Erro"; Write-Log "Wi-Fi: $Erro" -Nivel Erro; return }
-    if ($Res -and $Res.ok) {
-        $st.Text = [string] $Res.mensagem
-        Write-Log ("Wi-Fi conectado: {0}" -f $Res.mensagem) -Nivel Ok
-
-        # Registra JA a conexao Wi-Fi no estado (nao espera o re-probe async):
-        # a checagem local nao pode ficar travada se o inventario falhar. Parte
-        # do payload anterior (LAN, redes vistas) e so vira o Wi-Fi p/ conectado.
-        $ant     = $Global:FaseLocalPayload
-        $lanBase = if ($ant -and $ant.PSObject.Properties['Lan']) { $ant.Lan } else { $null }
-        $wfBase  = if ($ant -and $ant.PSObject.Properties['Wireless']) { $ant.Wireless } else { $null }
-        $Global:FaseLocalPayload = [pscustomobject]@{
-            Host     = $env:COMPUTERNAME
-            Lan      = $lanBase
-            Wireless = [pscustomobject]@{
-                presente          = $true
-                conectado         = $true
-                ssid              = [string] $Res.ssid
-                sinal_pct         = $Res.sinal_pct
-                nome              = if ($wfBase) { $wfBase.nome } else { '' }
-                redes_disponiveis = if ($wfBase) { @($wfBase.redes_disponiveis) } else { @() }
-                ipv4              = if ($wfBase) { [string] $wfBase.ipv4 } else { '' }
-                prefixo           = if ($wfBase) { $wfBase.prefixo } else { $null }
-                mascara           = if ($wfBase) { [string] $wfBase.mascara } else { '' }
-                gateway           = if ($wfBase) { [string] $wfBase.gateway } else { '' }
-                dns               = if ($wfBase) { @($wfBase.dns) } else { @() }
-                ip_origem         = if ($wfBase) { [string] $wfBase.ip_origem } else { '' }
-                mac               = if ($wfBase) { [string] $wfBase.mac } else { '' }
-                velocidade_mbps   = if ($wfBase) { $wfBase.velocidade_mbps } else { $null }
-                status            = 'Up'
-            }
-            Internet = $null
-            Quando   = (Get-Date).ToString('o')
-            Parcial  = $true
-        }
-        Update-PainelFaseLocal
-
-        # Re-inventaria as placas FORA deste tick: chamar Start-TarefaRede aqui
-        # dentro (aninhado no tick de Connect-RedeWireless) deixava dois
-        # DispatcherTimer polindo o mesmo slot -> EndInvoke apos Dispose
-        # ("o fluxo nao era legivel"). BeginInvoke deixa o tick atual terminar.
-        if ($w) {
-            $w.Dispatcher.BeginInvoke(
-                [Windows.Threading.DispatcherPriority]::Background,
-                [action] { Invoke-ProbeRedeLocal }) | Out-Null
-        } else {
-            Invoke-ProbeRedeLocal
-        }
-    } else {
-        $st.Text = if ($Res) { [string] $Res.mensagem } else { 'Nao foi possivel conectar.' }
-        Write-Log ("Wi-Fi nao conectou: {0}" -f $st.Text) -Nivel Aviso
-    }
-}
-
 # "Testei pelo roteamento do celular" -> libera/limpa o campo Operadora.
 function Update-TetheringCelular {
     $w = $Global:JanelaPrincipal
@@ -2257,9 +2223,6 @@ function Reset-PainelFaseLocal {
     Reset-Velocimetro
     $w = $Global:JanelaPrincipal
     if ($w) {
-        $w.FindName('txtWifiStatus').Text     = ''
-        $w.FindName('cboWifiSsid').Text        = ''
-        $w.FindName('pwdWifiSenha').Password   = ''
         $w.FindName('chkTetheringCelular').IsChecked = $false
         $w.FindName('cboOperadora').Text       = ''
         $w.FindName('cboOperadora').IsEnabled  = $false

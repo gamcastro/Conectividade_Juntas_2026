@@ -36,8 +36,7 @@ Script), em vez de criar um BI/dashboard separado.
 - **Fase 1 — rede local (ANTES da VPN do TRE)** (`src/core/RedeLocal.ps1`,
   `Invoke-FaseLocal`): inventário da placa cabeada (LAN conectada? **IP local**,
   máscara, gateway, DNS, MAC, velocidade — o IP vai no relatório), detecção da
-  placa Wi-Fi + redes por perto (`netsh wlan`), conexão a um Wi-Fi WPA2 por
-  dentro da ferramenta (`Connect-RedeWireless`), e **teste de velocidade Ookla**
+  placa Wi-Fi + redes por perto (`netsh wlan`), e **teste de velocidade Ookla**
   (`Test-InternetLocal` roda `speedtest.exe --format=jsonl`; `Invoke-SpeedtestStreaming`
   lê cada evento JSONL e `Write-EventoSpeedtest` → `Update-Speedtest` move o
   velocímetro ao vivo; resultado com provedor/servidor/IP/ping/jitter/perda/
@@ -77,6 +76,9 @@ Script), em vez de criar um BI/dashboard separado.
   `config/canal` (gitignored); `Atualizar-DICON.ps1` puxa desse canal sem
   parâmetro. `$CanalPadrao`/`$EndpointPadrao` no `Baixar-e-Instalar.ps1` são de
   `homologacao` nesta branch e viram os de `main` no merge para `main`.
+  `Get-CanalInstalacao` (`src/core/Juntas.ps1`) lê `config/canal`; em
+  `homologacao` a GUI mostra selos âmbar (`badgeHomologLogin` no login,
+  `badgeHomologRail` no rail) e põe o sufixo `- HOMOLOGACAO` no título da janela.
 
 ## Telas (rail de navegação)
 `login → início → guia de bordo → **Locais** → diagnóstico → administração`,
@@ -84,12 +86,20 @@ Grids empilhados alternados por `Visibility` (`$Global:Views`, `Show-View`).
 O rail recolhe/expande (`btnRailToggle` → `Invoke-ToggleRail` / `Set-RailRecolhido`:
 214 px ↔ 56 px só-ícones, oculta `railCabTexto`/`railRodape`/`lblNav*`;
 estado em `$Global:RailRecolhido`, sessão).
+**Auto-update**: ao entrar na home (e após "Atualizar dados"), `Test-AtualizacaoApp`
+compara `$Global:VersaoApp` com `Get-VersaoRemota` (lê `ModuleVersion` do
+`src/Conectividade.psd1` no canal de `config/canal`, no GitHub raw). Se houver
+versão maior, o botão `btnAtualizarApp` (rodapé do rail) aparece → `Invoke-AtualizarApp`
+(confirma, roda `setup/Atualizar-DICON.ps1 -Force` numa janela nova e fecha o DICON).
 **Locais** (`viewLocais`, item `navLocais` no rail): tela de referência com os
 locais de vistoria do roteiro do técnico (`Get-LocaisDoTecnico` achata
 `$Global:RoteiroAtual.juntas[].locais[]`), grade `dgLocais` + busca livre
 (`txtBuscaLocais`) + filtros por ZE (`cboFiltroZE`) e município (`cboFiltroMun`)
-em `Update-LocaisFiltrados`; clicar numa linha abre o `cardLocalDetalhe` com a
-ficha completa (`Update-LocalDetalheView`).
+em `Update-LocaisFiltrados`; clicar numa linha da grade abre a **tela dedicada**
+`viewLocalDetalhe` (`Invoke-AbrirLocalDetalhe`) com a ficha completa do local
+(tipo, endereço, internet, UC, responsável/função, telefone e `texto_completo`
+do roteiro); `btnLocalDetalheVoltar` → `Invoke-VoltarAosLocais` volta à lista
+com os filtros preservados.
 
 ## Assistente de diagnóstico (GUI)
 A tela de Diagnóstico é um **assistente de 7 passos** (`viewDiag` com os painéis
@@ -115,6 +125,12 @@ recomendado** (salvo override manual do técnico no combo da decisão final).
 (`cardLan`/`cardWifiPlaca`/`cardCelular`) com badge por meio (NÃO TESTADO /
 TESTADO: <veredito> / NÃO APLICÁVEL), rádio de escolha (`rbUsarLan`/`rbUsarWifi`/
 `rbUsarCelular`) e checkbox "não aplicável" + `txtMotivoNaMeio` (obrigatório).
+Botão ↻ `btnRelerPlacas` (`Invoke-RelerPlacas`) reinventaria as placas sem sair
+do passo (ex.: cabo plugado / Wi-Fi conectado depois de abrir a tela). A ligação
+a um Wi-Fi é feita **só pela bandeja do Windows** (não há mais conexão pela
+ferramenta); o card `cardWifiBandeja` só explica isso. As linhas IP/gateway/
+máscara/MAC/origem do card Wi-Fi ficam vazias quando a placa não está associada
+a nenhuma rede (`Get-AdaptadorWireless` só as preenche com `conectado`).
 "Rodar checagem local" (`Invoke-RodarFaseLocal` → `Complete-FaseLocal`) só
 habilita com conexão e faz o teste de internet (ping/DNS/download Ookla);
 celular exige operadora (`cboOperadoraCel`). Trocar de Local zera todas as
