@@ -178,7 +178,12 @@ try {
     if (@($w.FindName('cboFiltroZE').ItemsSource).Count -ge 2 -and @($w.FindName('cboFiltroMun').ItemsSource).Count -ge 2) {
         Write-Host "[3b] combos ZE/municipio populados"
     } else { Write-Host "    FALHA: combos de filtro vazios"; $falhas++ }
-    $w.FindName('dgLocais').SelectedIndex = 0
+    # a grade precisa selecionar a LINHA inteira (SelectedItem != null ao clicar);
+    # com SelectionUnit=Cell do estilo GridMetricas, clicar nao abria nada.
+    $dg = $w.FindName('dgLocais')
+    if ("$($dg.SelectionUnit)" -eq 'FullRow') { Write-Host "[3b] grade seleciona a linha inteira (FullRow)" }
+    else { Write-Host "    FALHA: dgLocais SelectionUnit='$($dg.SelectionUnit)' (esperado FullRow)"; $falhas++ }
+    $dg.SelectedItem = @($dg.ItemsSource)[0]   # o que um clique de mouse faz
     Invoke-Pump
     if ("$($w.FindName('viewLocalDetalhe').Visibility)" -eq 'Visible' -and "$($w.FindName('txtLDPNome').Text)") {
         Write-Host "[3b] clicar num local abre a ficha completa ($($w.FindName('txtLDPNome').Text))"

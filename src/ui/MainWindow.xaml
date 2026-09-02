@@ -477,6 +477,7 @@
                 <DataGrid x:Name="dgLocais" Grid.Row="3" Style="{DynamicResource GridMetricas}"
                           RowHeight="34" AutoGenerateColumns="False"
                           IsReadOnly="True" CanUserResizeRows="False" HeadersVisibility="Column"
+                          SelectionUnit="FullRow" SelectionMode="Single"
                           GridLinesVisibility="Horizontal" VerticalScrollBarVisibility="Auto">
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="ZE" Binding="{Binding zona_eleitoral}" Width="50"/>
