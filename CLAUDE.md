@@ -76,6 +76,9 @@ Script), em vez de criar um BI/dashboard separado.
   `config/canal` (gitignored); `Atualizar-DICON.ps1` puxa desse canal sem
   parâmetro. `$CanalPadrao`/`$EndpointPadrao` no `Baixar-e-Instalar.ps1` são de
   `homologacao` nesta branch e viram os de `main` no merge para `main`.
+  `Get-CanalInstalacao` (`src/core/Juntas.ps1`) lê `config/canal`; em
+  `homologacao` a GUI mostra selos âmbar (`badgeHomologLogin` no login,
+  `badgeHomologRail` no rail) e põe o sufixo `- HOMOLOGACAO` no título da janela.
 
 ## Telas (rail de navegação)
 `login → início → guia de bordo → **Locais** → diagnóstico → administração`,

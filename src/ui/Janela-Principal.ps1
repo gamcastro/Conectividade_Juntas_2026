@@ -250,6 +250,18 @@ function New-JanelaPrincipal {
         }
     }
 
+    # Marca de ambiente: em 'homologacao' mostra os selos (login + rail) e poe o
+    # sufixo no titulo da janela, pra ninguem confundir com o DICON de producao.
+    $Global:CanalApp = try { Get-CanalInstalacao } catch { 'main' }
+    if ($Global:CanalApp -eq 'homologacao') {
+        foreach ($n in 'badgeHomologLogin', 'badgeHomologRail') {
+            $b = $window.FindName($n); if ($b) { $b.Visibility = 'Visible' }
+        }
+        try { $window.Title = "$($window.Title)  -  HOMOLOGACAO" } catch { }
+        $lv = $window.FindName('txtLoginVersao')
+        if ($lv) { $lv.Text = "DICON v$ver - homologacao" }
+    }
+
     # diagnostico
     $window.FindName('btnRodar').Add_Click({ Invoke-ExecucaoNaJanela })
     $window.FindName('btnAbrirFortiClient').Add_Click({ Invoke-AbrirFortiClient })

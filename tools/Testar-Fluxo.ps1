@@ -100,6 +100,18 @@ try {
     if ($w.FindName('viewLogin').Visibility -ne 'Visible') { Write-Host "    FALHA: nao abriu no login"; $falhas++ }
     else { Write-Host "[1] Abriu na tela de login" }
 
+    # 1b. selo de ambiente: existe e segue o canal (config\canal). Sem o arquivo
+    # (repo/testes) o canal e 'main' -> selos ocultos.
+    $canalT = Get-CanalInstalacao
+    $bl = $w.FindName('badgeHomologLogin'); $br = $w.FindName('badgeHomologRail')
+    if (-not $bl -or -not $br) { Write-Host "    FALHA: selos de homologacao ausentes no XAML"; $falhas++ }
+    else {
+        $espera = if ($canalT -eq 'homologacao') { 'Visible' } else { 'Collapsed' }
+        if ("$($bl.Visibility)" -eq $espera -and "$($br.Visibility)" -eq $espera) {
+            Write-Host "[1b] selo de ambiente coerente com o canal '$canalT' ($espera)"
+        } else { Write-Host "    FALHA: selo de ambiente (canal=$canalT login=$($bl.Visibility) rail=$($br.Visibility))"; $falhas++ }
+    }
+
     # 2. login
     $cbo = $w.FindName('cboTecnico')
     if ($cbo.Items.Count -lt 1) { Write-Host "[2] FALHA: cboTecnico vazio"; $falhas++ }

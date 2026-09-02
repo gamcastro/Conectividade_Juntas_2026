@@ -4,18 +4,24 @@
 # Tudo e baixado por Sync-* e cacheado em data/*.json. Em campo (sem internet)
 # so se le o cache com Get-*.
 
+# Canal desta instalacao (config/canal, gravado pelo instalador): 'main' (prod)
+# ou 'homologacao' (testes do admin). Sem o arquivo -> 'main'. Nao lanca.
+function Get-CanalInstalacao {
+    try {
+        $arq = Join-Path $Global:RaizApp 'config\canal'
+        if (Test-Path $arq) {
+            $c = ([string] (Get-Content $arq -Raw -ErrorAction Stop)).Trim().ToLower()
+            if ($c) { return $c }
+        }
+    } catch { }
+    return 'main'
+}
+
 # Versao (ModuleVersion) publicada no canal desta instalacao (config/canal),
 # lida direto do GitHub. Devolve a string da versao ou $null. Nao lanca.
 function Get-VersaoRemota {
     try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 } catch { }
-    $canal = 'main'
-    try {
-        $arq = Join-Path $Global:RaizApp 'config\canal'
-        if (Test-Path $arq) {
-            $c = ([string] (Get-Content $arq -Raw -ErrorAction Stop)).Trim()
-            if ($c) { $canal = $c }
-        }
-    } catch { }
+    $canal = Get-CanalInstalacao
     $url = "https://raw.githubusercontent.com/gamcastro/Conectividade_Juntas_2026/$canal/src/Conectividade.psd1"
     try {
         $txt = (Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 12).Content
