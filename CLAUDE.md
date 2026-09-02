@@ -111,7 +111,11 @@ A tela de Diagnóstico é um **assistente de 6 passos** (`viewDiag` com os pain�
 justificativa):
 **Multi-meio (hub-and-spoke):** um Local pode ser medido por até 3 **meios** de
 conexão — `lan` (rede cabeada), `wifi_local` (Wi-Fi do próprio local),
-`celular` (Wi-Fi roteada de celular, com operadora). Cada meio gera uma
+`celular` (Wi-Fi roteada de celular). Como a placa Wi-Fi só fica numa rede por
+vez, o técnico declara qual é: o checkbox **`chkCelHotspot`** ("a rede Wi-Fi
+conectada é o roteamento do meu celular") no card CELULAR — marcado + operadora
+preenchida arma o card CELULAR e trava o WI-FI (aviso `txtWifiModoCel`);
+desmarcado, a rede conectada é tratada como Wi-Fi do local. Cada meio gera uma
 **medição** (Fase 1 Ookla + Fase 2 VPN) em `$Global:Medicoes`; meios que não
 servem ao Local são marcados **"não aplicável" + motivo** (`$Global:MeiosNaoAplicaveis`).
 Ao fim, o motor `Get-ConexaoRecomendada` (`src/decisao/Invoke-MotorDecisao.ps1`)

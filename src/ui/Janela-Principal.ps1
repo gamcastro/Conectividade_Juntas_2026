@@ -290,6 +290,7 @@ function New-JanelaPrincipal {
     $window.FindName('btnRefazerTeste').Add_Click({ Invoke-WizardProximo })
     $window.FindName('btnRelerPlacas').Add_Click({ Invoke-RelerPlacas })
     $window.FindName('cboOperadoraCel').Add_LostFocus({ Update-PainelMeios })
+    $window.FindName('chkCelHotspot').Add_Click({ Update-PainelMeios })
     foreach ($n in 'chkNaLan', 'chkNaWifi', 'chkNaCelular') {
         $window.FindName($n).Add_Click({ Update-NaoAplicavelMeio })
     }
@@ -1443,6 +1444,22 @@ function Update-PainelMeios {
         $tcel.Foreground = if ($wifiUp) { $verde } else { $cinza }
     }
 
+    # A placa Wi-Fi so pode estar numa rede por vez: o tecnico diz se essa rede
+    # e o Wi-Fi do local ou o roteamento do celular (chkCelHotspot no card CELULAR).
+    $modoCel = [bool] $w.FindName('chkCelHotspot').IsChecked
+    $tmc = $w.FindName('txtWifiModoCel')
+    if ($tmc) { $tmc.Visibility = if ($wifiUp -and $modoCel) { 'Visible' } else { 'Collapsed' } }
+    $tcd = $w.FindName('txtCelDica')
+    if ($tcd) {
+        $tcd.Text = if ($wifiUp -and $modoCel) {
+            'Rede "{0}" tratada como roteamento de celular. Informe a operadora e rode a checagem.' -f $wf.ssid
+        } elseif ($wifiUp) {
+            'Ja ha um Wi-Fi conectado. Se essa rede for o roteamento do seu celular, marque a caixa abaixo.'
+        } else {
+            'Ligue o roteamento no celular, conecte a rede dele pela bandeja do Windows, marque a caixa abaixo e informe a operadora.'
+        }
+    }
+
     # --- estado (badge + borda) e botao de cada meio ----------------------
     $estadoMeio = {
         param($meio)
@@ -1461,10 +1478,12 @@ function Update-PainelMeios {
     $livre   = -not $Global:CheckMeioAtivo
 
     # (card, badge, meio, botao, conectado, extraOK)
+    # Wi-Fi do local: conectado E o tecnico NAO marcou "e o meu celular".
+    # Celular: conectado E marcou "e o meu celular" E informou a operadora.
     $defs = @(
-        @('cardLan',       'badgeLan',      'lan',        'btnCheckLan',      $lanUp,               $true),
-        @('cardWifiPlaca', 'badgeWifi',     'wifi_local', 'btnCheckWifi',     [bool] $wf.conectado, $true),
-        @('cardCelular',   'badgeCelular',  'celular',    'btnCheckCelular',  [bool] $wf.conectado, [bool] $operCel)
+        @('cardLan',       'badgeLan',      'lan',        'btnCheckLan',      $lanUp,                                  $true),
+        @('cardWifiPlaca', 'badgeWifi',     'wifi_local', 'btnCheckWifi',     ([bool] $wf.conectado -and -not $modoCel), $true),
+        @('cardCelular',   'badgeCelular',  'celular',    'btnCheckCelular',  ([bool] $wf.conectado -and $modoCel),      [bool] $operCel)
     )
     foreach ($d in $defs) {
         $cd    = $w.FindName($d[0])
@@ -2029,9 +2048,20 @@ function Invoke-CheckMeio {
         Write-Log 'Conecte este meio e use o botao de reler placas antes de rodar a checagem.' -Nivel Aviso
         return
     }
-    if ($Meio -eq 'celular' -and -not ([string] $w.FindName('cboOperadoraCel').Text).Trim()) {
-        Write-Log 'Informe a operadora do celular antes de rodar a checagem.' -Nivel Aviso
+    $modoCel = [bool] $w.FindName('chkCelHotspot').IsChecked
+    if ($Meio -eq 'wifi' -and $modoCel) {
+        Write-Log 'A rede conectada esta marcada como roteamento de celular - use o card CELULAR (ou desmarque a caixa).' -Nivel Aviso
         return
+    }
+    if ($Meio -eq 'celular') {
+        if (-not $modoCel) {
+            Write-Log 'Marque "a rede Wi-Fi conectada e o roteamento do meu celular" no card CELULAR.' -Nivel Aviso
+            return
+        }
+        if (-not ([string] $w.FindName('cboOperadoraCel').Text).Trim()) {
+            Write-Log 'Informe a operadora do celular antes de rodar a checagem.' -Nivel Aviso
+            return
+        }
     }
 
     $Global:FaseLocalTipo  = $Meio
@@ -2453,6 +2483,7 @@ function Reset-PainelFaseLocal {
     if ($w) {
         $ov = $w.FindName('overlayCheck'); if ($ov) { $ov.Visibility = 'Collapsed' }
         $w.FindName('cboOperadoraCel').Text = ''
+        $ch = $w.FindName('chkCelHotspot'); if ($ch) { $ch.IsChecked = $false }
         $Global:NaMeioPendente = ''
         $cj = $w.FindName('cardNaJustif'); if ($cj) { $cj.Visibility = 'Collapsed' }
         $tj = $w.FindName('txtNaJustif');  if ($tj) { $tj.Text = '' }
