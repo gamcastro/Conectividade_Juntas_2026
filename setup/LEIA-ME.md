@@ -8,11 +8,27 @@ setup cria a partir dos `*.exemplo.json`.
 
 ---
 
+## Preparo da máquina (ADMIN, uma vez)
+
+Pra a instalação como **usuário comum** cair no layout `<D|C>:\Aplic\DICON`,
+um admin roda **uma vez por máquina**, em PowerShell **como Administrador**:
+
+```
+iex (irm 'https://raw.githubusercontent.com/gamcastro/Conectividade_Juntas_2026/homologacao/setup/Preparar-Maquina.ps1')
+```
+
+Cria `<D|C>:\Aplic` + `DICON` + `DICON-HOMOLOG` e dá escrita ao grupo Usuários
+(`icacls ... *S-1-5-32-545:(OI)(CI)M /T`). Pra apagar instalação anterior
+travada: `$env:DICON_LIMPAR = '1'` antes do comando.
+
+Sem esse preparo, a instalação do usuário comum ainda funciona — cai sozinha em
+`%LOCALAPPDATA%\DICON[-HOMOLOG]`.
+
 ## Atalho: baixar + instalar num comando (com internet)
 
-No PowerShell (janela normal, com internet). Baixa o código, garante o
-`speedtest.exe` (baixa + desbloqueia), grava o canal e roda o setup. Se já
-houver DICON na pasta, **atualiza** em vez de reinstalar.
+No PowerShell (janela normal, **usuário comum**, com internet). Baixa o código,
+garante o `speedtest.exe` (baixa + desbloqueia), grava o canal e roda o setup.
+Se já houver DICON na pasta, **atualiza** em vez de reinstalar.
 
 **Homologação** (testes do admin):
 ```
@@ -26,10 +42,10 @@ iex (irm 'https://raw.githubusercontent.com/gamcastro/Conectividade_Juntas_2026/
 
 ### Pasta padrão (por canal)
 
-| Canal | D: é disco fixo | só tem C: |
-|---|---|---|
-| produção (`main`) | `D:\Aplic\DICON` | `C:\Aplic\DICON` |
-| homologação | `D:\Aplic\DICON-HOMOLOG` | `C:\Aplic\DICON-HOMOLOG` |
+| Canal | D: é disco fixo | só tem C: | sem preparo admin |
+|---|---|---|---|
+| produção (`main`) | `D:\Aplic\DICON` | `C:\Aplic\DICON` | `%LOCALAPPDATA%\DICON` |
+| homologação | `D:\Aplic\DICON-HOMOLOG` | `C:\Aplic\DICON-HOMOLOG` | `%LOCALAPPDATA%\DICON-HOMOLOG` |
 
 Sobrescreve com `$env:DICON_DEST` antes do comando. O canal fica gravado em
 `config\canal` — daí pra frente é só `.\setup\Atualizar-DICON.ps1` (sem
