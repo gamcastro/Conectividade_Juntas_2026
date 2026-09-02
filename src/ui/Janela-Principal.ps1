@@ -2064,9 +2064,10 @@ function Set-ChkBotao {
     $b = $w.FindName('btnChkIniciar')
     if (-not $b) { return }
     switch ($Global:ChkFase) {
-        'f1-pronto' { $b.Content = 'Iniciar checagem da rede local'; $b.Visibility = 'Visible'; $b.IsEnabled = $true }
-        'f2-pronto' { $b.Content = 'Testar a VPN (Fase 2)';           $b.Visibility = 'Visible'; $b.IsEnabled = $true }
-        default     { $b.Visibility = 'Collapsed' }
+        'f1-pronto'  { $b.Content = 'Iniciar checagem da rede local';   $b.Visibility = 'Visible'; $b.IsEnabled = $true }
+        'f2-pronto'  { $b.Content = 'Testar a VPN (Fase 2)';            $b.Visibility = 'Visible'; $b.IsEnabled = $true }
+        'f2-vpn-ok'  { $b.Content = 'Iniciar diagnostico com a VPN';    $b.Visibility = 'Visible'; $b.IsEnabled = $true }
+        default      { $b.Visibility = 'Collapsed' }
     }
     $r = $w.FindName('ringChk')
     if ($r) {
@@ -2192,7 +2193,8 @@ function Invoke-CheckMeio {
 function Invoke-ChkAvancar {
     switch ($Global:ChkFase) {
         'f1-pronto' { Start-CheckFase1 }
-        'f2-pronto' { Start-CheckFase2 }
+        'f2-pronto' { Start-CheckFase2 }      # so verifica a VPN (nao roda o teste)
+        'f2-vpn-ok' { Start-DiagnosticoVpn }  # VPN confirmada -> agora roda a Fase 2
         default     { }
     }
 }
@@ -2247,9 +2249,11 @@ function Complete-CheckFase1 {
     Write-Log 'Clique em "Testar a VPN (Fase 2)" quando estiver com a VPN do TRE conectada.' -Nivel Info
 }
 
+# Botao "Testar a VPN (Fase 2)": SO verifica a VPN e mostra o estado. Nao dispara
+# o diagnostico - o tecnico confere o IP da VPN e clica em "Iniciar diagnostico".
 function Start-CheckFase2 {
     $w = $Global:JanelaPrincipal
-    Set-ChkStep 2 'rodando'
+    Set-ChkStep 2 'rodando' 'verificando a VPN'
     Set-ChkFaseView 'f2'
     # limpa a 3a coluna: some o resultado da Fase 1 e o do iperf de uma rodada anterior
     foreach ($n in 'painelSpeedResultado', 'painelIperfResultado') {
@@ -2258,17 +2262,11 @@ function Start-CheckFase2 {
     $w.FindName('txtChkResultadoVazio').Visibility = 'Visible'
     Update-EstadoVpn
     if (Test-VpnAtiva) {
-        $Global:ChkFase = 'f2-rodando'
+        $Global:ChkFase = 'f2-vpn-ok'
+        $w.FindName('panelChkVpnGate').Visibility = 'Visible'
+        Set-ChkStep 2 'rodando' 'VPN conectada - clique em Iniciar'
         Set-ChkBotao
-        $w.FindName('panelChkVpnGate').Visibility = 'Collapsed'
-        Reset-Velocimetro -Suf 'Vpn'
-        $w.FindName('txtVeloFaseVpn').Text = 'iniciando...'
-        $rd = $w.FindName('ringDiag'); if ($rd) { $rd.IsActive = $true; $rd.Visibility = 'Visible' }
-        Write-Log 'Fase 2: diagnostico com a VPN (ping + iperf3)...' -Nivel Info
-        Set-ProgressoDiag $true
-        $sel  = $w.FindName('cboLocal').SelectedItem
-        $selD = if ($sel) { $sel.Dados } else { $null }
-        Start-DiagnosticoAssincrono -Local $selD -AoConcluir { param($res, $erro) Complete-CheckFase2 $res $erro }
+        Write-Log 'VPN da JE conectada. Confira o IP e clique em "Iniciar diagnostico com a VPN".' -Nivel Ok
     } else {
         $Global:ChkFase = 'f2-pronto'
         Set-ChkBotao
@@ -2277,6 +2275,28 @@ function Start-CheckFase2 {
         $w.FindName('btnChkVpnImpossivel').Visibility = 'Visible'
         Set-ChkStep 2 'rodando' 'aguardando a VPN'
     }
+}
+
+# Botao "Iniciar diagnostico com a VPN": agora sim roda a bateria da Fase 2.
+function Start-DiagnosticoVpn {
+    $w = $Global:JanelaPrincipal
+    if (-not (Test-VpnAtiva)) {
+        Write-Log 'A VPN caiu. Reconecte pelo FortiClient e clique em "Verificar novamente".' -Nivel Aviso
+        Start-CheckFase2
+        return
+    }
+    $Global:ChkFase = 'f2-rodando'
+    Set-ChkBotao
+    $w.FindName('panelChkVpnGate').Visibility = 'Collapsed'
+    Reset-Velocimetro -Suf 'Vpn'
+    $w.FindName('txtVeloFaseVpn').Text = 'iniciando...'
+    $rd = $w.FindName('ringDiag'); if ($rd) { $rd.IsActive = $true; $rd.Visibility = 'Visible' }
+    Write-Log 'Fase 2: diagnostico com a VPN (ping + iperf3)...' -Nivel Info
+    Set-ChkStep 2 'rodando'
+    Set-ProgressoDiag $true
+    $sel  = $w.FindName('cboLocal').SelectedItem
+    $selD = if ($sel) { $sel.Dados } else { $null }
+    Start-DiagnosticoAssincrono -Local $selD -AoConcluir { param($res, $erro) Complete-CheckFase2 $res $erro }
 }
 
 function Complete-CheckFase2 {
@@ -3111,14 +3131,23 @@ function Invoke-AtualizarListaJuntas {
 function Update-EstadoVpn {
     $w = $Global:JanelaPrincipal
     if (-not $w) { return }
-    $vpn = Test-VpnAtiva
+    $d = Get-DetalheVpn
+    $vpn = [bool] $d.ativa
 
     $verde    = Get-PincelVeredito 'viavel'
     $vermelho = Get-PincelVeredito 'inviavel'
     $tv = $w.FindName('txtDiagVpn'); $dv = $w.FindName('dotVpn')
     if ($tv) {
         if ($vpn) {
-            $tv.Text = 'VPN da Justica Eleitoral conectada.'
+            $linhas = @('VPN da Justica Eleitoral conectada.')
+            if ($d.ipv4) {
+                $marca = if (Test-RedeJusticaEleitoral $d.ipv4) { '  (faixa interna da JE)' } else { '' }
+                $linhas += ('IP da VPN: {0}{1}' -f $d.ipv4, $marca)
+            }
+            if ($d.nome)    { $linhas += ('Interface: {0}' -f $d.nome) }
+            if ($d.gateway) { $linhas += ('Gateway: {0}' -f $d.gateway) }
+            if (@($d.dns).Count) { $linhas += ('DNS: {0}' -f ((@($d.dns)) -join ', ')) }
+            $tv.Text = ($linhas -join "`n")
             $tv.Foreground = $verde ; $dv.Fill = $verde
         } else {
             $tv.Text = 'VPN da Justica Eleitoral NAO detectada - conecte pelo FortiClient e clique em "Verificar novamente".'
@@ -3127,6 +3156,13 @@ function Update-EstadoVpn {
     }
     $bf = $w.FindName('btnAbrirFortiClient'); if ($bf) { $bf.Visibility = if ($vpn) { 'Collapsed' } else { 'Visible' } }
     $bv = $w.FindName('btnReverificarVpn');   if ($bv) { $bv.Visibility = if ($vpn) { 'Collapsed' } else { 'Visible' } }
+    # VPN conectada -> some a saida de escape "nao consegui a VPN" (nao faz sentido)
+    if ($vpn) {
+        $ci = $w.FindName('chkVpnImpossivel'); if ($ci) { $ci.IsChecked = $false }
+        foreach ($n in 'chkVpnImpossivel', 'txtVpnMotivo', 'txtVpnMotivoDica', 'btnChkVpnImpossivel') {
+            $c = $w.FindName($n); if ($c) { $c.Visibility = 'Collapsed' }
+        }
+    }
 }
 
 # Checkbox "Nao foi possivel conectar a VPN" -> libera/limpa o campo de motivo.
@@ -3158,7 +3194,8 @@ function Set-DiagnosticoVpnImpossivel {
 
 function Invoke-ReverificarVpn {
     Update-EstadoVpn
-    # no overlay: se a VPN subiu agora, comeca a Fase 2 automaticamente
+    # no overlay: se a VPN subiu agora, mostra a confirmacao (IP da VPN etc.) e
+    # troca o botao para "Iniciar diagnostico" - NAO dispara o teste sozinho.
     if ($Global:CheckMeioAtivo -and -not $Global:DiagRunState -and -not $Global:DiagPayload -and (Test-VpnAtiva)) {
         Start-CheckFase2
     }

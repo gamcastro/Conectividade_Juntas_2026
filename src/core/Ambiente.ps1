@@ -13,6 +13,45 @@ function Test-VpnAtiva {
     } catch { return $false }
 }
 
+# Detalhes da placa da VPN da JE quando conectada (IP, interface, gateway, DNS)
+# - usado no overlay de checagem para confirmar visualmente a conexao.
+function Get-DetalheVpn {
+    $o = [pscustomobject]@{ ativa = $false; nome = ''; descricao = ''; ipv4 = ''; gateway = ''; dns = @() }
+
+    if ($Global:ModoTeste -and $null -ne $Global:VpnSimulada) {
+        if ([bool] $Global:VpnSimulada) {
+            $o.ativa = $true; $o.nome = 'FortiClient VPN (simulada)'; $o.descricao = 'Fortinet SSL VPN Virtual Ethernet Adapter'
+            $o.ipv4 = '10.11.253.51'; $o.gateway = ''; $o.dns = @('10.11.1.1')
+        }
+        return $o
+    }
+
+    try {
+        $ad = Get-NetAdapter -ErrorAction Stop | Where-Object {
+            $_.Status -eq 'Up' -and $_.InterfaceDescription -match $Global:VpnPadraoRegex
+        } | Select-Object -First 1
+        if (-not $ad) { return $o }
+        $o.ativa = $true
+        $o.nome = [string] $ad.Name
+        $o.descricao = [string] $ad.InterfaceDescription
+        try {
+            $ip = Get-NetIPAddress -InterfaceIndex $ad.ifIndex -AddressFamily IPv4 -ErrorAction Stop |
+                Where-Object { $_.IPAddress -notmatch '^169\.254\.' -and $_.IPAddress -ne '127.0.0.1' } |
+                Select-Object -First 1
+            if ($ip) { $o.ipv4 = [string] $ip.IPAddress }
+        } catch { }
+        try {
+            $o.gateway = [string] ((Get-NetRoute -InterfaceIndex $ad.ifIndex -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue |
+                        Sort-Object RouteMetric | Select-Object -First 1).NextHop)
+        } catch { }
+        if ($o.gateway -eq '0.0.0.0') { $o.gateway = '' }
+        try {
+            $o.dns = @((Get-DnsClientServerAddress -InterfaceIndex $ad.ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue).ServerAddresses)
+        } catch { }
+    } catch { }
+    return $o
+}
+
 # Caminho do executavel do FortiClient (para o botao "Abrir o FortiClient").
 function Get-CaminhoFortiClient {
     $cands = @(

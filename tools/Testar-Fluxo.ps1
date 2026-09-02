@@ -311,7 +311,14 @@ try {
     if ($Global:ChkFase -eq 'f2-pronto' -and "$($w.FindName('btnChkIniciar').Content)" -match 'VPN') {
         Write-Host "[4d] Fase 1 concluida -> botao vira 'Testar a VPN'"
     } else { Write-Host "    FALHA: Fase 1 nao concluiu (fase='$($Global:ChkFase)' btn='$($w.FindName('btnChkIniciar').Content)')"; $falhas++ }
-    Invoke-ChkAvancar   # Testar a VPN -> Fase 2
+    Invoke-ChkAvancar   # "Testar a VPN" -> so VERIFICA (nao roda)
+    Invoke-Pump
+    $vpnTxt = "$($w.FindName('txtDiagVpn').Text)"
+    if ($Global:ChkFase -eq 'f2-vpn-ok' -and $vpnTxt -match 'conectada' -and $vpnTxt -match '10\.11\.' -and
+        "$($w.FindName('btnChkIniciar').Content)" -match 'Iniciar diagn') {
+        Write-Host "[4d] 'Verificar' -> pausa: VPN conectada + IP mostrado; botao vira 'Iniciar diagnostico'"
+    } else { Write-Host "    FALHA: pausa da VPN (fase='$($Global:ChkFase)' btn='$($w.FindName('btnChkIniciar').Content)' txt='$vpnTxt')"; $falhas++ }
+    Invoke-ChkAvancar   # "Iniciar diagnostico com a VPN" -> agora sim roda a Fase 2
     $deadline = (Get-Date).AddSeconds($TimeoutS)
     while ((Get-Date) -lt $deadline) {
         Invoke-Pump ; Start-Sleep -Milliseconds 120

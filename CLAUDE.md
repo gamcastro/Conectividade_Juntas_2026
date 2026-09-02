@@ -160,12 +160,15 @@ mostra o selo verde **"REDE DA JUSTIÇA ELEITORAL"** (`cardLocJE`; também no JS
 técnico avança pelo botão `btnChkIniciar` (`Invoke-ChkAvancar`, texto/estado por
 `$Global:ChkFase` via `Set-ChkBotao`): "Iniciar" → **Fase 1**
 (`Start-CheckFase1`→`Complete-CheckFase1`: `Invoke-FaseLocal` via
-`Start-TarefaRede`, velocímetro Ookla) → botão vira "Testar a VPN" → **Fase 2**
-(`Start-CheckFase2`→`Complete-CheckFase2`: gate da VPN `Update-EstadoVpn`/
-`Test-VpnAtiva`/`btnAbrirFortiClient`; se OK, `Start-DiagnosticoAssincrono
--AoConcluir` = ping + `Test-BandaVpn` + Selenium, velocímetro iperf3; se VPN
-fora, `btnChkVpnImpossivel`→`Invoke-CheckVpnImpossivel` com motivo →
-`Set-DiagnosticoVpnImpossivel`, meio inviável) → **Fase 3** (Selenium, "em
+`Start-TarefaRede`, velocímetro Ookla) → botão vira "Testar a VPN" → **Fase 2**:
+`Start-CheckFase2` **só verifica a VPN** (`Update-EstadoVpn`/`Get-DetalheVpn`/
+`Test-VpnAtiva`/`btnAbrirFortiClient`/`btnReverificarVpn`) — com a VPN conectada,
+mostra IP da VPN/interface/DNS em verde e o estado vira `f2-vpn-ok` com o botão
+"Iniciar diagnóstico com a VPN"; só esse clique roda `Start-DiagnosticoVpn` →
+`Start-DiagnosticoAssincrono -AoConcluir` = ping + `Test-BandaVpn` + Selenium
+(velocímetro iperf3) → `Complete-CheckFase2`. Se a VPN estiver fora,
+`btnChkVpnImpossivel`→`Invoke-CheckVpnImpossivel` com motivo →
+`Set-DiagnosticoVpnImpossivel`, meio inviável → **Fase 3** (Selenium, "em
 implementação"). `Complete-CheckMeio` → `Add-MedicaoAtual`; `Close-OverlayCheck`
 (`btnChkFechar`) fecha. O corpo tem um stepper de 3 linhas
 (`txtChkS1/S2/S3`+`dotChkS1/S2/S3`) e **3 colunas** — Origem (Servidor/IP,
