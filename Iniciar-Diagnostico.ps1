@@ -18,7 +18,10 @@
 [CmdletBinding()]
 param(
     [switch] $SemUI,
-    [string] $JuntaId
+    [string] $JuntaId,
+    # guardas anti-loop: setados no proprio relaunch, NAO passar a mao.
+    [switch] $StaFeito,
+    [switch] $ElevacaoFeita
 )
 
 $ErrorActionPreference = 'Stop'
@@ -32,19 +35,25 @@ if ($SemUI)   { $fwdArgs += '-SemUI' }
 if ($JuntaId) { $fwdArgs += @('-JuntaId', $JuntaId) }
 
 # --- 1. Garante STA (pwsh roda como MTA por padrao) --------------------------
-if ([Threading.Thread]::CurrentThread.GetApartmentState() -ne 'STA') {
+if ([Threading.Thread]::CurrentThread.GetApartmentState() -ne 'STA' -and -not $StaFeito) {
     $exe = (Get-Process -Id $PID).Path
     $lista = @('-STA', '-NoProfile', '-ExecutionPolicy', 'Bypass',
-               '-File', ('"{0}"' -f $PSCommandPath)) + $fwdArgs
+               '-File', ('"{0}"' -f $PSCommandPath), '-StaFeito') + $fwdArgs
     Start-Process -FilePath $exe -ArgumentList $lista
     return
 }
 
-# --- 2. Auto-elevacao UAC ---------------------------------------------------
+# --- 2. Auto-elevacao UAC (best-effort; NUNCA em loop) --------------------
 . "$PSScriptRoot\src\core\Elevacao.ps1"
 if (-not (Test-Administrador)) {
-    Invoke-AutoElevacao -Script $PSCommandPath -Argumentos $fwdArgs
-    return
+    if (-not $ElevacaoFeita -and (Test-PodeElevar)) {
+        if (Invoke-AutoElevacao -Script $PSCommandPath -Argumentos (@('-StaFeito', '-ElevacaoFeita') + $fwdArgs)) {
+            return   # a instancia elevada assume
+        }
+    }
+    Write-Warning ('DICON sem privilegio de administrador: conectar a uma rede Wi-Fi ' +
+        'pela ferramenta fica indisponivel (use a bandeja do Windows). O restante do ' +
+        'diagnostico funciona normalmente.')
 }
 
 # --- 3. Encoding UTF-8 -----------------------------------------------------
