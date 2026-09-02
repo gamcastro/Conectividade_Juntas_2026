@@ -255,26 +255,36 @@ try {
 
     Show-WizardPasso 3
 
-    # 4c-3. sem placa Wi-Fi -> some o card "Conectar a uma rede Wi-Fi"
+    # 4c-3. sem placa Wi-Fi -> some o card informativo "conecte pelo Windows"
     $Global:FaseLocalPayload.Wireless.presente = $false
     Update-PainelFaseLocal
-    if ($w.FindName('cardConectarWifi').Visibility -eq 'Collapsed') { Write-Host "[4c] sem placa Wi-Fi: card de conexao some" }
+    if ($w.FindName('cardWifiBandeja').Visibility -eq 'Collapsed') { Write-Host "[4c] sem placa Wi-Fi: card 'conecte pelo Windows' some" }
     else { Write-Host "    FALHA: card Wi-Fi visivel sem placa"; $falhas++ }
     $Global:FaseLocalPayload.Wireless.presente = $true
     Update-PainelFaseLocal
-    if ($w.FindName('cardConectarWifi').Visibility -eq 'Visible') { Write-Host "[4c] com placa Wi-Fi: card de conexao aparece" }
+    if ($w.FindName('cardWifiBandeja').Visibility -eq 'Visible') { Write-Host "[4c] com placa Wi-Fi: card 'conecte pelo Windows' aparece" }
     else { Write-Host "    FALHA: card Wi-Fi oculto com placa"; $falhas++ }
 
-    # 4c-3c. escolher "Usar o Wi-Fi do local" habilita o card de conexao; sem SSID avisa
+    # 4c-3c. escolher "Usar o Wi-Fi do local"
     $w.FindName('rbUsarWifi').IsChecked = $true
     Invoke-Pump
-    if ($w.FindName('cardConectarWifi').IsEnabled -and $Global:FaseLocalTipo -eq 'wifi') {
-        Write-Host "[4c] escolher 'Usar o Wi-Fi do local' habilita o card 'Conectar a uma rede Wi-Fi'"
-    } else { Write-Host "    FALHA: card Wi-Fi nao habilitou ao escolher (en=$($w.FindName('cardConectarWifi').IsEnabled) tipo='$($Global:FaseLocalTipo)')"; $falhas++ }
-    $w.FindName('cboWifiSsid').Text = ''
-    Invoke-ConectarWifi
-    if ("$($w.FindName('txtWifiStatus').Text)" -match 'SSID') { Write-Host "[4c] conectar Wi-Fi exige SSID" }
-    else { Write-Host "    FALHA: conectar Wi-Fi sem SSID nao avisou"; $falhas++ }
+    if ($Global:FaseLocalTipo -eq 'wifi') { Write-Host "[4c] meio 'Wi-Fi do local' selecionado" }
+    else { Write-Host "    FALHA: nao selecionou o meio Wi-Fi (tipo='$($Global:FaseLocalTipo)')"; $falhas++ }
+
+    # 4c-3d. Wi-Fi desconectado -> o painel limpa IP/gateway/mascara/MAC/origem da placa Wi-Fi
+    $wifiIpOrig  = $Global:FaseLocalPayload.Wireless.ipv4
+    $wifiMacOrig = $Global:FaseLocalPayload.Wireless.mac
+    $Global:FaseLocalPayload.Wireless.conectado = $false
+    $Global:FaseLocalPayload.Wireless.ipv4      = '10.9.9.9'
+    $Global:FaseLocalPayload.Wireless.mac       = 'AA-BB-CC-DD-EE-FF'
+    Update-PainelFaseLocal
+    if ("$($w.FindName('txtLocWifiIp').Visibility)" -eq 'Collapsed' -and "$($w.FindName('txtLocWifiMac').Visibility)" -eq 'Collapsed') {
+        Write-Host "[4c] Wi-Fi desconectado: IP/MAC da placa Wi-Fi ficam limpos no painel"
+    } else { Write-Host "    FALHA: dados da placa Wi-Fi visiveis sem conexao (ip=$($w.FindName('txtLocWifiIp').Visibility))"; $falhas++ }
+    $Global:FaseLocalPayload.Wireless.ipv4      = $wifiIpOrig
+    $Global:FaseLocalPayload.Wireless.mac       = $wifiMacOrig
+    $Global:FaseLocalPayload.Wireless.conectado = $true
+    Update-PainelFaseLocal
 
     # 4c-4. Wi-Fi escolhido mas nao conectado -> checagem travada; ao conectar, libera
     $Global:FaseLocalPayload.Lan.conectado      = $false

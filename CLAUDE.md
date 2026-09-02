@@ -36,8 +36,7 @@ Script), em vez de criar um BI/dashboard separado.
 - **Fase 1 — rede local (ANTES da VPN do TRE)** (`src/core/RedeLocal.ps1`,
   `Invoke-FaseLocal`): inventário da placa cabeada (LAN conectada? **IP local**,
   máscara, gateway, DNS, MAC, velocidade — o IP vai no relatório), detecção da
-  placa Wi-Fi + redes por perto (`netsh wlan`), conexão a um Wi-Fi WPA2 por
-  dentro da ferramenta (`Connect-RedeWireless`), e **teste de velocidade Ookla**
+  placa Wi-Fi + redes por perto (`netsh wlan`), e **teste de velocidade Ookla**
   (`Test-InternetLocal` roda `speedtest.exe --format=jsonl`; `Invoke-SpeedtestStreaming`
   lê cada evento JSONL e `Write-EventoSpeedtest` → `Update-Speedtest` move o
   velocímetro ao vivo; resultado com provedor/servidor/IP/ping/jitter/perda/
@@ -124,7 +123,11 @@ recomendado** (salvo override manual do técnico no combo da decisão final).
 TESTADO: <veredito> / NÃO APLICÁVEL), rádio de escolha (`rbUsarLan`/`rbUsarWifi`/
 `rbUsarCelular`) e checkbox "não aplicável" + `txtMotivoNaMeio` (obrigatório).
 Botão ↻ `btnRelerPlacas` (`Invoke-RelerPlacas`) reinventaria as placas sem sair
-do passo (ex.: cabo plugado depois de abrir a tela).
+do passo (ex.: cabo plugado / Wi-Fi conectado depois de abrir a tela). A ligação
+a um Wi-Fi é feita **só pela bandeja do Windows** (não há mais conexão pela
+ferramenta); o card `cardWifiBandeja` só explica isso. As linhas IP/gateway/
+máscara/MAC/origem do card Wi-Fi ficam vazias quando a placa não está associada
+a nenhuma rede (`Get-AdaptadorWireless` só as preenche com `conectado`).
 "Rodar checagem local" (`Invoke-RodarFaseLocal` → `Complete-FaseLocal`) só
 habilita com conexão e faz o teste de internet (ping/DNS/download Ookla);
 celular exige operadora (`cboOperadoraCel`). Trocar de Local zera todas as
