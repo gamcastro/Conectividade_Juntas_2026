@@ -232,6 +232,15 @@ try {
         Write-Host "[4c] probe ao entrar: placas mostradas ($hostTxt); LAN conectada libera o botao, Wi-Fi nao"
     } else { Write-Host "    FALHA: probe do passo 3 (card=$($w.FindName('cardFaseLocal').Visibility) lan.en=$($w.FindName('btnCheckLan').IsEnabled) wifi.en=$($w.FindName('btnCheckWifi').IsEnabled) host='$hostTxt')"; $falhas++ }
 
+    # 4c-0a. spinner "verificando as placas" enquanto o probe roda (payload nulo)
+    $flOrig = $Global:FaseLocalPayload
+    $Global:FaseLocalPayload = $null ; Update-PainelMeios
+    $spinOn = ("$($w.FindName('ringMeios').Visibility)" -eq 'Visible' -and $w.FindName('ringMeios').IsActive)
+    $Global:FaseLocalPayload = $flOrig ; Update-PainelMeios
+    $spinOff = ("$($w.FindName('ringMeios').Visibility)" -eq 'Collapsed')
+    if ($spinOn -and $spinOff) { Write-Host "[4c] spinner 'verificando placas' liga sem payload e desliga com payload" }
+    else { Write-Host "    FALHA: spinner do probe (on=$spinOn off=$spinOff)"; $falhas++ }
+
     # 4c-0b. botao "reler placas" reinventaria sem sair do passo 3
     Invoke-RelerPlacas
     Invoke-Pump

@@ -701,13 +701,17 @@
 
                             <Grid Margin="0,8,0,0">
                                 <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock x:Name="txtLocEscolha" Grid.Column="0" TextWrapping="Wrap" FontSize="12"
+                                <mah:ProgressRing x:Name="ringMeios" Grid.Column="0" Width="18" Height="18"
+                                                  Margin="0,0,10,0" IsActive="False" Visibility="Collapsed"
+                                                  VerticalAlignment="Center" Foreground="{DynamicResource Dicon.Accent}"/>
+                                <TextBlock x:Name="txtLocEscolha" Grid.Column="1" TextWrapping="Wrap" FontSize="12"
                                            VerticalAlignment="Center" Foreground="{DynamicResource Dicon.Text2}"
                                            Text="Rode a checagem de cada meio que serve a este local. Marque os que nao se aplicam."/>
-                                <Button x:Name="btnRelerPlacas" Grid.Column="1" Width="32" Height="32" Margin="10,0,0,0"
+                                <Button x:Name="btnRelerPlacas" Grid.Column="2" Width="32" Height="32" Margin="10,0,0,0"
                                         Style="{DynamicResource BotaoFantasma}" Padding="0"
                                         ToolTip="Reler o status das placas de rede (ex.: acabei de plugar o cabo)">
                                     <TextBlock Text="&#8635;" FontSize="17" HorizontalAlignment="Center"

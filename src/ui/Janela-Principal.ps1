@@ -1252,6 +1252,8 @@ function Set-FaseLocalOcupado {
         'btnCheckLan', 'btnCheckWifi', 'btnCheckCelular') {
         $c = $w.FindName($n); if ($c) { $c.IsEnabled = -not $Ocupado }
     }
+    $r = $w.FindName('ringMeios')
+    if ($r) { $r.IsActive = $Ocupado; $r.Visibility = if ($Ocupado) { 'Visible' } else { 'Collapsed' } }
 }
 
 # chkNa* + o campo de motivo POR CARD: marca/desmarca meios "nao aplicaveis".
@@ -1302,16 +1304,19 @@ function Update-PainelMeios {
 
     $cardWifi = $w.FindName('cardWifiBandeja')
 
+    $rm = $w.FindName('ringMeios')
     if (-not $p) {
         if ($card) { $card.Visibility = 'Collapsed' }
         if ($cardWifi) { $cardWifi.Visibility = 'Collapsed' }
         $w.FindName('cardRecMeios').Visibility = 'Collapsed'
         $w.FindName('txtLocEscolha').Text = 'Verificando as placas de rede deste computador...'
+        if ($rm) { $rm.IsActive = $true; $rm.Visibility = 'Visible' }
         foreach ($n in 'btnCheckLan', 'btnCheckWifi', 'btnCheckCelular') {
             $b = $w.FindName($n); if ($b) { $b.IsEnabled = $false }
         }
         return
     }
+    if ($rm) { $rm.IsActive = $false; $rm.Visibility = 'Collapsed' }
     $w.FindName('txtLocEscolha').Text = 'Rode a checagem de cada meio que serve a este local. Marque os que nao se aplicam.'
 
     $lan = $p.Lan; $wf = $p.Wireless
