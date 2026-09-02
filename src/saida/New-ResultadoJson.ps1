@@ -2,6 +2,25 @@
 #   -Avaliacoes:         lista de @{ metrica; classe_final; justificativa }  (ajustes do tecnico; opcional)
 #   -ClassificacaoFinal: @{ final; justificativa }                          (override da decisao; opcional)
 
+# Acesso seguro a um campo do local (cache externo pode nao ter a chave;
+# a GUI roda com Set-StrictMode).
+function Get-CampoLocal {
+    param($Local, [string] $Nome)
+    if ($null -eq $Local) { return '' }
+    $p = $Local.PSObject.Properties[$Nome]
+    if ($p) { return [string] $p.Value }
+    return ''
+}
+
+# Acesso seguro a uma propriedade qualquer (objetos vindos da GUI, StrictMode).
+function Get-Prop {
+    param($Obj, [string] $Nome)
+    if ($null -eq $Obj) { return $null }
+    $p = $Obj.PSObject.Properties[$Nome]
+    if ($p) { return $p.Value }
+    return $null
+}
+
 function New-ResultadoJson {
     param(
         [psobject] $Ambiente,
@@ -10,7 +29,20 @@ function New-ResultadoJson {
         $Local,
         $Avaliacoes,
         $ClassificacaoFinal,
-        [string]   $TecnicoNome
+        [string]   $TecnicoNome,
+        # Payload da fase 1 (rede local, sem VPN) - de Invoke-FaseLocal. Opcional.
+        $FaseLocal,
+        # Rede do local veio do roteamento (tethering) do celular do tecnico?
+        [bool]     $Tethering,
+        [string]   $Operadora,
+        # Nao foi possivel conectar a VPN da JE no local (bateria nao rodou).
+        [bool]     $VpnImpossivel,
+        [string]   $VpnMotivo,
+        # Multi-meio: lista de medicoes (uma por meio de conexao) e a
+        # recomendacao final (objeto de Get-ConexaoRecomendada). Opcionais.
+        $Medicoes,
+        $ConexaoRecomendada,
+        [string]   $MotivoRecomendacao
     )
 
     # index metrica -> override do tecnico
@@ -43,20 +75,123 @@ function New-ResultadoJson {
     $finalDecisao = if ($ClassificacaoFinal -and $ClassificacaoFinal.final) { [string] $ClassificacaoFinal.final } else { $recalc }
     $justDecisao  = if ($ClassificacaoFinal) { [string] $ClassificacaoFinal.justificativa } else { '' }
 
+    # --- fase 1: rede local (sem VPN) ---------------------------------------
+    $redeLocal = $null
+    if ($FaseLocal) {
+        $lan = Get-Prop $FaseLocal 'Lan'
+        $wf  = Get-Prop $FaseLocal 'Wireless'
+        $it  = Get-Prop $FaseLocal 'Internet'
+        # placa efetivamente usada: os campos ip/mascara/gateway/dns/mac saem
+        # dela (LAN ou Wi-Fi).
+        $tipoUsado = [string] (Get-Prop $FaseLocal 'TipoUsado')
+        $ativa = if ($tipoUsado -eq 'wifi') { $wf }
+                 elseif ($tipoUsado -eq 'lan') { $lan }
+                 elseif ([string] (Get-Prop $lan 'ipv4')) { $lan }
+                 else { $wf }
+        $redeLocal = [pscustomobject]@{
+            coletado_em            = (Get-Prop $FaseLocal 'Quando')
+            host                   = [string] (Get-Prop $FaseLocal 'Host')
+            placa_usada            = $tipoUsado
+            lan_conectada          = [bool] (Get-Prop $lan 'conectado')
+            lan_adaptador          = [string] (Get-Prop $lan 'nome')
+            lan_descricao          = [string] (Get-Prop $lan 'descricao')
+            tethering_celular      = [bool] $Tethering
+            operadora              = [string] $Operadora
+            ip_local               = [string] (Get-Prop $ativa 'ipv4')
+            ip_origem              = [string] (Get-Prop $ativa 'ip_origem')
+            mascara                = [string] (Get-Prop $ativa 'mascara')
+            gateway                = [string] (Get-Prop $ativa 'gateway')
+            dns                    = @(Get-Prop $ativa 'dns')
+            mac                    = [string] (Get-Prop $ativa 'mac')
+            velocidade_mbps        = (Get-Prop $ativa 'velocidade_mbps')
+            wireless_presente      = [bool] (Get-Prop $wf 'presente')
+            wireless_conectado     = [bool] (Get-Prop $wf 'conectado')
+            wireless_ssid          = [string] (Get-Prop $wf 'ssid')
+            wireless_sinal_pct     = (Get-Prop $wf 'sinal_pct')
+            wireless_ip_local      = [string] (Get-Prop $wf 'ipv4')
+            wireless_redes         = @(Get-Prop $wf 'redes_disponiveis')
+            speedtest_ok           = [bool] (Get-Prop $it 'speedtest_ok')
+            speedtest_erro         = [string] (Get-Prop $it 'speedtest_erro')
+            internet_provedor      = [string] (Get-Prop $it 'isp')
+            internet_ip_externo    = [string] (Get-Prop $it 'ip_externo')
+            internet_servidor      = ((([string] (Get-Prop $it 'servidor_nome')) + ' - ' + ([string] (Get-Prop $it 'servidor_local'))).Trim(' -'))
+            internet_servidor_id   = (Get-Prop $it 'servidor_id')
+            internet_ping_ms       = (Get-Prop $it 'ping_ms')
+            internet_jitter_ms     = (Get-Prop $it 'jitter_ms')
+            internet_perda_pct     = (Get-Prop $it 'perda_pct')
+            internet_download_mbps = (Get-Prop $it 'download_mbps')
+            internet_upload_mbps   = (Get-Prop $it 'upload_mbps')
+            internet_resultado_url = [string] (Get-Prop $it 'resultado_url')
+        }
+    }
+
+    # --- multi-meio: medicoes + recomendacao ------------------------------
+    $medicoesJson = @()
+    foreach ($m in @($Medicoes)) {
+        if (-not $m) { continue }
+        $mIt  = Get-Prop (Get-Prop $m 'fase_local') 'Internet'
+        $mMet = Get-Prop $m 'metricas'
+        $medicoesJson += [pscustomobject]@{
+            meio                 = [string] (Get-Prop $m 'meio')
+            operadora            = [string] (Get-Prop $m 'operadora')
+            rotulo               = [string] (Get-Prop $m 'rotulo')
+            nao_aplicavel        = [bool] (Get-Prop $m 'nao_aplicavel')
+            motivo_nao_aplicavel = [string] (Get-Prop $m 'motivo_na')
+            rede_local_ok        = [bool] (Get-Prop $m 'rede_local_ok')
+            rede_local_download  = (Get-Prop $m 'rede_local_download')
+            rede_local_provedor  = [string] (Get-Prop $mIt 'isp')
+            vpn_conectou         = [bool] (Get-Prop $m 'vpn_conectou')
+            vpn_motivo           = [string] (Get-Prop $m 'vpn_motivo')
+            vpn_download_mbps     = (Get-Prop $mMet 'BandaDownloadMbps')
+            vpn_upload_mbps       = (Get-Prop $mMet 'BandaUploadMbps')
+            latencia_ms           = (Get-Prop $mMet 'LatenciaMediaMs')
+            jitter_ms             = (Get-Prop $mMet 'JitterMs')
+            perda_percentual      = (Get-Prop $mMet 'PerdaPercentual')
+            veredito             = [string] (Get-Prop $m 'veredito')
+            quando               = [string] (Get-Prop $m 'quando')
+        }
+    }
+
+    $recJson = $null
+    if ($ConexaoRecomendada) {
+        $recJson = [pscustomobject]@{
+            meio       = [string] (Get-Prop $ConexaoRecomendada 'meio')
+            operadora  = [string] (Get-Prop $ConexaoRecomendada 'operadora')
+            rotulo     = [string] (Get-Prop $ConexaoRecomendada 'rotulo')
+            veredito   = [string] (Get-Prop $ConexaoRecomendada 'veredito')
+            provisoria = [bool] (Get-Prop $ConexaoRecomendada 'provisoria')
+            base       = [string] (Get-Prop $ConexaoRecomendada 'base')
+            motivo     = [string] $MotivoRecomendacao
+        }
+        # a decisao final do local passa a ser o veredito do meio recomendado,
+        # salvo override explicito do tecnico.
+        if (-not ($ClassificacaoFinal -and $ClassificacaoFinal.final)) {
+            $finalDecisao = [string] (Get-Prop $ConexaoRecomendada 'veredito')
+        }
+    }
+
     [pscustomobject]@{
         versao_ferramenta = $Global:VersaoApp
         coletado_em       = (Get-Date).ToString('o')
         tecnico           = [pscustomobject]@{ nome = $TecnicoNome }
         local             = [pscustomobject]@{
-            id              = $Local.id
-            zona_eleitoral  = $Local.zona_eleitoral
-            municipio_sede  = $Local.municipio_sede
-            municipio_termo = $Local.municipio_termo
-            tipo            = $Local.tipo
-            nome            = $Local.nome
-            endereco        = $Local.endereco
-            tipo_internet   = $Local.tipo_internet
+            id                  = $Local.id
+            zona_eleitoral      = $Local.zona_eleitoral
+            municipio_sede      = $Local.municipio_sede
+            municipio_termo     = $Local.municipio_termo
+            tipo                = $Local.tipo
+            nome                = $Local.nome
+            endereco            = $Local.endereco
+            unidade_consumidora = (Get-CampoLocal $Local 'unidade_consumidora')
+            responsavel         = (Get-CampoLocal $Local 'responsavel')
+            funcao              = (Get-CampoLocal $Local 'funcao')
+            telefone            = (Get-CampoLocal $Local 'telefone')
+            tipo_internet       = $Local.tipo_internet
         }
+        rede_local        = $redeLocal
+        vpn               = [pscustomobject]@{ impossivel = [bool] $VpnImpossivel; motivo = [string] $VpnMotivo }
+        medicoes          = @($medicoesJson)
+        conexao_recomendada = $recJson
         ambiente          = $Ambiente
         metricas          = [pscustomobject]@{
             latencia_ms         = $Metricas.LatenciaMediaMs
@@ -67,6 +202,7 @@ function New-ResultadoJson {
             carregamento_web_s  = $Metricas.CarregamentoWebS
         }
         avaliacao         = $avaliacao
+        metricas_desativadas = @(if ($Decisao.PSObject.Properties['MetricasDesativadas']) { $Decisao.MetricasDesativadas })
         classificacao     = [pscustomobject]@{
             automatica    = $Decisao.Classificacao
             recalculada   = $recalc

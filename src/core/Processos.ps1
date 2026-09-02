@@ -18,16 +18,17 @@ function Start-ProcessoNaoElevado {
 
 function Invoke-ProcessoComSaida {
     <#
-      Executa um binario e devolve o stdout como string, aguardando o termino
-      com timeout. Usado pelos testes (ex.: iperf3 -J).
-
-      TODO: para saidas grandes, ler stdout/stderr de forma assincrona para
-      evitar deadlock de buffer. Suficiente para o JSON compacto do iperf3.
+      Roda um binario e aguarda o termino com timeout. NAO captura stdout
+      (o unico chamador - Export-RelatorioPdf com o navegador headless - so
+      precisa do arquivo gerado). Usa Start-Process -PassThru + WaitForExit,
+      sem redirecionar streams: assim nao ha [IO.StreamReader] sobre pipe, que
+      estoura "o fluxo nao era legivel" no runspace MTA.
     #>
     param(
         [Parameter(Position = 0)] [string] $Caminho,
         [string[]] $Argumentos = @(),
-        [int] $TimeoutS = 60
+        [int] $TimeoutS = 60,
+        [System.Text.Encoding] $Encoding   # mantido por compatibilidade; ignorado
     )
 
     if (-not (Test-Path $Caminho)) {
@@ -35,23 +36,18 @@ function Invoke-ProcessoComSaida {
         return $null
     }
 
-    $psi = [Diagnostics.ProcessStartInfo]::new()
-    $psi.FileName               = $Caminho
-    $psi.Arguments              = ($Argumentos -join ' ')
-    $psi.RedirectStandardOutput = $true
-    $psi.RedirectStandardError  = $true
-    $psi.UseShellExecute        = $false
-    $psi.CreateNoWindow         = $true
+    $sp = @{ FilePath = $Caminho; NoNewWindow = $true; PassThru = $true; ErrorAction = 'Stop' }
+    $joined = ($Argumentos -join ' ')          # o chamador ja poe as aspas dos paths
+    if ($joined) { $sp['ArgumentList'] = $joined }
 
-    $p = [Diagnostics.Process]::Start($psi)
-    if (-not $p.WaitForExit($TimeoutS * 1000)) {
-        try { $p.Kill() } catch { }
-        Write-Log "Processo excedeu ${TimeoutS}s e foi encerrado: $Caminho" -Nivel Erro
-        return $null
+    try {
+        $p = Start-Process @sp
+        if (-not $p.WaitForExit($TimeoutS * 1000)) {
+            try { $p.Kill() } catch { }
+            Write-Log "Processo excedeu ${TimeoutS}s e foi encerrado: $Caminho" -Nivel Erro
+        }
+    } catch {
+        Write-Log "Falha ao executar ${Caminho}: $_" -Nivel Erro
     }
-
-    $saida = $p.StandardOutput.ReadToEnd()
-    $erro  = $p.StandardError.ReadToEnd()
-    if ($erro.Trim()) { Write-Log $erro.Trim() -Nivel Aviso }
-    return $saida
+    return $null
 }

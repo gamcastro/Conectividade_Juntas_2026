@@ -22,6 +22,11 @@
 
 var PLANILHA_JUNTAS_URL    = 'https://docs.google.com/spreadsheets/d/11MqlYAJfJBZ5ywkEe5AaYopNmM4UVToYPXADwPO72Us/edit';
 var ABA_JUNTAS             = 'Página1';
+// Aba estruturada opcional, importada da lista oficial de locais. Colunas
+// (cabecalho, qualquer ordem): zona, tipo, municipio, local, endereco,
+// unidade_consumidora, responsavel, telefone, internet. Se existir, esses
+// campos sobrescrevem (unidade_consumidora) ou completam os do bloco de texto.
+var ABA_LOCAIS             = 'Locais';
 
 var PLANILHA_ROTEIROS_URL  = 'https://docs.google.com/spreadsheets/d/1EQ32sRXiB4b9aXLc52CkONsL6AOUnIxERw4gKlj7ESo/edit';
 var ABA_RESUMO             = 'Resumo';
@@ -31,8 +36,16 @@ var ABA_ETAPAS             = 'Etapas';
 var PLANILHA_CONFIG_URL    = 'https://docs.google.com/spreadsheets/d/1wAZTeRsbDcFL4lyLF0J9pOmtR-cGElSh93HSpMKTCww/edit';
 var ABA_LIMIARES           = 'Limiares';
 
-var PLANILHA_RESULTADOS_ID = '';          // vazio = POST de resultado desativado
-var ABA_RESULTADOS         = 'Resultados';
+// ID da planilha de Resultados. Prioriza a Script Property PLANILHA_RESULTADOS_ID
+// (um projeto por ambiente: producao x homologacao, sem tocar no codigo); se
+// ausente, usa o padrao abaixo. Vazio -> POST de resultado desativado.
+var PLANILHA_RESULTADOS_ID_PADRAO = '1FnuGm-4sZHXamsK6WtHBKOIUlIsFobhrq6rhpBTrswk';
+var ABA_RESULTADOS               = 'Resultados';
+
+function _idResultados() {
+  var p = PropertiesService.getScriptProperties().getProperty('PLANILHA_RESULTADOS_ID');
+  return (p && p.trim()) || PLANILHA_RESULTADOS_ID_PADRAO;
+}
 
 // Direcao de cada metrica: 'max' = menor e melhor; 'min' = maior e melhor.
 var MAP_DIRECAO = {
@@ -83,7 +96,7 @@ function doPost(e) {
     }
 
     // acao 'resultado'
-    if (!PLANILHA_RESULTADOS_ID) {
+    if (!_idResultados()) {
       return _json({ status: 'ignorado', motivo: 'PLANILHA_RESULTADOS_ID nao configurado' });
     }
     gravarResultado(body);
@@ -122,7 +135,69 @@ function listarJuntas() {
     if (blocoPrincipal)    saida.push(montarLocal(zona, sede, termo, 'principal', blocoPrincipal));
     if (blocoContingencia) saida.push(montarLocal(zona, sede, termo, 'contingencia', blocoContingencia));
   }
+
+  // Enriquece com a aba estruturada (unidade_consumidora e o que faltar).
+  var extras = lerLocaisEstruturados();
+  for (var s = 0; s < saida.length; s++) {
+    var loc = saida[s];
+    var ex = extras[String(loc.zona_eleitoral).replace(/\D/g, '') + '|' + loc.tipo + '|' + chaveMunicipio(loc.municipio_termo)];
+    if (!ex) continue;
+    if (ex.unidade_consumidora) loc.unidade_consumidora = ex.unidade_consumidora;
+    if (ex.responsavel && !loc.responsavel)     loc.responsavel   = ex.responsavel;
+    if (ex.telefone && !loc.telefone)           loc.telefone      = ex.telefone;
+    if (ex.nome && !loc.nome)                   loc.nome          = ex.nome;
+    if (ex.endereco && !loc.endereco)           loc.endereco      = ex.endereco;
+    if (ex.tipo_internet && !loc.tipo_internet) loc.tipo_internet = ex.tipo_internet;
+  }
   return saida;
+}
+
+// Chave de municipio para casar a aba estruturada com o "Termo" da Pagina1.
+function chaveMunicipio(s) {
+  var t = String(s || '').replace(/[\/\-\(]\s*MA\s*\)?\s*$/i, '').replace(/\bMA\b\s*$/i, '');
+  return normalizeMunicipio(t);
+}
+
+function _normTipoLocal(v) {
+  var t = String(v || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  return (t.indexOf('conting') >= 0) ? 'contingencia' : 'principal';
+}
+
+// Le a aba ABA_LOCAIS (se existir) -> mapa "zona|tipo|chaveMunicipio" -> campos.
+function lerLocaisEstruturados() {
+  var map = {};
+  try {
+    var aba = SpreadsheetApp.openByUrl(PLANILHA_JUNTAS_URL).getSheetByName(ABA_LOCAIS);
+    if (!aba || aba.getLastRow() < 2) return map;
+    var dados = aba.getDataRange().getValues();
+
+    var hRow = -1, col = {};
+    for (var i = 0; i < dados.length && hRow < 0; i++) {
+      var lc = dados[i].map(function (c) { return String(c).trim().toLowerCase(); });
+      if (lc.indexOf('zona') >= 0 && lc.indexOf('tipo') >= 0) {
+        hRow = i;
+        for (var k = 0; k < lc.length; k++) if (lc[k]) col[lc[k]] = k;
+      }
+    }
+    if (hRow < 0) return map;
+
+    for (var r = hRow + 1; r < dados.length; r++) {
+      var row = dados[r];
+      var zona = String(row[col['zona']] || '').replace(/\D/g, '');
+      if (!zona) continue;
+      var tipo = _normTipoLocal(row[col['tipo']]);
+      var mun  = (col['municipio'] != null) ? row[col['municipio']] : '';
+      var o = {};
+      if (col['local']               != null) o.nome                = String(row[col['local']] || '').trim();
+      if (col['endereco']            != null) o.endereco            = String(row[col['endereco']] || '').trim();
+      if (col['unidade_consumidora'] != null) o.unidade_consumidora = String(row[col['unidade_consumidora']] || '').trim();
+      if (col['responsavel']         != null) o.responsavel         = String(row[col['responsavel']] || '').trim();
+      if (col['telefone']            != null) o.telefone            = String(row[col['telefone']] || '').trim();
+      if (col['internet']            != null) o.tipo_internet       = String(row[col['internet']] || '').trim();
+      map[zona + '|' + tipo + '|' + chaveMunicipio(mun)] = o;
+    }
+  } catch (e) { /* aba ausente ou sem permissao: ignora */ }
+  return map;
 }
 
 
@@ -133,16 +208,14 @@ function montarLocal(zona, sede, termo, tipo, bloco) {
 
   var nome = linhas.length ? linhas[0].replace(/^Local\s*:\s*/i, '').trim() : '';
 
-  var endereco = '';
-  var tipoInternet = '';
-  var reEndereco = new RegExp('^Endere[çc]o\\s*:\\s*(.+)$', 'i');
-  var reInternet = new RegExp('^Tipo de Internet\\s*:\\s*(.+)$', 'i');
-
-  for (var i = 0; i < linhas.length; i++) {
-    var mEnd = linhas[i].match(reEndereco);
-    if (mEnd && !endereco) endereco = mEnd[1].trim();
-    var mNet = linhas[i].match(reInternet);
-    if (mNet && !tipoInternet) tipoInternet = mNet[1].trim();
+  // Extrai o primeiro valor de "<Rotulo>: <valor>" no bloco (case-insensitive).
+  function campo(rotulo) {
+    var re = new RegExp('^' + rotulo + '\\s*:\\s*(.+)$', 'i');
+    for (var i = 0; i < linhas.length; i++) {
+      var m = linhas[i].match(re);
+      if (m) return m[1].trim();
+    }
+    return '';
   }
 
   return {
@@ -152,8 +225,12 @@ function montarLocal(zona, sede, termo, tipo, bloco) {
     municipio_termo: termo,
     tipo: tipo,
     nome: nome,
-    endereco: endereco,
-    tipo_internet: tipoInternet,
+    endereco: campo('Endere[çc]o'),
+    unidade_consumidora: campo('Unidade Consumidora') || campo('UC'),
+    responsavel: campo('Respons[áa]vel'),
+    funcao: campo('Fun[çc][ãa]o'),
+    telefone: campo('Telefone(?:\\s*/\\s*WhatsApp)?') || campo('WhatsApp'),
+    tipo_internet: campo('Tipo de Internet') || campo('Internet'),
     texto_completo: bloco
   };
 }
@@ -369,7 +446,7 @@ function _abaLimiares(criar) {
   var aba = ss.getSheetByName(ABA_LIMIARES);
   if (!aba && criar) {
     aba = ss.insertSheet(ABA_LIMIARES);
-    aba.appendRow(['metrica', 'direcao', 'limiar_viavel', 'limiar_ressalva']);
+    aba.appendRow(['metrica', 'direcao', 'limiar_viavel', 'limiar_ressalva', 'ativo']);
   }
   return aba;
 }
@@ -391,6 +468,9 @@ function lerLimiares() {
       var o = {};
       o[sv] = Number(linhas[r][2]);
       o[sr] = Number(linhas[r][3]);
+      // coluna 'ativo' (5a): vazio/ausente = ativo; so 'false'/'nao'/0 desativa
+      var a = String(linhas[r][4] == null ? '' : linhas[r][4]).trim().toLowerCase();
+      o.ativo = !(a === 'false' || a === 'nao' || a === 'não' || a === '0' || a === 'n');
       limiares[metrica] = o;
     }
     origem = 'planilha';
@@ -398,7 +478,12 @@ function lerLimiares() {
 
   // completa com os padroes o que faltar
   for (var m in LIMIARES_PADRAO) {
-    if (!limiares[m]) limiares[m] = LIMIARES_PADRAO[m];
+    if (!limiares[m]) {
+      var pd = {};
+      for (var k in LIMIARES_PADRAO[m]) pd[k] = LIMIARES_PADRAO[m][k];
+      pd.ativo = true;
+      limiares[m] = pd;
+    }
   }
 
   return { atualizado_em: new Date().toISOString(), origem: origem, limiares: limiares };
@@ -424,12 +509,13 @@ function salvarLimiares(body) {
     var v = Number(o[sv]);
     var rr = Number(o[sr]);
     if (!(v > 0) || !(rr > 0)) return { status: 'erro', erro: 'valores invalidos em ' + m };
-    linhas.push([m, dir, v, rr]);
+    var ativo = (o.ativo === false || o.ativo === 0 || String(o.ativo).toLowerCase() === 'false') ? 'false' : 'true';
+    linhas.push([m, dir, v, rr, ativo]);
   }
 
   var aba = _abaLimiares(true);
-  aba.getRange(2, 1, Math.max(aba.getLastRow() - 1, 1), 4).clearContent();
-  aba.getRange(2, 1, linhas.length, 4).setValues(linhas);
+  aba.getRange(2, 1, Math.max(aba.getLastRow() - 1, 1), 5).clearContent();
+  aba.getRange(2, 1, linhas.length, 5).setValues(linhas);
 
   return { status: 'ok', salvo_em: new Date().toISOString() };
 }
@@ -447,34 +533,82 @@ function setupAdminPin(hashHex) {
   return 'ADMIN_PIN_SHA256 gravado.';
 }
 
+// Define a planilha de Resultados deste projeto Apps Script. Rode 1x no editor:
+//   producao:     setupResultados('1FnuGm-4sZHXamsK6WtHBKOIUlIsFobhrq6rhpBTrswk')
+//   homologacao:  setupResultados('1aihOABaGSnHNIP5BHisR-iI1-OpQWHALLt5jvsUzpWE')
+function setupResultados(sheetId) {
+  if (!sheetId) throw new Error('passe o id: setupResultados("<sheet_id>")');
+  PropertiesService.getScriptProperties().setProperty('PLANILHA_RESULTADOS_ID', String(sheetId).trim());
+  return 'PLANILHA_RESULTADOS_ID = ' + String(sheetId).trim();
+}
+
 
 /* ============================ RESULTADOS (POST) ============================ */
 
 function gravarResultado(dados) {
-  var ss  = SpreadsheetApp.openById(PLANILHA_RESULTADOS_ID);
+  var ss  = SpreadsheetApp.openById(_idResultados());
   var aba = ss.getSheetByName(ABA_RESULTADOS) || ss.insertSheet(ABA_RESULTADOS);
 
+  var COLS = ['recebido_em', 'tecnico', 'local_id', 'zona', 'municipio_termo', 'tipo',
+    'classificacao_final', 'classificacao_automatica', 'ajustada',
+    'conexao_recomendada', 'operadora_recomendada', 'veredito_recomendado',
+    'recomendacao_provisoria', 'motivo_recomendacao',
+    'latencia_ms', 'jitter_ms', 'perda_%', 'download_mbps', 'upload_mbps', 'carregamento_s', 'json'];
+
   if (aba.getLastRow() === 0) {
-    aba.appendRow(['recebido_em', 'tecnico', 'local_id', 'zona', 'municipio_termo', 'tipo',
-      'classificacao_final', 'classificacao_automatica', 'ajustada',
-      'latencia_ms', 'jitter_ms', 'perda_%', 'download_mbps', 'upload_mbps', 'carregamento_s', 'json']);
+    aba.appendRow(COLS);
+  } else {
+    // migracao: planilha de versao anterior nao tem as colunas multi-meio.
+    var head = aba.getRange(1, 1, 1, aba.getLastColumn()).getValues()[0];
+    if (head.indexOf('conexao_recomendada') === -1) {
+      var novas = ['conexao_recomendada', 'operadora_recomendada', 'veredito_recomendado',
+        'recomendacao_provisoria', 'motivo_recomendacao'];
+      var jsonIdx = head.indexOf('json');
+      var at = (jsonIdx === -1) ? head.length + 1 : jsonIdx + 1;  // antes da coluna 'json'
+      aba.insertColumnsBefore(at, novas.length);
+      aba.getRange(1, at, 1, novas.length).setValues([novas]);
+    }
   }
 
   var m = dados.metricas || {};
   var l = dados.local || {};
   var c = dados.classificacao || {};
+  var r = dados.conexao_recomendada || {};
   // compat: versao antiga mandava classificacao como string
   var cFinal = (typeof c === 'string') ? c : (c.final || '');
   var cAuto  = (typeof c === 'string') ? c : (c.automatica || '');
   var cAdj   = (typeof c === 'object') ? !!c.ajustada : false;
-  aba.appendRow([
-    new Date(), (dados.tecnico || {}).nome || '', l.id || '', l.zona_eleitoral || '',
-    l.municipio_termo || '', l.tipo || '',
-    cFinal, cAuto, cAdj,
-    m.latencia_ms, m.jitter_ms, m.perda_percentual,
-    m.banda_download_mbps, m.banda_upload_mbps, m.carregamento_web_s,
-    JSON.stringify(dados)
-  ]);
+
+  var valores = {
+    'recebido_em': new Date(),
+    'tecnico': (dados.tecnico || {}).nome || '',
+    'local_id': l.id || '',
+    'zona': l.zona_eleitoral || '',
+    'municipio_termo': l.municipio_termo || '',
+    'tipo': l.tipo || '',
+    'classificacao_final': cFinal,
+    'classificacao_automatica': cAuto,
+    'ajustada': cAdj,
+    'conexao_recomendada': r.rotulo || r.meio || '',
+    'operadora_recomendada': r.operadora || '',
+    'veredito_recomendado': r.veredito || '',
+    'recomendacao_provisoria': !!r.provisoria,
+    'motivo_recomendacao': r.motivo || '',
+    'latencia_ms': m.latencia_ms,
+    'jitter_ms': m.jitter_ms,
+    'perda_%': m.perda_percentual,
+    'download_mbps': m.banda_download_mbps,
+    'upload_mbps': m.banda_upload_mbps,
+    'carregamento_s': m.carregamento_web_s,
+    'json': JSON.stringify(dados)
+  };
+
+  // grava por nome de coluna, tolerando ordem/idade diferentes da planilha.
+  var head2 = aba.getRange(1, 1, 1, aba.getLastColumn()).getValues()[0];
+  var linha = head2.map(function (nome) {
+    return Object.prototype.hasOwnProperty.call(valores, nome) ? valores[nome] : '';
+  });
+  aba.appendRow(linha);
 }
 
 

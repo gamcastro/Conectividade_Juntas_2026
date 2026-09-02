@@ -5,7 +5,8 @@
 # so se le o cache com Get-*.
 
 function Get-PastaDados {
-    $p = Join-Path $Global:RaizApp 'data'
+    # Testes usam $Global:PastaDadosOverride para nao tocar no data/ real.
+    $p = if ($Global:PastaDadosOverride) { $Global:PastaDadosOverride } else { Join-Path $Global:RaizApp 'data' }
     if (-not (Test-Path $p)) { New-Item -ItemType Directory -Path $p -Force | Out-Null }
     return $p
 }
@@ -14,7 +15,7 @@ function Get-PastaDados {
 function Invoke-RecursoWebApp {
     param(
         [Parameter(Mandatory)] [string] $Recurso,
-        [int] $TimeoutS = 25
+        [int] $TimeoutS = 45
     )
     $cfg = Get-Config 'juntas'
     $endpoint = $cfg.endpoint
@@ -51,7 +52,15 @@ function Write-CacheJson {
         origem        = $Origem
         $Campo        = @($Itens)
     }
-    $doc | ConvertTo-Json -Depth 10 | Set-Content -Path (Join-Path (Get-PastaDados) $Nome) -Encoding UTF8
+    # Grava atomico: arquivo temporario + rename. Uma falha (lock, disco) nunca
+    # deixa o cache antigo truncado ou vazio.
+    $alvo = Join-Path (Get-PastaDados) $Nome
+    $tmp  = '{0}.tmp{1}' -f $alvo, $PID
+    $doc | ConvertTo-Json -Depth 10 | Set-Content -Path $tmp -Encoding UTF8
+    for ($i = 1; $i -le 6; $i++) {
+        try { Move-Item -Path $tmp -Destination $alvo -Force; return }
+        catch { if ($i -eq 6) { Remove-Item $tmp -Force -EA SilentlyContinue; throw }; Start-Sleep -Milliseconds 250 }
+    }
 }
 
 # ---------------------------------------------------------------- JUNTAS

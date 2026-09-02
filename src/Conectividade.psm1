@@ -9,6 +9,7 @@ $ordem = @(
     'core\Elevacao.ps1'
     'core\Processos.ps1'
     'core\Ambiente.ps1'
+    'core\RedeLocal.ps1'
     'core\Juntas.ps1'
     'core\Limiares.ps1'
     'core\Sessao.ps1'
@@ -22,6 +23,8 @@ $ordem = @(
     'saida\New-ResultadoJson.ps1'
     'saida\Save-ResultadoLocal.ps1'
     'saida\Send-Resultado.ps1'
+    'saida\Get-DiagnosticosRealizados.ps1'
+    'saida\Export-RelatorioPdf.ps1'
     'core\Fluxo.ps1'
     'ui\Janela-Principal.ps1'
 )
@@ -30,7 +33,8 @@ foreach ($rel in $ordem) {
     . (Join-Path $PSScriptRoot $rel)
 }
 
-# Versao exposta no JSON de resultado.
-$Global:VersaoApp = '0.1.0'
+# Versao do DICON. Fonte unica: barra lateral + login da GUI, JSON de resultado
+# e relatorio PDF. Manter em sincronia com ModuleVersion em Conectividade.psd1.
+$Global:VersaoApp = '0.6.16'
 
 Export-ModuleMember -Function '*-*'

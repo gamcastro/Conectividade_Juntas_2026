@@ -14,6 +14,10 @@ namespace Conectividade
 '@
 }
 
+# A faixa de severidade e o chip "Sugerida" no painel de resultados sao
+# coloridos direto no XAML: a faixa via {Binding CorFinal} (hex na AvaliacaoRow)
+# e o chip via Style.Triggers por texto (ChipVeredito, em Tema.xaml).
+
 # Linha editavel do painel de resultados. INotifyPropertyChanged e obrigatorio
 # para o binding two-way do DataGrid e para o recalculo ao vivo da decisao.
 if (-not ('Conectividade.AvaliacaoRow' -as [type])) {
@@ -46,7 +50,7 @@ namespace Conectividade
         public string ClasseFinal
         {
             get { return _classeFinal; }
-            set { if (_classeFinal != value) { _classeFinal = value; Raise("ClasseFinal"); Raise("Ajustada"); } }
+            set { if (_classeFinal != value) { _classeFinal = value; Raise("ClasseFinal"); Raise("Ajustada"); Raise("CorFinal"); } }
         }
 
         private string _justificativa = "";
@@ -65,6 +69,17 @@ namespace Conectividade
                 if (_classeAutomatica == "viavel")   return "LightGreen";
                 if (_classeAutomatica == "ressalva") return "Yellow";
                 return "OrangeRed";
+            }
+        }
+
+        // Cor da faixa de severidade no painel (tons escuros da identidade DICON).
+        public string CorFinal
+        {
+            get
+            {
+                if (_classeFinal == "viavel")   return "#4FC177";
+                if (_classeFinal == "ressalva") return "#E8B93E";
+                return "#E8695C";
             }
         }
     }
@@ -98,6 +113,9 @@ namespace Conectividade
 
         private string _ressalva;
         public string LimiarRessalva { get { return _ressalva; } set { _ressalva = value; Raise("LimiarRessalva"); } }
+
+        private bool _ativo = true;   // metrica entra na bateria de teste?
+        public bool Ativo { get { return _ativo; } set { _ativo = value; Raise("Ativo"); } }
     }
 }
 '@
@@ -148,6 +166,12 @@ $Global:MetricasInfo = @(
     @{ metrica = 'carregamento_web_s';  rotulo = 'Carregamento web';  unidade = 's';    direcao = 'max' }
 )
 
+function Get-RotuloMetrica {
+    param([string] $Metrica)
+    $i = $Global:MetricasInfo | Where-Object { $_.metrica -eq $Metrica } | Select-Object -First 1
+    if ($i) { $i.rotulo } else { [string] $Metrica }
+}
+
 function New-LimiarRow {
     param($Info, $Limiar)
     $sv = if ($Info.direcao -eq 'max') { 'viavel_ate' } else { 'viavel_min' }
@@ -158,8 +182,12 @@ function New-LimiarRow {
     $r.Rotulo        = $Info.rotulo
     $r.Unidade       = $Info.unidade
     $r.Direcao       = $Info.direcao
-    $r.DirecaoTexto  = if ($Info.direcao -eq 'max') { 'menor e melhor' } else { 'maior e melhor' }
+    $r.DirecaoTexto  = if ($Info.direcao -eq 'max') { 'menor ' + [char]0x00E9 + ' melhor' } else { 'maior ' + [char]0x00E9 + ' melhor' }
     $r.LimiarViavel   = [string] $Limiar.$sv
     $r.LimiarRessalva = [string] $Limiar.$sr
+    # cache antigo pode nao ter 'ativo'; ausente = na bateria (e StrictMode
+    # lanca se acessarmos a propriedade direto)
+    $pAtivo = if ($Limiar) { $Limiar.PSObject.Properties['ativo'] } else { $null }
+    $r.Ativo = if ($pAtivo) { [bool] $pAtivo.Value } else { $true }
     return $r
 }

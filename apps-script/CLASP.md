@@ -2,13 +2,47 @@
 
 `clasp` (3.4.1) e Node ja estao instalados nesta maquina.
 
-## Estado atual (implantado)
+## Dois ambientes (mesmo Codigo.gs, projetos separados)
 
+Cada projeto escolhe a planilha de Resultados pela Script Property
+`PLANILHA_RESULTADOS_ID` (funcao `_idResultados()`; sem a propriedade, cai no
+`PLANILHA_RESULTADOS_ID_PADRAO` = a de producao). Juntas/roteiros/limiares sao
+os mesmos (planilhas compartilhadas) nos dois.
+
+### PRODUCAO (branch `main`)
 - scriptId:      `1WWMSPY7fRFOO4IPvj0sHHyrIozwNIaegMWzu_s3a3xfkj4YMpjOCa30W`
 - deploymentId:  `AKfycbyrPcogTNL_VZUwtgY-gj_J1nx6rXnhsU5l08da7jJ6KTfsIU-3tlHW8ABzVtgKQnvuig`
 - URL:           `https://script.google.com/macros/s/AKfycbyrPcogTNL_VZUwtgY-gj_J1nx6rXnhsU5l08da7jJ6KTfsIU-3tlHW8ABzVtgKQnvuig/exec`
-- ja configurada em `config/juntas.json`.
-- `?recurso=juntas` -> Juntas/locais; `?recurso=tecnicos` -> 8; `?recurso=roteiros` -> 8; `?recurso=limiares` -> limiares de decisao.
+- Planilha Resultados: `1FnuGm-4sZHXamsK6WtHBKOIUlIsFobhrq6rhpBTrswk` (aba `Resultados`).
+- clasp: `.clasp.prod.json` (raiz, gitignored).
+
+### HOMOLOGACAO (branch `homologacao`)
+- scriptId:      `17BLQ6IOZ6BVf4KUyfNJtQa7klssUOputNqIwen_GwQ1ZK5S-f14g1ehh`
+- deploymentId:  `AKfycbxHMpUwQuDH1SwRiLersK1Qbk3x90Xpu76zxnPl12Upthotd3UiaTd_eOPQ01FF2PBk`
+- URL:           `https://script.google.com/macros/s/AKfycbxHMpUwQuDH1SwRiLersK1Qbk3x90Xpu76zxnPl12Upthotd3UiaTd_eOPQ01FF2PBk/exec`
+  (em `setup/Baixar-e-Instalar.ps1` `$EndpointPadrao` da branch `homologacao`).
+- Planilha Resultados: `1aihOABaGSnHNIP5BHisR-iI1-OpQWHALLt5jvsUzpWE`
+  ("DICON - Resultados (Homologacao)", drive SEASU/ACOES/JUNTAS ESPECIAIS).
+  Script Property `PLANILHA_RESULTADOS_ID` ja setada nesse valor.
+- clasp: `.clasp.homolog.json` (raiz, gitignored).
+
+### Redeploy do HOMOLOGACAO (mantendo a URL)
+
+O `clasp push` falha em `D:\...` com "Content directory is a symlink" (bug do
+clasp 3.4 no Windows). Rodar de uma pasta limpa no `C:`:
+
+    Copy-Item .clasp.prod.json .clasp.json -Force     # deixa o repo em producao
+    cp apps-script\Codigo.gs apps-script\appsscript.json  $env:USERPROFILE\dicon-clasp-homolog\
+    cd $env:USERPROFILE\dicon-clasp-homolog
+    clasp push -f
+    clasp create-deployment -i AKfycbxHMpUwQuDH1SwRiLersK1Qbk3x90Xpu76zxnPl12Upthotd3UiaTd_eOPQ01FF2PBk -d "homolog vN"
+
+(a pasta `~/dicon-clasp-homolog` tem um `.clasp.json` com o scriptId de homolog
+e `rootDir` vazio.)
+
+## Config extra
+
+- `?recurso=juntas` -> Juntas/locais; `?recurso=tecnicos`; `?recurso=roteiros`; `?recurso=limiares`.
 - Planilha de config (limiares): `1wAZTeRsbDcFL4lyLF0J9pOmtR-cGElSh93HSpMKTCww` (aba `Limiares`, criada no 1o salvar).
 
 ## PIN do admin (para "Salvar limiares")

@@ -13,6 +13,99 @@ function Get-ClassificacaoFinal {
     else                                   { return 'viavel' }
 }
 
+# ----------------------------------------------------------------------------
+# RECOMENDACAO DE CONEXAO (regra multi-meio)
+#
+# Cada local pode ter varias "medicoes", uma por meio de conexao. A ferramenta
+# recomenda qual meio a Junta Especial deve usar naquele local.
+# ----------------------------------------------------------------------------
+
+# Rotulo de exibicao de um meio.
+function Get-RotuloMeio {
+    param([string] $Meio, [string] $Operadora)
+    switch ($Meio) {
+        'lan'        { 'Rede cabeada (LAN)' }
+        'wifi_local' { 'Wi-Fi do proprio local' }
+        'celular'    { if ($Operadora) { "Wi-Fi roteada de celular - $Operadora" } else { 'Wi-Fi roteada de celular' } }
+        'nenhuma'    { 'Nenhuma - local inviavel por qualquer meio' }
+        default      { [string] $Meio }
+    }
+}
+
+# Ordem para o pior caso: viavel < ressalva < inviavel < (sem veredito).
+function Get-RankVeredito {
+    param([string] $V)
+    switch ($V) {
+        'viavel'              { 0 }
+        'viavel_com_ressalva' { 1 }
+        'ressalva'            { 1 }
+        'inviavel'            { 2 }
+        default               { 3 }
+    }
+}
+
+# Escolhe o meio de conexao recomendado a partir das medicoes do local.
+# Cada $Medicao (pscustomobject) precisa expor:
+#   meio              'lan' | 'wifi_local' | 'celular'
+#   operadora         string (so p/ celular)
+#   nao_aplicavel     bool  (o meio nao pode ser usado nesse local)
+#   veredito          'viavel' | 'viavel_com_ressalva' | 'inviavel' | 'nao_testado'
+#   rede_local_ok     bool  (a checagem de Rede Local / Ookla rodou e deu numero)
+#   rede_local_download  Mbps | $null
+#   vpn_conectou      bool  (a VPN conectou por esse meio)
+#   fase2_ok          bool  (a bateria com VPN - iperf3 + ping - rodou)
+#   vpn_download      Mbps | $null
+#
+# Regra:
+#   1) candidato = fechou Rede Local + VPN + Fase 2. Recomenda o de melhor
+#      veredito; desempate = maior download pela VPN.
+#   2) se NINGUEM fechou a VPN mas algum rodou a Rede Local -> recomenda o de
+#      maior download na Rede Local, marcado como PROVISORIO e local inviavel.
+#   3) nada -> "nenhuma".
+function Get-ConexaoRecomendada {
+    param([object[]] $Medicoes)
+
+    $validas = @($Medicoes | Where-Object { $_ -and -not [bool] $_.nao_aplicavel -and $_.veredito -ne 'nao_testado' })
+
+    $cand = @($validas | Where-Object { [bool] $_.rede_local_ok -and [bool] $_.vpn_conectou -and [bool] $_.fase2_ok })
+    if ($cand.Count) {
+        $rec = $cand |
+            Sort-Object `
+                @{ Expression = { Get-RankVeredito ([string] $_.veredito) } }, `
+                @{ Expression = { if ($null -eq $_.vpn_download) { -1 } else { [double] $_.vpn_download } }; Descending = $true } |
+            Select-Object -First 1
+        return [pscustomobject]@{
+            meio       = [string] $rec.meio
+            operadora  = [string] $rec.operadora
+            rotulo     = Get-RotuloMeio ([string] $rec.meio) ([string] $rec.operadora)
+            veredito   = [string] $rec.veredito
+            provisoria = $false
+            base       = 'vpn'
+        }
+    }
+
+    $comRl = @($validas | Where-Object { [bool] $_.rede_local_ok })
+    if ($comRl.Count) {
+        $rec = $comRl |
+            Sort-Object @{ Expression = { if ($null -eq $_.rede_local_download) { -1 } else { [double] $_.rede_local_download } }; Descending = $true } |
+            Select-Object -First 1
+        return [pscustomobject]@{
+            meio       = [string] $rec.meio
+            operadora  = [string] $rec.operadora
+            rotulo     = Get-RotuloMeio ([string] $rec.meio) ([string] $rec.operadora)
+            veredito   = 'inviavel'   # nao fechou a bateria com a VPN
+            provisoria = $true
+            base       = 'rede_local'
+        }
+    }
+
+    return [pscustomobject]@{
+        meio = 'nenhuma'; operadora = ''
+        rotulo = Get-RotuloMeio 'nenhuma' ''
+        veredito = 'inviavel'; provisoria = $false; base = 'nenhuma'
+    }
+}
+
 function Invoke-MotorDecisao {
     param(
         [psobject] $Metricas,
@@ -59,19 +152,38 @@ function Invoke-MotorDecisao {
     }
 
     $L = $Limiares
-    $avaliacoes = @(
-        Test-Maximo $Metricas.LatenciaMediaMs   $L.latencia_ms.viavel_ate         $L.latencia_ms.ressalva_ate         'latencia_ms'         'Latencia'          'ms'
-        Test-Maximo $Metricas.JitterMs          $L.jitter_ms.viavel_ate           $L.jitter_ms.ressalva_ate           'jitter_ms'          'Jitter'           'ms'
-        Test-Maximo $Metricas.PerdaPercentual   $L.perda_percentual.viavel_ate    $L.perda_percentual.ressalva_ate    'perda_percentual'   'Perda de pacotes' '%'
-        Test-Minimo $Metricas.BandaDownloadMbps $L.banda_download_mbps.viavel_min $L.banda_download_mbps.ressalva_min 'banda_download_mbps' 'Download'         'Mbps'
-        Test-Minimo $Metricas.BandaUploadMbps   $L.banda_upload_mbps.viavel_min   $L.banda_upload_mbps.ressalva_min   'banda_upload_mbps'   'Upload'          'Mbps'
-        Test-Maximo $Metricas.CarregamentoWebS  $L.carregamento_web_s.viavel_ate  $L.carregamento_web_s.ressalva_ate  'carregamento_web_s' 'Carregamento web' 's'
+
+    # Metrica ativa? (o admin pode tirar itens da bateria; ausente = ativa)
+    function Test-MetricaAtiva {
+        param([string] $Metrica)
+        $m = $L.$Metrica
+        if ($null -eq $m) { return $true }
+        $p = $m.PSObject.Properties['ativo']
+        if (-not $p) { return $true }
+        return [bool] $p.Value
+    }
+
+    $todas = @(
+        @{ fn = { Test-Maximo $Metricas.LatenciaMediaMs   $L.latencia_ms.viavel_ate         $L.latencia_ms.ressalva_ate         'latencia_ms'         'Latencia'          'ms' };   m = 'latencia_ms' }
+        @{ fn = { Test-Maximo $Metricas.JitterMs          $L.jitter_ms.viavel_ate           $L.jitter_ms.ressalva_ate           'jitter_ms'          'Jitter'           'ms' };   m = 'jitter_ms' }
+        @{ fn = { Test-Maximo $Metricas.PerdaPercentual   $L.perda_percentual.viavel_ate    $L.perda_percentual.ressalva_ate    'perda_percentual'   'Perda de pacotes' '%' };    m = 'perda_percentual' }
+        @{ fn = { Test-Minimo $Metricas.BandaDownloadMbps $L.banda_download_mbps.viavel_min $L.banda_download_mbps.ressalva_min 'banda_download_mbps' 'Download'         'Mbps' }; m = 'banda_download_mbps' }
+        @{ fn = { Test-Minimo $Metricas.BandaUploadMbps   $L.banda_upload_mbps.viavel_min   $L.banda_upload_mbps.ressalva_min   'banda_upload_mbps'   'Upload'          'Mbps' }; m = 'banda_upload_mbps' }
+        @{ fn = { Test-Maximo $Metricas.CarregamentoWebS  $L.carregamento_web_s.viavel_ate  $L.carregamento_web_s.ressalva_ate  'carregamento_web_s' 'Carregamento web' 's' };   m = 'carregamento_web_s' }
     )
+
+    $avaliacoes  = @()
+    $desativadas = @()
+    foreach ($item in $todas) {
+        if (Test-MetricaAtiva $item.m) { $avaliacoes += (& $item.fn) }
+        else { $desativadas += $item.m }
+    }
 
     $classeFinal = Get-ClassificacaoFinal ($avaliacoes | Select-Object -ExpandProperty classe)
 
     [pscustomobject]@{
-        Classificacao = $classeFinal
-        Detalhes      = $avaliacoes
+        Classificacao      = $classeFinal
+        Detalhes           = $avaliacoes
+        MetricasDesativadas = @($desativadas)
     }
 }

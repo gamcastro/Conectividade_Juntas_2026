@@ -18,26 +18,42 @@
 [CmdletBinding()]
 param(
     [switch] $SemUI,
-    [string] $JuntaId
+    [string] $JuntaId,
+    # guardas anti-loop: setados no proprio relaunch, NAO passar a mao.
+    [switch] $StaFeito,
+    [switch] $ElevacaoFeita
 )
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
+# Reencaminhamento dos parametros no relaunch STA / elevacao UAC. NAO usar
+# $args: em script [CmdletBinding()] + StrictMode Latest ele nao existe e
+# lanca "A variavel '$args' nao pode ser recuperada" (sessao de usuario comum).
+$fwdArgs = @()
+if ($SemUI)   { $fwdArgs += '-SemUI' }
+if ($JuntaId) { $fwdArgs += @('-JuntaId', $JuntaId) }
+
 # --- 1. Garante STA (pwsh roda como MTA por padrao) --------------------------
-if ([Threading.Thread]::CurrentThread.GetApartmentState() -ne 'STA') {
+if ([Threading.Thread]::CurrentThread.GetApartmentState() -ne 'STA' -and -not $StaFeito) {
     $exe = (Get-Process -Id $PID).Path
     $lista = @('-STA', '-NoProfile', '-ExecutionPolicy', 'Bypass',
-               '-File', ('"{0}"' -f $PSCommandPath)) + $args
+               '-File', ('"{0}"' -f $PSCommandPath), '-StaFeito') + $fwdArgs
     Start-Process -FilePath $exe -ArgumentList $lista
     return
 }
 
-# --- 2. Auto-elevacao UAC ---------------------------------------------------
+# --- 2. Auto-elevacao UAC (best-effort; NUNCA em loop) --------------------
 . "$PSScriptRoot\src\core\Elevacao.ps1"
 if (-not (Test-Administrador)) {
-    Invoke-AutoElevacao -Script $PSCommandPath -Argumentos $args
-    return
+    if (-not $ElevacaoFeita -and (Test-PodeElevar)) {
+        if (Invoke-AutoElevacao -Script $PSCommandPath -Argumentos (@('-StaFeito', '-ElevacaoFeita') + $fwdArgs)) {
+            return   # a instancia elevada assume
+        }
+    }
+    Write-Warning ('DICON sem privilegio de administrador: conectar a uma rede Wi-Fi ' +
+        'pela ferramenta fica indisponivel (use a bandeja do Windows). O restante do ' +
+        'diagnostico funciona normalmente.')
 }
 
 # --- 3. Encoding UTF-8 -----------------------------------------------------
@@ -54,6 +70,7 @@ $pastaLog = Split-Path $Global:ArquivoLog -Parent
 if (-not (Test-Path $pastaLog)) { New-Item -ItemType Directory -Path $pastaLog -Force | Out-Null }
 
 Import-Module "$PSScriptRoot\src\Conectividade.psd1" -Force
+Write-Host ("DICON v{0}" -f $Global:VersaoApp) -ForegroundColor Cyan
 
 # --- 5. Dispara ---------------------------------------------------------
 if ($SemUI) {

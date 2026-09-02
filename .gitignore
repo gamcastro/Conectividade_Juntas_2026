@@ -1,6 +1,7 @@
 # Resultados de execução (gerados em campo)
 /resultados/pendentes/*
 /resultados/enviados/*
+/relatorios/*
 /logs/*
 
 # Cache local da lista de Juntas (baixado do Web App)
@@ -9,18 +10,25 @@
 # Configs reais — versiona apenas os exemplos
 /config/*.json
 !/config/*.exemplo.json
+# Marcador de canal da instalação (main | homologacao), gravado pelo setup
+/config/canal
 
 # Binários de terceiros (baixados no setup, não versionados)
 /bin/iperf3/*
 /bin/geckodriver/*
 /bin/chromedriver/*
 /lib/Selenium/*
+# Ookla Speedtest CLI — colocado manualmente em tools\, nunca versionado
+/tools/speedtest.exe
+/tools/speedtest.md
+/tools/speedtest*.5
 
 # Mantém as pastas vazias no repositório
 !**/.gitkeep
 
 # clasp: id do projeto e credenciais (nunca versionar credenciais)
 .clasp.json
+.clasp.*.json
 .clasprc.json
 *.clasprc.json
 
@@ -28,3 +36,6 @@
 *.tmp
 Thumbs.db
 desktop.ini
+
+# Permissões locais do Claude Code (pessoais, não versionar)
+/.claude/settings.local.json

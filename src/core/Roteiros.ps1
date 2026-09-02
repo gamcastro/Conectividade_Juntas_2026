@@ -16,16 +16,35 @@ function Get-Tecnicos {
     return Read-CacheJson -Nome 'tecnicos.json' -Campo 'tecnicos'
 }
 
+# Normaliza nome para comparacao: minusculas, sem acento, espacos colapsados.
+# Evita "roteiro nao encontrado" por diferenca boba de encoding/espaco entre a
+# sessao (login) e o cache (sync mais recente).
+function ConvertTo-NomeChave {
+    param([string] $Nome)
+    if ([string]::IsNullOrWhiteSpace($Nome)) { return '' }
+    $d  = $Nome.Normalize([Text.NormalizationForm]::FormD)
+    $sb = [Text.StringBuilder]::new()
+    foreach ($ch in $d.ToCharArray()) {
+        if ([Globalization.CharUnicodeInfo]::GetUnicodeCategory($ch) -ne [Globalization.UnicodeCategory]::NonSpacingMark) {
+            [void] $sb.Append($ch)
+        }
+    }
+    ($sb.ToString() -replace '\s+', ' ').Trim().ToLowerInvariant()
+}
+
 function Get-TecnicoPorNome {
     param([string] $Nome)
-    @(Get-Tecnicos) | Where-Object { $_.nome -eq $Nome } | Select-Object -First 1
+    $tec = @(Get-Tecnicos) | Where-Object { $_.nome -eq $Nome } | Select-Object -First 1
+    if ($tec) { return $tec }
+    $alvo = ConvertTo-NomeChave $Nome
+    @(Get-Tecnicos) | Where-Object { (ConvertTo-NomeChave $_.nome) -eq $alvo } | Select-Object -First 1
 }
 
 # ---------------------------------------------------------------- ROTEIROS
 
 function Sync-Roteiros {
     Write-Log 'Baixando roteiros...' -Nivel Info
-    $resp = Invoke-RecursoWebApp -Recurso 'roteiros'
+    $resp = Invoke-RecursoWebApp -Recurso 'roteiros' -TimeoutS 90   # e a chamada mais pesada
     $itens = @($resp.roteiros)
     if (-not $itens.Count) { throw "Resposta de 'roteiros' vazia." }
     Write-CacheJson -Nome 'roteiros.json' -Campo 'roteiros' -Itens $itens -Origem 'recurso=roteiros'

@@ -1,0 +1,5 @@
+{
+  "_comentario": "Fase 1 do diagnostico (rede local, ANTES da VPN do TRE). O teste de velocidade usa o Ookla Speedtest CLI: coloque o speedtest.exe em tools\\ (NAO vai ao repositorio). speedtest_server_id vazio = servidor mais proximo (auto); speedtest_extra_args passa flags adicionais ao binario.",
+  "speedtest_server_id": "",
+  "speedtest_extra_args": ""
+}
