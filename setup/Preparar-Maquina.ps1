@@ -23,6 +23,17 @@ if (-not $souAdmin) {
     return
 }
 
+# Roda icacls.exe sem deixar o stderr (item travado) abortar o script.
+function Invoke-Icacls {
+    $eap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    $saida = & icacls.exe @args 2>&1
+    $rc = $LASTEXITCODE
+    $ErrorActionPreference = $eap
+    $global:LASTEXITCODE = 0
+    return [pscustomobject]@{ Codigo = $rc; Saida = ($saida -join "`n") }
+}
+
 # base: D: se for disco fixo, senao C:
 $base = 'C:'
 try {
@@ -47,14 +58,29 @@ foreach ($n in 'DICON', 'DICON-HOMOLOG') {
     if (-not (Test-Path $p)) { New-Item -ItemType Directory -Path $p -Force | Out-Null }
 }
 
-# grupo "Usuarios" = SID *S-1-5-32-545 (independe de idioma); Modify + heranca
-& icacls $aplic /grant '*S-1-5-32-545:(OI)(CI)M' /T | Out-Null
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "  icacls retornou $LASTEXITCODE - verifique manualmente." -ForegroundColor Yellow
-} else {
-    Write-Host "  escrita concedida ao grupo Usuarios em $aplic (e subpastas)" -ForegroundColor Green
+# grupo "Usuarios" = SID *S-1-5-32-545 (independe de idioma); Modify + heranca.
+# 1) so no proprio $aplic (herança) - basta pra tudo que a instalacao criar.
+$ace = '*S-1-5-32-545:(OI)(CI)M'
+$r = Invoke-Icacls $aplic /grant $ace
+if ($r.Codigo -ne 0) {
+    Write-Host "  icacls negou - tomando posse de $aplic e tentando de novo..." -ForegroundColor Yellow
+    $eap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+    & takeown.exe /f $aplic /d s 2>&1 | Out-Null
+    $ErrorActionPreference = $eap; $global:LASTEXITCODE = 0
+    $r = Invoke-Icacls $aplic /grant $ace
 }
-$global:LASTEXITCODE = 0
+# 2) melhor-esforco nas subpastas ja existentes (nao aborta se falhar)
+(Invoke-Icacls $aplic /grant $ace /T /C) | Out-Null
+
+if ($r.Codigo -eq 0) {
+    Write-Host "  escrita concedida ao grupo Usuarios em $aplic" -ForegroundColor Green
+} else {
+    Write-Host "  NAO consegui ajustar as permissoes (icacls $($r.Codigo))." -ForegroundColor Red
+    if ($r.Saida) { Write-Host "  $($r.Saida)" -ForegroundColor DarkGray }
+    Write-Host "  Rode manualmente, elevado:" -ForegroundColor Yellow
+    Write-Host "     takeown /f `"$aplic`" /d s" -ForegroundColor Yellow
+    Write-Host "     icacls `"$aplic`" /grant *S-1-5-32-545:(OI)(CI)M" -ForegroundColor Yellow
+}
 
 Write-Host ''
 Write-Host "Pronto. Agora, como USUARIO COMUM (nao admin):" -ForegroundColor Green
