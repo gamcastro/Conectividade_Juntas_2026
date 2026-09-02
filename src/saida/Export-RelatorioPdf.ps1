@@ -127,7 +127,8 @@ function New-RelatorioHtml {
 
     $blocoRecomendacao = ''
     if ($rec -and $rec.rotulo) {
-        $corRec = Get-CorVeredito $rec.veredito
+        # Aqui NAO vai o veredito (soa estranho "conexao recomendada ... inviavel"):
+        # a classificacao do local ja consta em "Recomendacao final" no topo.
         $prov = if ($rec.provisoria) {
             '<br><span style="font-weight:400">Recomenda&ccedil;&atilde;o provis&oacute;ria &mdash; nenhum meio fechou a VPN da Justi&ccedil;a Eleitoral neste local.</span>'
         } else { '' }
@@ -136,7 +137,7 @@ function New-RelatorioHtml {
         } else { '' }
         $blocoRecomendacao = @"
   <h2>Conex&atilde;o recomendada para este local</h2>
-  <div class="final" style="border-color:$corRec;color:$corRec">$(ConvertTo-HtmlSafe ([string] $rec.rotulo)) &mdash; $(ConvertTo-HtmlSafe (Get-RotuloVeredito $rec.veredito))$prov</div>
+  <div class="final" style="border-color:#c9ced6;color:#1f2430">$(ConvertTo-HtmlSafe ([string] $rec.rotulo))$prov</div>
   $motRec
 "@
     }
