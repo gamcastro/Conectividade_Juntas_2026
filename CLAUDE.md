@@ -78,6 +78,16 @@ Script), em vez de criar um BI/dashboard separado.
   parâmetro. `$CanalPadrao`/`$EndpointPadrao` no `Baixar-e-Instalar.ps1` são de
   `homologacao` nesta branch e viram os de `main` no merge para `main`.
 
+## Telas (rail de navegação)
+`login → início → guia de bordo → **Locais** → diagnóstico → administração`,
+Grids empilhados alternados por `Visibility` (`$Global:Views`, `Show-View`).
+**Locais** (`viewLocais`, item `navLocais` no rail): tela de referência com os
+locais de vistoria do roteiro do técnico (`Get-LocaisDoTecnico` achata
+`$Global:RoteiroAtual.juntas[].locais[]`), grade `dgLocais` + busca livre
+(`txtBuscaLocais`) + filtros por ZE (`cboFiltroZE`) e município (`cboFiltroMun`)
+em `Update-LocaisFiltrados`; clicar numa linha abre o `cardLocalDetalhe` com a
+ficha completa (`Update-LocalDetalheView`).
+
 ## Assistente de diagnóstico (GUI)
 A tela de Diagnóstico é um **assistente de 7 passos** (`viewDiag` com os painéis
 `stepInfo/stepJunta/stepLocal/stepDiag/stepResultado/stepDecisao/stepFim`

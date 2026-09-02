@@ -127,6 +127,31 @@ try {
     Write-Host "[3] Guia: $nJuntas grupo(s) de Junta"
     if ($nJuntas -lt 1) { Write-Host "    FALHA: guia sem conteudo"; $falhas++ }
 
+    # 3b. tela de Locais: lista + busca + filtros por ZE/municipio
+    Show-Locais
+    if ($w.FindName('viewLocais').Visibility -eq 'Visible' -and @($w.FindName('dgLocais').ItemsSource).Count -ge 1) {
+        $nTot = @($w.FindName('dgLocais').ItemsSource).Count
+        Write-Host "[3b] Locais: tela abriu com $nTot local(is)"
+    } else { Write-Host "[3b] FALHA: tela de Locais vazia (vis=$($w.FindName('viewLocais').Visibility))"; $falhas++ }
+    $nTodos = @($w.FindName('dgLocais').ItemsSource).Count
+    $w.FindName('txtBuscaLocais').Text = 'zzz-nao-existe'
+    Invoke-Pump
+    if (@($w.FindName('dgLocais').ItemsSource).Count -eq 0) { Write-Host "[3b] busca sem resultado filtra a grade" }
+    else { Write-Host "    FALHA: busca nao filtrou"; $falhas++ }
+    $w.FindName('txtBuscaLocais').Text = ''
+    Invoke-Pump
+    if (@($w.FindName('dgLocais').ItemsSource).Count -eq $nTodos) { Write-Host "[3b] limpar a busca restaura a lista" }
+    else { Write-Host "    FALHA: limpar a busca nao restaurou ($(@($w.FindName('dgLocais').ItemsSource).Count) x $nTodos)"; $falhas++ }
+    if (@($w.FindName('cboFiltroZE').ItemsSource).Count -ge 2 -and @($w.FindName('cboFiltroMun').ItemsSource).Count -ge 2) {
+        Write-Host "[3b] combos ZE/municipio populados"
+    } else { Write-Host "    FALHA: combos de filtro vazios"; $falhas++ }
+    $w.FindName('dgLocais').SelectedIndex = 0
+    Invoke-Pump
+    if ("$($w.FindName('cardLocalDetalhe').Visibility)" -eq 'Visible' -and "$($w.FindName('txtLocDetNome').Text)") {
+        Write-Host "[3b] selecionar um local mostra o cartao de detalhe"
+    } else { Write-Host "    FALHA: cartao de detalhe do local nao apareceu"; $falhas++ }
+    Show-View 'viewHome'
+
     # 4. assistente pelo atalho do guia: abre no passo 1, Junta/Local pre-selecionados
     Start-DiagnosticoDoGuia -LocalId 'ZE99-TESTE-PRINCIPAL'
     Invoke-Pump

@@ -55,7 +55,10 @@ if (-not (Get-Variable -Name VpnSimulada -Scope Global -ErrorAction SilentlyCont
     $Global:VpnSimulada = $null           # testes: $true/$false forca o estado da VPN
 }
 
-$Global:Views = @('viewLogin', 'viewHome', 'viewGuia', 'viewDiag', 'viewAdmin')
+$Global:Views = @('viewLogin', 'viewHome', 'viewGuia', 'viewLocais', 'viewDiag', 'viewAdmin')
+
+$Global:LocaisTecnico            = @()      # locais do roteiro do tecnico (achatados)
+$Global:AtualizandoFiltroLocais  = $false   # guarda: preenchimento programatico dos combos
 
 $Global:WizardPassos  = @('stepInfo', 'stepJunta', 'stepLocal', 'stepDiag', 'stepResultado', 'stepDecisao', 'stepFim')
 $Global:WizardTitulos = @(
@@ -313,9 +316,17 @@ function New-JanelaPrincipal {
 
     # rail de navegacao (RadioButtons) - handlers ignoram mudanca programatica
     $window.FindName('navGuia').Add_Checked({ if (-not $Global:NavegandoPrograma) { Show-GuiaBordo } })
+    $window.FindName('navLocais').Add_Checked({ if (-not $Global:NavegandoPrograma) { Show-Locais } })
     $window.FindName('navDiag').Add_Checked({ if (-not $Global:NavegandoPrograma) { Open-DiagnosticoLimpo } })
     $window.FindName('navAdmin').Add_Checked({ if (-not $Global:NavegandoPrograma) { Show-Admin } })
     $window.FindName('navAtualizar').Add_Checked({ if (-not $Global:NavegandoPrograma) { Invoke-AtualizarDados } })
+
+    # locais de vistoria
+    $window.FindName('btnLocaisVoltar').Add_Click({ Show-View 'viewHome' })
+    $window.FindName('txtBuscaLocais').Add_TextChanged({ Update-LocaisFiltrados })
+    $window.FindName('cboFiltroZE').Add_SelectionChanged({ if (-not $Global:AtualizandoFiltroLocais) { Update-LocaisFiltrados } })
+    $window.FindName('cboFiltroMun').Add_SelectionChanged({ if (-not $Global:AtualizandoFiltroLocais) { Update-LocaisFiltrados } })
+    $window.FindName('dgLocais').Add_SelectionChanged({ Update-LocalDetalheView })
 
     # guia / admin
     $window.FindName('btnGuiaVoltar').Add_Click({ Show-View 'viewHome' })
@@ -390,9 +401,9 @@ function Show-View {
     $w.FindName('railNav').Visibility = if ($Nome -eq 'viewLogin') { 'Collapsed' } else { 'Visible' }
 
     # sincroniza o item ativo do rail sem disparar os handlers de navegacao
-    $map = @{ viewGuia = 'navGuia'; viewDiag = 'navDiag'; viewAdmin = 'navAdmin' }
+    $map = @{ viewGuia = 'navGuia'; viewLocais = 'navLocais'; viewDiag = 'navDiag'; viewAdmin = 'navAdmin' }
     $Global:NavegandoPrograma = $true
-    foreach ($nn in 'navGuia', 'navDiag', 'navAdmin', 'navAtualizar') {
+    foreach ($nn in 'navGuia', 'navLocais', 'navDiag', 'navAdmin', 'navAtualizar') {
         $rb = $w.FindName($nn)
         if ($rb) { $rb.IsChecked = ($map[$Nome] -eq $nn) }
     }
@@ -584,7 +595,7 @@ function Set-HomeOcupado {
     $ring = $w.FindName('ringHome'); if ($ring) { $ring.IsActive = $Ocupado }
     if ($Ocupado) { $w.FindName('txtAtualizandoMsg').Text = $Rotulo }
     foreach ($n in 'btnMenuGuia', 'btnMenuDiag', 'btnMenuAdmin', 'btnMenuAtualizar',
-        'btnReenviarPendentes', 'btnTrocarUsuario', 'navGuia', 'navDiag', 'navAdmin', 'navAtualizar') {
+        'btnReenviarPendentes', 'btnTrocarUsuario', 'navGuia', 'navLocais', 'navDiag', 'navAdmin', 'navAtualizar') {
         $c = $w.FindName($n); if ($c) { $c.IsEnabled = -not $Ocupado }
     }
 }
@@ -727,6 +738,124 @@ function Show-GuiaBordo {
     } else { '' }
 
     Show-View 'viewGuia'
+}
+
+# ------------------------------------------------------------- LOCAIS DE VISTORIA
+
+# Locais do roteiro do tecnico logado, achatados numa lista unica (com rotulos
+# prontos p/ a grade). Sem roteiro -> lista vazia.
+function Get-LocaisDoTecnico {
+    $rot = $Global:RoteiroAtual
+    if (-not $rot) { return @() }
+    $saida = New-Object System.Collections.Generic.List[object]
+    foreach ($grupo in @($rot.juntas)) {
+        foreach ($loc in @($grupo.locais)) {
+            if (-not $loc) { continue }
+            $rot2 = if ("$($loc.tipo)" -eq 'principal') { 'Principal' } else { 'Conting' + [char]0x00EA + 'ncia' }
+            $loc | Add-Member -NotePropertyName TipoRotulo -Force -NotePropertyValue $rot2
+            $saida.Add($loc)
+        }
+    }
+    return $saida
+}
+
+# Abre a tela de Locais (chamada pelo rail).
+function Show-Locais {
+    Initialize-Locais
+    Show-View 'viewLocais'
+}
+
+# Monta a lista + os combos de filtro (ZE / municipio).
+function Initialize-Locais {
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+
+    $Global:LocaisTecnico = @(Get-LocaisDoTecnico)
+    $rot = $Global:RoteiroAtual
+
+    $w.FindName('txtLocaisSub').Text = if ($rot) {
+        'Roteiro {0} - {1}    |    {2} local(is) de vistoria' -f $rot.numero, $rot.tecnico, @($Global:LocaisTecnico).Count
+    } else {
+        'Roteiro nao disponivel neste computador. Use "Atualizar dados" com internet.'
+    }
+
+    $zes = @($Global:LocaisTecnico | ForEach-Object { [string] $_.zona_eleitoral } |
+        Where-Object { $_ } | Select-Object -Unique | Sort-Object { [int] $_ })
+    $muns = @($Global:LocaisTecnico | ForEach-Object { [string] $_.municipio_termo } |
+        Where-Object { $_ } | Select-Object -Unique | Sort-Object)
+
+    $Global:AtualizandoFiltroLocais = $true
+    $cboZE = $w.FindName('cboFiltroZE')
+    $cboMun = $w.FindName('cboFiltroMun')
+    $cboZE.ItemsSource  = @('Todas as ZE') + @($zes | ForEach-Object { 'ZE ' + $_ })
+    $cboMun.ItemsSource = @('Todos os munic' + [char]0x00ED + 'pios') + $muns
+    $cboZE.SelectedIndex  = 0
+    $cboMun.SelectedIndex = 0
+    $w.FindName('txtBuscaLocais').Text = ''
+    $Global:AtualizandoFiltroLocais = $false
+
+    Update-LocaisFiltrados
+}
+
+# Aplica busca + filtros e atualiza a grade.
+function Update-LocaisFiltrados {
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+
+    $busca = ([string] $w.FindName('txtBuscaLocais').Text).Trim()
+    $selZE  = [string] $w.FindName('cboFiltroZE').SelectedItem
+    $selMun = [string] $w.FindName('cboFiltroMun').SelectedItem
+    $ze  = if ($selZE -and $selZE -like 'ZE *') { $selZE.Substring(3).Trim() } else { '' }
+    $mun = if ($selMun -and $selMun -notlike 'Todos os munic*') { $selMun } else { '' }
+
+    $lista = @($Global:LocaisTecnico)
+    if ($ze)  { $lista = @($lista | Where-Object { "$($_.zona_eleitoral)" -eq $ze }) }
+    if ($mun) { $lista = @($lista | Where-Object { "$($_.municipio_termo)" -eq $mun }) }
+    if ($busca) {
+        $alvo = $busca.ToLower()
+        $lista = @($lista | Where-Object {
+            $campos = @(
+                [string] $_.nome, [string] $_.endereco, [string] $_.municipio_termo,
+                [string] $_.municipio_sede, [string] $_.tipo_internet,
+                ('ze ' + [string] $_.zona_eleitoral),
+                [string] (Get-CampoLocal $_ 'responsavel'),
+                [string] (Get-CampoLocal $_ 'unidade_consumidora'),
+                [string] (Get-CampoLocal $_ 'telefone')
+            )
+            ($campos -join ' ').ToLower().Contains($alvo)
+        })
+    }
+
+    $w.FindName('dgLocais').ItemsSource = @($lista)
+    $w.FindName('txtLocaisContagem').Text = '{0} de {1}' -f @($lista).Count, @($Global:LocaisTecnico).Count
+    Update-LocalDetalheView
+}
+
+# Cartao de detalhe do local selecionado na grade.
+function Update-LocalDetalheView {
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    $d = $w.FindName('dgLocais').SelectedItem
+    $card = $w.FindName('cardLocalDetalhe')
+    if (-not $d) { $card.Visibility = 'Collapsed'; return }
+    $card.Visibility = 'Visible'
+
+    $w.FindName('txtLocDetTipo').Text = if ("$($d.tipo)" -eq 'principal') { 'LOCAL PRINCIPAL' } else { 'LOCAL DE CONTINGENCIA' }
+    $w.FindName('txtLocDetNome').Text = [string] $d.nome
+    $w.FindName('txtLocDetZE').Text   = Format-RotuloJunta $d.zona_eleitoral $d.municipio_termo $d.municipio_sede
+    Set-LinhaDetalhe $w.FindName('txtLocDetEndereco') ('Endere' + [char]0x00E7 + 'o') ([string] $d.endereco)
+    Set-LinhaDetalhe $w.FindName('txtLocDetInternet') 'Tipo de internet' ([string] $d.tipo_internet)
+    Set-LinhaDetalhe $w.FindName('txtLocDetUC') 'Unidade consumidora' ([string] (Get-CampoLocal $d 'unidade_consumidora'))
+
+    $resp = [string] (Get-CampoLocal $d 'responsavel')
+    $func = [string] (Get-CampoLocal $d 'funcao')
+    if ($func) { $resp = '{0} ({1})' -f $resp, $func }
+    Set-LinhaDetalhe $w.FindName('txtLocDetResponsavel') ('Respons' + [char]0x00E1 + 'vel') $resp
+    Set-LinhaDetalhe $w.FindName('txtLocDetTelefone') 'Telefone/WhatsApp' ([string] (Get-CampoLocal $d 'telefone'))
+
+    $comp = [string] (Get-CampoLocal $d 'texto_completo')
+    $tc = $w.FindName('txtLocDetCompleto')
+    if ($comp) { $tc.Text = $comp; $tc.Visibility = 'Visible' } else { $tc.Visibility = 'Collapsed' }
 }
 
 # ------------------------------------------------------------- ASSISTENTE (WIZARD)
