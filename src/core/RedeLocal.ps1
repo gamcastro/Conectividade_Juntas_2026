@@ -462,9 +462,17 @@ function Test-InternetLocal {
     $err = @($saida.Eventos | Where-Object { $_.type -eq 'error' }) | Select-Object -Last 1
 
     if (-not $res) {
+        # descarta banner/regua do Ookla ("====", "Speedtest by Ookla", licenca)
+        # e pega a ultima linha que parece erro de verdade.
+        $linhasErro = @($saida.Erro -split "`n" | ForEach-Object { $_.Trim() } | Where-Object {
+                $_ -and ($_ -notmatch '^[=\-\s]+$') -and ($_ -notmatch 'Speedtest by Ookla') -and
+                ($_ -notmatch 'License|EULA|GDPR|www\.speedtest\.net/about|Copyright')
+            })
+        $linhaReal = @($linhasErro | Where-Object { $_ -match 'error|Cannot|Unable|Couldn|fail|timeout|refused|resolve|denied' }) | Select-Object -Last 1
         $r.speedtest_erro = if ($err -and $err.message) { [string] $err.message }
-                            elseif ($saida.Erro) { ($saida.Erro -split "`n" | Where-Object { $_.Trim() } | Select-Object -Last 1) }
-                            else { 'o speedtest nao concluiu (sem internet no local?).' }
+                            elseif ($linhaReal) { [string] $linhaReal }
+                            elseif ($linhasErro.Count) { [string] ($linhasErro | Select-Object -Last 1) }
+                            else { 'o speedtest nao concluiu (sem internet no local? provedor/proxy bloqueando *.speedtest.net?).' }
         Write-Log ("Speedtest falhou: {0}" -f $r.speedtest_erro) -Nivel Erro
         return [pscustomobject] $r
     }
