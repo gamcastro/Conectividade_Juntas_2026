@@ -132,17 +132,22 @@ TESTANDO… / TESTADO: <veredito> na cor do veredito / NÃO APLICÁVEL), um bot�
 reinventaria as placas sem sair do passo. Wi-Fi só pela bandeja do Windows
 (`cardWifiBandeja` explica). Clicar em "Rodar checagem" de um card →
 **`Invoke-CheckMeio <meio>`** abre o **overlay modal `overlayCheck`**
-(`$Global:CheckMeioAtivo`, uma checagem por vez) que roda em sequência, ao vivo:
-**Fase 1** (`Start-CheckFase1`→`Complete-CheckFase1`: `Invoke-FaseLocal` via
-`Start-TarefaRede`, velocímetro Ookla) → **Fase 2** (`Start-CheckFase2`→
-`Complete-CheckFase2`: gate da VPN `Update-EstadoVpn`/`Test-VpnAtiva`/
-`btnAbrirFortiClient`; se OK, `Start-DiagnosticoAssincrono -AoConcluir`
-= ping + `Test-BandaVpn` + Selenium, velocímetro iperf3; se VPN fora, o técnico
-usa `btnChkVpnImpossivel`→`Invoke-CheckVpnImpossivel` com motivo →
+(`$Global:CheckMeioAtivo`, uma checagem por vez) — **não roda sozinho**: o
+técnico avança pelo botão `btnChkIniciar` (`Invoke-ChkAvancar`, texto/estado por
+`$Global:ChkFase` via `Set-ChkBotao`): "Iniciar" → **Fase 1**
+(`Start-CheckFase1`→`Complete-CheckFase1`: `Invoke-FaseLocal` via
+`Start-TarefaRede`, velocímetro Ookla) → botão vira "Testar a VPN" → **Fase 2**
+(`Start-CheckFase2`→`Complete-CheckFase2`: gate da VPN `Update-EstadoVpn`/
+`Test-VpnAtiva`/`btnAbrirFortiClient`; se OK, `Start-DiagnosticoAssincrono
+-AoConcluir` = ping + `Test-BandaVpn` + Selenium, velocímetro iperf3; se VPN
+fora, `btnChkVpnImpossivel`→`Invoke-CheckVpnImpossivel` com motivo →
 `Set-DiagnosticoVpnImpossivel`, meio inviável) → **Fase 3** (Selenium, "em
-implementação"). `Finish-CheckMeio` → `Add-MedicaoAtual`; `Close-OverlayCheck`
-(`btnChkFechar`) fecha. Um stepper (`txtChkS1/S2/S3`+`dotChkS1/S2/S3`) mostra o
-progresso das 3 fases. Ao concluir, o card fica **verde/amarelo/vermelho**
+implementação"). `Complete-CheckMeio` → `Add-MedicaoAtual`; `Close-OverlayCheck`
+(`btnChkFechar`) fecha. O corpo tem um stepper de 3 linhas
+(`txtChkS1/S2/S3`+`dotChkS1/S2/S3`) e **3 colunas** — Origem (Servidor/IP,
+`grpF1Conn`/`grpF2Conn`) · Medição (velocímetro, `Set-ChkFaseView` alterna
+Fase 1 ↔ Fase 2) · Resultado — e abaixo o log (`lstLog`) em coluna única. Ao
+concluir, o card fica **verde/amarelo/vermelho**
 conforme o veredito. `cardRecMeios`/`txtRecMeios` (`Update-BannerRecomendacao`)
 mostra a recomendação assim que 1+ meio é testado. Trocar de Local zera as
 medições (`Reset-Medicoes`); o gate 3→4 exige 1+ meio testado (ou todos "não
@@ -188,7 +193,7 @@ HTML. Saída em `relatorios/` (gitignored).
   de totalização)
 - Coleta real das métricas da Fase 2 (iperf3 + Selenium + ping) validada ponta a
   ponta (a Fase 1 — rede local — já coleta de verdade)
-- Checagem por meio via overlay modal (v0.6.29, rollback: tag
+- Checagem por meio via overlay modal (v0.6.29+, rollback: tag
   `backup-pre-checkmeio`): falta validar na GUI ponta a ponta em campo;
   Selenium/carregamento web (Fase 3) segue "em implementação"; "motivo da
   recomendação" é obrigatório sempre (provisório)

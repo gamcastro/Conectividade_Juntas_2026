@@ -1259,19 +1259,19 @@
         <!-- ================= OVERLAY: CHECAGEM DO MEIO (modal) ================= -->
         <Grid x:Name="overlayCheck" Grid.ColumnSpan="2" Panel.ZIndex="100"
               Background="#E60F1319" Visibility="Collapsed">
-            <Border Style="{DynamicResource Cartao}" Width="780" MaxHeight="640"
-                    HorizontalAlignment="Center" VerticalAlignment="Center" Padding="24,20">
+            <Border Style="{DynamicResource Cartao}" Width="1160" MaxHeight="740"
+                    HorizontalAlignment="Center" VerticalAlignment="Center" Padding="28,22">
                 <DockPanel LastChildFill="True">
 
+                    <!-- cabecalho + stepper + acao -->
                     <StackPanel DockPanel.Dock="Top">
-                        <TextBlock FontFamily="{DynamicResource Dicon.Display}" FontWeight="Bold" FontSize="20"
+                        <TextBlock FontFamily="{DynamicResource Dicon.Display}" FontWeight="Bold" FontSize="21"
                                    Foreground="{DynamicResource Dicon.Text}"><Run Text="Checagem do meio &#8212; "/><Run
                                    x:Name="txtChkMeioTitulo" Text="LAN"/></TextBlock>
                         <TextBlock Text="Fase 1 (rede local, sem VPN) &#8594; Fase 2 (com a VPN do TRE) &#8594; Sistema de totaliza&#231;&#227;o"
                                    FontSize="11" Foreground="{DynamicResource Dicon.Text3}" Margin="0,2,0,12"/>
 
-                        <!-- stepper -->
-                        <StackPanel Margin="0,0,0,10">
+                        <StackPanel Margin="0,0,0,12">
                             <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
                                 <Ellipse x:Name="dotChkS1" Width="10" Height="10" VerticalAlignment="Center"
                                          Margin="0,0,8,0" Fill="{DynamicResource Dicon.Text3}"/>
@@ -1291,245 +1291,265 @@
                                            Text="3. Sistema de totalizacao (Selenium) - em implementacao"/>
                             </StackPanel>
                         </StackPanel>
+
+                        <StackPanel x:Name="rowChkAcao" Orientation="Horizontal" Margin="0,0,0,6">
+                            <Button x:Name="btnChkIniciar" Content="Iniciar checagem da rede local"
+                                    Style="{DynamicResource BotaoPrimario}" Padding="22,9"/>
+                            <mah:ProgressRing x:Name="ringChk" Width="18" Height="18" Margin="12,0,0,0"
+                                              IsActive="False" Visibility="Collapsed"
+                                              Foreground="{DynamicResource Dicon.Accent}"/>
+                        </StackPanel>
+
+                        <!-- gate da VPN (Fase 2 sem VPN ativa) -->
+                        <Border x:Name="panelChkVpnGate" Style="{DynamicResource Faixa}" Visibility="Collapsed"
+                                Margin="0,8,0,4">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <Ellipse x:Name="dotVpn" Width="10" Height="10" Margin="0,0,8,0"
+                                             VerticalAlignment="Center" Fill="{DynamicResource Dicon.Text3}"/>
+                                    <TextBlock x:Name="txtDiagVpn" TextWrapping="Wrap" VerticalAlignment="Center"
+                                               FontSize="12" Foreground="{DynamicResource Dicon.Text2}"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                    <Button x:Name="btnAbrirFortiClient" Content="Abrir o FortiClient"
+                                            Style="{DynamicResource BotaoSecundario}"/>
+                                    <Button x:Name="btnReverificarVpn" Content="Verificar novamente"
+                                            Style="{DynamicResource BotaoFantasma}" Margin="8,0,0,0"/>
+                                </StackPanel>
+                                <CheckBox x:Name="chkVpnImpossivel" Margin="0,14,0,0"
+                                          Content="N&#227;o foi poss&#237;vel conectar a VPN da JE neste local"/>
+                                <TextBox x:Name="txtVpnMotivo" Margin="0,8,0,0" MinHeight="72"
+                                         TextWrapping="Wrap" AcceptsReturn="True" AcceptsTab="False"
+                                         VerticalContentAlignment="Top" VerticalScrollBarVisibility="Auto"
+                                         Padding="8,6" Visibility="Collapsed"/>
+                                <TextBlock x:Name="txtVpnMotivoDica" Margin="0,4,0,0" FontSize="11" TextWrapping="Wrap"
+                                           Foreground="{DynamicResource Dicon.Text3}" Visibility="Collapsed"
+                                           Text="Descreva o que impediu a conex&#227;o (FortiClient, credencial, link...). Vai no relat&#243;rio; o meio fica registrado como INVI&#193;VEL."/>
+                                <Button x:Name="btnChkVpnImpossivel" Content="Registrar este meio sem a VPN"
+                                        Style="{DynamicResource BotaoSecundario}" Margin="0,10,0,0"
+                                        HorizontalAlignment="Left" Visibility="Collapsed"/>
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
 
                     <!-- rodape -->
-                    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,12,0,0">
+                    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,14,0,0">
                         <Button x:Name="btnChkFechar" Content="Cancelar"
-                                Style="{DynamicResource BotaoSecundario}" Padding="22,8"/>
+                                Style="{DynamicResource BotaoSecundario}" Padding="24,8"/>
                     </StackPanel>
 
-                    <!-- corpo -->
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,0,6,0">
-                        <StackPanel>
+                    <!-- corpo: 3 colunas + log -->
+                    <Grid Margin="0,10,0,0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
 
-                            <!-- gate da VPN (Fase 2 sem VPN ativa) -->
-                            <Border x:Name="panelChkVpnGate" Style="{DynamicResource Faixa}" Visibility="Collapsed"
-                                    Margin="0,4,0,0">
-                                <StackPanel>
-                                    <StackPanel Orientation="Horizontal">
-                                        <Ellipse x:Name="dotVpn" Width="10" Height="10" Margin="0,0,8,0"
-                                                 VerticalAlignment="Center" Fill="{DynamicResource Dicon.Text3}"/>
-                                        <TextBlock x:Name="txtDiagVpn" TextWrapping="Wrap" VerticalAlignment="Center"
-                                                   FontSize="12" Foreground="{DynamicResource Dicon.Text2}"/>
-                                    </StackPanel>
-                                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                                        <Button x:Name="btnAbrirFortiClient" Content="Abrir o FortiClient"
-                                                Style="{DynamicResource BotaoSecundario}"/>
-                                        <Button x:Name="btnReverificarVpn" Content="Verificar novamente"
-                                                Style="{DynamicResource BotaoFantasma}" Margin="8,0,0,0"/>
-                                    </StackPanel>
-                                    <CheckBox x:Name="chkVpnImpossivel" Margin="0,14,0,0"
-                                              Content="N&#227;o foi poss&#237;vel conectar a VPN da JE neste local"/>
-                                    <TextBox x:Name="txtVpnMotivo" Margin="0,8,0,0" MinHeight="80"
-                                             TextWrapping="Wrap" AcceptsReturn="True" AcceptsTab="False"
-                                             VerticalContentAlignment="Top" VerticalScrollBarVisibility="Auto"
-                                             Padding="8,6" Visibility="Collapsed"/>
-                                    <TextBlock x:Name="txtVpnMotivoDica" Margin="0,4,0,0" FontSize="11" TextWrapping="Wrap"
-                                               Foreground="{DynamicResource Dicon.Text3}" Visibility="Collapsed"
-                                               Text="Descreva o que impediu a conex&#227;o (FortiClient, credencial, link...). Vai no relat&#243;rio; o meio fica registrado como INVI&#193;VEL."/>
-                                    <Button x:Name="btnChkVpnImpossivel" Content="Registrar este meio sem a VPN"
-                                            Style="{DynamicResource BotaoSecundario}" Margin="0,10,0,0"
-                                            HorizontalAlignment="Left" Visibility="Collapsed"/>
-                                </StackPanel>
-                            </Border>
+                        <Grid Grid.Row="0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="300"/>
+                                <ColumnDefinition Width="24"/>
+                                <ColumnDefinition Width="320"/>
+                                <ColumnDefinition Width="24"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
 
-                            <!-- Fase 1: velocimetro Ookla -->
-                            <StackPanel x:Name="panelChkFase1" Visibility="Collapsed" Margin="0,4,0,0">
-                                <TextBlock Text="Fase 1 - teste de velocidade (Ookla)" Style="{DynamicResource SecaoTela}"
-                                           Margin="0,0,0,8"/>
-                                <StackPanel x:Name="panelSpeedConn" Margin="0,0,0,4">
-                                    <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
-                                        <TextBlock FontSize="13" Foreground="{DynamicResource Dicon.Text3}"><Run Text="Provedor: "/><Run
+                            <!-- COLUNA 1: servidor / IP -->
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="ORIGEM DA CONEX&#195;O" FontFamily="Consolas" FontSize="9"
+                                           Foreground="{DynamicResource Dicon.Text3}" Margin="0,0,0,8"/>
+                                <StackPanel x:Name="grpF1Conn">
+                                    <StackPanel x:Name="panelSpeedConn">
+                                        <TextBlock FontSize="13" TextWrapping="Wrap" Foreground="{DynamicResource Dicon.Text3}" Margin="0,3,0,0"><Run Text="Provedor: "/><Run
                                                    x:Name="runConnProvedor" FontWeight="SemiBold" Foreground="{DynamicResource Dicon.Text}"/></TextBlock>
-                                    </StackPanel>
-                                    <StackPanel Orientation="Horizontal" Margin="0,5,0,0">
-                                        <TextBlock FontSize="13" TextWrapping="Wrap" Foreground="{DynamicResource Dicon.Text3}"><Run Text="Servidor: "/><Run
+                                        <TextBlock FontSize="13" TextWrapping="Wrap" Foreground="{DynamicResource Dicon.Text3}" Margin="0,6,0,0"><Run Text="Servidor: "/><Run
                                                    x:Name="runConnServidor" FontWeight="SemiBold" Foreground="{DynamicResource Dicon.Text}"/></TextBlock>
-                                    </StackPanel>
-                                    <StackPanel Orientation="Horizontal" Margin="0,5,0,0">
-                                        <TextBlock FontSize="13" Foreground="{DynamicResource Dicon.Text3}"><Run Text="IP: "/><Run
+                                        <TextBlock FontSize="13" TextWrapping="Wrap" Foreground="{DynamicResource Dicon.Text3}" Margin="0,6,0,0"><Run Text="IP: "/><Run
                                                    x:Name="runConnIp" FontWeight="SemiBold" FontFamily="Consolas" Foreground="{DynamicResource Dicon.Text}"/></TextBlock>
                                     </StackPanel>
+                                    <TextBlock x:Name="txtSpeedErro" FontSize="12" TextWrapping="Wrap" Margin="0,8,0,0"
+                                               Foreground="{DynamicResource Dicon.Inviavel}" Visibility="Collapsed"/>
                                 </StackPanel>
-                                <TextBlock x:Name="txtSpeedErro" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0"
-                                           Foreground="{DynamicResource Dicon.Inviavel}" Visibility="Collapsed"/>
-                                <Canvas x:Name="canvasVelo" Width="280" Height="235" HorizontalAlignment="Center" Margin="0,4,0,0">
-                                    <Path StrokeThickness="16" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
-                                          Stroke="{DynamicResource Dicon.Hair}">
-                                        <Path.Data><PathGeometry><PathFigure StartPoint="62.22,217.78">
-                                            <ArcSegment Point="217.78,217.78" Size="110,110" SweepDirection="Clockwise" IsLargeArc="True"/>
-                                        </PathFigure></PathGeometry></Path.Data>
-                                    </Path>
-                                    <Path StrokeThickness="16" StrokeStartLineCap="Round" StrokeEndLineCap="Round">
-                                        <Path.Stroke><LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                            <GradientStop Color="#6E9BFF" Offset="0"/><GradientStop Color="#4FC177" Offset="1"/>
-                                        </LinearGradientBrush></Path.Stroke>
-                                        <Path.Data><PathGeometry><PathFigure StartPoint="62.22,217.78">
-                                            <ArcSegment x:Name="segVelo" Point="62.22,217.78" Size="110,110" SweepDirection="Clockwise" IsLargeArc="False"/>
-                                        </PathFigure></PathGeometry></Path.Data>
-                                    </Path>
-                                    <Path Fill="{DynamicResource Dicon.Text}" Data="M -3.5,0 L 3.5,0 L 0,-100 Z">
-                                        <Path.RenderTransform><TransformGroup>
-                                            <RotateTransform x:Name="rotAgulha" Angle="-135"/>
-                                            <TranslateTransform X="140" Y="140"/>
-                                        </TransformGroup></Path.RenderTransform>
-                                    </Path>
-                                    <Ellipse Width="16" Height="16" Fill="{DynamicResource Dicon.Text}" Canvas.Left="132" Canvas.Top="132"/>
-                                    <StackPanel Canvas.Left="45" Canvas.Top="96" Width="190">
-                                        <TextBlock x:Name="txtVeloNum" Text="0" FontSize="32" FontWeight="Bold"
-                                                   TextAlignment="Center" Foreground="{DynamicResource Dicon.Text}"/>
-                                        <TextBlock x:Name="txtVeloUnid" Text="Mbps" FontSize="11" TextAlignment="Center"
-                                                   Foreground="{DynamicResource Dicon.Text2}"/>
-                                        <TextBlock x:Name="txtVeloFase" Text="" FontFamily="Consolas" FontSize="9"
-                                                   TextAlignment="Center" Margin="0,4,0,0" Foreground="{DynamicResource Dicon.Text3}"/>
-                                    </StackPanel>
-                                    <TextBlock x:Name="tickVelo0" FontFamily="Consolas" FontSize="8" Foreground="{DynamicResource Dicon.Text3}"/>
-                                    <TextBlock x:Name="tickVelo1" FontFamily="Consolas" FontSize="8" Foreground="{DynamicResource Dicon.Text3}"/>
-                                    <TextBlock x:Name="tickVelo2" FontFamily="Consolas" FontSize="8" Foreground="{DynamicResource Dicon.Text3}"/>
-                                    <TextBlock x:Name="tickVelo3" FontFamily="Consolas" FontSize="8" Foreground="{DynamicResource Dicon.Text3}"/>
-                                    <TextBlock x:Name="tickVelo4" FontFamily="Consolas" FontSize="8" Foreground="{DynamicResource Dicon.Text3}"/>
-                                    <TextBlock x:Name="tickVelo5" FontFamily="Consolas" FontSize="8" Foreground="{DynamicResource Dicon.Text3}"/>
-                                    <TextBlock x:Name="tickVelo6" FontFamily="Consolas" FontSize="8" Foreground="{DynamicResource Dicon.Text3}"/>
-                                </Canvas>
+                                <StackPanel x:Name="grpF2Conn" Visibility="Collapsed">
+                                    <TextBlock x:Name="txtIperfInfo" FontFamily="Consolas" FontSize="11" TextWrapping="Wrap"
+                                               Foreground="{DynamicResource Dicon.Text3}"/>
+                                    <TextBlock x:Name="txtIperfServidor" FontSize="12" TextWrapping="Wrap" Margin="0,6,0,0"
+                                               Foreground="{DynamicResource Dicon.Text2}"/>
+                                    <TextBlock x:Name="txtIperfErro" FontSize="12" TextWrapping="Wrap" Margin="0,8,0,0"
+                                               Foreground="{DynamicResource Dicon.Inviavel}" Visibility="Collapsed"/>
+                                </StackPanel>
+                            </StackPanel>
+
+                            <!-- COLUNA 2: velocimetro -->
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="MEDI&#199;&#195;O" FontFamily="Consolas" FontSize="9"
+                                           Foreground="{DynamicResource Dicon.Text3}" Margin="0,0,0,4"/>
+                                <Grid>
+                                    <Canvas x:Name="canvasVelo" Width="280" Height="235" HorizontalAlignment="Center">
+                                        <Path StrokeThickness="16" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                              Stroke="{DynamicResource Dicon.Hair}">
+                                            <Path.Data><PathGeometry><PathFigure StartPoint="62.22,217.78">
+                                                <ArcSegment Point="217.78,217.78" Size="110,110" SweepDirection="Clockwise" IsLargeArc="True"/>
+                                            </PathFigure></PathGeometry></Path.Data>
+                                        </Path>
+                                        <Path StrokeThickness="16" StrokeStartLineCap="Round" StrokeEndLineCap="Round">
+                                            <Path.Stroke><LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                <GradientStop Color="#6E9BFF" Offset="0"/><GradientStop Color="#4FC177" Offset="1"/>
+                                            </LinearGradientBrush></Path.Stroke>
+                                            <Path.Data><PathGeometry><PathFigure StartPoint="62.22,217.78">
+                                                <ArcSegment x:Name="segVelo" Point="62.22,217.78" Size="110,110" SweepDirection="Clockwise" IsLargeArc="False"/>
+                                            </PathFigure></PathGeometry></Path.Data>
+                                        </Path>
+                                        <Path Fill="{DynamicResource Dicon.Text}" Data="M -3.5,0 L 3.5,0 L 0,-100 Z">
+                                            <Path.RenderTransform><TransformGroup>
+                                                <RotateTransform x:Name="rotAgulha" Angle="-135"/>
+                                                <TranslateTransform X="140" Y="140"/>
+                                            </TransformGroup></Path.RenderTransform>
+                                        </Path>
+                                        <Ellipse Width="16" Height="16" Fill="{DynamicResource Dicon.Text}" Canvas.Left="132" Canvas.Top="132"/>
+                                        <StackPanel Canvas.Left="45" Canvas.Top="96" Width="190">
+                                            <TextBlock x:Name="txtVeloNum" Text="0" FontSize="32" FontWeight="Bold"
+                                                       TextAlignment="Center" Foreground="{DynamicResource Dicon.Text}"/>
+                                            <TextBlock x:Name="txtVeloUnid" Text="Mbps" FontSize="11" TextAlignment="Center"
+                                                       Foreground="{DynamicResource Dicon.Text2}"/>
+                                            <TextBlock x:Name="txtVeloFase" Text="" FontFamily="Consolas" FontSize="9"
+                                                       TextAlignment="Center" Margin="0,4,0,0" Foreground="{DynamicResource Dicon.Text3}"/>
+                                        </StackPanel>
+                                        <TextBlock x:Name="tickVelo0" FontFamily="Consolas" FontSize="8" Foreground="{DynamicResource Dicon.Text3}"/>
+                                        <TextBlock x:Name="tickVelo1" FontFamily="Consolas" FontSize="8" Foreground="{DynamicResource Dicon.Text3}"/>
+                                        <TextBlock x:Name="tickVelo2" FontFamily="Consolas" FontSize="8" Foreground="{DynamicResource Dicon.Text3}"/>
+                                        <TextBlock x:Name="tickVelo3" FontFamily="Consolas" FontSize="8" Foreground="{DynamicResource Dicon.Text3}"/>
+                                        <TextBlock x:Name="tickVelo4" FontFamily="Consolas" FontSize="8" Foreground="{DynamicResource Dicon.Text3}"/>
+                                        <TextBlock x:Name="tickVelo5" FontFamily="Consolas" FontSize="8" Foreground="{DynamicResource Dicon.Text3}"/>
+                                        <TextBlock x:Name="tickVelo6" FontFamily="Consolas" FontSize="8" Foreground="{DynamicResource Dicon.Text3}"/>
+                                    </Canvas>
+                                    <Canvas x:Name="canvasVeloVpn" Width="280" Height="235" HorizontalAlignment="Center" Visibility="Collapsed">
+                                        <Path StrokeThickness="16" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                              Stroke="{DynamicResource Dicon.Hair}">
+                                            <Path.Data><PathGeometry><PathFigure StartPoint="62.22,217.78">
+                                                <ArcSegment Point="217.78,217.78" Size="110,110" SweepDirection="Clockwise" IsLargeArc="True"/>
+                                            </PathFigure></PathGeometry></Path.Data>
+                                        </Path>
+                                        <Path StrokeThickness="16" StrokeStartLineCap="Round" StrokeEndLineCap="Round">
+                                            <Path.Stroke><LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                <GradientStop Color="#6E9BFF" Offset="0"/><GradientStop Color="#4FC177" Offset="1"/>
+                                            </LinearGradientBrush></Path.Stroke>
+                                            <Path.Data><PathGeometry><PathFigure StartPoint="62.22,217.78">
+                                                <ArcSegment x:Name="segVeloVpn" Point="62.22,217.78" Size="110,110" SweepDirection="Clockwise" IsLargeArc="False"/>
+                                            </PathFigure></PathGeometry></Path.Data>
+                                        </Path>
+                                        <Path Fill="{DynamicResource Dicon.Text}" Data="M -3.5,0 L 3.5,0 L 0,-100 Z">
+                                            <Path.RenderTransform><TransformGroup>
+                                                <RotateTransform x:Name="rotAgulhaVpn" Angle="-135"/>
+                                                <TranslateTransform X="140" Y="140"/>
+                                            </TransformGroup></Path.RenderTransform>
+                                        </Path>
+                                        <Ellipse Width="16" Height="16" Fill="{DynamicResource Dicon.Text}" Canvas.Left="132" Canvas.Top="132"/>
+                                        <StackPanel Canvas.Left="45" Canvas.Top="96" Width="190">
+                                            <TextBlock x:Name="txtVeloNumVpn" Text="0" FontSize="32" FontWeight="Bold"
+                                                       TextAlignment="Center" Foreground="{DynamicResource Dicon.Text}"/>
+                                            <TextBlock x:Name="txtVeloUnidVpn" Text="Mbps" FontSize="11" TextAlignment="Center"
+                                                       Foreground="{DynamicResource Dicon.Text2}"/>
+                                            <TextBlock x:Name="txtVeloFaseVpn" Text="" FontFamily="Consolas" FontSize="9"
+                                                       TextAlignment="Center" Margin="0,4,0,0" Foreground="{DynamicResource Dicon.Text3}"/>
+                                        </StackPanel>
+                                        <TextBlock x:Name="tickVeloVpn0" FontFamily="Consolas" FontSize="8" Foreground="{DynamicResource Dicon.Text3}"/>
+                                        <TextBlock x:Name="tickVeloVpn1" FontFamily="Consolas" FontSize="8" Foreground="{DynamicResource Dicon.Text3}"/>
+                                        <TextBlock x:Name="tickVeloVpn2" FontFamily="Consolas" FontSize="8" Foreground="{DynamicResource Dicon.Text3}"/>
+                                        <TextBlock x:Name="tickVeloVpn3" FontFamily="Consolas" FontSize="8" Foreground="{DynamicResource Dicon.Text3}"/>
+                                        <TextBlock x:Name="tickVeloVpn4" FontFamily="Consolas" FontSize="8" Foreground="{DynamicResource Dicon.Text3}"/>
+                                        <TextBlock x:Name="tickVeloVpn5" FontFamily="Consolas" FontSize="8" Foreground="{DynamicResource Dicon.Text3}"/>
+                                        <TextBlock x:Name="tickVeloVpn6" FontFamily="Consolas" FontSize="8" Foreground="{DynamicResource Dicon.Text3}"/>
+                                    </Canvas>
+                                </Grid>
                                 <ProgressBar x:Name="prgSpeed" Height="4" Minimum="0" Maximum="1" Value="0" Margin="0,4,0,0"
                                              BorderThickness="0" Background="{DynamicResource Dicon.Hair}"
                                              Foreground="{DynamicResource Dicon.Accent}"/>
-                                <Grid x:Name="painelSpeedResultado" Margin="0,12,0,0" Visibility="Collapsed">
-                                    <UniformGrid Rows="1" Columns="2">
-                                        <Border Style="{DynamicResource Faixa}" Margin="0,0,5,0">
+                                <ProgressBar x:Name="prgSpeedVpn" Height="4" Minimum="0" Maximum="1" Value="0" Margin="0,4,0,0"
+                                             BorderThickness="0" Background="{DynamicResource Dicon.Hair}" Visibility="Collapsed"
+                                             Foreground="{DynamicResource Dicon.Accent}"/>
+                                <ProgressBar x:Name="prgProgresso" Height="1" Visibility="Collapsed"/>
+                                <mah:ProgressRing x:Name="ringDiag" Width="14" Height="14" IsActive="False"
+                                                  Visibility="Collapsed" HorizontalAlignment="Center"
+                                                  Foreground="{DynamicResource Dicon.Accent}"/>
+                            </StackPanel>
+
+                            <!-- COLUNA 3: resultado -->
+                            <StackPanel Grid.Column="4">
+                                <TextBlock Text="RESULTADO" FontFamily="Consolas" FontSize="9"
+                                           Foreground="{DynamicResource Dicon.Text3}" Margin="0,0,0,8"/>
+                                <TextBlock x:Name="txtChkResultadoVazio" Text="Rode a checagem para ver o resultado aqui."
+                                           FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource Dicon.Text3}"/>
+                                <Grid x:Name="painelSpeedResultado" Visibility="Collapsed">
+                                    <StackPanel>
+                                        <Border Style="{DynamicResource Faixa}" Margin="0,0,0,6">
                                             <TextBlock Foreground="{DynamicResource Dicon.Text}"><Run Text="DOWN " FontFamily="Consolas" FontSize="9"
                                                        Foreground="{DynamicResource Dicon.Text3}"/><Run x:Name="runResDown" Text="--" FontSize="20" FontWeight="Bold"/><Run
                                                        Text=" Mbps" FontSize="10" Foreground="{DynamicResource Dicon.Text2}"/></TextBlock>
                                         </Border>
-                                        <Border Style="{DynamicResource Faixa}" Margin="5,0,0,0">
+                                        <Border Style="{DynamicResource Faixa}" Margin="0,0,0,6">
                                             <TextBlock Foreground="{DynamicResource Dicon.Text}"><Run Text="UP " FontFamily="Consolas" FontSize="9"
                                                        Foreground="{DynamicResource Dicon.Text3}"/><Run x:Name="runResUp" Text="--" FontSize="20" FontWeight="Bold"/><Run
                                                        Text=" Mbps" FontSize="10" Foreground="{DynamicResource Dicon.Text2}"/></TextBlock>
                                         </Border>
-                                    </UniformGrid>
-                                    <UniformGrid Rows="1" Columns="3" Margin="0,44,0,0">
-                                        <TextBlock FontFamily="Consolas" FontSize="11" Foreground="{DynamicResource Dicon.Text2}"><Run Text="ping "/><Run
-                                                   x:Name="runResPing" Text="--" FontWeight="Bold" Foreground="{DynamicResource Dicon.Text}"/><Run Text=" ms"/></TextBlock>
-                                        <TextBlock FontFamily="Consolas" FontSize="11" Foreground="{DynamicResource Dicon.Text2}"><Run Text="jitter "/><Run
-                                                   x:Name="runResJitter" Text="--" FontWeight="Bold" Foreground="{DynamicResource Dicon.Text}"/><Run Text=" ms"/></TextBlock>
-                                        <TextBlock FontFamily="Consolas" FontSize="11" Foreground="{DynamicResource Dicon.Text2}"><Run Text="perda "/><Run
+                                        <TextBlock FontFamily="Consolas" FontSize="11" Foreground="{DynamicResource Dicon.Text2}" Margin="0,2,0,0"><Run Text="ping "/><Run
+                                                   x:Name="runResPing" Text="--" FontWeight="Bold" Foreground="{DynamicResource Dicon.Text}"/><Run Text=" ms   jitter "/><Run
+                                                   x:Name="runResJitter" Text="--" FontWeight="Bold" Foreground="{DynamicResource Dicon.Text}"/><Run Text=" ms   perda "/><Run
                                                    x:Name="runResPerda" Text="--" FontWeight="Bold" Foreground="{DynamicResource Dicon.Text}"/><Run Text=" %"/></TextBlock>
-                                    </UniformGrid>
-                                </Grid>
-                            </StackPanel>
-
-                            <!-- Fase 2: velocimetro iperf3 (VPN) -->
-                            <StackPanel x:Name="panelChkFase2" Visibility="Collapsed" Margin="0,10,0,0">
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="Fase 2 - banda pela VPN (iperf3)" Style="{DynamicResource SecaoTela}"/>
-                                    <mah:ProgressRing x:Name="ringDiag" Width="16" Height="16" Margin="10,0,0,0"
-                                                      IsActive="False" Visibility="Collapsed"
-                                                      Foreground="{DynamicResource Dicon.Accent}"/>
-                                </StackPanel>
-                                <TextBlock x:Name="txtIperfInfo" FontFamily="Consolas" FontSize="11" TextWrapping="Wrap"
-                                           Foreground="{DynamicResource Dicon.Text3}" Margin="0,4,0,0"/>
-                                <TextBlock x:Name="txtIperfErro" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,0"
-                                           Foreground="{DynamicResource Dicon.Inviavel}" Visibility="Collapsed"/>
-                                <Canvas x:Name="canvasVeloVpn" Width="280" Height="235" HorizontalAlignment="Center" Margin="0,4,0,0">
-                                    <Path StrokeThickness="16" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
-                                          Stroke="{DynamicResource Dicon.Hair}">
-                                        <Path.Data><PathGeometry><PathFigure StartPoint="62.22,217.78">
-                                            <ArcSegment Point="217.78,217.78" Size="110,110" SweepDirection="Clockwise" IsLargeArc="True"/>
-                                        </PathFigure></PathGeometry></Path.Data>
-                                    </Path>
-                                    <Path StrokeThickness="16" StrokeStartLineCap="Round" StrokeEndLineCap="Round">
-                                        <Path.Stroke><LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                            <GradientStop Color="#6E9BFF" Offset="0"/><GradientStop Color="#4FC177" Offset="1"/>
-                                        </LinearGradientBrush></Path.Stroke>
-                                        <Path.Data><PathGeometry><PathFigure StartPoint="62.22,217.78">
-                                            <ArcSegment x:Name="segVeloVpn" Point="62.22,217.78" Size="110,110" SweepDirection="Clockwise" IsLargeArc="False"/>
-                                        </PathFigure></PathGeometry></Path.Data>
-                                    </Path>
-                                    <Path Fill="{DynamicResource Dicon.Text}" Data="M -3.5,0 L 3.5,0 L 0,-100 Z">
-                                        <Path.RenderTransform><TransformGroup>
-                                            <RotateTransform x:Name="rotAgulhaVpn" Angle="-135"/>
-                                            <TranslateTransform X="140" Y="140"/>
-                                        </TransformGroup></Path.RenderTransform>
-                                    </Path>
-                                    <Ellipse Width="16" Height="16" Fill="{DynamicResource Dicon.Text}" Canvas.Left="132" Canvas.Top="132"/>
-                                    <StackPanel Canvas.Left="45" Canvas.Top="96" Width="190">
-                                        <TextBlock x:Name="txtVeloNumVpn" Text="0" FontSize="32" FontWeight="Bold"
-                                                   TextAlignment="Center" Foreground="{DynamicResource Dicon.Text}"/>
-                                        <TextBlock x:Name="txtVeloUnidVpn" Text="Mbps" FontSize="11" TextAlignment="Center"
-                                                   Foreground="{DynamicResource Dicon.Text2}"/>
-                                        <TextBlock x:Name="txtVeloFaseVpn" Text="" FontFamily="Consolas" FontSize="9"
-                                                   TextAlignment="Center" Margin="0,4,0,0" Foreground="{DynamicResource Dicon.Text3}"/>
                                     </StackPanel>
-                                    <TextBlock x:Name="tickVeloVpn0" FontFamily="Consolas" FontSize="8" Foreground="{DynamicResource Dicon.Text3}"/>
-                                    <TextBlock x:Name="tickVeloVpn1" FontFamily="Consolas" FontSize="8" Foreground="{DynamicResource Dicon.Text3}"/>
-                                    <TextBlock x:Name="tickVeloVpn2" FontFamily="Consolas" FontSize="8" Foreground="{DynamicResource Dicon.Text3}"/>
-                                    <TextBlock x:Name="tickVeloVpn3" FontFamily="Consolas" FontSize="8" Foreground="{DynamicResource Dicon.Text3}"/>
-                                    <TextBlock x:Name="tickVeloVpn4" FontFamily="Consolas" FontSize="8" Foreground="{DynamicResource Dicon.Text3}"/>
-                                    <TextBlock x:Name="tickVeloVpn5" FontFamily="Consolas" FontSize="8" Foreground="{DynamicResource Dicon.Text3}"/>
-                                    <TextBlock x:Name="tickVeloVpn6" FontFamily="Consolas" FontSize="8" Foreground="{DynamicResource Dicon.Text3}"/>
-                                </Canvas>
-                                <ProgressBar x:Name="prgSpeedVpn" Height="4" Minimum="0" Maximum="1" Value="0" Margin="0,4,0,0"
-                                             BorderThickness="0" Background="{DynamicResource Dicon.Hair}"
-                                             Foreground="{DynamicResource Dicon.Accent}"/>
-                                <ProgressBar x:Name="prgProgresso" Height="1" Visibility="Collapsed"/>
-                                <Grid x:Name="painelIperfResultado" Margin="0,12,0,0" Visibility="Collapsed">
-                                    <UniformGrid Rows="1" Columns="2">
-                                        <Border Style="{DynamicResource Faixa}" Margin="0,0,5,0">
+                                </Grid>
+                                <Grid x:Name="painelIperfResultado" Visibility="Collapsed" Margin="0,4,0,0">
+                                    <StackPanel>
+                                        <Border Style="{DynamicResource Faixa}" Margin="0,0,0,6">
                                             <TextBlock Foreground="{DynamicResource Dicon.Text}"><Run Text="DOWN VPN " FontFamily="Consolas" FontSize="9"
                                                        Foreground="{DynamicResource Dicon.Text3}"/><Run x:Name="runIperfDown" Text="--" FontSize="20" FontWeight="Bold"/><Run
                                                        Text=" Mbps" FontSize="10" Foreground="{DynamicResource Dicon.Text2}"/></TextBlock>
                                         </Border>
-                                        <Border Style="{DynamicResource Faixa}" Margin="5,0,0,0">
+                                        <Border Style="{DynamicResource Faixa}" Margin="0,0,0,6">
                                             <TextBlock Foreground="{DynamicResource Dicon.Text}"><Run Text="UP VPN " FontFamily="Consolas" FontSize="9"
                                                        Foreground="{DynamicResource Dicon.Text3}"/><Run x:Name="runIperfUp" Text="--" FontSize="20" FontWeight="Bold"/><Run
                                                        Text=" Mbps" FontSize="10" Foreground="{DynamicResource Dicon.Text2}"/></TextBlock>
                                         </Border>
-                                    </UniformGrid>
-                                    <UniformGrid Rows="1" Columns="4" Margin="0,44,0,0">
-                                        <TextBlock FontFamily="Consolas" FontSize="11" Foreground="{DynamicResource Dicon.Text2}"><Run Text="ping "/><Run
-                                                   x:Name="runIperfPing" Text="--" FontWeight="Bold" Foreground="{DynamicResource Dicon.Text}"/><Run Text=" ms"/></TextBlock>
-                                        <TextBlock FontFamily="Consolas" FontSize="11" Foreground="{DynamicResource Dicon.Text2}"><Run Text="jitter "/><Run
+                                        <TextBlock FontFamily="Consolas" FontSize="11" Foreground="{DynamicResource Dicon.Text2}" Margin="0,2,0,0"><Run Text="ping "/><Run
+                                                   x:Name="runIperfPing" Text="--" FontWeight="Bold" Foreground="{DynamicResource Dicon.Text}"/><Run Text=" ms   jitter "/><Run
                                                    x:Name="runIperfJitter" Text="--" FontWeight="Bold" Foreground="{DynamicResource Dicon.Text}"/><Run Text=" ms"/></TextBlock>
-                                        <TextBlock FontFamily="Consolas" FontSize="11" Foreground="{DynamicResource Dicon.Text2}"><Run Text="perda "/><Run
-                                                   x:Name="runIperfPerda" Text="--" FontWeight="Bold" Foreground="{DynamicResource Dicon.Text}"/><Run Text=" %"/></TextBlock>
-                                        <TextBlock FontFamily="Consolas" FontSize="11" Foreground="{DynamicResource Dicon.Text2}"><Run Text="retr. "/><Run
+                                        <TextBlock FontFamily="Consolas" FontSize="11" Foreground="{DynamicResource Dicon.Text2}" Margin="0,2,0,0"><Run Text="perda "/><Run
+                                                   x:Name="runIperfPerda" Text="--" FontWeight="Bold" Foreground="{DynamicResource Dicon.Text}"/><Run Text=" %   retr. "/><Run
                                                    x:Name="runIperfRetrans" Text="--" FontWeight="Bold" Foreground="{DynamicResource Dicon.Text}"/></TextBlock>
-                                    </UniformGrid>
-                                    <TextBlock x:Name="txtIperfServidor" Margin="0,72,0,0" FontSize="12"
-                                               Foreground="{DynamicResource Dicon.Text2}"/>
+                                    </StackPanel>
                                 </Grid>
                             </StackPanel>
+                        </Grid>
 
-                            <Expander Header="Detalhes da execu&#231;&#227;o" Margin="0,14,0,0" IsExpanded="False"
-                                      Foreground="{DynamicResource Dicon.Text2}">
-                                <Border Background="{DynamicResource Dicon.SurfaceAlt}"
-                                        BorderBrush="{DynamicResource Dicon.Hair}" BorderThickness="1"
-                                        CornerRadius="4" Margin="0,8,0,0" Height="180">
-                                    <ListBox x:Name="lstLog" Background="Transparent" BorderThickness="0"
-                                             Foreground="{DynamicResource Dicon.Text2}" FontFamily="Consolas" FontSize="12"
-                                             ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                                             ScrollViewer.VerticalScrollBarVisibility="Auto">
-                                        <ListBox.ItemContainerStyle>
-                                            <Style TargetType="ListBoxItem">
-                                                <Setter Property="Background" Value="Transparent"/>
-                                                <Setter Property="Padding" Value="2,1"/>
-                                                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-                                            </Style>
-                                        </ListBox.ItemContainerStyle>
-                                        <ListBox.ItemTemplate>
-                                            <DataTemplate>
-                                                <StackPanel Orientation="Horizontal">
-                                                    <TextBlock Text="{Binding Hora}" Foreground="{DynamicResource Dicon.Text3}" Margin="0,0,10,0"/>
-                                                    <TextBlock Text="{Binding Texto}" Foreground="{Binding Cor}" TextWrapping="Wrap"/>
-                                                </StackPanel>
-                                            </DataTemplate>
-                                        </ListBox.ItemTemplate>
-                                    </ListBox>
-                                </Border>
-                            </Expander>
+                        <!-- LOG: uma coluna so -->
+                        <StackPanel Grid.Row="1" Margin="0,16,0,0">
+                            <TextBlock Text="Detalhes da execu&#231;&#227;o" Style="{DynamicResource SecaoTela}" Margin="0,0,0,6"/>
+                            <Border Background="{DynamicResource Dicon.SurfaceAlt}"
+                                    BorderBrush="{DynamicResource Dicon.Hair}" BorderThickness="1"
+                                    CornerRadius="4" Height="150">
+                                <ListBox x:Name="lstLog" Background="Transparent" BorderThickness="0"
+                                         Foreground="{DynamicResource Dicon.Text2}" FontFamily="Consolas" FontSize="12"
+                                         ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                         ScrollViewer.VerticalScrollBarVisibility="Auto">
+                                    <ListBox.ItemContainerStyle>
+                                        <Style TargetType="ListBoxItem">
+                                            <Setter Property="Background" Value="Transparent"/>
+                                            <Setter Property="Padding" Value="2,1"/>
+                                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                        </Style>
+                                    </ListBox.ItemContainerStyle>
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="{Binding Hora}" Foreground="{DynamicResource Dicon.Text3}" Margin="0,0,10,0"/>
+                                                <TextBlock Text="{Binding Texto}" Foreground="{Binding Cor}" TextWrapping="Wrap"/>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                            </Border>
                         </StackPanel>
-                    </ScrollViewer>
+                    </Grid>
                 </DockPanel>
             </Border>
         </Grid>

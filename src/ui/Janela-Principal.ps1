@@ -23,6 +23,7 @@ $Global:LoginEmAndamento   = $false   # trava reentrancia de Enter-Sessao (duplo
 $Global:FaseLocalPayload   = $null   # {Lan;Wireless;Internet;Quando} da fase 1 (sem VPN)
 $Global:FaseLocalTipo      = ''      # meio da checagem em curso: '' | 'lan' | 'wifi' | 'celular'
 $Global:CheckMeioAtivo     = $false  # overlay de checagem de um meio esta aberto/rodando
+$Global:ChkFase            = ''      # estado do overlay: ''|f1-pronto|f1-rodando|f2-pronto|f2-rodando|fim
 
 # --- multi-meio: o local pode ter varias medicoes, uma por meio de conexao ---
 $Global:Medicoes           = @()     # medicoes ja concluidas/marcadas neste local
@@ -270,6 +271,7 @@ function New-JanelaPrincipal {
     $window.FindName('btnCheckLan').Add_Click({ Invoke-CheckMeio 'lan' })
     $window.FindName('btnCheckWifi').Add_Click({ Invoke-CheckMeio 'wifi' })
     $window.FindName('btnCheckCelular').Add_Click({ Invoke-CheckMeio 'celular' })
+    $window.FindName('btnChkIniciar').Add_Click({ Invoke-ChkAvancar })
     $window.FindName('btnChkFechar').Add_Click({ Close-OverlayCheck })
     $window.FindName('btnChkVpnImpossivel').Add_Click({ Invoke-CheckVpnImpossivel })
     $window.FindName('btnAbrirFortiClient').Add_Click({ Invoke-AbrirFortiClient })
@@ -1850,8 +1852,43 @@ function Update-IperfPainel {
 
 # =============================================================== OVERLAY: CHECAGEM DE UM MEIO
 # Cada card do passo 3 tem seu botao "Rodar checagem" -> Invoke-CheckMeio, que
-# abre o overlay modal e roda Fase 1 (rede local) -> Fase 2 (VPN) -> (Selenium,
-# pendente). Uma checagem por vez ($Global:CheckMeioAtivo).
+# abre o overlay modal. O tecnico avanca a mao: "Iniciar" roda a Fase 1;
+# "Testar a VPN" roda a Fase 2; ao fim, "Concluir" fecha. Fase 3 (Selenium)
+# fica "em implementacao". Uma checagem por vez ($Global:CheckMeioAtivo);
+# estado da maquina em $Global:ChkFase ('f1-pronto'|'f1-rodando'|'f2-pronto'|
+# 'f2-rodando'|'fim').
+
+# Botao "Iniciar"/"Testar a VPN" do overlay: texto + visibilidade por $Global:ChkFase.
+function Set-ChkBotao {
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    $b = $w.FindName('btnChkIniciar')
+    if (-not $b) { return }
+    switch ($Global:ChkFase) {
+        'f1-pronto' { $b.Content = 'Iniciar checagem da rede local'; $b.Visibility = 'Visible'; $b.IsEnabled = $true }
+        'f2-pronto' { $b.Content = 'Testar a VPN (Fase 2)';           $b.Visibility = 'Visible'; $b.IsEnabled = $true }
+        default     { $b.Visibility = 'Collapsed' }
+    }
+    $r = $w.FindName('ringChk')
+    if ($r) {
+        $rod = $Global:ChkFase -in @('f1-rodando', 'f2-rodando')
+        $r.IsActive = $rod ; $r.Visibility = if ($rod) { 'Visible' } else { 'Collapsed' }
+    }
+}
+
+# Alterna as 3 colunas do corpo entre Fase 1 (Ookla) e Fase 2 (iperf3).
+function Set-ChkFaseView {
+    param([string] $Fase)   # 'nenhuma' | 'f1' | 'f2'
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    $f1 = ($Fase -ne 'f2')
+    foreach ($n in 'grpF1Conn', 'canvasVelo', 'prgSpeed') {
+        $c = $w.FindName($n); if ($c) { $c.Visibility = if ($f1) { 'Visible' } else { 'Collapsed' } }
+    }
+    foreach ($n in 'grpF2Conn', 'canvasVeloVpn', 'prgSpeedVpn') {
+        $c = $w.FindName($n); if ($c) { $c.Visibility = if ($f1) { 'Collapsed' } else { 'Visible' } }
+    }
+}
 
 # dot + texto de um passo do stepper do overlay.
 function Set-ChkStep {
@@ -1881,18 +1918,26 @@ function Reset-OverlayCheck {
     Set-ChkStep 1 'pendente'
     Set-ChkStep 2 'pendente'
     Set-ChkStep 3 'pendente' 'em implementacao'
-    foreach ($n in 'panelChkVpnGate', 'panelChkFase1', 'panelChkFase2') { $w.FindName($n).Visibility = 'Collapsed' }
+    $w.FindName('panelChkVpnGate').Visibility = 'Collapsed'
     $w.FindName('chkVpnImpossivel').IsChecked = $false
     $w.FindName('txtVpnMotivo').Text = ''
     $w.FindName('txtVpnMotivo').Visibility = 'Collapsed'
     $w.FindName('txtVpnMotivoDica').Visibility = 'Collapsed'
     $w.FindName('btnChkVpnImpossivel').Visibility = 'Collapsed'
     $w.FindName('btnChkFechar').Content = 'Cancelar'
+    foreach ($n in 'painelSpeedResultado', 'painelIperfResultado', 'txtSpeedErro', 'txtIperfErro', 'ringDiag') {
+        $c = $w.FindName($n); if ($c) { $c.Visibility = 'Collapsed' }
+    }
+    $rv = $w.FindName('txtChkResultadoVazio'); if ($rv) { $rv.Visibility = 'Visible' }
+    foreach ($n in 'txtIperfInfo', 'txtIperfServidor') { $c = $w.FindName($n); if ($c) { $c.Text = '' } }
     Reset-Velocimetro
     Reset-Velocimetro -Suf 'Vpn'
+    Set-ChkFaseView 'f1'
+    $Global:ChkFase = 'f1-pronto'
+    Set-ChkBotao
 }
 
-# Card do meio: "Rodar checagem" -> abre o overlay e comeca pela Fase 1.
+# Card do meio: "Rodar checagem" -> abre o overlay (nao inicia sozinho).
 function Invoke-CheckMeio {
     param([string] $Meio)   # 'lan' | 'wifi' | 'celular'
     $w = $Global:JanelaPrincipal
@@ -1924,15 +1969,26 @@ function Invoke-CheckMeio {
     $w.FindName('overlayCheck').Visibility = 'Visible'
     Update-PainelMeios
 
-    Write-Log ("Checagem do meio: {0}" -f $rot) -Nivel Destaque
-    Start-CheckFase1
+    Write-Log ("Checagem do meio: {0} - clique em Iniciar." -f $rot) -Nivel Destaque
+}
+
+# Botao "Iniciar" / "Testar a VPN" do overlay.
+function Invoke-ChkAvancar {
+    switch ($Global:ChkFase) {
+        'f1-pronto' { Start-CheckFase1 }
+        'f2-pronto' { Start-CheckFase2 }
+        default     { }
+    }
 }
 
 function Start-CheckFase1 {
     $w = $Global:JanelaPrincipal
+    $Global:ChkFase = 'f1-rodando'
+    Set-ChkBotao
     Set-ChkStep 1 'rodando'
-    $w.FindName('panelChkFase1').Visibility = 'Visible'
-    $w.FindName('panelChkFase2').Visibility = 'Collapsed'
+    Set-ChkFaseView 'f1'
+    $w.FindName('painelSpeedResultado').Visibility = 'Collapsed'
+    $w.FindName('txtChkResultadoVazio').Visibility = 'Visible'
     Reset-Velocimetro
     $w.FindName('txtVeloFase').Text = 'iniciando...'
     Write-Log 'Fase 1: teste de velocidade (Ookla), sem a VPN...' -Nivel Info
@@ -1944,6 +2000,7 @@ function Start-CheckFase1 {
 function Complete-CheckFase1 {
     param($Payload, $Erro)
     Set-FaseLocalOcupado $false
+    $w = $Global:JanelaPrincipal
     if ($Erro) {
         Write-Log "Fase 1 falhou: $Erro" -Nivel Erro
         Set-ChkStep 1 'erro'
@@ -1955,36 +2012,45 @@ function Complete-CheckFase1 {
         $it = if ($Payload) { $Payload.Internet } else { $null }
         if ($it -and $it.speedtest_ok) {
             Update-SpeedtestPainel -It $it
+            $w.FindName('txtChkResultadoVazio').Visibility = 'Collapsed'
             Write-Log 'Fase 1 concluida.' -Nivel Ok
             Set-ChkStep 1 'ok'
         } else {
-            $te = $Global:JanelaPrincipal.FindName('txtSpeedErro')
+            $te = $w.FindName('txtSpeedErro')
             $te.Text = if ($it -and $it.speedtest_erro) { [string] $it.speedtest_erro } else { 'sem resultado de velocidade' }
             $te.Visibility = 'Visible'
             Write-Log ("Fase 1 sem velocidade: {0}" -f $te.Text) -Nivel Aviso
             Set-ChkStep 1 'erro'
         }
     }
-    Start-CheckFase2
+    $Global:ChkFase = 'f2-pronto'
+    Set-ChkBotao
+    Write-Log 'Clique em "Testar a VPN (Fase 2)" quando estiver com a VPN do TRE conectada.' -Nivel Info
 }
 
 function Start-CheckFase2 {
     $w = $Global:JanelaPrincipal
     Set-ChkStep 2 'rodando'
-    $w.FindName('panelChkFase1').Visibility = 'Collapsed'
+    Set-ChkFaseView 'f2'
+    $w.FindName('painelIperfResultado').Visibility = 'Collapsed'
+    $w.FindName('txtChkResultadoVazio').Visibility = 'Visible'
     Update-EstadoVpn
     if (Test-VpnAtiva) {
+        $Global:ChkFase = 'f2-rodando'
+        Set-ChkBotao
         $w.FindName('panelChkVpnGate').Visibility = 'Collapsed'
-        $w.FindName('panelChkFase2').Visibility = 'Visible'
         Reset-Velocimetro -Suf 'Vpn'
         $w.FindName('txtVeloFaseVpn').Text = 'iniciando...'
+        $rd = $w.FindName('ringDiag'); if ($rd) { $rd.IsActive = $true; $rd.Visibility = 'Visible' }
         Write-Log 'Fase 2: diagnostico com a VPN (ping + iperf3)...' -Nivel Info
         Set-ProgressoDiag $true
         $sel  = $w.FindName('cboLocal').SelectedItem
         $selD = if ($sel) { $sel.Dados } else { $null }
         Start-DiagnosticoAssincrono -Local $selD -AoConcluir { param($res, $erro) Complete-CheckFase2 $res $erro }
     } else {
-        Write-Log 'Fase 2 aguardando a VPN da JE. Abra o FortiClient e conecte.' -Nivel Aviso
+        $Global:ChkFase = 'f2-pronto'
+        Set-ChkBotao
+        Write-Log 'Fase 2 aguardando a VPN da JE. Abra o FortiClient e conecte, depois "Verificar novamente".' -Nivel Aviso
         $w.FindName('panelChkVpnGate').Visibility = 'Visible'
         $w.FindName('btnChkVpnImpossivel').Visibility = 'Visible'
         Set-ChkStep 2 'rodando' 'aguardando a VPN'
@@ -1994,12 +2060,15 @@ function Start-CheckFase2 {
 function Complete-CheckFase2 {
     param($Payload, $Erro)
     Set-ProgressoDiag $false
+    $w = $Global:JanelaPrincipal
+    $rd = $w.FindName('ringDiag'); if ($rd) { $rd.IsActive = $false; $rd.Visibility = 'Collapsed' }
     if ($Erro) {
         Write-Log "Fase 2 falhou: $Erro" -Nivel Erro
         Set-ChkStep 2 'erro'
     } else {
         Show-PainelResultado -Payload $Payload
         if ($Payload -and $Payload.PSObject.Properties['Iperf'] -and $Payload.Iperf) { Update-IperfPainel -Iperf $Payload.Iperf }
+        $w.FindName('txtChkResultadoVazio').Visibility = 'Collapsed'
         Write-Log 'Fase 2 concluida.' -Nivel Ok
         $ver = if ($Payload -and $Payload.Decisao) { [string] $Payload.Decisao.Classificacao } else { 'inviavel' }
         Set-ChkStep 2 $(if ($ver -eq 'inviavel') { 'erro' } else { 'ok' })
@@ -2024,6 +2093,8 @@ function Invoke-CheckVpnImpossivel {
 
 function Complete-CheckMeio {
     $w = $Global:JanelaPrincipal
+    $Global:ChkFase = 'fim'
+    Set-ChkBotao
     Add-MedicaoAtual
     Write-Log 'Checagem do meio concluida. Clique em "Concluir" para fechar.' -Nivel Ok
     $b = $w.FindName('btnChkFechar'); if ($b) { $b.Content = 'Concluir' }
@@ -2036,6 +2107,7 @@ function Close-OverlayCheck {
         return
     }
     $Global:CheckMeioAtivo = $false
+    $Global:ChkFase = ''
     $w = $Global:JanelaPrincipal
     if ($w) { $w.FindName('overlayCheck').Visibility = 'Collapsed' }
     Update-PainelMeios

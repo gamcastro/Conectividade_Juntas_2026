@@ -253,9 +253,20 @@ try {
     else { Write-Host "    FALHA: botao do meio Celular nao liberou"; $falhas++ }
     Invoke-CheckMeio 'celular'
     Invoke-Pump
-    if ("$($w.FindName('overlayCheck').Visibility)" -eq 'Visible' -and $Global:CheckMeioAtivo) {
-        Write-Host "[4d] 'Rodar checagem' abre o overlay do meio"
-    } else { Write-Host "    FALHA: overlay nao abriu (vis=$($w.FindName('overlayCheck').Visibility) ativo=$($Global:CheckMeioAtivo))"; $falhas++ }
+    if ("$($w.FindName('overlayCheck').Visibility)" -eq 'Visible' -and $Global:CheckMeioAtivo -and
+        "$($w.FindName('btnChkIniciar').Visibility)" -eq 'Visible' -and $Global:ChkFase -eq 'f1-pronto') {
+        Write-Host "[4d] 'Rodar checagem' abre o overlay (aguardando 'Iniciar', nao roda sozinho)"
+    } else { Write-Host "    FALHA: overlay nao abriu certo (vis=$($w.FindName('overlayCheck').Visibility) fase='$($Global:ChkFase)' btn=$($w.FindName('btnChkIniciar').Visibility))"; $falhas++ }
+    Invoke-ChkAvancar   # Iniciar -> Fase 1
+    $deadline = (Get-Date).AddSeconds($TimeoutS)
+    while ((Get-Date) -lt $deadline) {
+        Invoke-Pump ; Start-Sleep -Milliseconds 120
+        if ($Global:ChkFase -eq 'f2-pronto' -and $null -eq $Global:TarefaRedeState) { break }
+    }
+    if ($Global:ChkFase -eq 'f2-pronto' -and "$($w.FindName('btnChkIniciar').Content)" -match 'VPN') {
+        Write-Host "[4d] Fase 1 concluida -> botao vira 'Testar a VPN'"
+    } else { Write-Host "    FALHA: Fase 1 nao concluiu (fase='$($Global:ChkFase)' btn='$($w.FindName('btnChkIniciar').Content)')"; $falhas++ }
+    Invoke-ChkAvancar   # Testar a VPN -> Fase 2
     $deadline = (Get-Date).AddSeconds($TimeoutS)
     while ((Get-Date) -lt $deadline) {
         Invoke-Pump ; Start-Sleep -Milliseconds 120
@@ -293,6 +304,14 @@ try {
     # 4g. Fase 2 sem VPN: a saida "nao consegui conectar a VPN" + motivo registra o meio; depois limpa
     $Global:VpnSimulada = $false
     Invoke-CheckMeio 'wifi'
+    Invoke-Pump
+    Invoke-ChkAvancar   # Iniciar -> Fase 1
+    $deadline = (Get-Date).AddSeconds($TimeoutS)
+    while ((Get-Date) -lt $deadline) {
+        Invoke-Pump ; Start-Sleep -Milliseconds 120
+        if ($Global:ChkFase -eq 'f2-pronto' -and $null -eq $Global:TarefaRedeState) { break }
+    }
+    Invoke-ChkAvancar   # Testar a VPN -> gate (VPN off)
     $deadline = (Get-Date).AddSeconds($TimeoutS)
     while ((Get-Date) -lt $deadline) {
         Invoke-Pump ; Start-Sleep -Milliseconds 120
