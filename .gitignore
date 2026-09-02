@@ -28,6 +28,7 @@
 
 # clasp: id do projeto e credenciais (nunca versionar credenciais)
 .clasp.json
+.clasp.*.json
 .clasprc.json
 *.clasprc.json
 
