@@ -614,6 +614,17 @@ try {
     } else {
         Write-Host "    FALHA: motor c/ metrica desativada (detalhes=$(@($dec.Detalhes).Count) desat=$($dec.MetricasDesativadas -join ',') dec=$($dec.Classificacao))"; $falhas++
     }
+
+    # 10. classificacao da falha do Speedtest (handshake da Ookla = dado do laudo)
+    $fHand = Resolve-FalhaSpeedtest -Mensagem '[error] Configuration - Timeout was reached (TimeoutException)' -Tentativas 3 -SsidWifi 'Mobili-TREMA05' -SinalPct 66
+    if ($fHand.tipo -eq 'handshake' -and $fHand.laudo -match 'link|Wi-Fi fraco' -and $fHand.laudo -match 'Mobili-TREMA05') {
+        Write-Host "[10] 'Configuration - Timeout' -> tipo 'handshake' + frase de laudo (link fraco)"
+    } else { Write-Host "    FALHA: classificacao handshake (tipo='$($fHand.tipo)' laudo='$($fHand.laudo)')"; $falhas++ }
+    $fBlock = Resolve-FalhaSpeedtest -Mensagem 'Cannot resolve www.speedtest.net'
+    $fUnk   = Resolve-FalhaSpeedtest -Mensagem 'algo esquisito aconteceu'
+    if ($fBlock.tipo -eq 'bloqueio' -and $fUnk.tipo -eq 'desconhecido' -and -not $fUnk.laudo) {
+        Write-Host "[10] falha de DNS -> 'bloqueio'; mensagem generica -> 'desconhecido' sem laudo"
+    } else { Write-Host "    FALHA: classificacao bloqueio/desconhecido (b='$($fBlock.tipo)' u='$($fUnk.tipo)')"; $falhas++ }
 }
 finally {
     $Global:PastaDadosOverride = $null

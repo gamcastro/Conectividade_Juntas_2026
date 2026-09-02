@@ -45,7 +45,13 @@ Script), em vez de criar um BI/dashboard separado.
   down/up + link Ookla). O `speedtest.exe` (Ookla CLI, proprietário) é colocado
   **manualmente em `tools/`** e **não vai ao repositório** (`.gitignore`); sem
   ele o teste mostra erro. Config em `config/rede-local.json`
-  (`speedtest_server_id`, `speedtest_extra_args`).
+  (`speedtest_server_id`, `speedtest_extra_args`). Até **3 tentativas** (espera
+  0s/3s/6s). Se falhar, `Resolve-FalhaSpeedtest` classifica em
+  `speedtest_falha_tipo` (`handshake` = nem baixou a config/lista de servidores
+  da Ookla — link fraco/instável; `bloqueio` = proxy/DNS barrando *.speedtest.net;
+  `sem_binario`; `desconhecido`) e monta `speedtest_diagnostico`, uma frase que
+  entra no JSON e no relatório PDF (box âmbar "Rede local fraca / instável") como
+  **dado do laudo**, não só erro de ferramenta.
   Se não houver rede no local, o técnico pode marcar **"testei pelo roteamento
   do celular"** e informar a **operadora** (vai no `rede_local` e no relatório).
   A **Fase 2 (com a VPN do TRE)** é a bateria de sempre (ping/iperf3/Selenium).

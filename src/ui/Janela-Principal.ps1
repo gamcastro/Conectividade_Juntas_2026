@@ -2153,7 +2153,10 @@ function Complete-CheckFase1 {
             Set-ChkStep 1 'ok'
         } else {
             $te = $w.FindName('txtSpeedErro')
-            $te.Text = if ($it -and $it.speedtest_erro) { [string] $it.speedtest_erro } else { 'sem resultado de velocidade' }
+            $diag = if ($it -and $it.PSObject.Properties['speedtest_diagnostico']) { [string] $it.speedtest_diagnostico } else { '' }
+            $te.Text = if ($diag) { $diag }
+                       elseif ($it -and $it.speedtest_erro) { [string] $it.speedtest_erro }
+                       else { 'sem resultado de velocidade' }
             $te.Visibility = 'Visible'
             Write-Log ("Fase 1 sem velocidade: {0}" -f $te.Text) -Nivel Aviso
             Set-ChkStep 1 'erro'

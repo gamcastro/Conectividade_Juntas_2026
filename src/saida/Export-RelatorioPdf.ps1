@@ -251,8 +251,16 @@ $($trs -join "`n")
             if ($rl.internet_servidor)   { $ce += '<div><b>Servidor:</b> {0}</div>' -f (ConvertTo-HtmlSafe ([string] $rl.internet_servidor)) }
             if ($rl.internet_ip_externo) { $ce += '<div><b>IP externo:</b> {0}</div>' -f (ConvertTo-HtmlSafe ([string] $rl.internet_ip_externo)) }
             if ($rl.internet_resultado_url) { $ce += '<div style="grid-column:1/3"><b>Resultado Ookla:</b> {0}</div>' -f (ConvertTo-HtmlSafe ([string] $rl.internet_resultado_url)) }
-        } elseif ($rl.PSObject.Properties['speedtest_erro'] -and $rl.speedtest_erro) {
-            $ce += '<div style="grid-column:1/3"><b>Speedtest (Ookla):</b> {0}</div>' -f (ConvertTo-HtmlSafe ([string] $rl.speedtest_erro))
+        } else {
+            $falhaTipo = if ($rl.PSObject.Properties['speedtest_falha_tipo']) { [string] $rl.speedtest_falha_tipo } else { '' }
+            $diag = if ($rl.PSObject.Properties['speedtest_diagnostico']) { [string] $rl.speedtest_diagnostico } else { '' }
+            if ($diag -and ($falhaTipo -eq 'handshake' -or $falhaTipo -eq 'bloqueio')) {
+                $rot = if ($falhaTipo -eq 'handshake') { 'Rede local fraca / inst&aacute;vel' } else { 'Speedtest bloqueado no local' }
+                $ce += ('<div style="grid-column:1/3;margin-top:4px;padding:6px 10px;background:#fff8e1;' +
+                        'border-left:3px solid #e0a800"><b>{0}:</b> {1}</div>') -f $rot, (ConvertTo-HtmlSafe $diag)
+            } elseif ($rl.PSObject.Properties['speedtest_erro'] -and $rl.speedtest_erro) {
+                $ce += '<div style="grid-column:1/3"><b>Speedtest (Ookla):</b> {0}</div>' -f (ConvertTo-HtmlSafe ([string] $rl.speedtest_erro))
+            }
         }
 
         $blocoRedeLocal = "  <h2>Rede local (antes da VPN do TRE)</h2>`n  <div class=""grid2"">`n    " + ($ce -join "`n    ") + "`n  </div>`n"
