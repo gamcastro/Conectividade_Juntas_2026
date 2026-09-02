@@ -713,7 +713,7 @@
                                            Text="Clique no card do meio que vai testar (fica com a borda azul) para liberar a checagem. Marque os que nao se aplicam."/>
                                 <Button x:Name="btnRelerPlacas" Grid.Column="2" Width="32" Height="32" Margin="10,0,0,0"
                                         Style="{DynamicResource BotaoFantasma}" Padding="0"
-                                        ToolTip="Reler o status das placas de rede (ex.: acabei de plugar o cabo)">
+                                        ToolTip="Reler TODAS as placas (LAN + Wi-Fi). Para atualizar s&#243; uma, use o &#8635; do card.">
                                     <TextBlock Text="&#8635;" FontSize="17" HorizontalAlignment="Center"
                                                VerticalAlignment="Center"/>
                                 </Button>
@@ -732,9 +732,26 @@
                                 <Border x:Name="cardLan" Grid.Column="0" Style="{DynamicResource Cartao}"
                                         Padding="16,14" VerticalAlignment="Stretch">
                                     <StackPanel>
-                                        <TextBlock Text="LAN" FontFamily="{DynamicResource Dicon.Display}"
-                                                   FontWeight="Bold" FontSize="19" Margin="0,0,0,2"
-                                                   Foreground="{DynamicResource Dicon.Text}"/>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="LAN" FontFamily="{DynamicResource Dicon.Display}"
+                                                       FontWeight="Bold" FontSize="19" Margin="0,0,0,2"
+                                                       Foreground="{DynamicResource Dicon.Text}"/>
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                                <mah:ProgressRing x:Name="ringRelerLan" Width="14" Height="14" Margin="0,0,4,0"
+                                                                  IsActive="False" Visibility="Collapsed"
+                                                                  Foreground="{DynamicResource Dicon.Accent}"/>
+                                                <Button x:Name="btnRelerLan" Width="26" Height="26" Padding="0"
+                                                        Style="{DynamicResource BotaoFantasma}"
+                                                        ToolTip="Reler s&#243; a placa cabeada (LAN) &#8212; n&#227;o mexe no card Wi-Fi">
+                                                    <TextBlock Text="&#8635;" FontSize="14" HorizontalAlignment="Center"
+                                                               VerticalAlignment="Center"/>
+                                                </Button>
+                                            </StackPanel>
+                                        </Grid>
                                         <TextBlock x:Name="badgeLan" FontFamily="Consolas" FontSize="10" FontWeight="Bold"
                                                    Margin="0,0,0,6" Foreground="{DynamicResource Dicon.Text3}"
                                                    Text="NAO TESTADO"/>
@@ -773,15 +790,43 @@
                                         <TextBlock x:Name="txtLocOrigem" Margin="18,2,0,0" FontFamily="Consolas"
                                                    FontSize="11" Foreground="{DynamicResource Dicon.Text3}"
                                                    Visibility="Collapsed"/>
+                                        <Border x:Name="cardLocJE" Margin="18,8,0,0" HorizontalAlignment="Left"
+                                                Background="{DynamicResource Dicon.ViavelDim}" CornerRadius="4"
+                                                Padding="8,3" Visibility="Collapsed">
+                                            <StackPanel Orientation="Horizontal">
+                                                <Ellipse Width="7" Height="7" Margin="0,0,6,0" VerticalAlignment="Center"
+                                                         Fill="{DynamicResource Dicon.Viavel}"/>
+                                                <TextBlock Text="REDE DA JUSTI&#199;A ELEITORAL" FontFamily="Consolas"
+                                                           FontSize="9" FontWeight="Bold"
+                                                           Foreground="{DynamicResource Dicon.Viavel}"/>
+                                            </StackPanel>
+                                        </Border>
                                     </StackPanel>
                                 </Border>
 
                                 <Border x:Name="cardWifiPlaca" Grid.Column="2" Style="{DynamicResource Cartao}"
                                         Padding="16,14" VerticalAlignment="Stretch">
                                     <StackPanel>
-                                        <TextBlock Text="WI-FI" FontFamily="{DynamicResource Dicon.Display}"
-                                                   FontWeight="Bold" FontSize="19" Margin="0,0,0,2"
-                                                   Foreground="{DynamicResource Dicon.Text}"/>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="WI-FI" FontFamily="{DynamicResource Dicon.Display}"
+                                                       FontWeight="Bold" FontSize="19" Margin="0,0,0,2"
+                                                       Foreground="{DynamicResource Dicon.Text}"/>
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                                <mah:ProgressRing x:Name="ringRelerWifi" Width="14" Height="14" Margin="0,0,4,0"
+                                                                  IsActive="False" Visibility="Collapsed"
+                                                                  Foreground="{DynamicResource Dicon.Accent}"/>
+                                                <Button x:Name="btnRelerWifi" Width="26" Height="26" Padding="0"
+                                                        Style="{DynamicResource BotaoFantasma}"
+                                                        ToolTip="Reler s&#243; a placa Wi-Fi &#8212; n&#227;o mexe no card LAN">
+                                                    <TextBlock Text="&#8635;" FontSize="14" HorizontalAlignment="Center"
+                                                               VerticalAlignment="Center"/>
+                                                </Button>
+                                            </StackPanel>
+                                        </Grid>
                                         <TextBlock x:Name="badgeWifi" FontFamily="Consolas" FontSize="10" FontWeight="Bold"
                                                    Margin="0,0,0,6" Foreground="{DynamicResource Dicon.Text3}"
                                                    Text="NAO TESTADO"/>
@@ -821,9 +866,26 @@
                                 <Border x:Name="cardCelular" Grid.Column="4" Style="{DynamicResource Cartao}"
                                         Padding="16,14" VerticalAlignment="Stretch">
                                     <StackPanel>
-                                        <TextBlock Text="CELULAR" FontFamily="{DynamicResource Dicon.Display}"
-                                                   FontWeight="Bold" FontSize="19" Margin="0,0,0,2"
-                                                   Foreground="{DynamicResource Dicon.Text}"/>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="CELULAR" FontFamily="{DynamicResource Dicon.Display}"
+                                                       FontWeight="Bold" FontSize="19" Margin="0,0,0,2"
+                                                       Foreground="{DynamicResource Dicon.Text}"/>
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                                <mah:ProgressRing x:Name="ringRelerCel" Width="14" Height="14" Margin="0,0,4,0"
+                                                                  IsActive="False" Visibility="Collapsed"
+                                                                  Foreground="{DynamicResource Dicon.Accent}"/>
+                                                <Button x:Name="btnRelerCel" Width="26" Height="26" Padding="0"
+                                                        Style="{DynamicResource BotaoFantasma}"
+                                                        ToolTip="Reler a placa Wi-Fi (o roteamento do celular usa a mesma placa)">
+                                                    <TextBlock Text="&#8635;" FontSize="14" HorizontalAlignment="Center"
+                                                               VerticalAlignment="Center"/>
+                                                </Button>
+                                            </StackPanel>
+                                        </Grid>
                                         <TextBlock x:Name="badgeCelular" FontFamily="Consolas" FontSize="10" FontWeight="Bold"
                                                    Margin="0,0,0,6" Foreground="{DynamicResource Dicon.Text3}"
                                                    Text="NAO TESTADO"/>

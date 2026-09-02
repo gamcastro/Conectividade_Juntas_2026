@@ -248,6 +248,31 @@ try {
         Write-Host "[4c] 'reler placas' reinventaria e mantem o passo 3"
     } else { Write-Host "    FALHA: 'reler placas' (step=$($Global:WizardStep))"; $falhas++ }
 
+    # 4c-0c. selo "rede da Justica Eleitoral" quando o IP da LAN e 10.11.* / 10.198.*
+    if (-not $w.FindName('ringRelerLan') -or -not $w.FindName('ringRelerWifi') -or -not $w.FindName('btnRelerLan')) {
+        Write-Host "    FALHA: controles de releitura por card ausentes no XAML"; $falhas++
+    }
+    $ipLanOrig = $Global:FaseLocalPayload.Lan.ipv4
+    $Global:FaseLocalPayload.Lan.ipv4 = '10.11.5.20' ; Update-PainelMeios
+    $jeOn = "$($w.FindName('cardLocJE').Visibility)" -eq 'Visible'
+    $Global:FaseLocalPayload.Lan.ipv4 = '192.168.1.10' ; Update-PainelMeios
+    $jeOff = "$($w.FindName('cardLocJE').Visibility)" -eq 'Collapsed'
+    if ($jeOn -and $jeOff) { Write-Host "[4c] selo 'rede da JE' aparece com IP 10.11.* e some fora dela" }
+    else { Write-Host "    FALHA: selo rede JE (on=$jeOn off=$jeOff)"; $falhas++ }
+
+    # 4c-0d. reler SO o Wi-Fi (por card) preserva os dados ja coletados da LAN
+    $Global:FaseLocalPayload.Lan.ipv4 = '10.11.5.20' ; $Global:FaseLocalPayload.Lan.conectado = $true
+    $wifiConectadoAntes = $Global:FaseLocalSimulada.Wireless.conectado
+    $Global:FaseLocalSimulada.Wireless.conectado = $true
+    Invoke-RelerAdaptador 'wifi'
+    Invoke-Pump
+    if ($Global:FaseLocalPayload.Lan.ipv4 -eq '10.11.5.20' -and [bool] $Global:FaseLocalPayload.Wireless.conectado) {
+        Write-Host "[4c] reler so o Wi-Fi por card: LAN mantem o IP coletado, Wi-Fi atualiza"
+    } else { Write-Host "    FALHA: reler Wi-Fi mexeu na LAN (lan.ip='$($Global:FaseLocalPayload.Lan.ipv4)' wifi.on=$($Global:FaseLocalPayload.Wireless.conectado))"; $falhas++ }
+    $Global:FaseLocalSimulada.Wireless.conectado = $wifiConectadoAntes
+    $Global:FaseLocalPayload.Lan.ipv4 = $ipLanOrig
+    Update-PainelMeios
+
     # 4c-1. passo 3 bloqueia "Proximo" sem nenhum meio testado
     Invoke-WizardProximo
     if ($Global:WizardStep -eq 3) { Write-Host "[4c] passo 3 bloqueia 'Proximo' sem meio testado" }

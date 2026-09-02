@@ -10,6 +10,14 @@
 # Depois desta fase o tecnico conecta a VPN do TRE e roda a bateria "com VPN"
 # (Invoke-DiagnosticoCompleto).
 
+# Faixas IPv4 internas da Justica Eleitoral (TRE-MA). Se a placa cabeada (LAN)
+# recebeu um IP nessas faixas, o notebook ja esta plugado na rede da JE.
+function Test-RedeJusticaEleitoral {
+    param([string] $Ip)
+    if (-not $Ip) { return $false }
+    return ($Ip -match '^10\.11\.' -or $Ip -match '^10\.198\.')
+}
+
 # --------------------------------------------------------------- configuracao
 function Get-ConfigRedeLocal {
     $def = [pscustomobject]@{

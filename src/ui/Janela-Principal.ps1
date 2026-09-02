@@ -21,6 +21,7 @@ $Global:HomeTrabalhoState  = $null   # runspace do "Atualizar dados"/"Reenviar" 
 $Global:TarefaRedeState    = $null   # runspace da fase local / conexao Wi-Fi
 $Global:LoginEmAndamento   = $false   # trava reentrancia de Enter-Sessao (duplo-clique em "Entrar")
 $Global:FaseLocalPayload   = $null   # {Lan;Wireless;Internet;Quando} da fase 1 (sem VPN)
+$Global:RelerAdaptadorTipo = ''      # placa sendo relida no passo 3: '' | 'lan' | 'wifi'
 $Global:FaseLocalTipo      = ''      # meio da checagem em curso: '' | 'lan' | 'wifi' | 'celular'
 $Global:MeioSelecionado    = ''      # card do passo 3 selecionado p/ testar: '' | 'lan' | 'wifi' | 'celular'
 $Global:CheckMeioAtivo     = $false  # overlay de checagem de um meio esta aberto/rodando
@@ -290,6 +291,9 @@ function New-JanelaPrincipal {
     $window.FindName('btnWizProximo').Add_Click({ Invoke-WizardProximo })
     $window.FindName('btnRefazerTeste').Add_Click({ Invoke-WizardProximo })
     $window.FindName('btnRelerPlacas').Add_Click({ Invoke-RelerPlacas })
+    $window.FindName('btnRelerLan').Add_Click({ Invoke-RelerAdaptador 'lan' })
+    $window.FindName('btnRelerWifi').Add_Click({ Invoke-RelerAdaptador 'wifi' })
+    $window.FindName('btnRelerCel').Add_Click({ Invoke-RelerAdaptador 'wifi' })
     $window.FindName('cboOperadoraCel').Add_LostFocus({ Update-PainelMeios })
     $window.FindName('cardLan').Add_MouseLeftButtonUp({ Select-MeioParaChecar 'lan' })
     $window.FindName('cardWifiPlaca').Add_MouseLeftButtonUp({ Select-MeioParaChecar 'wifi' })
@@ -1269,7 +1273,8 @@ function Set-FaseLocalOcupado {
     param([bool] $Ocupado)
     $w = $Global:JanelaPrincipal
     if (-not $w) { return }
-    foreach ($n in 'btnRelerPlacas', 'btnWizProximo', 'btnWizVoltar',
+    foreach ($n in 'btnRelerPlacas', 'btnRelerLan', 'btnRelerWifi', 'btnRelerCel',
+        'btnWizProximo', 'btnWizVoltar',
         'btnCheckLan', 'btnCheckWifi', 'btnCheckCelular') {
         $c = $w.FindName($n); if ($c) { $c.IsEnabled = -not $Ocupado }
     }
@@ -1411,6 +1416,13 @@ function Update-PainelMeios {
     Set-LinhaDetalhe $w.FindName('txtLocMac')     'MAC'              ([string] $lan.mac)
     Set-LinhaDetalhe $w.FindName('txtLocVel')     'Enlace'          $(if ($lan.velocidade_mbps) { "$($lan.velocidade_mbps) Mbps" } else { '' })
     Set-LinhaDetalhe $w.FindName('txtLocOrigem')  'Obtencao do IP'   ([string] $lan.ip_origem)
+
+    # IP 10.11.* / 10.198.* na placa cabeada = notebook plugado na rede da JE.
+    $je = $w.FindName('cardLocJE')
+    if ($je) {
+        $ehJE = $lanUp -and (Test-RedeJusticaEleitoral ([string] $lan.ipv4))
+        $je.Visibility = if ($ehJE) { 'Visible' } else { 'Collapsed' }
+    }
 
     $wifiUp = [bool] $wf.conectado
     $tw = $w.FindName('txtLocWifi'); $dw = $w.FindName('dotWifi')
@@ -1586,8 +1598,76 @@ function Invoke-RelerPlacas {
         Write-Log 'Aguarde a checagem em andamento terminar.' -Nivel Aviso
         return
     }
-    Write-Log 'Relendo o status das placas de rede...' -Nivel Info
+    Write-Log 'Relendo TODAS as placas de rede...' -Nivel Info
     Invoke-ProbeRedeLocal
+}
+
+# Spinner + trava so no card da placa que esta sendo relida (nao no probe geral).
+function Set-RelerAdaptadorOcupado {
+    param([string] $Tipo, [bool] $Ocupado)
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    $rings = if ($Tipo -eq 'lan') { @('ringRelerLan') } else { @('ringRelerWifi', 'ringRelerCel') }
+    foreach ($n in $rings) {
+        $r = $w.FindName($n)
+        if ($r) { $r.IsActive = $Ocupado; $r.Visibility = if ($Ocupado) { 'Visible' } else { 'Collapsed' } }
+    }
+    # uma tarefa de rede por vez: trava tudo enquanto roda; ao liberar, o
+    # Update-PainelMeios recalcula o estado real dos botoes "Rodar checagem".
+    foreach ($n in 'btnRelerPlacas', 'btnRelerLan', 'btnRelerWifi', 'btnRelerCel', 'btnWizProximo', 'btnWizVoltar') {
+        $c = $w.FindName($n); if ($c) { $c.IsEnabled = -not $Ocupado }
+    }
+    if ($Ocupado) {
+        foreach ($n in 'btnCheckLan', 'btnCheckWifi', 'btnCheckCelular') {
+            $c = $w.FindName($n); if ($c) { $c.IsEnabled = $false }
+        }
+    }
+}
+
+# Botao (do card) para reler SO uma placa - preserva o que ja foi coletado da
+# outra. Ex.: ja testei a LAN, tirei o cabo e liguei o Wi-Fi -> releio so o
+# Wi-Fi e o card LAN mantem o IP/gateway/... da coleta anterior.
+function Invoke-RelerAdaptador {
+    param([string] $Tipo)   # 'lan' | 'wifi'
+    if ($Global:TarefaRedeState -or $Global:CheckMeioAtivo) {
+        Write-Log 'Aguarde a checagem em andamento terminar.' -Nivel Aviso
+        return
+    }
+    if (-not $Global:FaseLocalPayload) { Invoke-ProbeRedeLocal; return }
+
+    if ($Global:FaseLocalSimulada) {
+        $s = $Global:FaseLocalSimulada
+        if ($Tipo -eq 'lan') { $Global:FaseLocalPayload.Lan = $s.Lan }
+        else { $Global:FaseLocalPayload.Wireless = $s.Wireless }
+        Update-PainelMeios
+        return
+    }
+
+    $Global:RelerAdaptadorTipo = $Tipo
+    Set-RelerAdaptadorOcupado $Tipo $true
+    $rot = if ($Tipo -eq 'lan') { 'cabeada (LAN)' } else { 'Wi-Fi' }
+    $script = if ($Tipo -eq 'lan') { 'Get-AdaptadorLan' } else { 'Get-AdaptadorWireless' }
+    Write-Log ("Relendo so a placa {0} (o outro card fica como esta)..." -f $rot) -Nivel Info
+    Start-TarefaRede -Script $script -AoConcluir { param($res, $erro) Complete-RelerAdaptador $res $erro }
+}
+
+function Complete-RelerAdaptador {
+    param($Novo, $Erro)
+    $tipo = [string] $Global:RelerAdaptadorTipo
+    $Global:RelerAdaptadorTipo = ''
+    Set-RelerAdaptadorOcupado $tipo $false
+
+    if ($Erro) { Write-Log ("Nao consegui reler a placa: {0}" -f $Erro) -Nivel Aviso; Update-PainelMeios; return }
+    if (-not $Novo -or -not $Global:FaseLocalPayload) { Write-Log 'Releitura da placa nao retornou dados.' -Nivel Aviso; Update-PainelMeios; return }
+
+    if ($tipo -eq 'lan') {
+        $Global:FaseLocalPayload.Lan = $Novo
+        Write-Log ('Placa LAN relida: {0}' -f $(if ($Novo.conectado) { "conectada - IP $($Novo.ipv4)" } else { 'sem conexao' })) -Nivel Info
+    } else {
+        $Global:FaseLocalPayload.Wireless = $Novo
+        Write-Log ('Placa Wi-Fi relida: {0}' -f $(if ($Novo.conectado) { "conectada a `"$($Novo.ssid)`"" } else { 'sem conexao' })) -Nivel Info
+    }
+    Update-PainelMeios
 }
 
 function Invoke-ProbeRedeLocal {

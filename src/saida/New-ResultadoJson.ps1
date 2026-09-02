@@ -122,6 +122,7 @@ function New-ResultadoJson {
             lan_conectada          = [bool] (Get-Prop $lan 'conectado')
             lan_adaptador          = [string] (Get-Prop $lan 'nome')
             lan_descricao          = [string] (Get-Prop $lan 'descricao')
+            lan_rede_je            = [bool] (Test-RedeJusticaEleitoral ([string] (Get-Prop $lan 'ipv4')))
             tethering_celular      = [bool] $Tethering
             operadora              = [string] $Operadora
             ip_local               = [string] (Get-Prop $ativa 'ipv4')

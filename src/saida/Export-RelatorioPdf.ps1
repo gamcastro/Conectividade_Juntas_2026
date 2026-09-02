@@ -229,6 +229,10 @@ $($trs -join "`n")
             $ce += '<div style="grid-column:1/3"><b>Conex&atilde;o:</b> roteamento (tethering) do celular do t&eacute;cnico{0}</div>' -f $op
         }
         $ce += '<div><b>Placa de rede (LAN):</b> {0}</div>' -f $lanS
+        if ($rl.PSObject.Properties['lan_rede_je'] -and $rl.lan_rede_je) {
+            $ce += '<div style="grid-column:1/3;margin-top:2px;padding:4px 8px;background:#eaf7ee;' +
+                   'border-left:3px solid #4FC177"><b>Rede da Justi&ccedil;a Eleitoral:</b> a placa cabeada recebeu IP interno da JE.</div>'
+        }
         if ($rl.ip_local)        { $ce += '<div><b>IP na rede local:</b> {0}</div>' -f (ConvertTo-HtmlSafe ([string] $rl.ip_local)) }
         if ($rl.PSObject.Properties['ip_origem'] -and $rl.ip_origem) { $ce += '<div><b>Obten&ccedil;&atilde;o do IP:</b> {0}</div>' -f (ConvertTo-HtmlSafe ([string] $rl.ip_origem)) }
         if ($rl.mascara)         { $ce += '<div><b>M&aacute;scara:</b> {0}</div>' -f (ConvertTo-HtmlSafe ([string] $rl.mascara)) }

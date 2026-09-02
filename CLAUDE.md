@@ -144,8 +144,16 @@ NÃO SE APLICA - INVIÁVEL), um botão **`btnCheck{Lan,Wifi,Celular}`**
 grade (`Open-CardNaJustif`: `txtNaJustif` + `btnNaRegistrar`/`btnNaCancelar`,
 `$Global:NaMeioPendente`); "Registrar" (`Invoke-NaRegistrar` → `Set-MeioNaoAplicavel`)
 fecha o card e carimba a justificativa em vermelho no card do meio
-(`txtNaMotivoCard*`), que fica inviável; desmarcar o checkbox remove o NA. Botão ↻ `btnRelerPlacas` (`Invoke-RelerPlacas`)
-reinventaria as placas sem sair do passo. Wi-Fi só pela bandeja do Windows
+(`txtNaMotivoCard*`), que fica inviável; desmarcar o checkbox remove o NA.
+**Releitura**: cada card tem um ↻ próprio (`btnRelerLan`/`btnRelerWifi`/`btnRelerCel`
++ `ringReler*`) → **`Invoke-RelerAdaptador 'lan'|'wifi'`** relê **só aquela placa**
+(`Get-AdaptadorLan`/`Get-AdaptadorWireless` no runspace) e mescla em
+`$Global:FaseLocalPayload.Lan`/`.Wireless`, **preservando o outro card** (cenário:
+testei a LAN, tirei o cabo, liguei o Wi-Fi — o card LAN mantém o IP/gateway já
+coletados); o ↻ do topo (`btnRelerPlacas`) ainda relê tudo. Se o IP da placa LAN
+começa com **10.11.** ou **10.198.** (`Test-RedeJusticaEleitoral`), o card LAN
+mostra o selo verde **"REDE DA JUSTIÇA ELEITORAL"** (`cardLocJE`; também no JSON
+`rede_local.lan_rede_je` e no PDF). Wi-Fi só pela bandeja do Windows
 (`cardWifiBandeja` explica). Clicar em "Rodar checagem" de um card →
 **`Invoke-CheckMeio <meio>`** abre o **overlay modal `overlayCheck`**
 (`$Global:CheckMeioAtivo`, uma checagem por vez) — **não roda sozinho**: o
