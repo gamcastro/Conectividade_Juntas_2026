@@ -414,6 +414,9 @@ function Export-RelatorioPdf {
         '--disable-gpu'
         '--no-first-run'
         '--no-pdf-header-footer'
+        '--disable-logging'
+        '--log-level=3'
+        '--disable-breakpad'
         ('--user-data-dir="{0}"' -f $userDir)
         ('--print-to-pdf="{0}"' -f $Caminho)
         ('"{0}"' -f $uri)

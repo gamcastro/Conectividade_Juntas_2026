@@ -18,11 +18,15 @@ function Start-ProcessoNaoElevado {
 
 function Invoke-ProcessoComSaida {
     <#
-      Roda um binario e aguarda o termino com timeout. NAO captura stdout
-      (o unico chamador - Export-RelatorioPdf com o navegador headless - so
-      precisa do arquivo gerado). Usa Start-Process -PassThru + WaitForExit,
-      sem redirecionar streams: assim nao ha [IO.StreamReader] sobre pipe, que
-      estoura "o fluxo nao era legivel" no runspace MTA.
+      Roda um binario e aguarda o termino com timeout. NAO captura stdout para
+      uso (o unico chamador - Export-RelatorioPdf com o navegador headless - so
+      precisa do arquivo gerado). stdout/stderr vao para ARQUIVOS temporarios e
+      sao descartados: sem isso o -NoNewWindow herda o console do DICON e o
+      Edge/Chrome headless despeja o proprio log ("Platform detected...",
+      "N bytes written to file", "[ERROR:chrome\...task_manager...]") na janela,
+      assustando o tecnico. Redirecionar para ARQUIVO (nao pipe) e seguro no
+      runspace MTA - nao ha [IO.StreamReader] sobre pipe ("o fluxo nao era
+      legivel"). Mesmo padrao de Invoke-Netsh.
     #>
     param(
         [Parameter(Position = 0)] [string] $Caminho,
@@ -36,7 +40,14 @@ function Invoke-ProcessoComSaida {
         return $null
     }
 
-    $sp = @{ FilePath = $Caminho; NoNewWindow = $true; PassThru = $true; ErrorAction = 'Stop' }
+    $tmp = [IO.Path]::GetTempPath()
+    $out = Join-Path $tmp ('dicon-proc-{0}.out' -f [guid]::NewGuid().ToString('N'))
+    $err = Join-Path $tmp ('dicon-proc-{0}.err' -f [guid]::NewGuid().ToString('N'))
+
+    $sp = @{
+        FilePath = $Caminho; NoNewWindow = $true; PassThru = $true; ErrorAction = 'Stop'
+        RedirectStandardOutput = $out; RedirectStandardError = $err
+    }
     $joined = ($Argumentos -join ' ')          # o chamador ja poe as aspas dos paths
     if ($joined) { $sp['ArgumentList'] = $joined }
 
@@ -48,6 +59,8 @@ function Invoke-ProcessoComSaida {
         }
     } catch {
         Write-Log "Falha ao executar ${Caminho}: $_" -Nivel Erro
+    } finally {
+        foreach ($f in $out, $err) { Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue }
     }
     return $null
 }
