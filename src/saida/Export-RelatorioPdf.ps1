@@ -54,6 +54,17 @@ function Get-RotuloVeredito {
     }
 }
 
+# Faixa aceitavel por extenso (sem simbolos <= / >=), p/ o relatorio.
+function Get-FaixaEmPalavras {
+    param($Direcao, $LimiarViavel, $LimiarRessalva, $Unidade)
+    $u = [string] $Unidade
+    $a = [char]0x00E1
+    if ($Direcao -eq 'max') {
+        return ('vi{0}vel: menor que {1} {3} / ressalva: menor que {2} {3}' -f $a, $LimiarViavel, $LimiarRessalva, $u)
+    }
+    return ('vi{0}vel: maior que {1} {3} / ressalva: maior que {2} {3}' -f $a, $LimiarViavel, $LimiarRessalva, $u)
+}
+
 function Get-CorVeredito {
     param([string] $Classe)
     switch ($Classe) {
@@ -79,11 +90,7 @@ function New-RelatorioHtml {
     $vpn = if ($amb.vpn_ativa -eq $true) { 'ativa' } elseif ($amb.vpn_ativa -eq $false) { 'n' + [char]0x00E3 + 'o detectada' } else { 'n/d' }
 
     $linhas = foreach ($a in @($r.avaliacao)) {
-        $regra = if ($a.direcao -eq 'max') {
-            'vi' + [char]0x00E1 + 'vel &le; {0}{2} / ressalva &le; {1}{2}' -f $a.limiar_viavel, $a.limiar_ressalva, $a.unidade
-        } else {
-            'vi' + [char]0x00E1 + 'vel &ge; {0}{2} / ressalva &ge; {1}{2}' -f $a.limiar_viavel, $a.limiar_ressalva, $a.unidade
-        }
+        $regra = ConvertTo-HtmlSafe (Get-FaixaEmPalavras $a.direcao $a.limiar_viavel $a.limiar_ressalva $a.unidade)
         $badge = '<span style="color:{0};font-weight:600">{1}</span>' -f (Get-CorVeredito $a.classe_final), (ConvertTo-HtmlSafe (Get-RotuloVeredito $a.classe_final))
         $just  = if ($a.ajustada) { ConvertTo-HtmlSafe ([string] $a.justificativa) } else { '&mdash;' }
         @"
@@ -275,13 +282,12 @@ $($trs -join "`n")
                 $cls = ConvertTo-HtmlSafe (Get-RotuloVeredito $a.classe_final)
                 $cor = Get-CorVeredito $a.classe_final
                 $val = ConvertTo-HtmlSafe (Format-ValorMetrica $a.valor $a.unidade)
-                $faixa = if ($a.direcao -eq 'max') { '&le; {0} / &le; {1} {2}' -f $a.limiar_viavel, $a.limiar_ressalva, $a.unidade }
-                         else { '&ge; {0} / &ge; {1} {2}' -f $a.limiar_viavel, $a.limiar_ressalva, $a.unidade }
+                $faixa = ConvertTo-HtmlSafe (Get-FaixaEmPalavras $a.direcao $a.limiar_viavel $a.limiar_ressalva $a.unidade)
                 $mot = if ($a.ajustada -and $a.justificativa) { ' &mdash; ' + (ConvertTo-HtmlSafe ([string] $a.justificativa)) } else { '' }
                 "      <tr><td>$(ConvertTo-HtmlSafe ([string] $a.rotulo))</td><td class=""mono"">$val</td><td class=""mono small"">$faixa</td><td style=""color:$cor;font-weight:600"">$cls$mot</td></tr>"
             }
             $tabRl = @"
-  <p class="small" style="margin:8px 0 2px"><b>Avalia&ccedil;&atilde;o da rede local (sem VPN)</b> &mdash; entra no pior caso junto com a bateria da VPN.</p>
+  <p class="small" style="margin:8px 0 2px"><b>Avalia&ccedil;&atilde;o da rede local (sem VPN)</b></p>
   <table>
     <thead><tr><th>M&eacute;trica</th><th>Valor</th><th>Faixa aceit&aacute;vel</th><th>Classifica&ccedil;&atilde;o</th></tr></thead>
     <tbody>
