@@ -450,6 +450,12 @@ function Test-InternetLocal {
         return [pscustomobject] $r
     }
 
+    # Aquecimento: na 1a execucao o Ookla CLI despeja TODO o texto da licenca +
+    # GDPR (emoldurado em "===="), grava a aceitacao e so entao roda. Esse
+    # diluvio de stderr atrapalha a leitura do JSONL no runspace. Fazemos uma
+    # chamada rapida so pra registrar a aceitacao antes da medicao real.
+    try { & $exe --accept-license --accept-gdpr --version 2>&1 | Out-Null } catch { }
+
     # Sem flag de versao de IP: o Ookla CLI 1.x nao aceita (--ip-version / -4 dao
     # "Unrecognized option"). O IPv4 e resolvido na exibicao (IP local da placa).
     $argv = '--format=jsonl --progress=yes --accept-license --accept-gdpr'
