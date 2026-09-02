@@ -530,4 +530,55 @@
         </Setter>
     </Style>
 
+    <!-- ===== ABAS DE MEDICAO (passo 4) ===== -->
+    <Style x:Key="TabsMedicao" TargetType="TabControl">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TabControl">
+                    <Border BorderBrush="{DynamicResource Dicon.Hair}" BorderThickness="0,0,0,1">
+                        <TabPanel IsItemsHost="True" Panel.ZIndex="1" Background="Transparent"
+                                  Margin="0,0,0,-1"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="TabMedicao" TargetType="TabItem">
+        <Setter Property="Foreground" Value="{DynamicResource Dicon.Text2}"/>
+        <Setter Property="Padding" Value="14,7"/>
+        <Setter Property="Margin" Value="0,0,4,-1"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TabItem">
+                    <Border x:Name="bd" Background="Transparent" SnapsToDevicePixels="True"
+                            BorderBrush="{DynamicResource Dicon.Hair}"
+                            BorderThickness="1,1,1,0" CornerRadius="7,7,0,0"
+                            Padding="{TemplateBinding Padding}">
+                        <Border x:Name="under" BorderBrush="Transparent" BorderThickness="0,0,0,2">
+                            <ContentPresenter ContentSource="Header" RecognizesAccessKey="True"
+                                              VerticalAlignment="Center"
+                                              TextBlock.Foreground="{TemplateBinding Foreground}"
+                                              TextBlock.FontSize="12"/>
+                        </Border>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="bd" Property="Background" Value="{DynamicResource Dicon.SurfaceAlt}"/>
+                            <Setter Property="Foreground" Value="{DynamicResource Dicon.Text}"/>
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="bd" Property="Background" Value="{DynamicResource Dicon.Surface}"/>
+                            <Setter TargetName="under" Property="BorderBrush" Value="{DynamicResource Dicon.Accent}"/>
+                            <Setter Property="Foreground" Value="{DynamicResource Dicon.Text}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
 </ResourceDictionary>

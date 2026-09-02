@@ -374,18 +374,21 @@ try {
     Invoke-Pump
     if ($Global:WizardStep -ne 4) { Write-Host "    FALHA: nao foi para o passo 4 (resultado) (step=$($Global:WizardStep))"; $falhas++ }
     else { Write-Host "[4h] passo 3 -> 4 (resultado por metrica)" }
-    $nLinhas = @($w.FindName('dgAvaliacao').ItemsSource).Count
+    $nVpn = @($w.FindName('dgAvaliacaoVpn').ItemsSource).Count
+    $nRl  = @($w.FindName('dgAvaliacaoRl').ItemsSource).Count
+    $nLinhas = @($Global:AvaliacaoRows).Count
     $decIni  = [string] $w.FindName('cboDecisaoFinal').SelectedItem
-    Write-Host "[5] passo 4: painel com $nLinhas linha(s), decisao '$decIni'"
+    Write-Host "[5] passo 4: $nVpn linha(s) VPN + $nRl rede local = $nLinhas, decisao '$decIni'"
     # 6 linhas da Fase 2 (VPN) + 5 da Fase 1 (rede local, Speedtest ok no fixture)
-    if ($nLinhas -ne 11) { Write-Host "    FALHA: painel deveria ter 11 linhas (6 VPN + 5 rede local), veio $nLinhas"; $falhas++ }
+    if ($nVpn -ne 6 -or $nRl -ne 5 -or $nLinhas -ne 11) { Write-Host "    FALHA: cards do passo 4 (vpn=$nVpn rede_local=$nRl total=$nLinhas)"; $falhas++ }
     $rlRows = @($Global:AvaliacaoRows | Where-Object { $_.Fase -eq 'Rede local' })
     $rlDown = $rlRows | Where-Object { $_.Rotulo -eq 'Download' } | Select-Object -First 1
     if ($rlRows.Count -eq 5 -and $rlDown -and "$($rlDown.ValorTexto)" -match '855') {
-        Write-Host "[5] passo 4 traz a checagem da rede local (Fase 1): $($rlRows.Count) linhas, Download=$($rlDown.ValorTexto)"
+        Write-Host "[5] card da rede local (Fase 1): $($rlRows.Count) linhas, Download=$($rlDown.ValorTexto)"
     } else { Write-Host "    FALHA: linhas da rede local no passo 4 (n=$($rlRows.Count) down='$($rlDown.ValorTexto)')"; $falhas++ }
-    if ("$($w.FindName('txtRedeLocalNota').Visibility)" -eq 'Visible') { Write-Host "[5] nota da rede local visivel no passo 4" }
-    else { Write-Host "    FALHA: txtRedeLocalNota deveria estar visivel"; $falhas++ }
+    if ("$($w.FindName('cardAvaliacaoRl').Visibility)" -eq 'Visible' -and "$($w.FindName('txtRedeLocalNota').Visibility)" -eq 'Visible') {
+        Write-Host "[5] card + nota da rede local visiveis no passo 4"
+    } else { Write-Host "    FALHA: card/nota da rede local (card=$($w.FindName('cardAvaliacaoRl').Visibility) nota=$($w.FindName('txtRedeLocalNota').Visibility))"; $falhas++ }
     if ($decIni -notin @('viavel', 'viavel_com_ressalva', 'inviavel')) { Write-Host "    FALHA: decisao nao classificou"; $falhas++ }
 
     # 5b. override de metrica + passo 4 -> 5 bloqueia sem justificativa
@@ -547,10 +550,10 @@ try {
     # 6. menu Inicio -> assistente abre limpo no passo 1
     Open-DiagnosticoLimpo
     $selLimpo    = $w.FindName('cboLocal').SelectedItem
-    $painelLimpo = ($w.FindName('dgAvaliacao').Items.Count -eq 0) -and ($null -eq $Global:DiagPayload)
+    $painelLimpo = (@($w.FindName('dgAvaliacaoVpn').Items).Count -eq 0) -and (@($w.FindName('dgAvaliacaoRl').Items).Count -eq 0) -and ($null -eq $Global:DiagPayload)
     $faseLimpa   = ($null -eq $Global:FaseLocalPayload) -and ($w.FindName('cardFaseLocal').Visibility -ne 'Visible')
     if ($selLimpo -or $Global:LogEntries.Count -ne 0 -or -not $painelLimpo -or -not $faseLimpa -or $Global:WizardStep -ne 1) {
-        Write-Host "[6] FALHA: nao abriu limpo (sel=$([bool]$selLimpo) log=$($Global:LogEntries.Count) painel=$($w.FindName('dgAvaliacao').Items.Count) payload=$($null -ne $Global:DiagPayload) fase=$($null -ne $Global:FaseLocalPayload) step=$($Global:WizardStep))"
+        Write-Host "[6] FALHA: nao abriu limpo (sel=$([bool]$selLimpo) log=$($Global:LogEntries.Count) painelVpn=$(@($w.FindName('dgAvaliacaoVpn').Items).Count) payload=$($null -ne $Global:DiagPayload) fase=$($null -ne $Global:FaseLocalPayload) step=$($Global:WizardStep))"
         $falhas++
     } else { Write-Host "[6] Assistente pelo menu abre limpo no passo 1 (rede local zerada)" }
 

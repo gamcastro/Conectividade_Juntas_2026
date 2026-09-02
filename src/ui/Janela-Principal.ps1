@@ -3116,7 +3116,10 @@ function Clear-PainelResultado {
     if ($tb) { $Global:AtualizandoMedicaoP5 = $true; $tb.Items.Clear(); $tb.Visibility = 'Collapsed'; $Global:AtualizandoMedicaoP5 = $false }
     $cn = $w.FindName('cardNaResumo');  if ($cn) { $cn.Visibility = 'Collapsed' }
     $sm = $w.FindName('txtSemMedicoes'); if ($sm) { $sm.Visibility = 'Collapsed' }
-    $w.FindName('dgAvaliacao').ItemsSource = @()
+    $w.FindName('dgAvaliacaoVpn').ItemsSource = @()
+    $w.FindName('dgAvaliacaoRl').ItemsSource = @()
+    $cr = $w.FindName('cardAvaliacaoRl'); if ($cr) { $cr.Visibility = 'Collapsed' }
+    $tn = $w.FindName('txtRedeLocalNota'); if ($tn) { $tn.Visibility = 'Collapsed' }
     $Global:AtualizandoDecisao = $true
     $w.FindName('cboDecisaoFinal').SelectedItem = $null
     $Global:AtualizandoDecisao = $false
@@ -3190,9 +3193,11 @@ function Show-PainelResultado {
     $Global:DiagPayload        = $Payload
     $Global:DecisaoFinalTocada = $false
 
-    $rows = [System.Collections.ObjectModel.ObservableCollection[object]]::new()
+    $rows    = [System.Collections.ObjectModel.ObservableCollection[object]]::new()
+    $rowsVpn = [System.Collections.ObjectModel.ObservableCollection[object]]::new()
+    $rowsRl  = [System.Collections.ObjectModel.ObservableCollection[object]]::new()
     $addRow = {
-        param($d, $fase)
+        param($d, $fase, $dest)
         $row = New-AvaliacaoRow -Detalhe $d -Fase $fase
         if ($Overrides -and $Overrides.ContainsKey([string] $d.metrica)) {
             $o = $Overrides[[string] $d.metrica]
@@ -3200,13 +3205,14 @@ function Show-PainelResultado {
             $row.Justificativa = [string] $o.justificativa
         }
         $rows.Add($row)
+        $dest.Add($row)
         $row.add_PropertyChanged({
                 param($s, $e)
                 if ($e.PropertyName -eq 'ClasseFinal') { Update-DecisaoRecalculada }
             })
     }
     # linhas da Fase 2 (com a VPN do TRE)
-    foreach ($d in @($Payload.Decisao.Detalhes)) { & $addRow $d 'Com a VPN' }
+    foreach ($d in @($Payload.Decisao.Detalhes)) { & $addRow $d 'Com a VPN' $rowsVpn }
 
     # linhas da Fase 1 (rede local, sem VPN) - do Speedtest da Ookla; entram no
     # pior caso junto com as da VPN.
@@ -3214,11 +3220,17 @@ function Show-PainelResultado {
            elseif ($Global:FaseLocalPayload) { $Global:FaseLocalPayload.Internet }
            else { $null }
     $d1 = @(Get-DetalhesRedeLocal -Internet $rli -Limiares (Get-LimiaresConfig))
-    foreach ($d in $d1) { & $addRow $d 'Rede local' }
-    Set-NotaRedeLocal $rli ($d1.Count -gt 0)
+    foreach ($d in $d1) { & $addRow $d 'Rede local' $rowsRl }
 
     $Global:AvaliacaoRows = $rows
-    $w.FindName('dgAvaliacao').ItemsSource = $rows
+    $w.FindName('dgAvaliacaoVpn').ItemsSource = $rowsVpn
+    $w.FindName('dgAvaliacaoRl').ItemsSource  = $rowsRl
+
+    Set-NotaRedeLocal $rli ($rowsRl.Count -gt 0)
+    $dgRl = $w.FindName('dgAvaliacaoRl')
+    $dgRl.Visibility = if ($rowsRl.Count) { 'Visible' } else { 'Collapsed' }
+    $notaVis = "$($w.FindName('txtRedeLocalNota').Visibility)" -eq 'Visible'
+    $w.FindName('cardAvaliacaoRl').Visibility = if ($rowsRl.Count -or $notaVis) { 'Visible' } else { 'Collapsed' }
 
     $des = @(if ($Payload.Decisao.PSObject.Properties['MetricasDesativadas']) { $Payload.Decisao.MetricasDesativadas })
     $lblDes = $w.FindName('txtMetricasDesativadas')
@@ -3278,10 +3290,24 @@ function Update-SeletorMedicoes {
     }
     $Global:AtualizandoMedicaoP5 = $true
     $tabs.Items.Clear()
+    $pincelMudo = $w.TryFindResource('Dicon.Text3')
     foreach ($p in $pares) {
         $ti = [Windows.Controls.TabItem]::new()
-        $ti.Header = '{0}   ({1})' -f $p.med.rotulo, (Get-PalavraVeredito $p.med.veredito)
-        try { $ti.Foreground = Get-PincelVeredito $p.med.veredito } catch { }
+        $sp = [Windows.Controls.StackPanel]::new(); $sp.Orientation = 'Horizontal'
+        $dot = [Windows.Shapes.Ellipse]::new()
+        $dot.Width = 9; $dot.Height = 9; $dot.VerticalAlignment = 'Center'
+        $dot.Margin = [Windows.Thickness]::new(0, 0, 8, 0)
+        try { $dot.Fill = Get-PincelVeredito $p.med.veredito } catch { }
+        $sp.Children.Add($dot) | Out-Null
+        $tr = [Windows.Controls.TextBlock]::new()
+        $tr.Text = [string] $p.med.rotulo; $tr.VerticalAlignment = 'Center'
+        $sp.Children.Add($tr) | Out-Null
+        $tv = [Windows.Controls.TextBlock]::new()
+        $tv.Text = '  ' + (Get-PalavraVeredito $p.med.veredito)
+        $tv.VerticalAlignment = 'Center'; $tv.FontSize = 10
+        if ($pincelMudo) { $tv.Foreground = $pincelMudo }
+        $sp.Children.Add($tv) | Out-Null
+        $ti.Header = $sp
         $tabs.Items.Add($ti) | Out-Null
     }
     $tabs.Visibility = 'Visible'

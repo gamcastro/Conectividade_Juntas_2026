@@ -919,65 +919,123 @@
                                        Visibility="Collapsed" Foreground="{DynamicResource Dicon.Ressalva}"
                                        Text="Nenhum meio foi testado &#8212; todos marcados como n&#227;o aplic&#225;veis. O local fica INVI&#193;VEL."/>
 
-                            <TabControl x:Name="tabsMedicoes" Margin="0,0,0,10" Visibility="Collapsed"
-                                        Background="Transparent" BorderThickness="0"/>
+                            <TabControl x:Name="tabsMedicoes" Margin="0,0,0,14" Visibility="Collapsed"
+                                        Style="{DynamicResource TabsMedicao}"
+                                        ItemContainerStyle="{DynamicResource TabMedicao}"/>
 
-                            <TextBlock x:Name="txtRedeLocalNota" Margin="0,0,0,8" TextWrapping="Wrap"
-                                       FontSize="11" Visibility="Collapsed"
-                                       Foreground="{DynamicResource Dicon.Text3}"/>
                             <TextBlock x:Name="txtMetricasDesativadas" Margin="0,0,0,8" TextWrapping="Wrap"
                                        FontFamily="Consolas" FontSize="11" Visibility="Collapsed"
                                        Foreground="{DynamicResource Dicon.Ressalva}"/>
-                            <DataGrid x:Name="dgAvaliacao" Style="{DynamicResource GridMetricas}"
-                                      MaxHeight="340" RowHeight="40"
-                                      CanUserResizeRows="False" HeadersVisibility="Column"
-                                      GridLinesVisibility="Horizontal"
-                                      VerticalScrollBarVisibility="Auto">
-                                <DataGrid.Columns>
-                                    <DataGridTemplateColumn Header="" Width="6" CanUserResize="False" IsReadOnly="True">
-                                        <DataGridTemplateColumn.CellTemplate>
-                                            <DataTemplate>
-                                                <Border Background="{Binding CorFinal}" CornerRadius="2" Margin="0,3"/>
-                                            </DataTemplate>
-                                        </DataGridTemplateColumn.CellTemplate>
-                                    </DataGridTemplateColumn>
-                                    <DataGridTextColumn Header="Etapa" Binding="{Binding Fase}"
-                                                        IsReadOnly="True" Width="110"/>
-                                    <DataGridTextColumn Header="M&#233;trica" Binding="{Binding Rotulo}"
-                                                        IsReadOnly="True" Width="130"/>
-                                    <DataGridTextColumn Header="Valor medido" Binding="{Binding ValorTexto}"
-                                                        IsReadOnly="True" Width="110" FontFamily="Consolas"/>
-                                    <DataGridTextColumn Header="Faixa aceit&#225;vel" Binding="{Binding Regra}"
-                                                        IsReadOnly="True" Width="230" FontFamily="Consolas"/>
-                                    <DataGridTemplateColumn Header="Sugerida" Width="90" IsReadOnly="True">
-                                        <DataGridTemplateColumn.CellTemplate>
-                                            <DataTemplate>
-                                                <TextBlock Text="{Binding ClasseAutomatica}"
-                                                           Style="{DynamicResource ChipVeredito}"/>
-                                            </DataTemplate>
-                                        </DataGridTemplateColumn.CellTemplate>
-                                    </DataGridTemplateColumn>
-                                    <DataGridTemplateColumn Header="Classifica&#231;&#227;o" Width="150">
-                                        <DataGridTemplateColumn.CellTemplate>
-                                            <DataTemplate>
-                                                <ComboBox Margin="2" VerticalContentAlignment="Center"
-                                                          ItemsSource="{StaticResource classesMetrica}"
-                                                          SelectedItem="{Binding ClasseFinal, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
-                                            </DataTemplate>
-                                        </DataGridTemplateColumn.CellTemplate>
-                                    </DataGridTemplateColumn>
-                                    <DataGridTemplateColumn Header="Motivo do ajuste" Width="*">
-                                        <DataGridTemplateColumn.CellTemplate>
-                                            <DataTemplate>
-                                                <TextBox Margin="2" TextWrapping="Wrap" AcceptsReturn="True"
-                                                         VerticalContentAlignment="Center"
-                                                         Visibility="{Binding Ajustada, Converter={StaticResource boolVis}}"
-                                                         Text="{Binding Justificativa, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
-                                            </DataTemplate>
-                                        </DataGridTemplateColumn.CellTemplate>
-                                    </DataGridTemplateColumn>
-                                </DataGrid.Columns>
-                            </DataGrid>
+
+                            <Border Style="{DynamicResource Cartao}" Padding="14,12" Margin="0,0,0,12">
+                                <StackPanel>
+                                    <TextBlock Text="COM A VPN (bateria da JE)" FontFamily="Consolas" FontSize="10"
+                                               FontWeight="Bold" Foreground="{DynamicResource Dicon.Text2}" Margin="0,0,0,8"/>
+                                    <DataGrid x:Name="dgAvaliacaoVpn" Style="{DynamicResource GridMetricas}"
+                                              MaxHeight="300" RowHeight="40" BorderThickness="0"
+                                              VerticalScrollBarVisibility="Auto">
+                                        <DataGrid.Columns>
+                                            <DataGridTemplateColumn Header="" Width="6" CanUserResize="False" IsReadOnly="True">
+                                                <DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <Border Background="{Binding CorFinal}" CornerRadius="2" Margin="0,3"/>
+                                                    </DataTemplate>
+                                                </DataGridTemplateColumn.CellTemplate>
+                                            </DataGridTemplateColumn>
+                                            <DataGridTextColumn Header="M&#233;trica" Binding="{Binding Rotulo}"
+                                                                IsReadOnly="True" Width="140"/>
+                                            <DataGridTextColumn Header="Valor medido" Binding="{Binding ValorTexto}"
+                                                                IsReadOnly="True" Width="110" FontFamily="Consolas"/>
+                                            <DataGridTextColumn Header="Faixa aceit&#225;vel" Binding="{Binding Regra}"
+                                                                IsReadOnly="True" Width="250" FontFamily="Consolas"/>
+                                            <DataGridTemplateColumn Header="Sugerida" Width="90" IsReadOnly="True">
+                                                <DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock Text="{Binding ClasseAutomatica}"
+                                                                   Style="{DynamicResource ChipVeredito}"/>
+                                                    </DataTemplate>
+                                                </DataGridTemplateColumn.CellTemplate>
+                                            </DataGridTemplateColumn>
+                                            <DataGridTemplateColumn Header="Classifica&#231;&#227;o" Width="150">
+                                                <DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <ComboBox Margin="2" VerticalContentAlignment="Center"
+                                                                  ItemsSource="{StaticResource classesMetrica}"
+                                                                  SelectedItem="{Binding ClasseFinal, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                                    </DataTemplate>
+                                                </DataGridTemplateColumn.CellTemplate>
+                                            </DataGridTemplateColumn>
+                                            <DataGridTemplateColumn Header="Motivo do ajuste" Width="*">
+                                                <DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <TextBox Margin="2" TextWrapping="Wrap" AcceptsReturn="True"
+                                                                 VerticalContentAlignment="Center"
+                                                                 Visibility="{Binding Ajustada, Converter={StaticResource boolVis}}"
+                                                                 Text="{Binding Justificativa, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                                    </DataTemplate>
+                                                </DataGridTemplateColumn.CellTemplate>
+                                            </DataGridTemplateColumn>
+                                        </DataGrid.Columns>
+                                    </DataGrid>
+                                </StackPanel>
+                            </Border>
+
+                            <Border x:Name="cardAvaliacaoRl" Style="{DynamicResource Cartao}" Padding="14,12"
+                                    Margin="0,0,0,12" Visibility="Collapsed">
+                                <StackPanel>
+                                    <TextBlock Text="REDE LOCAL &#8212; SPEEDTEST DA OOKLA (SEM VPN)"
+                                               FontFamily="Consolas" FontSize="10" FontWeight="Bold"
+                                               Foreground="{DynamicResource Dicon.Text2}" Margin="0,0,0,4"/>
+                                    <TextBlock x:Name="txtRedeLocalNota" TextWrapping="Wrap" FontSize="11"
+                                               Margin="0,0,0,8" Foreground="{DynamicResource Dicon.Text3}"/>
+                                    <DataGrid x:Name="dgAvaliacaoRl" Style="{DynamicResource GridMetricas}"
+                                              MaxHeight="260" RowHeight="40" BorderThickness="0"
+                                              VerticalScrollBarVisibility="Auto">
+                                        <DataGrid.Columns>
+                                            <DataGridTemplateColumn Header="" Width="6" CanUserResize="False" IsReadOnly="True">
+                                                <DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <Border Background="{Binding CorFinal}" CornerRadius="2" Margin="0,3"/>
+                                                    </DataTemplate>
+                                                </DataGridTemplateColumn.CellTemplate>
+                                            </DataGridTemplateColumn>
+                                            <DataGridTextColumn Header="M&#233;trica" Binding="{Binding Rotulo}"
+                                                                IsReadOnly="True" Width="140"/>
+                                            <DataGridTextColumn Header="Valor medido" Binding="{Binding ValorTexto}"
+                                                                IsReadOnly="True" Width="110" FontFamily="Consolas"/>
+                                            <DataGridTextColumn Header="Faixa aceit&#225;vel" Binding="{Binding Regra}"
+                                                                IsReadOnly="True" Width="250" FontFamily="Consolas"/>
+                                            <DataGridTemplateColumn Header="Sugerida" Width="90" IsReadOnly="True">
+                                                <DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock Text="{Binding ClasseAutomatica}"
+                                                                   Style="{DynamicResource ChipVeredito}"/>
+                                                    </DataTemplate>
+                                                </DataGridTemplateColumn.CellTemplate>
+                                            </DataGridTemplateColumn>
+                                            <DataGridTemplateColumn Header="Classifica&#231;&#227;o" Width="150">
+                                                <DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <ComboBox Margin="2" VerticalContentAlignment="Center"
+                                                                  ItemsSource="{StaticResource classesMetrica}"
+                                                                  SelectedItem="{Binding ClasseFinal, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                                    </DataTemplate>
+                                                </DataGridTemplateColumn.CellTemplate>
+                                            </DataGridTemplateColumn>
+                                            <DataGridTemplateColumn Header="Motivo do ajuste" Width="*">
+                                                <DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <TextBox Margin="2" TextWrapping="Wrap" AcceptsReturn="True"
+                                                                 VerticalContentAlignment="Center"
+                                                                 Visibility="{Binding Ajustada, Converter={StaticResource boolVis}}"
+                                                                 Text="{Binding Justificativa, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                                    </DataTemplate>
+                                                </DataGridTemplateColumn.CellTemplate>
+                                            </DataGridTemplateColumn>
+                                        </DataGrid.Columns>
+                                    </DataGrid>
+                                </StackPanel>
+                            </Border>
                         </StackPanel>
                     </ScrollViewer>
 
