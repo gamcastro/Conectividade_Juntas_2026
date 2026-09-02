@@ -2037,7 +2037,10 @@ function Start-CheckFase2 {
     $w = $Global:JanelaPrincipal
     Set-ChkStep 2 'rodando'
     Set-ChkFaseView 'f2'
-    $w.FindName('painelIperfResultado').Visibility = 'Collapsed'
+    # limpa a 3a coluna: some o resultado da Fase 1 e o do iperf de uma rodada anterior
+    foreach ($n in 'painelSpeedResultado', 'painelIperfResultado') {
+        $c = $w.FindName($n); if ($c) { $c.Visibility = 'Collapsed' }
+    }
     $w.FindName('txtChkResultadoVazio').Visibility = 'Visible'
     Update-EstadoVpn
     if (Test-VpnAtiva) {
