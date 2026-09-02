@@ -401,24 +401,24 @@ try {
     $Global:Medicoes = @(@($Global:Medicoes) + $medLan)
     Show-WizardPasso 4
     Invoke-Pump
-    $boxVis = "$($w.FindName('boxMedicaoPasso5').Visibility)"
-    $nOpc = @($w.FindName('cboMedicaoPasso5').ItemsSource).Count
-    if ($boxVis -eq 'Visible' -and $nOpc -eq 2) { Write-Host "[5b] multi-meio: seletor de medicoes visivel com $nOpc opcoes" }
-    else { Write-Host "    FALHA: seletor de medicoes do passo 5 (vis=$boxVis opc=$nOpc)"; $falhas++ }
+    $boxVis = "$($w.FindName('tabsMedicoes').Visibility)"
+    $nOpc = @($w.FindName('tabsMedicoes').Items).Count
+    if ($boxVis -eq 'Visible' -and $nOpc -eq 2) { Write-Host "[5b] multi-meio: abas de medicoes visiveis com $nOpc abas" }
+    else { Write-Host "    FALHA: abas de medicoes do passo 4 (vis=$boxVis abas=$nOpc)"; $falhas++ }
     $idxAntes  = $Global:MedicaoPasso5Idx
-    $selInicial = $w.FindName('cboMedicaoPasso5').SelectedIndex
+    $selInicial = $w.FindName('tabsMedicoes').SelectedIndex
     $novoSel   = if ($selInicial -eq 0) { 1 } else { 0 }
-    $w.FindName('cboMedicaoPasso5').SelectedIndex = $novoSel
+    $w.FindName('tabsMedicoes').SelectedIndex = $novoSel
     Invoke-Pump
     if ($Global:MedicaoPasso5Idx -ne $idxAntes -and @($Global:AvaliacaoRows).Count -eq 6) {
         Write-Host "[5b] troca de medicao re-renderiza o grid (idx $idxAntes -> $($Global:MedicaoPasso5Idx))"
-    } else { Write-Host "    FALHA: troca de medicao no passo 5 (idx=$($Global:MedicaoPasso5Idx) linhas=$(@($Global:AvaliacaoRows).Count))"; $falhas++ }
+    } else { Write-Host "    FALHA: troca de medicao no passo 4 (idx=$($Global:MedicaoPasso5Idx) linhas=$(@($Global:AvaliacaoRows).Count))"; $falhas++ }
     $lnLan = @($Global:AvaliacaoRows) | Where-Object { $_.Rotulo -eq 'Latencia' } | Select-Object -First 1
     $lnLan.ClasseFinal = 'inviavel'; $lnLan.Justificativa = 'teste multi-meio'
     Invoke-Pump
     $outroSel = if ($novoSel -eq 0) { 1 } else { 0 }
-    $w.FindName('cboMedicaoPasso5').SelectedIndex = $outroSel ; Invoke-Pump
-    $w.FindName('cboMedicaoPasso5').SelectedIndex = $novoSel ; Invoke-Pump
+    $w.FindName('tabsMedicoes').SelectedIndex = $outroSel ; Invoke-Pump
+    $w.FindName('tabsMedicoes').SelectedIndex = $novoSel ; Invoke-Pump
     $lnLan2 = @($Global:AvaliacaoRows) | Where-Object { $_.Rotulo -eq 'Latencia' } | Select-Object -First 1
     if ("$($lnLan2.ClasseFinal)" -eq 'inviavel' -and "$($lnLan2.Justificativa)" -eq 'teste multi-meio') {
         Write-Host "[5b] ajuste por medicao persiste ao alternar no seletor"

@@ -911,14 +911,21 @@
                                   VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">
                         <StackPanel>
                             <TextBlock Style="{DynamicResource SubtituloTela}" Margin="0,0,0,10"
-                                       Text="Ajuste a classifica&#231;&#227;o de uma m&#233;trica se necess&#225;rio &#8212; nesse caso, informe o motivo."/>
-                            <StackPanel x:Name="boxMedicaoPasso5" Orientation="Horizontal" Margin="0,0,0,10"
-                                        Visibility="Collapsed">
-                                <TextBlock Text="Medi&#231;&#227;o:" VerticalAlignment="Center" Margin="0,0,8,0"
-                                           Foreground="{DynamicResource Dicon.Text3}" FontSize="12"/>
-                                <ComboBox x:Name="cboMedicaoPasso5" MinWidth="340" MinHeight="30"
-                                          VerticalContentAlignment="Center"/>
-                            </StackPanel>
+                                       Text="Cada aba &#233; um meio testado. Ajuste a classifica&#231;&#227;o de uma m&#233;trica se necess&#225;rio &#8212; nesse caso, informe o motivo."/>
+
+                            <Border x:Name="cardNaResumo" Style="{DynamicResource Faixa}" Margin="0,0,0,10"
+                                    Visibility="Collapsed">
+                                <TextBlock x:Name="txtNaResumo" TextWrapping="Wrap" FontSize="12"
+                                           Foreground="{DynamicResource Dicon.Inviavel}"/>
+                            </Border>
+
+                            <TextBlock x:Name="txtSemMedicoes" Margin="0,0,0,10" TextWrapping="Wrap" FontSize="13"
+                                       Visibility="Collapsed" Foreground="{DynamicResource Dicon.Ressalva}"
+                                       Text="Nenhum meio foi testado &#8212; todos marcados como n&#227;o aplic&#225;veis. O local fica INVI&#193;VEL."/>
+
+                            <TabControl x:Name="tabsMedicoes" Margin="0,0,0,10" Visibility="Collapsed"
+                                        Background="Transparent" BorderThickness="0"/>
+
                             <TextBlock x:Name="txtMetricasDesativadas" Margin="0,0,0,8" TextWrapping="Wrap"
                                        FontFamily="Consolas" FontSize="11" Visibility="Collapsed"
                                        Foreground="{DynamicResource Dicon.Ressalva}"/>

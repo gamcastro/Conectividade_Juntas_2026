@@ -159,10 +159,14 @@ conforme o veredito. `cardRecMeios`/`txtRecMeios` (`Update-BannerRecomendacao`)
 mostra a recomendação assim que 1+ meio é testado. Trocar de Local zera as
 medições (`Reset-Medicoes`); o gate 3→4 exige 1+ meio testado (ou todos "não
 aplicável" → medição sintética inviável)
-→ 4. resultado por métrica: com 2+ meios testados, o combo `cboMedicaoPasso5`
-(`Update-SeletorMedicoes`/`Show-MedicaoNoPasso5`/`Invoke-TrocarMedicaoPasso5`)
-alterna qual medição o grid mostra; `Save-AjustesPasso5` grava classe final +
-justificativa na medição **aberta** → 5. **conexão recomendada**:
+→ 4. resultado por métrica: `Update-SeletorMedicoes` monta **uma aba por meio
+testado** no `TabControl` `tabsMedicoes` (header = rótulo + veredito, na cor do
+veredito); `Show-MedicaoNoPasso5`/`Invoke-TrocarMedicaoPasso5` trocam qual
+medição o grid `dgAvaliacao` mostra; `Save-AjustesPasso5` grava classe final +
+justificativa na medição **aberta**. `cardNaResumo`/`txtNaResumo` lista os meios
+marcados "não aplicável" (rótulo — motivo); se nenhum meio foi testado (todos
+"não aplicável"), `txtSemMedicoes` avisa que o local fica inviável →
+5. **conexão recomendada**:
 combo `cboConexaoRec` (candidatos + "nenhuma") pré-selecionado por
 `Get-ConexaoRecomendada`, `txtMotivoRec` (**motivo obrigatório**,
 `Test-RecomendacaoValida` é o gate 5→6) e a tabela read-only `dgMedicoes` de

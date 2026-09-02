@@ -305,7 +305,7 @@ function New-JanelaPrincipal {
             if (-not $Global:AtualizandoDecisao) { $Global:DecisaoFinalTocada = $true }
             Update-VisibilidadeJustDecisao
         })
-    $window.FindName('cboMedicaoPasso5').Add_SelectionChanged({ Invoke-TrocarMedicaoPasso5 })
+    $window.FindName('tabsMedicoes').Add_SelectionChanged({ Invoke-TrocarMedicaoPasso5 })
     $window.FindName('cboConexaoRec').Add_SelectionChanged({
             if (-not $Global:AtualizandoRecomendacao) { Update-ContextoRecomendacao }
         })
@@ -3080,7 +3080,10 @@ function Clear-PainelResultado {
     $Global:DecisaoFinalTocada = $false
     $Global:MedicaoPasso5Idx   = -1
 
-    $bm = $w.FindName('boxMedicaoPasso5'); if ($bm) { $bm.Visibility = 'Collapsed' }
+    $tb = $w.FindName('tabsMedicoes')
+    if ($tb) { $Global:AtualizandoMedicaoP5 = $true; $tb.Items.Clear(); $tb.Visibility = 'Collapsed'; $Global:AtualizandoMedicaoP5 = $false }
+    $cn = $w.FindName('cardNaResumo');  if ($cn) { $cn.Visibility = 'Collapsed' }
+    $sm = $w.FindName('txtSemMedicoes'); if ($sm) { $sm.Visibility = 'Collapsed' }
     $w.FindName('dgAvaliacao').ItemsSource = @()
     $Global:AtualizandoDecisao = $true
     $w.FindName('cboDecisaoFinal').SelectedItem = $null
@@ -3164,13 +3167,12 @@ function Show-PainelResultado {
     Update-DecisaoRecalculada
 }
 
-# Passo 5: monta o seletor de medicoes (so aparece com 2+ meios testados) e
-# abre a medicao correspondente ao meio que acabou de rodar.
+# Passo 4 (resultado): monta uma ABA por meio testado + o resumo dos meios "nao
+# aplicaveis", e abre a aba do meio que acabou de rodar.
 function Update-SeletorMedicoes {
     $w = $Global:JanelaPrincipal
     if (-not $w) { return }
-    $box = $w.FindName('boxMedicaoPasso5')
-    $cbo = $w.FindName('cboMedicaoPasso5')
+    $tabs = $w.FindName('tabsMedicoes')
 
     $pares = @()
     for ($i = 0; $i -lt @($Global:Medicoes).Count; $i++) {
@@ -3181,18 +3183,25 @@ function Update-SeletorMedicoes {
     }
     $Global:MedicoesPasso5 = $pares
 
+    # resumo dos meios marcados "nao se aplica"
+    $na = @($Global:Medicoes | Where-Object { $_ -and $_.nao_aplicavel })
+    $cardNa = $w.FindName('cardNaResumo')
+    if ($cardNa) {
+        if ($na.Count) {
+            $w.FindName('txtNaResumo').Text = 'Meios que NAO se aplicam a este local: ' +
+                (($na | ForEach-Object { '{0} - {1}' -f $_.rotulo, ([string] $_.motivo_na) }) -join '     |     ')
+            $cardNa.Visibility = 'Visible'
+        } else { $cardNa.Visibility = 'Collapsed' }
+    }
+
     if ($pares.Count -eq 0) {
-        if ($box) { $box.Visibility = 'Collapsed' }
+        if ($tabs) { $Global:AtualizandoMedicaoP5 = $true; $tabs.Items.Clear(); $tabs.Visibility = 'Collapsed'; $Global:AtualizandoMedicaoP5 = $false }
+        $w.FindName('txtSemMedicoes').Visibility = 'Visible'
         $Global:MedicaoPasso5Idx = -1
         return
     }
-    if ($pares.Count -eq 1) {
-        if ($box) { $box.Visibility = 'Collapsed' }
-        $Global:MedicaoPasso5Idx = $pares[0].idx
-        return
-    }
+    $w.FindName('txtSemMedicoes').Visibility = 'Collapsed'
 
-    if ($box) { $box.Visibility = 'Visible' }
     # abre na ultima medicao registrada, ou na que ja estava aberta
     $sel = $pares.Count - 1
     if ($Global:MedicaoPasso5Idx -ge 0) {
@@ -3201,8 +3210,15 @@ function Update-SeletorMedicoes {
         }
     }
     $Global:AtualizandoMedicaoP5 = $true
-    $cbo.ItemsSource   = @($pares | ForEach-Object { '{0}  -  {1}' -f $_.med.rotulo, (Get-PalavraVeredito $_.med.veredito) })
-    $cbo.SelectedIndex = $sel
+    $tabs.Items.Clear()
+    foreach ($p in $pares) {
+        $ti = [Windows.Controls.TabItem]::new()
+        $ti.Header = '{0}   ({1})' -f $p.med.rotulo, (Get-PalavraVeredito $p.med.veredito)
+        try { $ti.Foreground = Get-PincelVeredito $p.med.veredito } catch { }
+        $tabs.Items.Add($ti) | Out-Null
+    }
+    $tabs.Visibility = 'Visible'
+    $tabs.SelectedIndex = $sel
     $Global:AtualizandoMedicaoP5 = $false
 
     Show-MedicaoNoPasso5 -Par $pares[$sel]
@@ -3227,11 +3243,11 @@ function Show-MedicaoNoPasso5 {
     Show-PainelResultado -Payload $payload -Overrides $ovr
 }
 
-# Handler do combo de medicoes do passo 5: salva a aberta e mostra a escolhida.
+# Handler das abas de medicao do passo 4: salva a aberta e mostra a escolhida.
 function Invoke-TrocarMedicaoPasso5 {
     if ($Global:AtualizandoMedicaoP5) { return }
     $w = $Global:JanelaPrincipal
-    $i = $w.FindName('cboMedicaoPasso5').SelectedIndex
+    $i = $w.FindName('tabsMedicoes').SelectedIndex
     $pares = @($Global:MedicoesPasso5)
     if ($i -lt 0 -or $i -ge $pares.Count) { return }
     Save-AjustesPasso5
