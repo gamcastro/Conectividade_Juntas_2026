@@ -43,22 +43,32 @@
                 Visibility="Collapsed">
             <DockPanel LastChildFill="True">
 
-                <StackPanel DockPanel.Dock="Top" Margin="18,20,18,8">
-                    <StackPanel Orientation="Horizontal">
-                        <ContentControl Style="{DynamicResource MarcaDicon}" Width="30" Height="30"
-                                        Foreground="{DynamicResource Dicon.Text}"/>
-                        <TextBlock Text="DICON" Margin="10,0,0,0" VerticalAlignment="Center"
-                                   FontFamily="{DynamicResource Dicon.Display}" FontWeight="Bold"
-                                   FontSize="20" Foreground="{DynamicResource Dicon.Text}"/>
-                    </StackPanel>
+                <Grid DockPanel.Dock="Top" Margin="14,14,10,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <ContentControl Grid.Column="0" Style="{DynamicResource MarcaDicon}" Width="28" Height="28"
+                                    HorizontalAlignment="Left" VerticalAlignment="Center"
+                                    Foreground="{DynamicResource Dicon.Text}"/>
+                    <Button x:Name="btnRailToggle" Grid.Column="1" Width="30" Height="30"
+                            Style="{DynamicResource BotaoFantasma}" Padding="0" ToolTip="Recolher/expandir o menu">
+                        <TextBlock x:Name="txtRailToggle" Text="&#171;" FontFamily="Consolas" FontSize="16"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Button>
+                </Grid>
+
+                <StackPanel x:Name="railCabTexto" DockPanel.Dock="Top" Margin="18,4,18,4">
+                    <TextBlock Text="DICON" FontFamily="{DynamicResource Dicon.Display}" FontWeight="Bold"
+                               FontSize="20" Foreground="{DynamicResource Dicon.Text}"/>
                     <TextBlock Text="Diagn&#243;stico de Conectividade &#8212; Juntas Especiais 2026"
-                               Margin="0,4,0,0" FontFamily="Consolas" FontSize="10" TextWrapping="Wrap"
+                               Margin="0,2,0,0" FontFamily="Consolas" FontSize="10" TextWrapping="Wrap"
                                Foreground="{DynamicResource Dicon.Text3}"/>
-                    <TextBlock x:Name="txtSaudacao" Margin="0,14,0,0" TextWrapping="Wrap"
+                    <TextBlock x:Name="txtSaudacao" Margin="0,12,0,0" TextWrapping="Wrap"
                                FontSize="13" Foreground="{DynamicResource Dicon.Text2}"/>
                 </StackPanel>
 
-                <StackPanel DockPanel.Dock="Bottom" Margin="12,8,12,18">
+                <StackPanel x:Name="railRodape" DockPanel.Dock="Bottom" Margin="12,8,12,18">
                     <Border Style="{DynamicResource Faixa}" Margin="0,0,0,10">
                         <StackPanel>
                             <TextBlock Text="T&#201;CNICO" FontFamily="Consolas" FontSize="9"
@@ -74,16 +84,25 @@
                                Foreground="{DynamicResource Dicon.Text3}"/>
                 </StackPanel>
 
-                <StackPanel VerticalAlignment="Top" Margin="0,18,0,0">
-                    <TextBlock Text="NAVEGA&#199;&#195;O" Margin="22,0,0,6" FontFamily="Consolas"
-                               FontSize="9" Foreground="{DynamicResource Dicon.Text3}"/>
+                <StackPanel VerticalAlignment="Top" Margin="0,14,0,0">
+                    <TextBlock x:Name="lblNavSecao" Text="NAVEGA&#199;&#195;O" Margin="22,0,0,6"
+                               FontFamily="Consolas" FontSize="9" Foreground="{DynamicResource Dicon.Text3}"/>
 
                     <RadioButton x:Name="navGuia" Style="{DynamicResource NavBotao}">
                         <StackPanel Orientation="Horizontal">
                             <Path Width="18" Height="18" Stretch="Uniform"
                                   Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
                                   Data="M4,3 L13,3 A3,3 0 0 1 16,6 L16,17 L4,17 Z M6,7 L13,7 M6,10 L13,10 M6,13 L11,13"/>
-                            <TextBlock Text="Guia de bordo" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="lblNavGuia" Text="Guia de bordo" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </RadioButton>
+
+                    <RadioButton x:Name="navLocais" Style="{DynamicResource NavBotao}">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Width="18" Height="18" Stretch="Uniform"
+                                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
+                                  Data="M10,1 A6,6 0 0 1 16,7 C16,12 10,19 10,19 C10,19 4,12 4,7 A6,6 0 0 1 10,1 Z M10,4.5 A2.5,2.5 0 1 0 10,9.5 A2.5,2.5 0 1 0 10,4.5"/>
+                            <TextBlock x:Name="lblNavLocais" Text="Locais" Margin="12,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </RadioButton>
 
@@ -92,7 +111,7 @@
                             <Path Width="18" Height="18" Stretch="Uniform"
                                   Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
                                   Data="M10,1 A9,9 0 1 0 10,19 A9,9 0 1 0 10,1 M10,4 A6,6 0 1 1 10,16 A6,6 0 1 1 10,4 M10,7 A3,3 0 1 0 10,13 A3,3 0 1 0 10,7"/>
-                            <TextBlock Text="Diagn&#243;stico" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="lblNavDiag" Text="Diagn&#243;stico" Margin="12,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </RadioButton>
 
@@ -101,7 +120,7 @@
                             <Path Width="18" Height="18" Stretch="Uniform"
                                   Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
                                   Data="M10,1 L12,4 L15.5,3.3 L15,7 L18,9 L15,11 L15.5,14.7 L12,14 L10,17 L8,14 L4.5,14.7 L5,11 L2,9 L5,7 L4.5,3.3 L8,4 Z M10,6.5 A2.5,2.5 0 1 0 10,11.5 A2.5,2.5 0 1 0 10,6.5"/>
-                            <TextBlock Text="Administra&#231;&#227;o" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="lblNavAdmin" Text="Administra&#231;&#227;o" Margin="12,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </RadioButton>
 
@@ -112,7 +131,7 @@
                             <Path Width="18" Height="18" Stretch="Uniform"
                                   Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
                                   Data="M10,3 A7,7 0 1 1 3.5,7.7 M10,3 L10,0.2 M10,3 L6.5,3.2"/>
-                            <TextBlock Text="Atualizar dados" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="lblNavAtualizar" Text="Atualizar dados" Margin="12,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </RadioButton>
                 </StackPanel>
@@ -391,6 +410,97 @@
                 </ScrollViewer>
 
                 <Button x:Name="btnGuiaVoltar" Grid.Row="3" Content="Voltar ao in&#237;cio"
+                        HorizontalAlignment="Left" Margin="0,14,0,0"
+                        Style="{DynamicResource BotaoFantasma}"/>
+            </Grid>
+
+            <!-- ===== LOCAIS DE VISTORIA (referencia + busca/filtros) ===== -->
+            <Grid x:Name="viewLocais" Visibility="Collapsed">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" Text="Locais de vistoria" Style="{DynamicResource TituloTela}"/>
+                <TextBlock x:Name="txtLocaisSub" Grid.Row="1" Style="{DynamicResource SubtituloTela}"
+                           Margin="0,6,0,12"/>
+
+                <Grid Grid.Row="2" Margin="0,0,0,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="Buscar" Style="{DynamicResource Rotulo}"
+                               VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <TextBox x:Name="txtBuscaLocais" Grid.Column="1" MinHeight="32"
+                             VerticalContentAlignment="Center"/>
+                    <ComboBox x:Name="cboFiltroZE" Grid.Column="2" MinHeight="32" Width="130" Margin="10,0,0,0"
+                              VerticalContentAlignment="Center"/>
+                    <ComboBox x:Name="cboFiltroMun" Grid.Column="3" MinHeight="32" Width="210" Margin="10,0,0,0"
+                              VerticalContentAlignment="Center"/>
+                    <TextBlock x:Name="txtLocaisContagem" Grid.Column="4" VerticalAlignment="Center"
+                               Margin="14,0,0,0" FontFamily="Consolas" FontSize="11"
+                               Foreground="{DynamicResource Dicon.Text3}"/>
+                </Grid>
+
+                <Grid Grid.Row="3">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <DataGrid x:Name="dgLocais" Grid.Row="0" Style="{DynamicResource GridMetricas}"
+                              MaxHeight="240" RowHeight="34" AutoGenerateColumns="False"
+                              IsReadOnly="True" CanUserResizeRows="False" HeadersVisibility="Column"
+                              GridLinesVisibility="Horizontal" VerticalScrollBarVisibility="Auto">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="ZE" Binding="{Binding zona_eleitoral}" Width="50"/>
+                            <DataGridTextColumn Header="Munic&#237;pio" Binding="{Binding municipio_termo}" Width="150"/>
+                            <DataGridTextColumn Header="Tipo" Binding="{Binding TipoRotulo}" Width="90"/>
+                            <DataGridTextColumn Header="Local" Binding="{Binding nome}" Width="*"/>
+                            <DataGridTextColumn Header="Internet" Binding="{Binding tipo_internet}" Width="150"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="0,12,0,0" Padding="0,0,8,0">
+                        <Border x:Name="cardLocalDetalhe" Style="{DynamicResource Cartao}" Padding="18,16"
+                                Visibility="Collapsed">
+                            <StackPanel>
+                                <TextBlock x:Name="txtLocDetTipo" FontFamily="Consolas" FontSize="9"
+                                           Foreground="{DynamicResource Dicon.Text3}"/>
+                                <TextBlock x:Name="txtLocDetNome" FontFamily="{DynamicResource Dicon.Display}"
+                                           FontWeight="Bold" FontSize="18" TextWrapping="Wrap"
+                                           Foreground="{DynamicResource Dicon.Text}"/>
+                                <TextBlock x:Name="txtLocDetZE" Margin="0,2,0,0"
+                                           Foreground="{DynamicResource Dicon.Text2}"/>
+                                <TextBlock x:Name="txtLocDetEndereco" Margin="0,8,0,0" TextWrapping="Wrap"
+                                           Foreground="{DynamicResource Dicon.Text2}"/>
+                                <TextBlock x:Name="txtLocDetInternet" Margin="0,6,0,0"
+                                           Foreground="{DynamicResource Dicon.Text2}"/>
+                                <TextBlock x:Name="txtLocDetUC" Margin="0,6,0,0"
+                                           Foreground="{DynamicResource Dicon.Text2}"/>
+                                <TextBlock x:Name="txtLocDetResponsavel" Margin="0,6,0,0"
+                                           Foreground="{DynamicResource Dicon.Text2}"/>
+                                <TextBlock x:Name="txtLocDetTelefone" Margin="0,6,0,0"
+                                           Foreground="{DynamicResource Dicon.Text2}"/>
+                                <Separator Margin="0,12" Background="{DynamicResource Dicon.Hair}"/>
+                                <TextBlock Text="FICHA COMPLETA DO LOCAL" FontFamily="Consolas" FontSize="9"
+                                           Foreground="{DynamicResource Dicon.Text3}"/>
+                                <TextBlock x:Name="txtLocDetCompleto" Margin="0,4,0,0" TextWrapping="Wrap"
+                                           FontFamily="Consolas" FontSize="11"
+                                           Foreground="{DynamicResource Dicon.Text2}"/>
+                            </StackPanel>
+                        </Border>
+                    </ScrollViewer>
+                </Grid>
+
+                <Button x:Name="btnLocaisVoltar" Grid.Row="4" Content="Voltar ao in&#237;cio"
                         HorizontalAlignment="Left" Margin="0,14,0,0"
                         Style="{DynamicResource BotaoFantasma}"/>
             </Grid>

@@ -450,22 +450,34 @@ function Test-InternetLocal {
         return [pscustomobject] $r
     }
 
-    # Aquecimento: na 1a execucao o Ookla CLI despeja TODO o texto da licenca +
-    # GDPR (emoldurado em "===="), grava a aceitacao e so entao roda. Esse
-    # diluvio de stderr atrapalha a leitura do JSONL no runspace. Fazemos uma
-    # chamada rapida so pra registrar a aceitacao antes da medicao real.
-    try { & $exe --accept-license --accept-gdpr --version 2>&1 | Out-Null } catch { }
-
     # Sem flag de versao de IP: o Ookla CLI 1.x nao aceita (--ip-version / -4 dao
     # "Unrecognized option"). O IPv4 e resolvido na exibicao (IP local da placa).
-    $argv = '--format=jsonl --progress=yes --accept-license --accept-gdpr'
+    # As flags de licenca aqui ja bastam: na 1a vez o CLI imprime a licenca no
+    # stderr (linhas que NAO comecam com "{" e o Invoke-SpeedtestStreaming ignora)
+    # e grava a aceitacao; nas seguintes fica silencioso.
+    # NAO forcar --progress=yes: com a saida em pipe, o Ookla CLI usa
+    # --progress=no por padrao. Forcando "yes" ele despeja eventos de progresso a
+    # cada ~100ms; se o consumidor (velocimetro) nao drena rapido, o speedtest.exe
+    # trava no stdout e o proprio config-fetch dele estoura ("Configuration -
+    # Timeout") mesmo com a rede boa. Sem a flag ainda vem o evento 'result' (e
+    # 'download'/'upload' parciais) - o velocimetro move menos, mas a medicao passa.
+    $argv = '--format=jsonl --accept-license --accept-gdpr'
     if ($cfg.speedtest_server_id) { $argv += ' --server-id={0}' -f $cfg.speedtest_server_id }
     if ($cfg.speedtest_extra_args) { $argv += ' ' + [string] $cfg.speedtest_extra_args }
-    Write-Log ("Speedtest (Ookla): {0} {1}" -f $exe, $argv) -Nivel Destaque
 
-    $saida = Invoke-SpeedtestStreaming -Caminho $exe -Argumentos $argv -TimeoutS 120
-    $res = @($saida.Eventos | Where-Object { $_.type -eq 'result' }) | Select-Object -Last 1
-    $err = @($saida.Eventos | Where-Object { $_.type -eq 'error' }) | Select-Object -Last 1
+    # Ate 2 tentativas: em Wi-Fi de celular / hotspot o "Configuration - Timeout"
+    # da Ookla acontece de forma intermitente; a 2a tentativa costuma passar.
+    $res = $null; $err = $null; $saida = $null
+    for ($tent = 1; $tent -le 2 -and -not $res; $tent++) {
+        if ($tent -gt 1) {
+            Write-Log 'Speedtest nao respondeu - tentando de novo em 3s...' -Nivel Aviso
+            Start-Sleep -Seconds 3
+        }
+        Write-Log ("Speedtest (Ookla): {0} {1}" -f $exe, $argv) -Nivel Destaque
+        $saida = Invoke-SpeedtestStreaming -Caminho $exe -Argumentos $argv -TimeoutS 120
+        $res = @($saida.Eventos | Where-Object { $_.type -eq 'result' }) | Select-Object -Last 1
+        $err = @($saida.Eventos | Where-Object { $_.type -eq 'error' }) | Select-Object -Last 1
+    }
 
     if (-not $res) {
         # descarta banner/regua do Ookla ("====", "Speedtest by Ookla", licenca)

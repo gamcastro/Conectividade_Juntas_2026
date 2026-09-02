@@ -108,6 +108,18 @@ try {
     if ($w.FindName('viewHome').Visibility -ne 'Visible') { Write-Host "[2] FALHA: nao foi para a home"; $falhas++ }
     else { Write-Host "[2] Login OK -> home ($($w.FindName('txtSaudacao').Text))" }
 
+    # 2d. menu lateral recolhe/expande
+    $lRail0 = $w.FindName('railNav').Width
+    Invoke-ToggleRail
+    $lRail1 = $w.FindName('railNav').Width
+    if ($lRail1 -lt $lRail0 -and "$($w.FindName('lblNavGuia').Visibility)" -eq 'Collapsed') {
+        Write-Host "[2d] menu recolheu ($lRail0 -> $lRail1, rotulos ocultos)"
+    } else { Write-Host "    FALHA: menu nao recolheu (w $lRail0 -> $lRail1)"; $falhas++ }
+    Invoke-ToggleRail
+    if ($w.FindName('railNav').Width -eq $lRail0 -and "$($w.FindName('lblNavGuia').Visibility)" -eq 'Visible') {
+        Write-Host "[2d] menu expandiu de volta"
+    } else { Write-Host "    FALHA: menu nao expandiu"; $falhas++ }
+
     # 2b. seletor de Juntas filtra pela rota do tecnico (cache tem 2, rota tem 1)
     $nJrota = @($w.FindName('cboJunta').ItemsSource).Count
     if ($nJrota -eq 1) { Write-Host "[2b] seletor filtra pela rota: $nJrota Junta (de 2 no cache)" }
@@ -126,6 +138,31 @@ try {
     $nJuntas  = @($w.FindName('lstGuiaJuntas').ItemsSource).Count
     Write-Host "[3] Guia: $nJuntas grupo(s) de Junta"
     if ($nJuntas -lt 1) { Write-Host "    FALHA: guia sem conteudo"; $falhas++ }
+
+    # 3b. tela de Locais: lista + busca + filtros por ZE/municipio
+    Show-Locais
+    if ($w.FindName('viewLocais').Visibility -eq 'Visible' -and @($w.FindName('dgLocais').ItemsSource).Count -ge 1) {
+        $nTot = @($w.FindName('dgLocais').ItemsSource).Count
+        Write-Host "[3b] Locais: tela abriu com $nTot local(is)"
+    } else { Write-Host "[3b] FALHA: tela de Locais vazia (vis=$($w.FindName('viewLocais').Visibility))"; $falhas++ }
+    $nTodos = @($w.FindName('dgLocais').ItemsSource).Count
+    $w.FindName('txtBuscaLocais').Text = 'zzz-nao-existe'
+    Invoke-Pump
+    if (@($w.FindName('dgLocais').ItemsSource).Count -eq 0) { Write-Host "[3b] busca sem resultado filtra a grade" }
+    else { Write-Host "    FALHA: busca nao filtrou"; $falhas++ }
+    $w.FindName('txtBuscaLocais').Text = ''
+    Invoke-Pump
+    if (@($w.FindName('dgLocais').ItemsSource).Count -eq $nTodos) { Write-Host "[3b] limpar a busca restaura a lista" }
+    else { Write-Host "    FALHA: limpar a busca nao restaurou ($(@($w.FindName('dgLocais').ItemsSource).Count) x $nTodos)"; $falhas++ }
+    if (@($w.FindName('cboFiltroZE').ItemsSource).Count -ge 2 -and @($w.FindName('cboFiltroMun').ItemsSource).Count -ge 2) {
+        Write-Host "[3b] combos ZE/municipio populados"
+    } else { Write-Host "    FALHA: combos de filtro vazios"; $falhas++ }
+    $w.FindName('dgLocais').SelectedIndex = 0
+    Invoke-Pump
+    if ("$($w.FindName('cardLocalDetalhe').Visibility)" -eq 'Visible' -and "$($w.FindName('txtLocDetNome').Text)") {
+        Write-Host "[3b] selecionar um local mostra o cartao de detalhe"
+    } else { Write-Host "    FALHA: cartao de detalhe do local nao apareceu"; $falhas++ }
+    Show-View 'viewHome'
 
     # 4. assistente pelo atalho do guia: abre no passo 1, Junta/Local pre-selecionados
     Start-DiagnosticoDoGuia -LocalId 'ZE99-TESTE-PRINCIPAL'
