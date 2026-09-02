@@ -30,8 +30,8 @@ $ProgressPreference = 'SilentlyContinue'
 # Canal + URL /exec do Web App desta copia. Na branch 'main' estes dois valores
 # sao 'main' e a URL de PRODUCAO (o merge homologacao->main resolve o conflito
 # mantendo os valores de 'main').
-$CanalPadrao    = 'homologacao'
-$EndpointPadrao = 'https://script.google.com/macros/s/AKfycbxHMpUwQuDH1SwRiLersK1Qbk3x90Xpu76zxnPl12Upthotd3UiaTd_eOPQ01FF2PBk/exec'
+$CanalPadrao    = 'main'
+$EndpointPadrao = 'https://script.google.com/macros/s/AKfycbyrPcogTNL_VZUwtgY-gj_J1nx6rXnhsU5l08da7jJ6KTfsIU-3tlHW8ABzVtgKQnvuig/exec'
 
 function Save-ZipRemoto {
     param([string] $Url, [string] $OutFile, [int] $Tentativas = 3)
