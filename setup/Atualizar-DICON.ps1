@@ -1,9 +1,9 @@
 ﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
-    Atualiza o codigo do DICON (src\, lib\mahapps\, assets\, tools\*.ps1,
-    Iniciar-Diagnostico.*) SEM tocar em config\, data\, bin\, lib\Selenium\,
-    resultados\ e relatorios\.
+    Atualiza o codigo do DICON (src\, lib\mahapps\, assets\, bin\iperf3\,
+    tools\*.ps1, Iniciar-Diagnostico.*) SEM tocar em config\, data\,
+    bin\geckodriver\, bin\chromedriver\, lib\Selenium\, resultados\ e relatorios\.
 
 .DESCRIPTION
     Usa 'git pull' se a pasta for um clone; senao baixa o ZIP da branch e
@@ -64,8 +64,8 @@ if ($temGit) {
     $novo = Get-ChildItem -Path $tmp -Directory | Where-Object { $_.Name -like 'Conectividade_Juntas_2026*' } | Select-Object -First 1
     if (-not $novo) { throw 'ZIP da branch nao extraiu como esperado.' }
 
-    # pastas de codigo: espelha (remove arquivos sumidos)
-    foreach ($d in 'src', 'lib\mahapps', 'assets', 'apps-script', 'docs', 'setup') {
+    # pastas de codigo (+ iperf3, que agora vai no repo): espelha (remove sumidos)
+    foreach ($d in 'src', 'lib\mahapps', 'assets', 'apps-script', 'docs', 'setup', 'bin\iperf3') {
         $orig = Join-Path $novo.FullName $d
         $dest = Join-Path $RaizApp $d
         if (-not (Test-Path $orig)) { continue }
@@ -95,6 +95,6 @@ try {
 
 Write-Host ''
 if ($verNova) { Write-Host ("Codigo agora na versao DICON v{0}." -f $verNova) -ForegroundColor Green }
-Write-Host "Pronto. config\, data\, bin\ e resultados\ foram preservados." -ForegroundColor Green
+Write-Host "Pronto. config\, data\, bin\geckodriver|chromedriver\ e resultados\ preservados; bin\iperf3\ atualizado." -ForegroundColor Green
 Write-Host "Se o Chrome/Firefox mudou de versao, rode: .\setup\Instalar-DICON.ps1 -PularDeps:`$false -Force" -ForegroundColor DarkGray
 Write-Host "Abrir: .\Iniciar-Diagnostico.bat" -ForegroundColor White

@@ -21,6 +21,12 @@ $Global:RaizApp    = Split-Path $PSScriptRoot -Parent
 $Global:ArquivoLog = $null
 $Global:ModoTeste  = $true   # nao abrir o PDF/pasta no final do export
 $Global:VpnSimulada = $true  # passo 4: VPN "conectada" (troque p/ testar o gate)
+# passo 4: nao roda o iperf3 real (o binario agora vai no repo); erro sintetico
+$Global:BandaVpnSimulada = [pscustomobject]@{
+    iperf_ok = $false; iperf_erro = 'ambiente de teste: iperf3 nao executado'
+    servidor = 'teste:5201'; DownloadMbps = $null; UploadMbps = $null
+    retrans_down = $null; retrans_up = $null
+}
 
 # fase 1 (rede local) simulada: nao mexe na placa de rede real da maquina de teste
 $Global:FaseLocalSimulada = [pscustomobject]@{
@@ -428,9 +434,9 @@ try {
     else { Write-Host "[5] apos rodar continua no passo 4 (sem auto-avancar)" }
     if ($w.FindName('btnWizProximo').IsEnabled) { Write-Host "[5] apos rodar, 'Proximo' habilita" }
     else { Write-Host "    FALHA: 'Proximo' seguiu desabilitado apos rodar o diagnostico"; $falhas++ }
-    # card do iperf3 aparece; sem o binario em bin\iperf3\ mostra o erro
-    if ($w.FindName('cardIperfVpn').Visibility -eq 'Visible' -and "$($w.FindName('txtIperfErro').Text)" -match 'iperf3\.exe') {
-        Write-Host "[5] card iperf3 (Fase 2) visivel; sem binario -> erro exibido"
+    # card do iperf3 aparece e mostra o erro (Fase 2 nao concluiu - BandaVpnSimulada)
+    if ($w.FindName('cardIperfVpn').Visibility -eq 'Visible' -and "$($w.FindName('txtIperfErro').Text)" -match 'ambiente de teste|iperf3') {
+        Write-Host "[5] card iperf3 (Fase 2) visivel; erro exibido"
     } else { Write-Host "    FALHA: card/erro do iperf3 (vis=$($w.FindName('cardIperfVpn').Visibility) erro='$($w.FindName('txtIperfErro').Text)')"; $falhas++ }
     Invoke-WizardProximo
     $decIni = [string] $w.FindName('cboDecisaoFinal').SelectedItem

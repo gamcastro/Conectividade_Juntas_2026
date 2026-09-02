@@ -51,6 +51,9 @@ if (-not (Get-Variable -Name FaseLocalSimulada -Scope Global -ErrorAction Silent
 if (-not (Get-Variable -Name VpnSimulada -Scope Global -ErrorAction SilentlyContinue)) {
     $Global:VpnSimulada = $null           # testes: $true/$false forca o estado da VPN
 }
+if (-not (Get-Variable -Name BandaVpnSimulada -Scope Global -ErrorAction SilentlyContinue)) {
+    $Global:BandaVpnSimulada = $null      # testes: resultado fixo p/ Test-BandaVpn (nao roda iperf3)
+}
 
 $Global:Views = @('viewLogin', 'viewHome', 'viewGuia', 'viewLocais', 'viewLocalDetalhe', 'viewDiag', 'viewAdmin')
 
@@ -3153,10 +3156,11 @@ function Start-DiagnosticoAssincrono {
     $rs.ApartmentState = 'MTA'
     $rs.ThreadOptions  = 'ReuseThread'
     $rs.Open()
-    $rs.SessionStateProxy.SetVariable('RaizApp',         $Global:RaizApp)
-    $rs.SessionStateProxy.SetVariable('LogEntries',      $Global:LogEntries)
-    $rs.SessionStateProxy.SetVariable('JanelaPrincipal', $Global:JanelaPrincipal)
-    $rs.SessionStateProxy.SetVariable('ArquivoLog',      $Global:ArquivoLog)
+    $rs.SessionStateProxy.SetVariable('RaizApp',          $Global:RaizApp)
+    $rs.SessionStateProxy.SetVariable('LogEntries',       $Global:LogEntries)
+    $rs.SessionStateProxy.SetVariable('JanelaPrincipal',  $Global:JanelaPrincipal)
+    $rs.SessionStateProxy.SetVariable('ArquivoLog',       $Global:ArquivoLog)
+    $rs.SessionStateProxy.SetVariable('BandaVpnSimulada', $Global:BandaVpnSimulada)  # hook de teste
 
     $ps = [powershell]::Create()
     $ps.Runspace = $rs

@@ -159,7 +159,7 @@ if ($precisaPin) {
 # ---------------------------------------------------------------- binarios
 if ($SoConfig -or $PularDeps) {
     Titulo 'Binarios de terceiros'
-    Aviso 'pulado (-SoConfig / -PularDeps). Coloque a mao: tools\speedtest.exe e bin\iperf3\iperf3.exe'
+    Aviso 'pulado (-SoConfig / -PularDeps). Coloque a mao: tools\speedtest.exe (o iperf3 ja vem no repo)'
 } else {
     Titulo 'Binarios de terceiros'
     $man = Get-Content (Join-Path $PSScriptRoot 'dependencias.json') -Raw -Encoding UTF8 | ConvertFrom-Json

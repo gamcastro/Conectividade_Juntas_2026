@@ -728,6 +728,9 @@
                                 <Border x:Name="cardLan" Grid.Column="0" Style="{DynamicResource Cartao}"
                                         Padding="16,14" VerticalAlignment="Stretch">
                                     <StackPanel>
+                                        <TextBlock Text="LAN" FontFamily="{DynamicResource Dicon.Display}"
+                                                   FontWeight="Bold" FontSize="19" Margin="0,0,0,2"
+                                                   Foreground="{DynamicResource Dicon.Text}"/>
                                         <TextBlock x:Name="badgeLan" FontFamily="Consolas" FontSize="10" FontWeight="Bold"
                                                    Margin="0,0,0,6" Foreground="{DynamicResource Dicon.Text3}"
                                                    Text="NAO TESTADO"/>
@@ -768,6 +771,9 @@
                                 <Border x:Name="cardWifiPlaca" Grid.Column="2" Style="{DynamicResource Cartao}"
                                         Padding="16,14" VerticalAlignment="Stretch">
                                     <StackPanel>
+                                        <TextBlock Text="WI-FI" FontFamily="{DynamicResource Dicon.Display}"
+                                                   FontWeight="Bold" FontSize="19" Margin="0,0,0,2"
+                                                   Foreground="{DynamicResource Dicon.Text}"/>
                                         <TextBlock x:Name="badgeWifi" FontFamily="Consolas" FontSize="10" FontWeight="Bold"
                                                    Margin="0,0,0,6" Foreground="{DynamicResource Dicon.Text3}"
                                                    Text="NAO TESTADO"/>
@@ -800,6 +806,9 @@
                                 <Border x:Name="cardCelular" Grid.Column="4" Style="{DynamicResource Cartao}"
                                         Padding="16,14" VerticalAlignment="Stretch">
                                     <StackPanel>
+                                        <TextBlock Text="CELULAR" FontFamily="{DynamicResource Dicon.Display}"
+                                                   FontWeight="Bold" FontSize="19" Margin="0,0,0,2"
+                                                   Foreground="{DynamicResource Dicon.Text}"/>
                                         <TextBlock x:Name="badgeCelular" FontFamily="Consolas" FontSize="10" FontWeight="Bold"
                                                    Margin="0,0,0,6" Foreground="{DynamicResource Dicon.Text3}"
                                                    Text="NAO TESTADO"/>
@@ -809,7 +818,7 @@
                                                   Content="Nao se aplica a este local"/>
                                         <TextBlock x:Name="txtCelDica" Margin="0,10,0,0" TextWrapping="Wrap" FontSize="11"
                                                    Foreground="{DynamicResource Dicon.Text3}"
-                                                   Text="Ligue o roteamento no celular, conecte a rede dele pelo card abaixo (ou pela bandeja) e informe a operadora."/>
+                                                   Text="Ligue o roteamento no celular, conecte a rede dele pela bandeja do Windows e informe a operadora."/>
                                         <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
                                             <TextBlock Text="Operadora" Style="{DynamicResource Rotulo}"
                                                        VerticalAlignment="Center" Margin="0,0,10,0"/>
