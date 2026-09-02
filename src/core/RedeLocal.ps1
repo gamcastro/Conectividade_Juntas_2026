@@ -455,7 +455,13 @@ function Test-InternetLocal {
     # As flags de licenca aqui ja bastam: na 1a vez o CLI imprime a licenca no
     # stderr (linhas que NAO comecam com "{" e o Invoke-SpeedtestStreaming ignora)
     # e grava a aceitacao; nas seguintes fica silencioso.
-    $argv = '--format=jsonl --progress=yes --accept-license --accept-gdpr'
+    # NAO forcar --progress=yes: com a saida em pipe, o Ookla CLI usa
+    # --progress=no por padrao. Forcando "yes" ele despeja eventos de progresso a
+    # cada ~100ms; se o consumidor (velocimetro) nao drena rapido, o speedtest.exe
+    # trava no stdout e o proprio config-fetch dele estoura ("Configuration -
+    # Timeout") mesmo com a rede boa. Sem a flag ainda vem o evento 'result' (e
+    # 'download'/'upload' parciais) - o velocimetro move menos, mas a medicao passa.
+    $argv = '--format=jsonl --accept-license --accept-gdpr'
     if ($cfg.speedtest_server_id) { $argv += ' --server-id={0}' -f $cfg.speedtest_server_id }
     if ($cfg.speedtest_extra_args) { $argv += ' ' + [string] $cfg.speedtest_extra_args }
 
