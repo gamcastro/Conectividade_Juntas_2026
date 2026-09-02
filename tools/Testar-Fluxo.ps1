@@ -108,6 +108,18 @@ try {
     if ($w.FindName('viewHome').Visibility -ne 'Visible') { Write-Host "[2] FALHA: nao foi para a home"; $falhas++ }
     else { Write-Host "[2] Login OK -> home ($($w.FindName('txtSaudacao').Text))" }
 
+    # 2d. menu lateral recolhe/expande
+    $lRail0 = $w.FindName('railNav').Width
+    Invoke-ToggleRail
+    $lRail1 = $w.FindName('railNav').Width
+    if ($lRail1 -lt $lRail0 -and "$($w.FindName('lblNavGuia').Visibility)" -eq 'Collapsed') {
+        Write-Host "[2d] menu recolheu ($lRail0 -> $lRail1, rotulos ocultos)"
+    } else { Write-Host "    FALHA: menu nao recolheu (w $lRail0 -> $lRail1)"; $falhas++ }
+    Invoke-ToggleRail
+    if ($w.FindName('railNav').Width -eq $lRail0 -and "$($w.FindName('lblNavGuia').Visibility)" -eq 'Visible') {
+        Write-Host "[2d] menu expandiu de volta"
+    } else { Write-Host "    FALHA: menu nao expandiu"; $falhas++ }
+
     # 2b. seletor de Juntas filtra pela rota do tecnico (cache tem 2, rota tem 1)
     $nJrota = @($w.FindName('cboJunta').ItemsSource).Count
     if ($nJrota -eq 1) { Write-Host "[2b] seletor filtra pela rota: $nJrota Junta (de 2 no cache)" }

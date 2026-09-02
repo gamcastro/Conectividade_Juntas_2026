@@ -81,6 +81,9 @@ Script), em vez de criar um BI/dashboard separado.
 ## Telas (rail de navegação)
 `login → início → guia de bordo → **Locais** → diagnóstico → administração`,
 Grids empilhados alternados por `Visibility` (`$Global:Views`, `Show-View`).
+O rail recolhe/expande (`btnRailToggle` → `Invoke-ToggleRail` / `Set-RailRecolhido`:
+214 px ↔ 56 px só-ícones, oculta `railCabTexto`/`railRodape`/`lblNav*`;
+estado em `$Global:RailRecolhido`, sessão).
 **Locais** (`viewLocais`, item `navLocais` no rail): tela de referência com os
 locais de vistoria do roteiro do técnico (`Get-LocaisDoTecnico` achata
 `$Global:RoteiroAtual.juntas[].locais[]`), grade `dgLocais` + busca livre

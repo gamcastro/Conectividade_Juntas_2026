@@ -59,6 +59,7 @@ $Global:Views = @('viewLogin', 'viewHome', 'viewGuia', 'viewLocais', 'viewDiag',
 
 $Global:LocaisTecnico            = @()      # locais do roteiro do tecnico (achatados)
 $Global:AtualizandoFiltroLocais  = $false   # guarda: preenchimento programatico dos combos
+$Global:RailRecolhido            = $false   # menu lateral recolhido (so icones)?
 
 $Global:WizardPassos  = @('stepInfo', 'stepJunta', 'stepLocal', 'stepDiag', 'stepResultado', 'stepDecisao', 'stepFim')
 $Global:WizardTitulos = @(
@@ -314,6 +315,8 @@ function New-JanelaPrincipal {
     $window.FindName('btnReenviarPendentes').Add_Click({ Invoke-ReenvioPendentes })
     $window.FindName('btnTrocarUsuario').Add_Click({ Invoke-TrocarUsuario })
 
+    $window.FindName('btnRailToggle').Add_Click({ Invoke-ToggleRail })
+
     # rail de navegacao (RadioButtons) - handlers ignoram mudanca programatica
     $window.FindName('navGuia').Add_Checked({ if (-not $Global:NavegandoPrograma) { Show-GuiaBordo } })
     $window.FindName('navLocais').Add_Checked({ if (-not $Global:NavegandoPrograma) { Show-Locais } })
@@ -408,6 +411,26 @@ function Show-View {
         if ($rb) { $rb.IsChecked = ($map[$Nome] -eq $nn) }
     }
     $Global:NavegandoPrograma = $false
+}
+
+# Recolhe (so icones, ~56px) ou expande (214px) o menu lateral.
+function Set-RailRecolhido {
+    param([bool] $On)
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    $w.FindName('railNav').Width = if ($On) { 56 } else { 214 }
+    $vis = if ($On) { 'Collapsed' } else { 'Visible' }
+    foreach ($n in 'railCabTexto', 'lblNavSecao', 'railRodape',
+        'lblNavGuia', 'lblNavLocais', 'lblNavDiag', 'lblNavAdmin', 'lblNavAtualizar') {
+        $c = $w.FindName($n); if ($c) { $c.Visibility = $vis }
+    }
+    $t = $w.FindName('txtRailToggle')
+    if ($t) { $t.Text = if ($On) { [char]0x00BB } else { [char]0x00AB } }
+}
+
+function Invoke-ToggleRail {
+    $Global:RailRecolhido = -not $Global:RailRecolhido
+    Set-RailRecolhido $Global:RailRecolhido
 }
 
 # ------------------------------------------------------------- LOGIN
