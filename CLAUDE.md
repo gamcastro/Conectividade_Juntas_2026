@@ -104,9 +104,9 @@ do roteiro); `btnLocalDetalheVoltar` → `Invoke-VoltarAosLocais` volta à lista
 com os filtros preservados.
 
 ## Assistente de diagnóstico (GUI)
-A tela de Diagnóstico é um **assistente de 7 passos** (`viewDiag` com os painéis
-`stepInfo/stepJunta/stepLocal/stepDiag/stepResultado/stepDecisao/stepFim`
-alternados por `Visibility`; estado em `$Global:WizardStep`, navegação por
+A tela de Diagnóstico é um **assistente de 6 passos** (`viewDiag` com os painéis
+`stepInfo/stepJunta/stepLocal/stepResultado/stepDecisao/stepFim` alternados por
+`Visibility`; `$Global:WizardPassos`/`$Global:WizardNPassos`; navegação por
 `Show-WizardPasso` / `Invoke-WizardProximo` / `Invoke-WizardVoltar`, com gates de
 justificativa):
 **Multi-meio (hub-and-spoke):** um Local pode ser medido por até 3 **meios** de
@@ -122,44 +122,42 @@ inviável; nada → "nenhuma". O **veredito final do Local = veredito do meio
 recomendado** (salvo override manual do técnico no combo da decisão final).
 
 1. informação do teste → 2. Junta/Local (com cartão de detalhe) →
-3. **rede local, SEM a VPN** — *painel de meios*: `Invoke-ProbeRedeLocal`
-(`Invoke-FaseLocal -SemInternet`, async) inventaria as placas; três cards
-(`cardLan`/`cardWifiPlaca`/`cardCelular`) com badge por meio (NÃO TESTADO /
-TESTADO: <veredito> / NÃO APLICÁVEL), rádio de escolha (`rbUsarLan`/`rbUsarWifi`/
-`rbUsarCelular`) e checkbox "não aplicável" + `txtMotivoNaMeio` (obrigatório).
-Botão ↻ `btnRelerPlacas` (`Invoke-RelerPlacas`) reinventaria as placas sem sair
-do passo (ex.: cabo plugado / Wi-Fi conectado depois de abrir a tela). A ligação
-a um Wi-Fi é feita **só pela bandeja do Windows** (não há mais conexão pela
-ferramenta); o card `cardWifiBandeja` só explica isso. As linhas IP/gateway/
-máscara/MAC/origem do card Wi-Fi ficam vazias quando a placa não está associada
-a nenhuma rede (`Get-AdaptadorWireless` só as preenche com `conectado`).
-"Rodar checagem local" (`Invoke-RodarFaseLocal` → `Complete-FaseLocal`) só
-habilita com conexão e faz o teste de internet (ping/DNS/download Ookla);
-celular exige operadora (`cboOperadoraCel`). Trocar de Local zera todas as
-medições (`Reset-Medicoes`)
-→ 4. rodar a bateria **com a VPN**: `Update-EstadoVpn` (via `Test-VpnAtiva`)
-bloqueia "Rodar diagnóstico" sem a VPN e mostra **"Abrir o FortiClient"**
-(`Get-CaminhoFortiClient`) + "Verificar novamente"; **"Próximo" fica
-desabilitado** (`Update-Passo4Nav`) até o diagnóstico rodar **ou** o técnico
-marcar **"Não foi possível conectar a VPN"** + motivo (`Set-DiagnosticoVpnImpossivel`
-gera payload sintético INVIÁVEL; vai em `vpn.impossivel/motivo` no JSON e num
-aviso vermelho no relatório). "Rodar diagnóstico" → `Invoke-DiagnosticoCompleto`
-(ping + `Test-BandaVpn` + Selenium): a banda iperf3 aparece ao vivo no
-velocímetro do card `cardIperfVpn` (`Update-IperfGauge`/`Update-IperfPainel`).
-**Não** auto-avança ao concluir; ao passar do passo 4, `Add-MedicaoAtual`
-registra a medição do meio. O card `cardOutroMeio` ("Testar outro meio neste
-local", `Invoke-TestarOutroMeio`) volta ao passo 3 sem perder as medições
-→ 5. resultado por métrica: com 2+ meios testados, o combo `cboMedicaoPasso5`
+3. **meios de conexão** — *painel de 3 cards*: `Invoke-ProbeRedeLocal`
+(`Invoke-FaseLocal -SemInternet`, async) inventaria as placas; cada card
+(`cardLan`/`cardWifiPlaca`/`cardCelular`) tem um `badge*` (NÃO TESTADO /
+TESTANDO… / TESTADO: <veredito> na cor do veredito / NÃO APLICÁVEL), um botão
+**`btnCheck{Lan,Wifi,Celular}`** ("Rodar checagem"), e o checkbox "não aplicável"
++ `txtMotivoNa{Lan,Wifi,Celular}` **por card** — marcar desabilita o card
+(`Update-NaoAplicavelMeio`). Botão ↻ `btnRelerPlacas` (`Invoke-RelerPlacas`)
+reinventaria as placas sem sair do passo. Wi-Fi só pela bandeja do Windows
+(`cardWifiBandeja` explica). Clicar em "Rodar checagem" de um card →
+**`Invoke-CheckMeio <meio>`** abre o **overlay modal `overlayCheck`**
+(`$Global:CheckMeioAtivo`, uma checagem por vez) que roda em sequência, ao vivo:
+**Fase 1** (`Start-CheckFase1`→`Complete-CheckFase1`: `Invoke-FaseLocal` via
+`Start-TarefaRede`, velocímetro Ookla) → **Fase 2** (`Start-CheckFase2`→
+`Complete-CheckFase2`: gate da VPN `Update-EstadoVpn`/`Test-VpnAtiva`/
+`btnAbrirFortiClient`; se OK, `Start-DiagnosticoAssincrono -AoConcluir`
+= ping + `Test-BandaVpn` + Selenium, velocímetro iperf3; se VPN fora, o técnico
+usa `btnChkVpnImpossivel`→`Invoke-CheckVpnImpossivel` com motivo →
+`Set-DiagnosticoVpnImpossivel`, meio inviável) → **Fase 3** (Selenium, "em
+implementação"). `Finish-CheckMeio` → `Add-MedicaoAtual`; `Close-OverlayCheck`
+(`btnChkFechar`) fecha. Um stepper (`txtChkS1/S2/S3`+`dotChkS1/S2/S3`) mostra o
+progresso das 3 fases. Ao concluir, o card fica **verde/amarelo/vermelho**
+conforme o veredito. `cardRecMeios`/`txtRecMeios` (`Update-BannerRecomendacao`)
+mostra a recomendação assim que 1+ meio é testado. Trocar de Local zera as
+medições (`Reset-Medicoes`); o gate 3→4 exige 1+ meio testado (ou todos "não
+aplicável" → medição sintética inviável)
+→ 4. resultado por métrica: com 2+ meios testados, o combo `cboMedicaoPasso5`
 (`Update-SeletorMedicoes`/`Show-MedicaoNoPasso5`/`Invoke-TrocarMedicaoPasso5`)
 alterna qual medição o grid mostra; `Save-AjustesPasso5` grava classe final +
-justificativa na medição **aberta** → 6. **conexão recomendada**:
+justificativa na medição **aberta** → 5. **conexão recomendada**:
 combo `cboConexaoRec` (candidatos + "nenhuma") pré-selecionado por
 `Get-ConexaoRecomendada`, `txtMotivoRec` (**motivo obrigatório**,
-`Test-RecomendacaoValida` é o gate 6→7) e a tabela read-only `dgMedicoes` de
+`Test-RecomendacaoValida` é o gate 5→6) e a tabela read-only `dgMedicoes` de
 todas as medições do Local; o card da decisão final continua acima →
-7. conclusão: **Salvar** / **Transmitir** / **Exportar relatório (PDF)** + checklist.
-O runspace da fase local / conexão Wi-Fi é o `Start-TarefaRede`
-(`$Global:TarefaRedeState`, mesmo padrão do `Start-DiagnosticoAssincrono`).
+6. conclusão: **Salvar** / **Transmitir** / **Exportar relatório (PDF)** + checklist.
+Os runspaces são `Start-TarefaRede` (`$Global:TarefaRedeState`, Fase 1/probe) e
+`Start-DiagnosticoAssincrono` (`$Global:DiagRunState`, Fase 2, com `-AoConcluir`).
 O `rede_local` entra no JSON de resultado (`New-ResultadoJson -FaseLocal`) e numa
 seção própria do relatório PDF; `medicoes[]` + `conexao_recomendada`
 (`-Medicoes` / `-ConexaoRecomendada` / `-MotivoRecomendacao`) trazem o
@@ -190,9 +188,9 @@ HTML. Saída em `relatorios/` (gitignored).
   de totalização)
 - Coleta real das métricas da Fase 2 (iperf3 + Selenium + ping) validada ponta a
   ponta (a Fase 1 — rede local — já coleta de verdade)
-- Multi-meio: refatoração na branch `feature/multi-meio-conexao` (rollback:
-  tag `backup-pre-multimeio`), ainda não mesclada em `homologacao`. Falta
-  validar na GUI ponta a ponta; Selenium/carregamento web segue desativado;
-  "motivo da recomendação" é obrigatório sempre (provisório)
+- Checagem por meio via overlay modal (v0.6.29, rollback: tag
+  `backup-pre-checkmeio`): falta validar na GUI ponta a ponta em campo;
+  Selenium/carregamento web (Fase 3) segue "em implementação"; "motivo da
+  recomendação" é obrigatório sempre (provisório)
 - Fase 2 do admin: incluir/alterar Locais das Juntas
 - Empacotamento de campo (pasta portátil autocontida)

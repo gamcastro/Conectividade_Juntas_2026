@@ -222,240 +222,123 @@ try {
         Write-Host "[4b] campos extras: '$($uc.Text)' / '$($rsp.Text)'"
     } else { Write-Host "    FALHA: cartao sem UC/responsavel (uc='$($uc.Text)' resp='$($rsp.Text)')"; $falhas++ }
 
-    # 4c. passo 2 -> 3 (rede local, sem VPN): probe ao entrar mostra as placas
+    # 4c. passo 2 -> 3 (meios de conexao): probe ao entrar mostra as placas
     Invoke-WizardProximo
     Invoke-Pump
-    if ($Global:WizardStep -ne 3) { Write-Host "[4c] FALHA: nao foi para o passo 3 (rede local)"; $falhas++ }
+    if ($Global:WizardStep -ne 3) { Write-Host "[4c] FALHA: nao foi para o passo 3 (meios)"; $falhas++ }
     $hostTxt = "$($w.FindName('txtLocHost').Text)"
-    if ($w.FindName('cardFaseLocal').Visibility -eq 'Visible' -and
-        $w.FindName('cardInternetLocal').Visibility -eq 'Collapsed' -and
-        -not $w.FindName('btnRodarFaseLocal').IsEnabled -and $hostTxt -match 'NB-TESTE-01') {
-        Write-Host "[4c] probe ao entrar: placas mostradas ($hostTxt); 'Rodar checagem' travado ate escolher a placa"
-    } else { Write-Host "    FALHA: probe do passo 3 (card=$($w.FindName('cardFaseLocal').Visibility) inet=$($w.FindName('cardInternetLocal').Visibility) rodar.en=$($w.FindName('btnRodarFaseLocal').IsEnabled) host='$hostTxt')"; $falhas++ }
+    if ($w.FindName('cardFaseLocal').Visibility -eq 'Visible' -and $hostTxt -match 'NB-TESTE-01' -and
+        $w.FindName('btnCheckLan').IsEnabled -and -not $w.FindName('btnCheckWifi').IsEnabled) {
+        Write-Host "[4c] probe ao entrar: placas mostradas ($hostTxt); LAN conectada libera o botao, Wi-Fi nao"
+    } else { Write-Host "    FALHA: probe do passo 3 (card=$($w.FindName('cardFaseLocal').Visibility) lan.en=$($w.FindName('btnCheckLan').IsEnabled) wifi.en=$($w.FindName('btnCheckWifi').IsEnabled) host='$hostTxt')"; $falhas++ }
 
     # 4c-0b. botao "reler placas" reinventaria sem sair do passo 3
-    $antHost = "$($w.FindName('txtLocHost').Text)"
     Invoke-RelerPlacas
     Invoke-Pump
-    if ($Global:WizardStep -eq 3 -and $w.FindName('cardFaseLocal').Visibility -eq 'Visible' -and
-        "$($w.FindName('txtLocHost').Text)" -eq $antHost) {
+    if ($Global:WizardStep -eq 3 -and $w.FindName('cardFaseLocal').Visibility -eq 'Visible') {
         Write-Host "[4c] 'reler placas' reinventaria e mantem o passo 3"
-    } else { Write-Host "    FALHA: 'reler placas' (step=$($Global:WizardStep) card=$($w.FindName('cardFaseLocal').Visibility))"; $falhas++ }
+    } else { Write-Host "    FALHA: 'reler placas' (step=$($Global:WizardStep))"; $falhas++ }
 
-    # 4c-0. escolher a placa cabeada (LAN) libera "Rodar checagem local"
-    $w.FindName('rbUsarLan').IsChecked = $true
-    Invoke-Pump
-    if ($w.FindName('rbUsarLan').IsEnabled -and $w.FindName('rbUsarWifi').IsEnabled -and
-        $w.FindName('btnRodarFaseLocal').IsEnabled -and $Global:FaseLocalTipo -eq 'lan') {
-        Write-Host "[4c] escolhida a placa LAN -> 'Rodar checagem local' libera"
-    } else { Write-Host "    FALHA: escolha da placa (rbLan.en=$($w.FindName('rbUsarLan').IsEnabled) rbWifi.en=$($w.FindName('rbUsarWifi').IsEnabled) rodar.en=$($w.FindName('btnRodarFaseLocal').IsEnabled) tipo='$($Global:FaseLocalTipo)')"; $falhas++ }
-
-    # 4c-1. passo 3 bloqueia "Proximo" antes de rodar a checagem da internet do local
+    # 4c-1. passo 3 bloqueia "Proximo" sem nenhum meio testado
     Invoke-WizardProximo
-    if ($Global:WizardStep -ne 3) { Write-Host "[4c] FALHA: avancou sem testar a internet local"; $falhas++ }
-    else { Write-Host "[4c] passo 3 bloqueia antes do teste de internet" }
+    if ($Global:WizardStep -eq 3) { Write-Host "[4c] passo 3 bloqueia 'Proximo' sem meio testado" }
+    else { Write-Host "    FALHA: avancou sem testar meio (step=$($Global:WizardStep))"; $falhas++ }
 
-    # 4c-2. roda o speedtest (simulado): velocimetro + painel de resultado; avanca p/ passo 4
-    Invoke-RodarFaseLocal
-    Invoke-Pump
-    if ($Global:FaseLocalPayload.PSObject.Properties['TipoUsado'] -and $Global:FaseLocalPayload.TipoUsado -eq 'lan') {
-        Write-Host "[4c] checagem registrou a placa usada: LAN"
-    } else { Write-Host "    FALHA: TipoUsado nao gravado ('$($Global:FaseLocalPayload.TipoUsado)')"; $falhas++ }
-    $it = $Global:FaseLocalPayload.Internet
-    if ($it -and $it.speedtest_ok -and $w.FindName('cardInternetLocal').Visibility -eq 'Visible' -and
-        "$($w.FindName('painelSpeedResultado').Visibility)" -eq 'Visible') {
-        Write-Host "[4c] speedtest OK: card + painel de resultado visiveis"
-    } else { Write-Host "    FALHA: speedtest nao completou (ok=$($it.speedtest_ok) card=$($w.FindName('cardInternetLocal').Visibility) painel=$($w.FindName('painelSpeedResultado').Visibility))"; $falhas++ }
-    $rd = "$($w.FindName('runResDown').Text)"; $rp = "$($w.FindName('runConnProvedor').Text)"
-    if ($rd -match '85' -and "$($w.FindName('runResUp').Text)" -match '29' -and $rp -match 'BARREIRAS NET') {
-        Write-Host "[4c] resultado: down=$rd Mbps  up=$($w.FindName('runResUp').Text)  provedor='$rp'"
-    } else { Write-Host "    FALHA: painel de resultado do speedtest (down='$rd' isp='$rp')"; $falhas++ }
-    if ("$($w.FindName('txtVeloNum').Text)" -match '85' -and "$($w.FindName('txtVeloFase').Text)" -match 'concluido') {
-        Write-Host "[4c] velocimetro fixou o download ($($w.FindName('txtVeloNum').Text) Mbps)"
-    } else { Write-Host "    FALHA: velocimetro final (num='$($w.FindName('txtVeloNum').Text)' fase='$($w.FindName('txtVeloFase').Text)')"; $falhas++ }
-    Invoke-WizardProximo
-    if ($Global:WizardStep -ne 4) { Write-Host "    FALHA: nao foi para o passo 4 (diagnostico com VPN)"; $falhas++ }
-
-    Show-WizardPasso 3
-
-    # 4c-3. sem placa Wi-Fi -> some o card informativo "conecte pelo Windows"
-    $Global:FaseLocalPayload.Wireless.presente = $false
-    Update-PainelFaseLocal
-    if ($w.FindName('cardWifiBandeja').Visibility -eq 'Collapsed') { Write-Host "[4c] sem placa Wi-Fi: card 'conecte pelo Windows' some" }
-    else { Write-Host "    FALHA: card Wi-Fi visivel sem placa"; $falhas++ }
-    $Global:FaseLocalPayload.Wireless.presente = $true
-    Update-PainelFaseLocal
-    if ($w.FindName('cardWifiBandeja').Visibility -eq 'Visible') { Write-Host "[4c] com placa Wi-Fi: card 'conecte pelo Windows' aparece" }
-    else { Write-Host "    FALHA: card Wi-Fi oculto com placa"; $falhas++ }
-
-    # 4c-3c. escolher "Usar o Wi-Fi do local"
-    $w.FindName('rbUsarWifi').IsChecked = $true
-    Invoke-Pump
-    if ($Global:FaseLocalTipo -eq 'wifi') { Write-Host "[4c] meio 'Wi-Fi do local' selecionado" }
-    else { Write-Host "    FALHA: nao selecionou o meio Wi-Fi (tipo='$($Global:FaseLocalTipo)')"; $falhas++ }
-
-    # 4c-3d. Wi-Fi desconectado -> o painel limpa IP/gateway/mascara/MAC/origem da placa Wi-Fi
-    $wifiIpOrig  = $Global:FaseLocalPayload.Wireless.ipv4
-    $wifiMacOrig = $Global:FaseLocalPayload.Wireless.mac
-    $Global:FaseLocalPayload.Wireless.conectado = $false
-    $Global:FaseLocalPayload.Wireless.ipv4      = '10.9.9.9'
-    $Global:FaseLocalPayload.Wireless.mac       = 'AA-BB-CC-DD-EE-FF'
-    Update-PainelFaseLocal
-    if ("$($w.FindName('txtLocWifiIp').Visibility)" -eq 'Collapsed' -and "$($w.FindName('txtLocWifiMac').Visibility)" -eq 'Collapsed') {
-        Write-Host "[4c] Wi-Fi desconectado: IP/MAC da placa Wi-Fi ficam limpos no painel"
-    } else { Write-Host "    FALHA: dados da placa Wi-Fi visiveis sem conexao (ip=$($w.FindName('txtLocWifiIp').Visibility))"; $falhas++ }
-    $Global:FaseLocalPayload.Wireless.ipv4      = $wifiIpOrig
-    $Global:FaseLocalPayload.Wireless.mac       = $wifiMacOrig
-    $Global:FaseLocalPayload.Wireless.conectado = $true
-    Update-PainelFaseLocal
-
-    # 4c-4. Wi-Fi escolhido mas nao conectado -> checagem travada; ao conectar, libera
-    $Global:FaseLocalPayload.Lan.conectado      = $false
-    $Global:FaseLocalPayload.Wireless.conectado = $false
-    Update-PainelFaseLocal
-    if (-not $w.FindName('btnRodarFaseLocal').IsEnabled -and "$($w.FindName('txtLocDica').Visibility)" -eq 'Visible') {
-        Write-Host "[4c] Wi-Fi escolhido e nao conectado: checagem travada + dica visivel"
-    } else { Write-Host "    FALHA: gate sem conexao (rodar.en=$($w.FindName('btnRodarFaseLocal').IsEnabled) dica=$($w.FindName('txtLocDica').Visibility))"; $falhas++ }
-    $Global:FaseLocalPayload.Wireless.conectado = $true
-    Update-PainelFaseLocal
-    if ($w.FindName('btnRodarFaseLocal').IsEnabled) {
-        Write-Host "[4c] sem LAN + Wi-Fi do local conectado: checagem libera"
-    } else { Write-Host "    FALHA: gate Wi-Fi do local (rodar.en=$($w.FindName('btnRodarFaseLocal').IsEnabled))"; $falhas++ }
-
-    # 4c-4b. meio "Celular": exige operadora
-    $w.FindName('rbUsarCelular').IsChecked = $true
-    Invoke-Pump
-    $w.FindName('cboOperadoraCel').Text = ''
-    Update-PainelFaseLocal
-    if (-not $w.FindName('btnRodarFaseLocal').IsEnabled) { Write-Host "[4c] meio Celular sem operadora: checagem travada" }
-    else { Write-Host "    FALHA: Celular liberou sem operadora"; $falhas++ }
-    Invoke-WizardProximo
-    if ($Global:WizardStep -eq 3) { Write-Host "[4c] Celular sem operadora nao avanca" }
-    else { Write-Host "    FALHA: avancou sem operadora (step=$($Global:WizardStep))"; $falhas++ }
+    # 4d. checagem de um meio (celular) pelo overlay: Fase 1 (Ookla) + Fase 2 (VPN)
+    $Global:VpnSimulada = $true
+    $Global:FaseLocalPayload.Wireless.conectado = $true      # habilita Wi-Fi/celular
     $w.FindName('cboOperadoraCel').Text = 'Vivo'
-    Set-FaseLocalTipo 'celular'
+    Update-PainelMeios
+    if ($w.FindName('btnCheckCelular').IsEnabled) { Write-Host "[4d] card Celular: Wi-Fi conectado + operadora -> botao libera" }
+    else { Write-Host "    FALHA: botao do meio Celular nao liberou"; $falhas++ }
+    Invoke-CheckMeio 'celular'
     Invoke-Pump
-    if ($w.FindName('btnRodarFaseLocal').IsEnabled -and $Global:FaseLocalTipo -eq 'celular') {
-        Write-Host "[4c] Celular + Wi-Fi conectado + operadora -> checagem libera"
-    } else { Write-Host "    FALHA: Celular nao liberou (rodar.en=$($w.FindName('btnRodarFaseLocal').IsEnabled) tipo='$($Global:FaseLocalTipo)')"; $falhas++ }
-
-    # 4c-4c. "nao aplicavel": marca a LAN e ela some da escolha
-    $w.FindName('chkNaLan').IsChecked = $true
-    $w.FindName('txtMotivoNaMeio').Text = 'sem ponto de rede na sala'
-    Update-NaoAplicavelMeio
-    if ($Global:MeiosNaoAplicaveis.ContainsKey('lan') -and -not $w.FindName('rbUsarLan').IsEnabled) {
-        Write-Host "[4c] LAN marcada 'nao aplicavel' -> radio desabilitado"
-    } else { Write-Host "    FALHA: 'nao aplicavel' nao pegou (chave=$($Global:MeiosNaoAplicaveis.ContainsKey('lan')) rb.en=$($w.FindName('rbUsarLan').IsEnabled))"; $falhas++ }
-    $w.FindName('chkNaLan').IsChecked = $false ; Update-NaoAplicavelMeio
-
-    # volta para Wi-Fi do local e avanca
-    $Global:FaseLocalPayload.Lan.conectado = $true   # restaura o fixture
-    $w.FindName('rbUsarWifi').IsChecked = $true
-    Invoke-Pump
-    Invoke-WizardProximo
-    if ($Global:WizardStep -eq 4) { Write-Host "[4c] Wi-Fi do local -> passo 4" }
-    else { Write-Host "    FALHA: nao avancou (step=$($Global:WizardStep))"; $falhas++ }
-
-    # 4c-5. voltar ao passo 2 e retornar LIMPA a checagem e os meios
-    Invoke-WizardVoltar          # 4 -> 3
-    Invoke-WizardVoltar          # 3 -> 2  (Update-DetalheLocal invalida a checagem)
-    if ($null -eq $Global:FaseLocalPayload -and [string]::IsNullOrEmpty($Global:FaseLocalTipo)) {
-        Write-Host "[4c] voltar ao passo 2 limpa a ultima checagem"
-    } else { Write-Host "    FALHA: passo 2 nao limpou (payload=$($null -ne $Global:FaseLocalPayload) tipo='$($Global:FaseLocalTipo)')"; $falhas++ }
-    Invoke-WizardProximo         # 2 -> 3: novo probe
-    Invoke-Pump
-    if ($Global:WizardStep -eq 3 -and $null -ne $Global:FaseLocalPayload -and $null -eq $Global:FaseLocalPayload.Internet) {
-        Write-Host "[4c] re-entrou no passo 3 com checagem zerada"
-    } else { Write-Host "    FALHA: re-probe ao voltar (step=$($Global:WizardStep))"; $falhas++ }
-    # refaz "via celular": escolhe o meio Celular + operadora + checagem
-    $Global:FaseLocalPayload.Lan.conectado      = $false
-    $Global:FaseLocalPayload.Wireless.conectado = $true    # conectado ao hotspot do celular
-    Update-PainelFaseLocal
-    $w.FindName('cboOperadoraCel').Text = 'Vivo'
-    $w.FindName('rbUsarCelular').IsChecked = $true
-    Set-FaseLocalTipo 'celular'
-    Invoke-Pump
-    Invoke-RodarFaseLocal ; Invoke-Pump
-    Invoke-WizardProximo         # 3 -> 4
-    if ($Global:WizardStep -ne 4) { Write-Host "    FALHA: nao voltou ao passo 4 apos re-checagem (step=$($Global:WizardStep))"; $falhas++ }
-
-    # 4d. sem VPN: "Rodar diagnostico" desabilitado + botao do FortiClient visivel + rodar bloqueado
-    $Global:VpnSimulada = $false ; Update-EstadoVpn
-    if (-not $w.FindName('btnRodar').IsEnabled -and "$($w.FindName('btnAbrirFortiClient').Visibility)" -eq 'Visible' -and
-        "$($w.FindName('txtDiagVpn').Text)" -match 'FortiClient') {
-        Write-Host "[4d] sem VPN: 'Rodar diagnostico' travado + 'Abrir o FortiClient' visivel"
-    } else { Write-Host "    FALHA: gate de VPN (rodar.en=$($w.FindName('btnRodar').IsEnabled) forti=$($w.FindName('btnAbrirFortiClient').Visibility))"; $falhas++ }
-    Invoke-ExecucaoNaJanela
-    if ($null -eq $Global:DiagRunState -and $null -eq $Global:DiagPayload) { Write-Host "[4d] sem VPN: 'Rodar diagnostico' nao inicia a bateria" }
-    else { Write-Host "    FALHA: rodou o diagnostico sem VPN (runstate=$($null -ne $Global:DiagRunState))"; $falhas++ }
-
-    # 4d-1. "Proximo" no passo 4 fica DESABILITADO ate rodar (ou marcar "VPN impossivel" + motivo)
-    if (-not $w.FindName('btnWizProximo').IsEnabled) { Write-Host "[4d] 'Proximo' desabilitado sem diagnostico" }
-    else { Write-Host "    FALHA: 'Proximo' habilitado sem rodar o diagnostico"; $falhas++ }
-    $w.FindName('chkVpnImpossivel').IsChecked = $true ; Update-VpnImpossivel
-    if ("$($w.FindName('txtVpnMotivo').Visibility)" -eq 'Visible' -and -not $w.FindName('btnWizProximo').IsEnabled) {
-        Write-Host "[4d] marcou 'VPN impossivel' sem motivo: 'Proximo' segue desabilitado"
-    } else { Write-Host "    FALHA: 'Proximo' habilitou sem o motivo da VPN"; $falhas++ }
-    $w.FindName('txtVpnMotivo').Text = 'FortiClient corrompido; sem internet no local para reinstalar.'
-    Update-Passo4Nav
-    if ($w.FindName('btnWizProximo').IsEnabled) { Write-Host "[4d] motivo preenchido: 'Proximo' habilita" }
-    else { Write-Host "    FALHA: 'Proximo' nao habilitou com o motivo"; $falhas++ }
-    Set-DiagnosticoVpnImpossivel -Motivo ([string] $w.FindName('txtVpnMotivo').Text)
-    if (@($Global:DiagPayload.Decisao.Detalhes).Count -eq 6 -and $Global:DiagPayload.Decisao.Classificacao -eq 'inviavel') {
-        Write-Host "[4d] 'VPN impossivel' -> payload sintetico INVIAVEL (6 metricas sem medida)"
-    } else { Write-Host "    FALHA: payload sintetico da VPN impossivel (det=$(@($Global:DiagPayload.Decisao.Detalhes).Count) cls=$($Global:DiagPayload.Decisao.Classificacao))"; $falhas++ }
-    $w.FindName('chkVpnImpossivel').IsChecked = $false ; Update-VpnImpossivel
-    Clear-PainelResultado
-
-    $Global:VpnSimulada = $true ; Update-EstadoVpn
-    if ($w.FindName('btnRodar').IsEnabled -and "$($w.FindName('btnAbrirFortiClient').Visibility)" -eq 'Collapsed') {
-        Write-Host "[4d] com VPN: 'Rodar diagnostico' habilita, botao do FortiClient some"
-    } else { Write-Host "    FALHA: VPN conectada nao liberou o rodar"; $falhas++ }
-
-    # 4e. passo 4 -> 5 bloqueia antes de rodar o diagnostico
-    Invoke-WizardProximo
-    if ($Global:WizardStep -ne 4) { Write-Host "[4e] FALHA: avancou sem rodar o diagnostico"; $falhas++ }
-    else { Write-Host "[4e] passo 4 bloqueia antes de rodar" }
-
-    # 5. roda a bateria -> NAO avanca sozinho; o tecnico clica em Proximo
-    Invoke-ExecucaoNaJanela
+    if ("$($w.FindName('overlayCheck').Visibility)" -eq 'Visible' -and $Global:CheckMeioAtivo) {
+        Write-Host "[4d] 'Rodar checagem' abre o overlay do meio"
+    } else { Write-Host "    FALHA: overlay nao abriu (vis=$($w.FindName('overlayCheck').Visibility) ativo=$($Global:CheckMeioAtivo))"; $falhas++ }
     $deadline = (Get-Date).AddSeconds($TimeoutS)
-    $ok = $false
     while ((Get-Date) -lt $deadline) {
-        Invoke-Pump
-        Start-Sleep -Milliseconds 150
-        if ($null -ne $Global:DiagPayload -and $w.FindName('btnRodar').IsEnabled) { $ok = $true; break }
+        Invoke-Pump ; Start-Sleep -Milliseconds 120
+        if ("$($w.FindName('btnChkFechar').Content)" -eq 'Concluir' -and $null -eq $Global:DiagRunState) { break }
     }
     Invoke-Pump
-    $nLinhas = @($w.FindName('dgAvaliacao').ItemsSource).Count
-    Write-Host "[5] Concluiu: $ok | passo: $($Global:WizardStep) | painel: $nLinhas linhas"
-    if (-not $ok) { $falhas++ }
-    if ($Global:WizardStep -ne 4) { Write-Host "    FALHA: avancou sozinho apos rodar (esperado ficar no passo 4)"; $falhas++ }
-    else { Write-Host "[5] apos rodar continua no passo 4 (sem auto-avancar)" }
-    if ($w.FindName('btnWizProximo').IsEnabled) { Write-Host "[5] apos rodar, 'Proximo' habilita" }
-    else { Write-Host "    FALHA: 'Proximo' seguiu desabilitado apos rodar o diagnostico"; $falhas++ }
-    # card do iperf3 aparece e mostra o erro (Fase 2 nao concluiu - BandaVpnSimulada)
-    if ($w.FindName('cardIperfVpn').Visibility -eq 'Visible' -and "$($w.FindName('txtIperfErro').Text)" -match 'ambiente de teste|iperf3') {
-        Write-Host "[5] card iperf3 (Fase 2) visivel; erro exibido"
-    } else { Write-Host "    FALHA: card/erro do iperf3 (vis=$($w.FindName('cardIperfVpn').Visibility) erro='$($w.FindName('txtIperfErro').Text)')"; $falhas++ }
+    $medCel = @($Global:Medicoes | Where-Object { $_.meio -eq 'celular' -and -not $_.nao_aplicavel } | Select-Object -First 1)
+    if ($medCel -and "$($w.FindName('btnChkFechar').Content)" -eq 'Concluir') {
+        Write-Host "[4d] checagem do meio concluida -> medicao 'celular' registrada (veredito $($medCel.veredito))"
+    } else { Write-Host "    FALHA: checagem do meio nao concluiu (btn='$($w.FindName('btnChkFechar').Content)' med=$([bool]$medCel))"; $falhas++ }
+    Close-OverlayCheck
+    Invoke-Pump
+    if ("$($w.FindName('overlayCheck').Visibility)" -eq 'Collapsed' -and -not $Global:CheckMeioAtivo) {
+        Write-Host "[4d] 'Concluir' fecha o overlay"
+    } else { Write-Host "    FALHA: overlay nao fechou"; $falhas++ }
+    if ("$($w.FindName('badgeCelular').Text)" -match 'TESTADO') { Write-Host "[4d] card Celular marca 'TESTADO' ($($w.FindName('badgeCelular').Text))" }
+    else { Write-Host "    FALHA: badge Celular nao virou TESTADO ('$($w.FindName('badgeCelular').Text)')"; $falhas++ }
+
+    # 4e. banner de recomendacao aparece com >= 1 meio testado
+    if ("$($w.FindName('cardRecMeios').Visibility)" -eq 'Visible' -and "$($w.FindName('txtRecMeios').Text)" -match 'usar') {
+        Write-Host "[4e] banner de recomendacao: '$($w.FindName('txtRecMeios').Text)'"
+    } else { Write-Host "    FALHA: banner de recomendacao (vis=$($w.FindName('cardRecMeios').Visibility) txt='$($w.FindName('txtRecMeios').Text)')"; $falhas++ }
+
+    # 4f. "nao se aplica" + motivo desabilita o card do meio (LAN); depois desmarca
+    $w.FindName('chkNaLan').IsChecked = $true
+    $w.FindName('txtMotivoNaLan').Text = 'sem ponto de rede na sala'
+    Update-NaoAplicavelMeio
+    Invoke-Pump
+    if ($Global:MeiosNaoAplicaveis.ContainsKey('lan') -and -not $w.FindName('btnCheckLan').IsEnabled -and
+        [double] $w.FindName('cardLan').Opacity -lt 1) {
+        Write-Host "[4f] LAN 'nao se aplica' -> card desabilitado (opacity $($w.FindName('cardLan').Opacity))"
+    } else { Write-Host "    FALHA: 'nao aplicavel' nao desabilitou o card (chave=$($Global:MeiosNaoAplicaveis.ContainsKey('lan')) btn.en=$($w.FindName('btnCheckLan').IsEnabled))"; $falhas++ }
+    $w.FindName('chkNaLan').IsChecked = $false ; Update-NaoAplicavelMeio ; Invoke-Pump
+
+    # 4g. Fase 2 sem VPN: a saida "nao consegui conectar a VPN" + motivo registra o meio; depois limpa
+    $Global:VpnSimulada = $false
+    Invoke-CheckMeio 'wifi'
+    $deadline = (Get-Date).AddSeconds($TimeoutS)
+    while ((Get-Date) -lt $deadline) {
+        Invoke-Pump ; Start-Sleep -Milliseconds 120
+        if ("$($w.FindName('panelChkVpnGate').Visibility)" -eq 'Visible' -and $null -eq $Global:TarefaRedeState) { break }
+    }
+    if ("$($w.FindName('panelChkVpnGate').Visibility)" -eq 'Visible' -and "$($w.FindName('btnChkVpnImpossivel').Visibility)" -eq 'Visible') {
+        Write-Host "[4g] Fase 2 sem VPN: aparece o gate + 'registrar sem a VPN'"
+    } else { Write-Host "    FALHA: gate de VPN nao apareceu (gate=$($w.FindName('panelChkVpnGate').Visibility))"; $falhas++ }
+    $w.FindName('chkVpnImpossivel').IsChecked = $true ; Update-VpnImpossivel
+    $w.FindName('txtVpnMotivo').Text = 'FortiClient corrompido; sem internet no local para reinstalar.'
+    Invoke-CheckVpnImpossivel
+    Invoke-Pump
+    $medWifi = @($Global:Medicoes | Where-Object { $_.meio -eq 'wifi_local' -and -not $_.nao_aplicavel } | Select-Object -First 1)
+    if ($medWifi -and $medWifi.vpn_conectou -eq $false -and $medWifi.veredito -eq 'inviavel') {
+        Write-Host "[4g] meio Wi-Fi registrado sem a VPN -> inviavel"
+    } else { Write-Host "    FALHA: medicao Wi-Fi sem VPN (med=$([bool]$medWifi) vpn=$($medWifi.vpn_conectou) ver=$($medWifi.veredito))"; $falhas++ }
+    Close-OverlayCheck
+    $w.FindName('chkVpnImpossivel').IsChecked = $false ; Update-VpnImpossivel
+    $Global:VpnSimulada = $true
+    $Global:Medicoes = @(@($Global:Medicoes) | Where-Object { $_.meio -ne 'wifi_local' })   # volta ao meio unico (celular)
+    $idxCel = [array]::IndexOf(@($Global:Medicoes), (@($Global:Medicoes | Where-Object { $_.meio -eq 'celular' })[0]))
+    Show-MedicaoNoPasso5 -Par ([pscustomobject]@{ idx = $idxCel; med = @($Global:Medicoes | Where-Object { $_.meio -eq 'celular' })[0] })
+    Invoke-Pump
+
+    # 4h. passo 3 -> 4 (resultado por metrica)
     Invoke-WizardProximo
-    $decIni = [string] $w.FindName('cboDecisaoFinal').SelectedItem
-    if ($Global:WizardStep -ne 5) { Write-Host "    FALHA: Proximo nao foi para o passo 5"; $falhas++ }
-    else { Write-Host "[5] Proximo -> passo 5 | decisao: $decIni" }
+    Invoke-Pump
+    if ($Global:WizardStep -ne 4) { Write-Host "    FALHA: nao foi para o passo 4 (resultado) (step=$($Global:WizardStep))"; $falhas++ }
+    else { Write-Host "[4h] passo 3 -> 4 (resultado por metrica)" }
+    $nLinhas = @($w.FindName('dgAvaliacao').ItemsSource).Count
+    $decIni  = [string] $w.FindName('cboDecisaoFinal').SelectedItem
+    Write-Host "[5] passo 4: painel com $nLinhas linha(s), decisao '$decIni'"
     if ($nLinhas -ne 6) { Write-Host "    FALHA: painel deveria ter 6 linhas"; $falhas++ }
     if ($decIni -notin @('viavel', 'viavel_com_ressalva', 'inviavel')) { Write-Host "    FALHA: decisao nao classificou"; $falhas++ }
 
-    # 5b. override de metrica + passo 5 -> 6 bloqueia sem justificativa
+    # 5b. override de metrica + passo 4 -> 5 bloqueia sem justificativa
     $linha = @($Global:AvaliacaoRows) | Where-Object { $_.Rotulo -eq 'Download' } | Select-Object -First 1
     $linha.ClasseFinal = 'viavel'
     Invoke-Pump
     Invoke-WizardProximo
     $ultimoLog = @($Global:LogEntries)[-1].Texto
-    if ($Global:WizardStep -eq 5 -and $ultimoLog -match 'Justificativa obrigatoria') {
-        Write-Host "[5b] passo 5 bloqueia override sem justificativa"
-    } else { Write-Host "    FALHA: passo 5 avancou sem justificativa (step=$($Global:WizardStep))"; $falhas++ }
+    if ($Global:WizardStep -eq 4 -and $ultimoLog -match 'Justificativa obrigatoria') {
+        Write-Host "[5b] passo 4 bloqueia override sem justificativa"
+    } else { Write-Host "    FALHA: passo 4 avancou sem justificativa (step=$($Global:WizardStep))"; $falhas++ }
 
-    # 5b-2. multi-meio: seletor de medicoes no passo 5 (2+ meios testados)
+    # 5b-2. multi-meio: seletor de medicoes no passo 4 (resultado) (2+ meios testados)
     $medBase = @($Global:Medicoes)[-1]
     $medLan = [pscustomobject]@{
         meio = 'lan'; operadora = ''; rotulo = 'Rede cabeada (LAN)'
@@ -467,7 +350,7 @@ try {
         avaliacoes = @(); veredito = [string] $medBase.decisao.Classificacao; quando = (Get-Date).ToString('o')
     }
     $Global:Medicoes = @(@($Global:Medicoes) + $medLan)
-    Show-WizardPasso 5
+    Show-WizardPasso 4
     Invoke-Pump
     $boxVis = "$($w.FindName('boxMedicaoPasso5').Visibility)"
     $nOpc = @($w.FindName('cboMedicaoPasso5').ItemsSource).Count
@@ -500,35 +383,35 @@ try {
     $linha.ClasseFinal = 'viavel'
     Invoke-Pump
 
-    # 5c. com justificativa -> passo 5 -> 6
+    # 5c. com justificativa -> passo 4 -> 5
     $linha.Justificativa = 'Refiz o teste pelo celular e deu 25 Mbps.'
     Invoke-Pump
     Invoke-WizardProximo
-    if ($Global:WizardStep -ne 6) { Write-Host "    FALHA: nao foi para o passo 6"; $falhas++ }
+    if ($Global:WizardStep -ne 5) { Write-Host "    FALHA: nao foi para o passo 5 (decisao)"; $falhas++ }
 
-    # 5c-2. passo 6: seletor da conexao recomendada + tabela de medicoes
+    # 5c-2. passo 5: seletor da conexao recomendada + tabela de medicoes
     $optsRec = @($w.FindName('cboConexaoRec').ItemsSource)
     $selRec  = [string] $w.FindName('cboConexaoRec').SelectedItem
-    if ($optsRec.Count -ge 1 -and $selRec) { Write-Host "[5c] passo 6: recomendacao pre-selecionada = '$selRec' ($($optsRec.Count) opcao/oes)" }
+    if ($optsRec.Count -ge 1 -and $selRec) { Write-Host "[5c] passo 5: recomendacao pre-selecionada = '$selRec' ($($optsRec.Count) opcao/oes)" }
     else { Write-Host "    FALHA: combo da conexao recomendada vazio (opts=$($optsRec.Count) sel='$selRec')"; $falhas++ }
     $nMed = @($w.FindName('dgMedicoes').ItemsSource).Count
-    if ($nMed -ge 1) { Write-Host "[5c] passo 6: tabela de medicoes com $nMed linha(s)" }
+    if ($nMed -ge 1) { Write-Host "[5c] passo 5: tabela de medicoes com $nMed linha(s)" }
     else { Write-Host "    FALHA: tabela de medicoes vazia"; $falhas++ }
 
-    # 5c-3. passo 6 -> 7 bloqueia sem o motivo da recomendacao
+    # 5c-3. passo 5 -> 6 bloqueia sem o motivo da recomendacao
     $w.FindName('txtMotivoRec').Text = ''
     Invoke-Pump
     Invoke-WizardProximo
     $ultimoLog = @($Global:LogEntries)[-1].Texto
-    if ($Global:WizardStep -eq 6 -and $ultimoLog -match 'motivo da recomendacao') {
-        Write-Host "[5c] passo 6 bloqueia sem o motivo da recomendacao"
-    } else { Write-Host "    FALHA: passo 6 avancou sem o motivo (step=$($Global:WizardStep))"; $falhas++ }
+    if ($Global:WizardStep -eq 5 -and $ultimoLog -match 'motivo da recomendacao') {
+        Write-Host "[5c] passo 5 bloqueia sem o motivo da recomendacao"
+    } else { Write-Host "    FALHA: passo 5 avancou sem o motivo (step=$($Global:WizardStep))"; $falhas++ }
 
-    # 5c-4. com o motivo -> passo 7
+    # 5c-4. com o motivo -> passo 6 (conclusao)
     $w.FindName('txtMotivoRec').Text = 'Cabo nao alcanca a sala; melhor download foi pelo celular Vivo.'
     Invoke-Pump
     Invoke-WizardProximo
-    if ($Global:WizardStep -ne 7) { Write-Host "    FALHA: nao foi para o passo 7 com o motivo"; $falhas++ }
+    if ($Global:WizardStep -ne 6) { Write-Host "    FALHA: nao foi para o passo 6 com o motivo"; $falhas++ }
     else { Write-Host "[5c] passos 5->6->7 (com justificativa + motivo da recomendacao)" }
 
     # 5d. passo 6: salva o resultado -> checklist "Salvar" fica verde, "Transmitir" habilita
@@ -583,7 +466,7 @@ try {
     Invoke-FinalizarDiagnostico
     if ("$($w.FindName('viewHome').Visibility)" -eq 'Visible') { Write-Host "[5d] 'Finalizar' -> volta para a tela inicial" }
     else { Write-Host "    FALHA: 'Finalizar' nao voltou para a home (viewHome=$($w.FindName('viewHome').Visibility))"; $falhas++ }
-    Show-WizardPasso 7   # volta ao passo 7 para os proximos testes seguirem
+    Show-WizardPasso 6   # volta ao passo 6 (conclusao) para os proximos testes seguirem
 
     # 5e. acompanhamento: guia marca o local como testado; home mostra progresso
     Show-GuiaBordo
