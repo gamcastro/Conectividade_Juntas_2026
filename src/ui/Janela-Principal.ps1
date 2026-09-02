@@ -55,7 +55,7 @@ if (-not (Get-Variable -Name VpnSimulada -Scope Global -ErrorAction SilentlyCont
     $Global:VpnSimulada = $null           # testes: $true/$false forca o estado da VPN
 }
 
-$Global:Views = @('viewLogin', 'viewHome', 'viewGuia', 'viewLocais', 'viewDiag', 'viewAdmin')
+$Global:Views = @('viewLogin', 'viewHome', 'viewGuia', 'viewLocais', 'viewLocalDetalhe', 'viewDiag', 'viewAdmin')
 
 $Global:LocaisTecnico            = @()      # locais do roteiro do tecnico (achatados)
 $Global:AtualizandoFiltroLocais  = $false   # guarda: preenchimento programatico dos combos
@@ -329,10 +329,11 @@ function New-JanelaPrincipal {
 
     # locais de vistoria
     $window.FindName('btnLocaisVoltar').Add_Click({ Show-View 'viewHome' })
+    $window.FindName('btnLocalDetalheVoltar').Add_Click({ Invoke-VoltarAosLocais })
     $window.FindName('txtBuscaLocais').Add_TextChanged({ Update-LocaisFiltrados })
     $window.FindName('cboFiltroZE').Add_SelectionChanged({ if (-not $Global:AtualizandoFiltroLocais) { Update-LocaisFiltrados } })
     $window.FindName('cboFiltroMun').Add_SelectionChanged({ if (-not $Global:AtualizandoFiltroLocais) { Update-LocaisFiltrados } })
-    $window.FindName('dgLocais').Add_SelectionChanged({ Update-LocalDetalheView })
+    $window.FindName('dgLocais').Add_SelectionChanged({ Invoke-AbrirLocalDetalhe })
 
     # guia / admin
     $window.FindName('btnGuiaVoltar').Add_Click({ Show-View 'viewHome' })
@@ -407,7 +408,7 @@ function Show-View {
     $w.FindName('railNav').Visibility = if ($Nome -eq 'viewLogin') { 'Collapsed' } else { 'Visible' }
 
     # sincroniza o item ativo do rail sem disparar os handlers de navegacao
-    $map = @{ viewGuia = 'navGuia'; viewLocais = 'navLocais'; viewDiag = 'navDiag'; viewAdmin = 'navAdmin' }
+    $map = @{ viewGuia = 'navGuia'; viewLocais = 'navLocais'; viewLocalDetalhe = 'navLocais'; viewDiag = 'navDiag'; viewAdmin = 'navAdmin' }
     $Global:NavegandoPrograma = $true
     foreach ($nn in 'navGuia', 'navLocais', 'navDiag', 'navAdmin', 'navAtualizar') {
         $rb = $w.FindName($nn)
@@ -852,7 +853,7 @@ function Initialize-Locais {
     $rot = $Global:RoteiroAtual
 
     $w.FindName('txtLocaisSub').Text = if ($rot) {
-        'Roteiro {0} - {1}    |    {2} local(is) de vistoria' -f $rot.numero, $rot.tecnico, @($Global:LocaisTecnico).Count
+        'Roteiro {0} - {1}    |    {2} local(is)    |    clique num local para abrir a ficha completa' -f $rot.numero, $rot.tecnico, @($Global:LocaisTecnico).Count
     } else {
         'Roteiro nao disponivel neste computador. Use "Atualizar dados" com internet.'
     }
@@ -904,36 +905,51 @@ function Update-LocaisFiltrados {
         })
     }
 
+    $Global:AtualizandoFiltroLocais = $true
     $w.FindName('dgLocais').ItemsSource = @($lista)
+    $Global:AtualizandoFiltroLocais = $false
     $w.FindName('txtLocaisContagem').Text = '{0} de {1}' -f @($lista).Count, @($Global:LocaisTecnico).Count
-    Update-LocalDetalheView
 }
 
-# Cartao de detalhe do local selecionado na grade.
-function Update-LocalDetalheView {
+# Clicar numa linha da grade abre a ficha completa do local (tela dedicada).
+function Invoke-AbrirLocalDetalhe {
+    if ($Global:AtualizandoFiltroLocais) { return }
     $w = $Global:JanelaPrincipal
     if (-not $w) { return }
     $d = $w.FindName('dgLocais').SelectedItem
-    $card = $w.FindName('cardLocalDetalhe')
-    if (-not $d) { $card.Visibility = 'Collapsed'; return }
-    $card.Visibility = 'Visible'
+    if (-not $d) { return }
 
-    $w.FindName('txtLocDetTipo').Text = if ("$($d.tipo)" -eq 'principal') { 'LOCAL PRINCIPAL' } else { 'LOCAL DE CONTINGENCIA' }
-    $w.FindName('txtLocDetNome').Text = [string] $d.nome
-    $w.FindName('txtLocDetZE').Text   = Format-RotuloJunta $d.zona_eleitoral $d.municipio_termo $d.municipio_sede
-    Set-LinhaDetalhe $w.FindName('txtLocDetEndereco') ('Endere' + [char]0x00E7 + 'o') ([string] $d.endereco)
-    Set-LinhaDetalhe $w.FindName('txtLocDetInternet') 'Tipo de internet' ([string] $d.tipo_internet)
-    Set-LinhaDetalhe $w.FindName('txtLocDetUC') 'Unidade consumidora' ([string] (Get-CampoLocal $d 'unidade_consumidora'))
+    $w.FindName('txtLDPTipo').Text = if ("$($d.tipo)" -eq 'principal') { 'LOCAL PRINCIPAL' } else { 'LOCAL DE CONTINGENCIA' }
+    $w.FindName('txtLDPNome').Text = [string] $d.nome
+    $w.FindName('txtLDPZE').Text   = Format-RotuloJunta $d.zona_eleitoral $d.municipio_termo $d.municipio_sede
+
+    Set-LinhaDetalhe $w.FindName('txtLDPEndereco') ('Endere' + [char]0x00E7 + 'o') ([string] $d.endereco)
+    Set-LinhaDetalhe $w.FindName('txtLDPInternet') 'Tipo de internet' ([string] $d.tipo_internet)
+    Set-LinhaDetalhe $w.FindName('txtLDPUC') 'Unidade consumidora' ([string] (Get-CampoLocal $d 'unidade_consumidora'))
 
     $resp = [string] (Get-CampoLocal $d 'responsavel')
     $func = [string] (Get-CampoLocal $d 'funcao')
     if ($func) { $resp = '{0} ({1})' -f $resp, $func }
-    Set-LinhaDetalhe $w.FindName('txtLocDetResponsavel') ('Respons' + [char]0x00E1 + 'vel') $resp
-    Set-LinhaDetalhe $w.FindName('txtLocDetTelefone') 'Telefone/WhatsApp' ([string] (Get-CampoLocal $d 'telefone'))
+    Set-LinhaDetalhe $w.FindName('txtLDPResponsavel') ('Respons' + [char]0x00E1 + 'vel') $resp
+    Set-LinhaDetalhe $w.FindName('txtLDPTelefone') 'Telefone/WhatsApp' ([string] (Get-CampoLocal $d 'telefone'))
 
     $comp = [string] (Get-CampoLocal $d 'texto_completo')
-    $tc = $w.FindName('txtLocDetCompleto')
-    if ($comp) { $tc.Text = $comp; $tc.Visibility = 'Visible' } else { $tc.Visibility = 'Collapsed' }
+    $tc   = $w.FindName('txtLDPCompleto')
+    $card = $w.FindName('cardLDPCompleto')
+    if ($comp) { $tc.Text = $comp; $card.Visibility = 'Visible' } else { $card.Visibility = 'Collapsed' }
+
+    Show-View 'viewLocalDetalhe'
+}
+
+# "Voltar aos locais": limpa a selecao (para reabrir a mesma linha depois) e
+# volta para a lista com os filtros preservados.
+function Invoke-VoltarAosLocais {
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    $Global:AtualizandoFiltroLocais = $true
+    $w.FindName('dgLocais').SelectedIndex = -1
+    $Global:AtualizandoFiltroLocais = $false
+    Show-View 'viewLocais'
 }
 
 # ------------------------------------------------------------- ASSISTENTE (WIZARD)

@@ -93,8 +93,11 @@ versão maior, o botão `btnAtualizarApp` (rodapé do rail) aparece → `Invoke-
 locais de vistoria do roteiro do técnico (`Get-LocaisDoTecnico` achata
 `$Global:RoteiroAtual.juntas[].locais[]`), grade `dgLocais` + busca livre
 (`txtBuscaLocais`) + filtros por ZE (`cboFiltroZE`) e município (`cboFiltroMun`)
-em `Update-LocaisFiltrados`; clicar numa linha abre o `cardLocalDetalhe` com a
-ficha completa (`Update-LocalDetalheView`).
+em `Update-LocaisFiltrados`; clicar numa linha da grade abre a **tela dedicada**
+`viewLocalDetalhe` (`Invoke-AbrirLocalDetalhe`) com a ficha completa do local
+(tipo, endereço, internet, UC, responsável/função, telefone e `texto_completo`
+do roteiro); `btnLocalDetalheVoltar` → `Invoke-VoltarAosLocais` volta à lista
+com os filtros preservados.
 
 ## Assistente de diagnóstico (GUI)
 A tela de Diagnóstico é um **assistente de 7 passos** (`viewDiag` com os painéis

@@ -168,9 +168,14 @@ try {
     } else { Write-Host "    FALHA: combos de filtro vazios"; $falhas++ }
     $w.FindName('dgLocais').SelectedIndex = 0
     Invoke-Pump
-    if ("$($w.FindName('cardLocalDetalhe').Visibility)" -eq 'Visible' -and "$($w.FindName('txtLocDetNome').Text)") {
-        Write-Host "[3b] selecionar um local mostra o cartao de detalhe"
-    } else { Write-Host "    FALHA: cartao de detalhe do local nao apareceu"; $falhas++ }
+    if ("$($w.FindName('viewLocalDetalhe').Visibility)" -eq 'Visible' -and "$($w.FindName('txtLDPNome').Text)") {
+        Write-Host "[3b] clicar num local abre a ficha completa ($($w.FindName('txtLDPNome').Text))"
+    } else { Write-Host "    FALHA: ficha completa do local nao abriu (vis=$($w.FindName('viewLocalDetalhe').Visibility))"; $falhas++ }
+    Invoke-VoltarAosLocais
+    Invoke-Pump
+    if ("$($w.FindName('viewLocais').Visibility)" -eq 'Visible' -and $w.FindName('dgLocais').SelectedIndex -lt 0) {
+        Write-Host "[3b] 'voltar aos locais' retorna para a lista e limpa a selecao"
+    } else { Write-Host "    FALHA: nao voltou para a lista de locais"; $falhas++ }
     Show-View 'viewHome'
 
     # 4. assistente pelo atalho do guia: abre no passo 1, Junta/Local pre-selecionados

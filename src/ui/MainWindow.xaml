@@ -453,60 +453,77 @@
                                Foreground="{DynamicResource Dicon.Text3}"/>
                 </Grid>
 
-                <Grid Grid.Row="3">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                    </Grid.RowDefinitions>
-
-                    <DataGrid x:Name="dgLocais" Grid.Row="0" Style="{DynamicResource GridMetricas}"
-                              MaxHeight="240" RowHeight="34" AutoGenerateColumns="False"
-                              IsReadOnly="True" CanUserResizeRows="False" HeadersVisibility="Column"
-                              GridLinesVisibility="Horizontal" VerticalScrollBarVisibility="Auto">
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="ZE" Binding="{Binding zona_eleitoral}" Width="50"/>
-                            <DataGridTextColumn Header="Munic&#237;pio" Binding="{Binding municipio_termo}" Width="150"/>
-                            <DataGridTextColumn Header="Tipo" Binding="{Binding TipoRotulo}" Width="90"/>
-                            <DataGridTextColumn Header="Local" Binding="{Binding nome}" Width="*"/>
-                            <DataGridTextColumn Header="Internet" Binding="{Binding tipo_internet}" Width="150"/>
-                        </DataGrid.Columns>
-                    </DataGrid>
-
-                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="0,12,0,0" Padding="0,0,8,0">
-                        <Border x:Name="cardLocalDetalhe" Style="{DynamicResource Cartao}" Padding="18,16"
-                                Visibility="Collapsed">
-                            <StackPanel>
-                                <TextBlock x:Name="txtLocDetTipo" FontFamily="Consolas" FontSize="9"
-                                           Foreground="{DynamicResource Dicon.Text3}"/>
-                                <TextBlock x:Name="txtLocDetNome" FontFamily="{DynamicResource Dicon.Display}"
-                                           FontWeight="Bold" FontSize="18" TextWrapping="Wrap"
-                                           Foreground="{DynamicResource Dicon.Text}"/>
-                                <TextBlock x:Name="txtLocDetZE" Margin="0,2,0,0"
-                                           Foreground="{DynamicResource Dicon.Text2}"/>
-                                <TextBlock x:Name="txtLocDetEndereco" Margin="0,8,0,0" TextWrapping="Wrap"
-                                           Foreground="{DynamicResource Dicon.Text2}"/>
-                                <TextBlock x:Name="txtLocDetInternet" Margin="0,6,0,0"
-                                           Foreground="{DynamicResource Dicon.Text2}"/>
-                                <TextBlock x:Name="txtLocDetUC" Margin="0,6,0,0"
-                                           Foreground="{DynamicResource Dicon.Text2}"/>
-                                <TextBlock x:Name="txtLocDetResponsavel" Margin="0,6,0,0"
-                                           Foreground="{DynamicResource Dicon.Text2}"/>
-                                <TextBlock x:Name="txtLocDetTelefone" Margin="0,6,0,0"
-                                           Foreground="{DynamicResource Dicon.Text2}"/>
-                                <Separator Margin="0,12" Background="{DynamicResource Dicon.Hair}"/>
-                                <TextBlock Text="FICHA COMPLETA DO LOCAL" FontFamily="Consolas" FontSize="9"
-                                           Foreground="{DynamicResource Dicon.Text3}"/>
-                                <TextBlock x:Name="txtLocDetCompleto" Margin="0,4,0,0" TextWrapping="Wrap"
-                                           FontFamily="Consolas" FontSize="11"
-                                           Foreground="{DynamicResource Dicon.Text2}"/>
-                            </StackPanel>
-                        </Border>
-                    </ScrollViewer>
-                </Grid>
+                <DataGrid x:Name="dgLocais" Grid.Row="3" Style="{DynamicResource GridMetricas}"
+                          RowHeight="34" AutoGenerateColumns="False"
+                          IsReadOnly="True" CanUserResizeRows="False" HeadersVisibility="Column"
+                          GridLinesVisibility="Horizontal" VerticalScrollBarVisibility="Auto">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="ZE" Binding="{Binding zona_eleitoral}" Width="50"/>
+                        <DataGridTextColumn Header="Munic&#237;pio" Binding="{Binding municipio_termo}" Width="150"/>
+                        <DataGridTextColumn Header="Tipo" Binding="{Binding TipoRotulo}" Width="90"/>
+                        <DataGridTextColumn Header="Local" Binding="{Binding nome}" Width="*"/>
+                        <DataGridTextColumn Header="Internet" Binding="{Binding tipo_internet}" Width="150"/>
+                    </DataGrid.Columns>
+                </DataGrid>
 
                 <Button x:Name="btnLocaisVoltar" Grid.Row="4" Content="Voltar ao in&#237;cio"
                         HorizontalAlignment="Left" Margin="0,14,0,0"
                         Style="{DynamicResource BotaoFantasma}"/>
+            </Grid>
+
+            <!-- ===== LOCAL DE VISTORIA - FICHA COMPLETA (tela dedicada) ===== -->
+            <Grid x:Name="viewLocalDetalhe" Visibility="Collapsed">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <Button x:Name="btnLocalDetalheVoltar" Grid.Row="0"
+                        Content="&#8249; Voltar aos locais" HorizontalAlignment="Left"
+                        Style="{DynamicResource BotaoFantasma}"/>
+
+                <StackPanel Grid.Row="1" Margin="0,14,0,10">
+                    <TextBlock x:Name="txtLDPTipo" FontFamily="Consolas" FontSize="10"
+                               Foreground="{DynamicResource Dicon.Text3}"/>
+                    <TextBlock x:Name="txtLDPNome" FontFamily="{DynamicResource Dicon.Display}"
+                               FontWeight="Bold" FontSize="26" TextWrapping="Wrap"
+                               Foreground="{DynamicResource Dicon.Text}"/>
+                    <TextBlock x:Name="txtLDPZE" Margin="0,4,0,0" FontSize="13"
+                               Foreground="{DynamicResource Dicon.Text2}"/>
+                </StackPanel>
+
+                <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Padding="0,0,10,0">
+                    <StackPanel>
+                        <Border Style="{DynamicResource Cartao}" Padding="20,18">
+                            <StackPanel>
+                                <TextBlock Text="DADOS DO LOCAL" FontFamily="Consolas" FontSize="9"
+                                           Foreground="{DynamicResource Dicon.Text3}" Margin="0,0,0,10"/>
+                                <TextBlock x:Name="txtLDPEndereco" TextWrapping="Wrap"
+                                           Foreground="{DynamicResource Dicon.Text}"/>
+                                <TextBlock x:Name="txtLDPInternet" TextWrapping="Wrap" Margin="0,8,0,0"
+                                           Foreground="{DynamicResource Dicon.Text}"/>
+                                <TextBlock x:Name="txtLDPUC" TextWrapping="Wrap" Margin="0,8,0,0"
+                                           Foreground="{DynamicResource Dicon.Text}"/>
+                                <TextBlock x:Name="txtLDPResponsavel" TextWrapping="Wrap" Margin="0,8,0,0"
+                                           Foreground="{DynamicResource Dicon.Text}"/>
+                                <TextBlock x:Name="txtLDPTelefone" TextWrapping="Wrap" Margin="0,8,0,0"
+                                           Foreground="{DynamicResource Dicon.Text}"/>
+                            </StackPanel>
+                        </Border>
+
+                        <Border x:Name="cardLDPCompleto" Style="{DynamicResource Cartao}" Padding="20,18"
+                                Margin="0,12,0,0" Visibility="Collapsed">
+                            <StackPanel>
+                                <TextBlock Text="FICHA COMPLETA (texto do roteiro)" FontFamily="Consolas"
+                                           FontSize="9" Foreground="{DynamicResource Dicon.Text3}" Margin="0,0,0,10"/>
+                                <TextBlock x:Name="txtLDPCompleto" TextWrapping="Wrap"
+                                           FontFamily="Consolas" FontSize="12" LineHeight="18"
+                                           Foreground="{DynamicResource Dicon.Text2}"/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
             </Grid>
 
             <!-- ===== DIAGNOSTICO (assistente de 7 passos) ===== -->
