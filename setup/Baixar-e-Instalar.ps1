@@ -7,9 +7,9 @@
 #  PRODUCAO (a copia em main tem $CanalPadrao = 'main'):
 #      iex (irm 'https://raw.githubusercontent.com/gamcastro/Conectividade_Juntas_2026/main/setup/Baixar-e-Instalar.ps1')
 #
-#  Pasta padrao: <D|C>:\Aplic\DICON  (producao)  /  ...\DICON-HOMOLOG  (homolog).
-#  Se \Aplic nao for gravavel pelo usuario, cai em %LOCALAPPDATA%\DICON[-HOMOLOG].
-#  Sobrescreve com  $env:DICON_DEST.
+#  Pasta padrao: C:\Aplic\DICON  (producao)  /  C:\Aplic\DICON-HOMOLOG  (homolog).
+#  Cria C:\Aplic se nao existir (usuario comum consegue criar na raiz do C:).
+#  Se nao der, cai em %LOCALAPPDATA%\DICON[-HOMOLOG]. Sobrescreve com $env:DICON_DEST.
 #
 #  O endpoint /exec ja vem embutido por canal ($EndpointPadrao); so precisa de
 #  $env:DICON_ENDPOINT para apontar para outro Web App.
@@ -56,18 +56,14 @@ function Test-CaminhoGravavel {
     } catch { return $false }
 }
 
-# Pasta padrao por canal: <D|C>:\Aplic\... se der pra gravar, senao %LOCALAPPDATA%.
+# Pasta padrao por canal: C:\Aplic\... (cria C:\Aplic se der); senao %LOCALAPPDATA%.
 function Get-DestPadrao {
     param([string] $Canal)
     $nome  = if ($Canal -eq 'main') { 'DICON' } else { 'DICON-HOMOLOG' }
-    $cands = @()
-    foreach ($drv in 'D:', 'C:') {
-        try {
-            $di = [System.IO.DriveInfo]::new($drv + '\')
-            if ($di.IsReady -and $di.DriveType -eq 'Fixed') { $cands += (Join-Path "$drv\Aplic" $nome) }
-        } catch { }
-    }
-    $cands += (Join-Path $env:LOCALAPPDATA $nome)   # sempre gravavel pelo usuario
+    $cands = @(
+        (Join-Path 'C:\Aplic' $nome)
+        (Join-Path $env:LOCALAPPDATA $nome)   # sempre gravavel pelo usuario
+    )
     foreach ($c in $cands) {
         if (Test-CaminhoGravavel (Split-Path $c -Parent)) { return $c }
     }
@@ -93,8 +89,8 @@ $OoklaZip = 'https://install.speedtest.net/app/cli/ookla-speedtest-1.2.0-win64.z
 $temSrc = Test-PathSeguro (Join-Path $Dest 'src')
 if ($null -eq $temSrc -and -not $env:DICON_DEST) {
     $alt = Join-Path $env:LOCALAPPDATA (Split-Path $Dest -Leaf)
-    Write-Host "Sem acesso a '$Dest' (pasta de admin/outro usuario). Instalando em '$alt'." -ForegroundColor Yellow
-    Write-Host "  (para usar '$Dest', um admin roda: icacls `"$(Split-Path $Dest -Parent)`" /grant *S-1-5-32-545:(OI)(CI)M /T)" -ForegroundColor DarkGray
+    Write-Host "Sem acesso a '$Dest'. Instalando em '$alt'." -ForegroundColor Yellow
+    Write-Host "  (para usar '$Dest', rode antes o Preparar-Maquina.ps1 como admin)" -ForegroundColor DarkGray
     $Dest   = $alt
     $temSrc = Test-PathSeguro (Join-Path $Dest 'src')
 }

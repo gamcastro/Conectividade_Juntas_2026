@@ -1,9 +1,11 @@
 # =============================================================================
-#  DICON - preparo UNICO da maquina (ADMINISTRADOR).
+#  DICON - preparo da maquina (ADMINISTRADOR). So e necessario se a raiz do C:
+#  estiver travada por politica OU se varias contas de usuario forem usar o
+#  DICON na mesma maquina. Instalacao normal (1 usuario) NAO precisa disto -
+#  o Baixar-e-Instalar.ps1 cria C:\Aplic sozinho.
 #
-#  Cria <D|C>:\Aplic e da escrita ao grupo "Usuarios", pra a instalacao
-#  (Baixar-e-Instalar.ps1) rodar depois como usuario comum, no layout
-#  <D|C>:\Aplic\DICON (producao) / ...\DICON-HOMOLOG (homologacao).
+#  Cria C:\Aplic (+ DICON / DICON-HOMOLOG) e da escrita ao grupo "Usuarios",
+#  com heranca, pra a instalacao rodar depois como usuario comum.
 #
 #  PowerShell ABERTO COMO ADMINISTRADOR:
 #      iex (irm 'https://raw.githubusercontent.com/gamcastro/Conectividade_Juntas_2026/homologacao/setup/Preparar-Maquina.ps1')
@@ -34,13 +36,7 @@ function Invoke-Icacls {
     return [pscustomobject]@{ Codigo = $rc; Saida = ($saida -join "`n") }
 }
 
-# base: D: se for disco fixo, senao C:
-$base = 'C:'
-try {
-    $di = [System.IO.DriveInfo]::new('D:\')
-    if ($di.IsReady -and $di.DriveType -eq 'Fixed') { $base = 'D:' }
-} catch { }
-$aplic = Join-Path "$base\" 'Aplic'
+$aplic = 'C:\Aplic'
 $limpar = [bool] $env:DICON_LIMPAR
 
 Write-Host "Preparando $aplic ..." -ForegroundColor Cyan

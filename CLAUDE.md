@@ -69,11 +69,14 @@ Script), em vez de criar um BI/dashboard separado.
   partir de uma pasta única (executável + dependências), sem instalar nada
   extra no notebook de campo
 - **Canais**: `main` = produção, `homologacao` = testes do admin. Instalação
-  por `iex (irm .../<canal>/setup/Baixar-e-Instalar.ps1)`; pasta padrão
-  `<D|C>:\Aplic\DICON` (main) ou `...\DICON-HOMOLOG` (homologacao), D: só se
-  for disco fixo. O setup grava `config/canal` (gitignored); `Atualizar-DICON.ps1`
-  puxa desse canal sem parâmetro. `$CanalPadrao` no `Baixar-e-Instalar.ps1` é
-  `homologacao` nesta branch e deve virar `main` no merge para `main`.
+  por `iex (irm .../<canal>/setup/Baixar-e-Instalar.ps1)` como **usuário
+  comum**; pasta padrão `C:\Aplic\DICON` (main) / `C:\Aplic\DICON-HOMOLOG`
+  (homologacao) — o script cria `C:\Aplic` sozinho; se não der, cai em
+  `%LOCALAPPDATA%\...`. `setup/Preparar-Maquina.ps1` (admin) só é preciso se a
+  raiz do C: estiver travada ou for máquina multiusuário. O setup grava
+  `config/canal` (gitignored); `Atualizar-DICON.ps1` puxa desse canal sem
+  parâmetro. `$CanalPadrao`/`$EndpointPadrao` no `Baixar-e-Instalar.ps1` são de
+  `homologacao` nesta branch e viram os de `main` no merge para `main`.
 
 ## Assistente de diagnóstico (GUI)
 A tela de Diagnóstico é um **assistente de 7 passos** (`viewDiag` com os painéis

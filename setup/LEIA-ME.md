@@ -8,21 +8,25 @@ setup cria a partir dos `*.exemplo.json`.
 
 ---
 
-## Preparo da máquina (ADMIN, uma vez)
+## Preparo da máquina (ADMIN) — só se precisar
 
-Pra a instalação como **usuário comum** cair no layout `<D|C>:\Aplic\DICON`,
-um admin roda **uma vez por máquina**, em PowerShell **como Administrador**:
+**Na maioria das máquinas não é preciso.** O `Baixar-e-Instalar.ps1` roda como
+**usuário comum** e cria `C:\Aplic` sozinho (a raiz do `C:` costuma permitir).
+
+Só rode o preparo se: a raiz do `C:` estiver bloqueada por política, **ou**
+várias contas de usuário forem usar o DICON na mesma máquina. Em PowerShell
+**como Administrador**:
 
 ```
 iex (irm 'https://raw.githubusercontent.com/gamcastro/Conectividade_Juntas_2026/homologacao/setup/Preparar-Maquina.ps1')
 ```
 
-Cria `<D|C>:\Aplic` + `DICON` + `DICON-HOMOLOG` e dá escrita ao grupo Usuários
-(`icacls ... *S-1-5-32-545:(OI)(CI)M /T`). Pra apagar instalação anterior
-travada: `$env:DICON_LIMPAR = '1'` antes do comando.
+Cria `C:\Aplic` + `DICON` + `DICON-HOMOLOG` e dá escrita (com herança) ao grupo
+Usuários. Pra apagar instalação anterior travada: `$env:DICON_LIMPAR = '1'`
+antes do comando.
 
-Sem esse preparo, a instalação do usuário comum ainda funciona — cai sozinha em
-`%LOCALAPPDATA%\DICON[-HOMOLOG]`.
+Sem o preparo, se o `C:\Aplic` não puder ser criado, a instalação cai sozinha
+em `%LOCALAPPDATA%\DICON[-HOMOLOG]`.
 
 ## Atalho: baixar + instalar num comando (com internet)
 
@@ -42,10 +46,10 @@ iex (irm 'https://raw.githubusercontent.com/gamcastro/Conectividade_Juntas_2026/
 
 ### Pasta padrão (por canal)
 
-| Canal | D: é disco fixo | só tem C: | sem preparo admin |
-|---|---|---|---|
-| produção (`main`) | `D:\Aplic\DICON` | `C:\Aplic\DICON` | `%LOCALAPPDATA%\DICON` |
-| homologação | `D:\Aplic\DICON-HOMOLOG` | `C:\Aplic\DICON-HOMOLOG` | `%LOCALAPPDATA%\DICON-HOMOLOG` |
+| Canal | normal | se `C:\Aplic` não puder ser criado |
+|---|---|---|
+| produção (`main`) | `C:\Aplic\DICON` | `%LOCALAPPDATA%\DICON` |
+| homologação | `C:\Aplic\DICON-HOMOLOG` | `%LOCALAPPDATA%\DICON-HOMOLOG` |
 
 Sobrescreve com `$env:DICON_DEST` antes do comando. O canal fica gravado em
 `config\canal` — daí pra frente é só `.\setup\Atualizar-DICON.ps1` (sem
