@@ -377,7 +377,15 @@ try {
     $nLinhas = @($w.FindName('dgAvaliacao').ItemsSource).Count
     $decIni  = [string] $w.FindName('cboDecisaoFinal').SelectedItem
     Write-Host "[5] passo 4: painel com $nLinhas linha(s), decisao '$decIni'"
-    if ($nLinhas -ne 6) { Write-Host "    FALHA: painel deveria ter 6 linhas"; $falhas++ }
+    # 6 linhas da Fase 2 (VPN) + 5 da Fase 1 (rede local, Speedtest ok no fixture)
+    if ($nLinhas -ne 11) { Write-Host "    FALHA: painel deveria ter 11 linhas (6 VPN + 5 rede local), veio $nLinhas"; $falhas++ }
+    $rlRows = @($Global:AvaliacaoRows | Where-Object { $_.Fase -eq 'Rede local' })
+    $rlDown = $rlRows | Where-Object { $_.Rotulo -eq 'Download' } | Select-Object -First 1
+    if ($rlRows.Count -eq 5 -and $rlDown -and "$($rlDown.ValorTexto)" -match '855') {
+        Write-Host "[5] passo 4 traz a checagem da rede local (Fase 1): $($rlRows.Count) linhas, Download=$($rlDown.ValorTexto)"
+    } else { Write-Host "    FALHA: linhas da rede local no passo 4 (n=$($rlRows.Count) down='$($rlDown.ValorTexto)')"; $falhas++ }
+    if ("$($w.FindName('txtRedeLocalNota').Visibility)" -eq 'Visible') { Write-Host "[5] nota da rede local visivel no passo 4" }
+    else { Write-Host "    FALHA: txtRedeLocalNota deveria estar visivel"; $falhas++ }
     if ($decIni -notin @('viavel', 'viavel_com_ressalva', 'inviavel')) { Write-Host "    FALHA: decisao nao classificou"; $falhas++ }
 
     # 5b. override de metrica + passo 4 -> 5 bloqueia sem justificativa
@@ -413,7 +421,7 @@ try {
     $novoSel   = if ($selInicial -eq 0) { 1 } else { 0 }
     $w.FindName('tabsMedicoes').SelectedIndex = $novoSel
     Invoke-Pump
-    if ($Global:MedicaoPasso5Idx -ne $idxAntes -and @($Global:AvaliacaoRows).Count -eq 6) {
+    if ($Global:MedicaoPasso5Idx -ne $idxAntes -and @($Global:AvaliacaoRows).Count -eq 11) {
         Write-Host "[5b] troca de medicao re-renderiza o grid (idx $idxAntes -> $($Global:MedicaoPasso5Idx))"
     } else { Write-Host "    FALHA: troca de medicao no passo 4 (idx=$($Global:MedicaoPasso5Idx) linhas=$(@($Global:AvaliacaoRows).Count))"; $falhas++ }
     $lnLan = @($Global:AvaliacaoRows) | Where-Object { $_.Rotulo -eq 'Latencia' } | Select-Object -First 1

@@ -263,7 +263,29 @@ $($trs -join "`n")
             }
         }
 
-        $blocoRedeLocal = "  <h2>Rede local (antes da VPN do TRE)</h2>`n  <div class=""grid2"">`n    " + ($ce -join "`n    ") + "`n  </div>`n"
+        $tabRl = ''
+        $avRl = @(if ($rl.PSObject.Properties['internet_avaliacao']) { $rl.internet_avaliacao })
+        if ($avRl.Count) {
+            $linRl = foreach ($a in $avRl) {
+                $cls = ConvertTo-HtmlSafe (Get-RotuloVeredito $a.classe_final)
+                $cor = Get-CorVeredito $a.classe_final
+                $val = ConvertTo-HtmlSafe (Format-ValorMetrica $a.valor $a.unidade)
+                $faixa = if ($a.direcao -eq 'max') { '&le; {0} / &le; {1} {2}' -f $a.limiar_viavel, $a.limiar_ressalva, $a.unidade }
+                         else { '&ge; {0} / &ge; {1} {2}' -f $a.limiar_viavel, $a.limiar_ressalva, $a.unidade }
+                $mot = if ($a.ajustada -and $a.justificativa) { ' &mdash; ' + (ConvertTo-HtmlSafe ([string] $a.justificativa)) } else { '' }
+                "      <tr><td>$(ConvertTo-HtmlSafe ([string] $a.rotulo))</td><td class=""mono"">$val</td><td class=""mono small"">$faixa</td><td style=""color:$cor;font-weight:600"">$cls$mot</td></tr>"
+            }
+            $tabRl = @"
+  <p class="small" style="margin:8px 0 2px"><b>Avalia&ccedil;&atilde;o da rede local (sem VPN)</b> &mdash; entra no pior caso junto com a bateria da VPN.</p>
+  <table>
+    <thead><tr><th>M&eacute;trica</th><th>Valor</th><th>Faixa aceit&aacute;vel</th><th>Classifica&ccedil;&atilde;o</th></tr></thead>
+    <tbody>
+$($linRl -join "`n")
+    </tbody>
+  </table>
+"@
+        }
+        $blocoRedeLocal = "  <h2>Rede local (antes da VPN do TRE)</h2>`n  <div class=""grid2"">`n    " + ($ce -join "`n    ") + "`n  </div>`n" + $tabRl
     }
 
     @"

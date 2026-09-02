@@ -35,6 +35,7 @@ namespace Conectividade
         }
 
         public string Metrica    { get; set; }
+        public string Fase       { get; set; }   // "Rede local" (sem VPN) | "Com a VPN"
         public string Rotulo     { get; set; }
         public string ValorTexto { get; set; }
         public string Regra      { get; set; }
@@ -135,7 +136,7 @@ function New-LogEntry {
 }
 
 function New-AvaliacaoRow {
-    param($Detalhe)
+    param($Detalhe, [string] $Fase = '')
     $d = $Detalhe
 
     $valorTxt = if ($null -eq $d.valor) { 'sem medida' }
@@ -149,6 +150,7 @@ function New-AvaliacaoRow {
 
     $r = [Conectividade.AvaliacaoRow]::new()
     $r.Metrica          = [string] $d.metrica
+    $r.Fase             = $Fase
     $r.Rotulo           = [string] $d.rotulo
     $r.ValorTexto       = $valorTxt
     $r.Regra            = $regra

@@ -922,6 +922,9 @@
                             <TabControl x:Name="tabsMedicoes" Margin="0,0,0,10" Visibility="Collapsed"
                                         Background="Transparent" BorderThickness="0"/>
 
+                            <TextBlock x:Name="txtRedeLocalNota" Margin="0,0,0,8" TextWrapping="Wrap"
+                                       FontSize="11" Visibility="Collapsed"
+                                       Foreground="{DynamicResource Dicon.Text3}"/>
                             <TextBlock x:Name="txtMetricasDesativadas" Margin="0,0,0,8" TextWrapping="Wrap"
                                        FontFamily="Consolas" FontSize="11" Visibility="Collapsed"
                                        Foreground="{DynamicResource Dicon.Ressalva}"/>
@@ -938,12 +941,14 @@
                                             </DataTemplate>
                                         </DataGridTemplateColumn.CellTemplate>
                                     </DataGridTemplateColumn>
+                                    <DataGridTextColumn Header="Etapa" Binding="{Binding Fase}"
+                                                        IsReadOnly="True" Width="110"/>
                                     <DataGridTextColumn Header="M&#233;trica" Binding="{Binding Rotulo}"
                                                         IsReadOnly="True" Width="130"/>
                                     <DataGridTextColumn Header="Valor medido" Binding="{Binding ValorTexto}"
                                                         IsReadOnly="True" Width="110" FontFamily="Consolas"/>
                                     <DataGridTextColumn Header="Faixa aceit&#225;vel" Binding="{Binding Regra}"
-                                                        IsReadOnly="True" Width="250" FontFamily="Consolas"/>
+                                                        IsReadOnly="True" Width="230" FontFamily="Consolas"/>
                                     <DataGridTemplateColumn Header="Sugerida" Width="90" IsReadOnly="True">
                                         <DataGridTemplateColumn.CellTemplate>
                                             <DataTemplate>

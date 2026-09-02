@@ -172,7 +172,14 @@ aplicável" → medição sintética inviável)
 testado** no `TabControl` `tabsMedicoes` (header = rótulo + veredito, na cor do
 veredito); `Show-MedicaoNoPasso5`/`Invoke-TrocarMedicaoPasso5` trocam qual
 medição o grid `dgAvaliacao` mostra; `Save-AjustesPasso5` grava classe final +
-justificativa na medição **aberta**. `cardNaResumo`/`txtNaResumo` lista os meios
+justificativa na medição **aberta**. O grid traz as linhas da **Fase 2 (Com a
+VPN)** e, logo abaixo, as da **Fase 1 (Rede local, sem VPN)** — `Get-DetalhesRedeLocal`
+classifica o Speedtest da Ookla contra os mesmos limiares (métricas `rl_*`, sem
+carregamento_web); a coluna "Etapa" separa as duas e ambas entram no pior caso
+(`Update-DecisaoRecalculada`). `txtRedeLocalNota` explica / mostra o motivo se a
+rede local não mediu. No JSON: `rede_local.internet_avaliacao` e
+`medicoes[].rede_local_avaliacao`; no PDF, tabela "Avaliação da rede local (sem
+VPN)". `cardNaResumo`/`txtNaResumo` lista os meios
 marcados "não aplicável" (rótulo — motivo); se nenhum meio foi testado (todos
 "não aplicável"), `txtSemMedicoes` avisa que o local fica inviável →
 5. **conexão recomendada**:

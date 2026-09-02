@@ -3162,6 +3162,28 @@ function Complete-Diagnostico {
     Write-Log 'Diagnostico concluido.' -Nivel Ok
 }
 
+# Nota acima do grid do passo 4 sobre a checagem da rede local (Fase 1, sem VPN).
+function Set-NotaRedeLocal {
+    param($Internet, [bool] $TemLinhas)
+    $w = $Global:JanelaPrincipal
+    $t = $w.FindName('txtRedeLocalNota')
+    if (-not $t) { return }
+    if ($TemLinhas) {
+        $t.Text = 'As linhas "Rede local" vem do Speedtest da Ookla (sem a VPN) e entram no pior caso junto com as da VPN.'
+        $t.Visibility = 'Visible'
+    } elseif ($Internet) {
+        $diag = if ($Internet.PSObject.Properties['speedtest_diagnostico']) { [string] $Internet.speedtest_diagnostico } else { '' }
+        $err  = if ($Internet.PSObject.Properties['speedtest_erro']) { [string] $Internet.speedtest_erro } else { '' }
+        $msg  = if ($diag) { $diag } elseif ($err) { $err } else { '' }
+        if ($msg) {
+            $t.Text = 'Rede local (sem VPN): nao foi medida. ' + $msg
+            $t.Visibility = 'Visible'
+        } else { $t.Visibility = 'Collapsed' }
+    } else {
+        $t.Visibility = 'Collapsed'
+    }
+}
+
 function Show-PainelResultado {
     param($Payload, [hashtable] $Overrides)
     $w = $Global:JanelaPrincipal
@@ -3169,8 +3191,9 @@ function Show-PainelResultado {
     $Global:DecisaoFinalTocada = $false
 
     $rows = [System.Collections.ObjectModel.ObservableCollection[object]]::new()
-    foreach ($d in @($Payload.Decisao.Detalhes)) {
-        $row = New-AvaliacaoRow -Detalhe $d
+    $addRow = {
+        param($d, $fase)
+        $row = New-AvaliacaoRow -Detalhe $d -Fase $fase
         if ($Overrides -and $Overrides.ContainsKey([string] $d.metrica)) {
             $o = $Overrides[[string] $d.metrica]
             if ($o.classe_final) { $row.ClasseFinal = [string] $o.classe_final }
@@ -3182,6 +3205,18 @@ function Show-PainelResultado {
                 if ($e.PropertyName -eq 'ClasseFinal') { Update-DecisaoRecalculada }
             })
     }
+    # linhas da Fase 2 (com a VPN do TRE)
+    foreach ($d in @($Payload.Decisao.Detalhes)) { & $addRow $d 'Com a VPN' }
+
+    # linhas da Fase 1 (rede local, sem VPN) - do Speedtest da Ookla; entram no
+    # pior caso junto com as da VPN.
+    $rli = if ($Payload.PSObject.Properties['RedeLocalInternet'] -and $Payload.RedeLocalInternet) { $Payload.RedeLocalInternet }
+           elseif ($Global:FaseLocalPayload) { $Global:FaseLocalPayload.Internet }
+           else { $null }
+    $d1 = @(Get-DetalhesRedeLocal -Internet $rli -Limiares (Get-LimiaresConfig))
+    foreach ($d in $d1) { & $addRow $d 'Rede local' }
+    Set-NotaRedeLocal $rli ($d1.Count -gt 0)
+
     $Global:AvaliacaoRows = $rows
     $w.FindName('dgAvaliacao').ItemsSource = $rows
 
@@ -3264,11 +3299,12 @@ function Show-MedicaoNoPasso5 {
 
     $localRef = if ($Global:DiagPayload) { $Global:DiagPayload.Local } else { $null }
     $payload = [pscustomobject]@{
-        Ambiente = $m.ambiente
-        Metricas = $m.metricas
-        Decisao  = $m.decisao
-        Local    = $localRef
-        Iperf    = $m.iperf
+        Ambiente          = $m.ambiente
+        Metricas          = $m.metricas
+        Decisao           = $m.decisao
+        Local             = $localRef
+        Iperf             = $m.iperf
+        RedeLocalInternet = (Get-Prop $m.fase_local 'Internet')
     }
     $ovr = @{}
     foreach ($a in @($m.avaliacoes)) { if ($a -and $a.metrica) { $ovr[[string] $a.metrica] = $a } }

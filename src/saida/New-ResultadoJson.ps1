@@ -21,6 +21,33 @@ function Get-Prop {
     return $null
 }
 
+# Avaliacao da Fase 1 (rede local, sem VPN) para o JSON: classifica o resultado
+# do Speedtest contra os limiares e aplica os ajustes do tecnico (chaves "rl_").
+function Get-AvaliacaoRedeLocalJson {
+    param($Internet, $Overrides)
+    $det = @(Get-DetalhesRedeLocal -Internet $Internet -Limiares (Get-LimiaresConfig))
+    $out = @()
+    foreach ($d in $det) {
+        $o  = if ($Overrides) { $Overrides[$d.metrica] } else { $null }
+        $cf = if ($o -and $o.classe_final) { [string] $o.classe_final } else { [string] $d.classe }
+        $ju = if ($o) { [string] $o.justificativa } else { '' }
+        $out += [pscustomobject]@{
+            metrica           = $d.metrica
+            rotulo            = $d.rotulo
+            valor             = $d.valor
+            unidade           = $d.unidade
+            direcao           = $d.direcao
+            limiar_viavel     = $d.limiar_viavel
+            limiar_ressalva   = $d.limiar_ressalva
+            classe_automatica = $d.classe
+            classe_final      = $cf
+            ajustada          = ($cf -ne $d.classe)
+            justificativa     = $ju
+        }
+    }
+    return $out
+}
+
 function New-ResultadoJson {
     param(
         [psobject] $Ambiente,
@@ -124,6 +151,7 @@ function New-ResultadoJson {
             internet_download_mbps = (Get-Prop $it 'download_mbps')
             internet_upload_mbps   = (Get-Prop $it 'upload_mbps')
             internet_resultado_url = [string] (Get-Prop $it 'resultado_url')
+            internet_avaliacao     = @(Get-AvaliacaoRedeLocalJson $it $ovr)
         }
     }
 
@@ -133,6 +161,8 @@ function New-ResultadoJson {
         if (-not $m) { continue }
         $mIt  = Get-Prop (Get-Prop $m 'fase_local') 'Internet'
         $mMet = Get-Prop $m 'metricas'
+        $mOvr = @{}
+        foreach ($a in @(Get-Prop $m 'avaliacoes')) { if ($a -and $a.metrica) { $mOvr[[string] $a.metrica] = $a } }
         $medicoesJson += [pscustomobject]@{
             meio                 = [string] (Get-Prop $m 'meio')
             operadora            = [string] (Get-Prop $m 'operadora')
@@ -144,6 +174,7 @@ function New-ResultadoJson {
             rede_local_provedor  = [string] (Get-Prop $mIt 'isp')
             rede_local_falha_tipo  = [string] (Get-Prop $mIt 'speedtest_falha_tipo')
             rede_local_diagnostico = [string] (Get-Prop $mIt 'speedtest_diagnostico')
+            rede_local_avaliacao   = @(Get-AvaliacaoRedeLocalJson $mIt $mOvr)
             vpn_conectou         = [bool] (Get-Prop $m 'vpn_conectou')
             vpn_motivo           = [string] (Get-Prop $m 'vpn_motivo')
             vpn_download_mbps     = (Get-Prop $mMet 'BandaDownloadMbps')
