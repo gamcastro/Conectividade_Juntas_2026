@@ -408,10 +408,34 @@ function Initialize-Login {
     $w.FindName('cboTecnico').ItemsSource = $tec
     $w.FindName('lblPin').Visibility = 'Collapsed'
     $w.FindName('txtPin').Visibility = 'Collapsed'
-    $w.FindName('txtLoginMsg').Text = if ($tec.Count) {
-        ''
+
+    # sem listas locais: trava a selecao/entrada e orienta a baixar
+    $temLista = [bool] $tec.Count
+    $w.FindName('cboTecnico').IsEnabled = $temLista
+    $w.FindName('btnEntrar').IsEnabled  = $temLista
+    if ($temLista) {
+        $w.FindName('txtLoginMsg').Text = ''
     } else {
-        "Nenhum tecnico no cache. Clique em 'Baixar lista' (precisa de internet)."
+        $w.FindName('txtLoginMsg').Text = "Este computador ainda nao tem as listas (tecnicos, Juntas, roteiros). " +
+            "Conecte a internet e clique em 'Baixar lista' para carrega-las."
+    }
+}
+
+# Liga/desliga o spinner + trava os controles do login durante o "Baixar lista".
+function Set-LoginBaixando {
+    param([bool] $On)
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    $ring = $w.FindName('ringLogin')
+    if ($ring) {
+        $ring.IsActive   = $On
+        $ring.Visibility = if ($On) { 'Visible' } else { 'Collapsed' }
+    }
+    $w.FindName('btnBaixarLista').IsEnabled = -not $On
+    $w.FindName('btnEntrar').IsEnabled      = -not $On
+    $w.FindName('cboTecnico').IsEnabled     = -not $On
+    if ($On) {
+        $w.FindName('txtLoginMsg').Text = 'Baixando as listas (Juntas, tecnicos, roteiros, limiares)... acompanhe no log abaixo.'
     }
 }
 
@@ -425,14 +449,18 @@ function Update-VisibilidadePin {
 }
 
 function Invoke-BaixarListaLogin {
-    $w = $Global:JanelaPrincipal
-    $w.FindName('txtLoginMsg').Text = 'Baixando dados...'
-    try {
-        $r = Sync-TudoOnline
+    if ($Global:TarefaRedeState) { return }   # ja tem uma tarefa de rede rodando
+    Set-LoginBaixando $true
+    Start-TarefaRede -Script 'Sync-TudoOnline' -AoConcluir {
+        param($res, $erro)
+        Set-LoginBaixando $false
         Initialize-Login
-        $w.FindName('txtLoginMsg').Text = ("Baixado: {0} tecnicos, {1} juntas, {2} roteiros." -f $r.tecnicos, $r.juntas, $r.roteiros)
-    } catch {
-        $w.FindName('txtLoginMsg').Text = "Falha ao baixar: $_"
+        $w = $Global:JanelaPrincipal
+        if ($erro) {
+            $w.FindName('txtLoginMsg').Text = "Falha ao baixar: $erro"
+        } elseif ($res) {
+            $w.FindName('txtLoginMsg').Text = ("Baixado: {0} tecnicos, {1} juntas, {2} roteiros." -f $res.tecnicos, $res.juntas, $res.roteiros)
+        }
     }
 }
 

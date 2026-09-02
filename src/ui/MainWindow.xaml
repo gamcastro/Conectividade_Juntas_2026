@@ -158,11 +158,14 @@
                         <TextBlock x:Name="txtLoginMsg" Foreground="{DynamicResource Dicon.Ressalva}"
                                    Margin="0,12,0,0" TextWrapping="Wrap" FontSize="12"/>
 
-                        <StackPanel Orientation="Horizontal" Margin="0,18,0,0">
+                        <StackPanel Orientation="Horizontal" Margin="0,18,0,0" VerticalAlignment="Center">
                             <Button x:Name="btnEntrar" Content="Entrar" Style="{DynamicResource BotaoPrimario}"
                                     Padding="30,9"/>
                             <Button x:Name="btnBaixarLista" Content="Baixar lista"
                                     Style="{DynamicResource BotaoSecundario}" Margin="10,0,0,0"/>
+                            <mah:ProgressRing x:Name="ringLogin" Width="22" Height="22" Margin="12,0,0,0"
+                                              IsActive="False" Visibility="Collapsed"
+                                              Foreground="{DynamicResource Dicon.Accent}"/>
                         </StackPanel>
                     </StackPanel>
                 </Border>
