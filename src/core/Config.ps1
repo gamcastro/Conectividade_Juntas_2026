@@ -46,7 +46,8 @@ function Save-ConfigAmbiente {
     param(
         [Parameter(Mandatory)] [string] $Servidor,
         [int] $Porta   = 5201,
-        [int] $Duracao = 10
+        [int] $Duracao = 10,
+        [string] $MapsKey                 # chave da Maps Static API (opcional)
     )
     $dir  = Join-Path $Global:RaizApp 'config'
     $alvo = Join-Path $dir 'ambiente.json'
@@ -62,6 +63,12 @@ function Save-ConfigAmbiente {
     $novoIperf = [pscustomobject]@{ servidor = $Servidor; porta = [int] $Porta; duracao_s = [int] $Duracao; reverso = $true }
     if ($base.PSObject.Properties['iperf3']) { $base.iperf3 = $novoIperf }
     else { $base | Add-Member -NotePropertyName iperf3 -NotePropertyValue $novoIperf -Force }
+
+    if ($PSBoundParameters.ContainsKey('MapsKey')) {
+        $gm = [pscustomobject]@{ static_key = ([string] $MapsKey).Trim() }
+        if ($base.PSObject.Properties['google_maps']) { $base.google_maps = $gm }
+        else { $base | Add-Member -NotePropertyName google_maps -NotePropertyValue $gm -Force }
+    }
 
     Write-TextoArquivo -Caminho $alvo -Conteudo ($base | ConvertTo-Json -Depth 8)
     $alvo

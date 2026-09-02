@@ -133,7 +133,16 @@ recomenda o de maior download na Rede Local, marcado **provisório** e Local
 inviável; nada → "nenhuma". O **veredito final do Local = veredito do meio
 recomendado** (salvo override manual do técnico no combo da recomendação final).
 
-1. informação do teste → 2. Junta/Local (com cartão de detalhe) →
+1. informação do teste → 2. Junta/Local (com cartão de detalhe **+ anexo do
+formulário GEL**: `cardGel`/`btnAnexarGel` → `Invoke-AnexarGel` abre o PDF da
+vistoria do GEL, `Read-TextoPdf` (PdfPig em `lib/pdfpig/`, degrada se ausente) +
+`ConvertFrom-VistoriaGel` extraem coordenadas / suporte ao link local / elétrica;
+o técnico confere em `panelGelConf` e `Invoke-GelRegistrar` grava em
+`$Global:VistoriaGel` → JSON `vistoria_gel` + seção "Vistoria GEL" no relatório
+com link e imagem do Google Maps. A chave da **Maps Static API** fica em
+`config/ambiente.json` (`google_maps.static_key`), editável na tela de
+Administração; a imagem é baixada e embutida como `data:` URI, então a chave não
+vai no HTML/PDF) →
 3. **meios de conexão** — *painel de 3 cards*: `Invoke-ProbeRedeLocal`
 (`Invoke-FaseLocal -SemInternet`, async) inventaria as placas; cada card
 (`cardLan`/`cardWifiPlaca`/`cardCelular`, clicáveis para selecionar) tem um

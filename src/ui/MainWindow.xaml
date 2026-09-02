@@ -681,6 +681,92 @@
                                             Margin="0,12,0,0" Visibility="Collapsed"/>
                                 </StackPanel>
                             </Border>
+
+                            <!-- anexo: formulario do GEL (opcional) -->
+                            <Border x:Name="cardGel" Style="{DynamicResource Cartao}" Padding="16,14"
+                                    Margin="0,12,0,0" Visibility="Collapsed">
+                                <StackPanel>
+                                    <TextBlock Text="Formul&#225;rio do GEL (opcional)" Style="{DynamicResource SecaoTela}"
+                                               Margin="0,0,0,4"/>
+                                    <TextBlock TextWrapping="Wrap" FontSize="11"
+                                               Foreground="{DynamicResource Dicon.Text3}" Margin="0,0,0,10"
+                                               Text="Anexe o PDF da vistoria do GEL deste local. O DICON extrai as coordenadas (mapa no relat&#243;rio), o suporte ao link local e os dados el&#233;tricos. Voc&#234; confere antes de registrar."/>
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button x:Name="btnAnexarGel" Content="Anexar formul&#225;rio GEL (PDF)"
+                                                Style="{DynamicResource BotaoSecundario}"/>
+                                        <TextBlock x:Name="txtGelStatus" Margin="12,0,0,0" VerticalAlignment="Center"
+                                                   TextWrapping="Wrap" FontSize="12"
+                                                   Foreground="{DynamicResource Dicon.Text3}"/>
+                                    </StackPanel>
+
+                                    <Border x:Name="panelGelConf" Style="{DynamicResource Faixa}" Margin="0,12,0,0"
+                                            Visibility="Collapsed">
+                                        <StackPanel>
+                                            <TextBlock Text="Confira e ajuste antes de registrar" FontFamily="Consolas"
+                                                       FontSize="9" FontWeight="Bold"
+                                                       Foreground="{DynamicResource Dicon.Text3}" Margin="0,0,0,8"/>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                </Grid.RowDefinitions>
+                                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Latitude" Style="{DynamicResource Rotulo}"
+                                                           VerticalAlignment="Center" Margin="0,3,10,3"/>
+                                                <TextBox x:Name="txtGelLat" Grid.Row="0" Grid.Column="1" Margin="0,3,12,3"
+                                                         MinHeight="30" FontFamily="Consolas" VerticalContentAlignment="Center"/>
+                                                <TextBlock Grid.Row="0" Grid.Column="2" Text="Longitude" Style="{DynamicResource Rotulo}"
+                                                           VerticalAlignment="Center" Margin="0,3,10,3"/>
+                                                <TextBox x:Name="txtGelLong" Grid.Row="0" Grid.Column="3" Margin="0,3,0,3"
+                                                         MinHeight="30" FontFamily="Consolas" VerticalContentAlignment="Center"/>
+
+                                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Precis&#227;o (m)" Style="{DynamicResource Rotulo}"
+                                                           VerticalAlignment="Center" Margin="0,3,10,3"/>
+                                                <TextBox x:Name="txtGelPrec" Grid.Row="1" Grid.Column="1" Margin="0,3,12,3"
+                                                         MinHeight="30" FontFamily="Consolas" VerticalContentAlignment="Center"/>
+                                                <TextBlock Grid.Row="1" Grid.Column="2" Text="Tens&#227;o" Style="{DynamicResource Rotulo}"
+                                                           VerticalAlignment="Center" Margin="0,3,10,3"/>
+                                                <TextBox x:Name="txtGelTensao" Grid.Row="1" Grid.Column="3" Margin="0,3,0,3"
+                                                         MinHeight="30" VerticalContentAlignment="Center"/>
+
+                                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Tomadas" Style="{DynamicResource Rotulo}"
+                                                           VerticalAlignment="Center" Margin="0,3,10,3"/>
+                                                <TextBox x:Name="txtGelTomadas" Grid.Row="2" Grid.Column="1" Margin="0,3,12,3"
+                                                         MinHeight="30" VerticalContentAlignment="Center"/>
+                                                <TextBlock Grid.Row="2" Grid.Column="2" Text="Extens&#227;o el&#233;trica" Style="{DynamicResource Rotulo}"
+                                                           VerticalAlignment="Center" Margin="0,3,10,3"/>
+                                                <TextBox x:Name="txtGelExtensao" Grid.Row="2" Grid.Column="3" Margin="0,3,0,3"
+                                                         MinHeight="30" VerticalContentAlignment="Center"/>
+
+                                                <TextBlock Grid.Row="3" Grid.Column="0" Text="Suporte (nome)" Style="{DynamicResource Rotulo}"
+                                                           VerticalAlignment="Center" Margin="0,3,10,3"/>
+                                                <TextBox x:Name="txtGelSupNome" Grid.Row="3" Grid.Column="1" Margin="0,3,12,3"
+                                                         MinHeight="30" VerticalContentAlignment="Center"/>
+                                                <TextBlock Grid.Row="3" Grid.Column="2" Text="Suporte (telefone)" Style="{DynamicResource Rotulo}"
+                                                           VerticalAlignment="Center" Margin="0,3,10,3"/>
+                                                <TextBox x:Name="txtGelSupTel" Grid.Row="3" Grid.Column="3" Margin="0,3,0,3"
+                                                         MinHeight="30" VerticalContentAlignment="Center"/>
+                                            </Grid>
+                                            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                                <Button x:Name="btnGelRegistrar" Content="Registrar"
+                                                        Style="{DynamicResource BotaoPrimario}" Padding="18,7"/>
+                                                <Button x:Name="btnGelCancelar" Content="Cancelar"
+                                                        Style="{DynamicResource BotaoFantasma}" Margin="8,0,0,0"/>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <TextBlock x:Name="txtGelResumo" Margin="0,10,0,0" TextWrapping="Wrap" FontSize="12"
+                                               Foreground="{DynamicResource Dicon.Viavel}" Visibility="Collapsed"/>
+                                </StackPanel>
+                            </Border>
                         </StackPanel>
                     </ScrollViewer>
 
@@ -1390,6 +1476,15 @@
                                 <TextBox x:Name="txtIperfDuracaoCfg" Grid.Column="5" Width="60" MinHeight="32"
                                          FontFamily="Consolas" VerticalContentAlignment="Center"/>
                             </Grid>
+
+                            <TextBlock Text="Chave da API do Google Maps (Static)" Style="{DynamicResource Rotulo}"
+                                       Margin="0,14,0,4"/>
+                            <TextBlock Text="Restrita s&#243; &#224; Maps Static API. Usada no anexo do formul&#225;rio GEL para gerar a imagem do mapa no relat&#243;rio. Vazio = s&#243; o link, sem imagem."
+                                       FontSize="11" Foreground="{DynamicResource Dicon.Text3}" TextWrapping="Wrap"
+                                       Margin="0,0,0,6"/>
+                            <TextBox x:Name="txtMapsKeyCfg" MinHeight="32" FontFamily="Consolas"
+                                     VerticalContentAlignment="Center"/>
+
                             <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
                                 <Button x:Name="btnSalvarAmbiente" Content="Salvar ambiente"
                                         Style="{DynamicResource BotaoSucesso}"/>

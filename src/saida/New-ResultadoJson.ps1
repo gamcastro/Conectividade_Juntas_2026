@@ -69,7 +69,9 @@ function New-ResultadoJson {
         # recomendacao final (objeto de Get-ConexaoRecomendada). Opcionais.
         $Medicoes,
         $ConexaoRecomendada,
-        [string]   $MotivoRecomendacao
+        [string]   $MotivoRecomendacao,
+        # Anexo do formulario GEL (coordenadas / suporte / eletrica). Opcional.
+        $VistoriaGel
     )
 
     # index metrica -> override do tecnico
@@ -225,6 +227,19 @@ function New-ResultadoJson {
             tipo_internet       = $Local.tipo_internet
         }
         rede_local        = $redeLocal
+        vistoria_gel       = $(if ($VistoriaGel) {
+            [pscustomobject]@{
+                latitude          = (Get-Prop $VistoriaGel 'lat')
+                longitude         = (Get-Prop $VistoriaGel 'long')
+                precisao_m        = (Get-Prop $VistoriaGel 'precisao_m')
+                mapa_link         = [string] (Get-Prop $VistoriaGel 'mapa_link')
+                suporte_nome      = [string] (Get-Prop $VistoriaGel 'suporte_nome')
+                suporte_telefone  = [string] (Get-Prop $VistoriaGel 'suporte_telefone')
+                eletrica_tensao   = [string] (Get-Prop $VistoriaGel 'eletrica_tensao')
+                eletrica_tomadas  = [string] (Get-Prop $VistoriaGel 'eletrica_tomadas')
+                eletrica_extensao = [string] (Get-Prop $VistoriaGel 'eletrica_extensao')
+            }
+        } else { $null })
         vpn               = [pscustomobject]@{ impossivel = [bool] $VpnImpossivel; motivo = [string] $VpnMotivo }
         medicoes          = @($medicoesJson)
         conexao_recomendada = $recJson

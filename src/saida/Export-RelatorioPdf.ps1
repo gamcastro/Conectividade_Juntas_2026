@@ -210,6 +210,42 @@ $($trs -join "`n")
     $campos += '<div style="grid-column:1/3"><b>Tipo de internet:</b> {0}</div>' -f (ConvertTo-HtmlSafe $loc.tipo_internet)
     $blocoLocal = $campos -join "`n    "
 
+    # Bloco "Vistoria GEL" (anexo) - so aparece se um formulario do GEL foi anexado.
+    $blocoGel = ''
+    $vg = if ($r.PSObject.Properties['vistoria_gel']) { $r.vistoria_gel } else { $null }
+    if ($vg) {
+        $gc = @()
+        if ($null -ne $vg.latitude -and $null -ne $vg.longitude) {
+            $latS  = ("$($vg.latitude)")  -replace ',', '.'
+            $longS = ("$($vg.longitude)") -replace ',', '.'
+            $precS = (("$($vg.precisao_m)") -replace ',', '.').Trim()
+            $prec = if ($precS -and $precS -ne '0') { (' &middot; precis&atilde;o ~{0} m' -f $precS) } else { '' }
+            $gc += '<div style="grid-column:1/3"><b>Coordenadas:</b> {0}, {1}{2}</div>' -f $latS, $longS, $prec
+            $lnk = if ($vg.mapa_link) { [string] $vg.mapa_link }
+                   else { 'https://www.google.com/maps?q={0},{1}' -f $latS, $longS }
+            $gc += '<div style="grid-column:1/3"><b>Mapa:</b> <a href="{0}">{0}</a></div>' -f (ConvertTo-HtmlSafe $lnk)
+        }
+        if ($vg.suporte_nome)      { $gc += '<div style="grid-column:1/3"><b>Suporte ao link local:</b> {0}</div>' -f (ConvertTo-HtmlSafe ([string] $vg.suporte_nome)) }
+        if ($vg.suporte_telefone)  { $gc += '<div style="grid-column:1/3"><b>Telefone do suporte:</b> {0}</div>' -f (ConvertTo-HtmlSafe ([string] $vg.suporte_telefone)) }
+        $ele = @()
+        if ($vg.eletrica_tensao)   { $ele += ('tens&atilde;o {0}' -f (ConvertTo-HtmlSafe ([string] $vg.eletrica_tensao))) }
+        if ($vg.eletrica_tomadas)  { $ele += ('{0} tomada(s)' -f (ConvertTo-HtmlSafe ([string] $vg.eletrica_tomadas))) }
+        if ($vg.eletrica_extensao) { $ele += ('extens&atilde;o el&eacute;trica: {0}' -f (ConvertTo-HtmlSafe ([string] $vg.eletrica_extensao))) }
+        if ($ele.Count)            { $gc += '<div style="grid-column:1/3"><b>El&eacute;trica:</b> {0}</div>' -f ($ele -join ' &middot; ') }
+
+        if ($gc.Count) {
+            $imgMapa = ''
+            if ($null -ne $vg.latitude -and $null -ne $vg.longitude) {
+                $chave = Get-ChaveMapsStatic
+                if ($chave) {
+                    $du = Get-MapaEstaticoDataUri -Lat $vg.latitude -Long $vg.longitude -Chave $chave
+                    if ($du) { $imgMapa = '<div style="margin:6px 0 12px"><img src="{0}" alt="mapa" style="max-width:520px;border:1px solid #d6dae2;border-radius:4px"></div>' -f $du }
+                }
+            }
+            $blocoGel = "  <h2>Vistoria GEL (formul&aacute;rio anexado)</h2>`n$imgMapa`n  <div class=""grid2"">`n    " + ($gc -join "`n    ") + "`n  </div>`n"
+        }
+    }
+
     # Bloco "Rede local (antes da VPN)" - so aparece se a fase 1 foi coletada.
     $rl = if ($r.PSObject.Properties['rede_local']) { $r.rede_local } else { $null }
     $blocoRedeLocal = ''
@@ -355,6 +391,7 @@ $blocoRecomendacao
     $blocoLocal
   </div>
 
+$blocoGel
 $blocoRedeLocal
 $blocoMeios
   <h2>M&eacute;tricas medidas</h2>

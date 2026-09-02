@@ -15,5 +15,9 @@
     "url": "https://totalizacao.exemplo.tre-ma.jus.br",
     "navegadores": ["firefox", "chrome"],
     "timeout_s": 60
+  },
+  "google_maps": {
+    "_nota": "chave da Maps Static API (Google Cloud), restrita SO a essa API. Usada no anexo do GEL para gerar a imagem do mapa no relatorio. Preencher pela tela de Administracao.",
+    "static_key": ""
   }
 }

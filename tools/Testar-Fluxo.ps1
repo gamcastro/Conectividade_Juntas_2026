@@ -668,6 +668,49 @@ try {
     if ($fBlock.tipo -eq 'bloqueio' -and $fUnk.tipo -eq 'desconhecido' -and -not $fUnk.laudo) {
         Write-Host "[10] falha de DNS -> 'bloqueio'; mensagem generica -> 'desconhecido' sem laudo"
     } else { Write-Host "    FALHA: classificacao bloqueio/desconhecido (b='$($fBlock.tipo)' u='$($fUnk.tipo)')"; $falhas++ }
+
+    # 11. anexo do GEL: extrator + links de mapa + bloco no JSON/relatorio
+    $fixGel = 'Sistema de Georreferenciamento Eleitoral Zona: 24 Municipio: HUMBERTO DE CAMPOS ' +
+        'Local: C. E. MANOEL DIAS DE SOUSA Coordenadas: -2.4997476' + [char]0x00BA + ',-43.25344546' + [char]0x00BA + '. Precisao 6.558 ' +
+        'Localizacao do Quadro de Energia: R. : Externo Ha energia eletrica? R. : Sim ' +
+        'Ha quantas tomadas funcionando? R. : 6 Qual a tensao da rede eletrica? R. : 220 volts ' +
+        'Ha necessidade de extensao eletrica? R. : Sim Qual o numero da unidade consumidora (UC)? R. : 3064-001367-9 ' +
+        'Qual o nome do tecnico ou empresa responsavel pelo suporte ao link local? R. : suporte Tec 98 30421747 ' +
+        'Qual o telefone do tecnico ou empresa responsavel pelo suporte ao link local? R. : OLNY TELECON ' +
+        'Qual o tempo de resposta do ping exaustivo utilizando o comando ping <endereco> -t? R. :'
+    $pg = ConvertFrom-VistoriaGel -Texto $fixGel
+    if ([math]::Abs($pg.lat - (-2.4997476)) -lt 1e-6 -and [math]::Abs($pg.long - (-43.25344546)) -lt 1e-6 -and
+        [math]::Abs([double] $pg.precisao_m - 6.558) -lt 1e-3 -and
+        $pg.eletrica_tensao -match '220' -and $pg.eletrica_tomadas -eq '6' -and $pg.eletrica_extensao -match 'Sim' -and
+        $pg.suporte_nome -match 'suporte Tec' -and $pg.suporte_telefone -match 'OLNY') {
+        Write-Host "[11] ConvertFrom-VistoriaGel extrai coordenadas + eletrica + suporte do texto do GEL"
+    } else { Write-Host "    FALHA: extrator do GEL (lat=$($pg.lat) long=$($pg.long) prec=$($pg.precisao_m) tensao='$($pg.eletrica_tensao)' tomadas='$($pg.eletrica_tomadas)' ext='$($pg.eletrica_extensao)' sup='$($pg.suporte_nome)'/'$($pg.suporte_telefone)')"; $falhas++ }
+
+    $lnkG = Get-LinkGoogleMaps -Lat -2.5 -Long -43.25
+    $urlM = Get-UrlMapaEstatico -Lat -2.5 -Long -43.25 -Chave 'FAKE123'
+    if ($lnkG -eq 'https://www.google.com/maps?q=-2.5,-43.25' -and $urlM -match 'staticmap' -and $urlM -match 'key=FAKE123' -and $urlM -match '-2.5,-43.25') {
+        Write-Host "[11] links de mapa: Get-LinkGoogleMaps + Get-UrlMapaEstatico OK"
+    } else { Write-Host "    FALHA: links de mapa (lnk='$lnkG' url='$urlM')"; $falhas++ }
+    if ((Get-UrlMapaEstatico -Lat -2.5 -Long -43.25 -Chave '') -eq '') { Write-Host "[11] sem chave -> Get-UrlMapaEstatico vazio" }
+    else { Write-Host "    FALHA: Get-UrlMapaEstatico deveria voltar vazio sem chave"; $falhas++ }
+
+    $g = [pscustomobject]@{
+        lat = -2.4997476; long = -43.25344546; precisao_m = 6.558
+        suporte_nome = 'OLNY TELECON'; suporte_telefone = '(98) 3042-1747'
+        eletrica_tensao = '220 volts'; eletrica_tomadas = '6'; eletrica_extensao = 'Sim'
+        mapa_link = (Get-LinkGoogleMaps -Lat -2.4997476 -Long -43.25344546)
+    }
+    $jsonGel = New-ResultadoJson -Local ([pscustomobject]@{ id = 'X'; nome = 'L'; zona_eleitoral = 24; municipio_sede = 'S'; municipio_termo = 'T'; tipo = 'contingencia'; endereco = 'R' }) `
+        -TecnicoNome 'T' -Decisao ([pscustomobject]@{ Classificacao = 'inviavel'; Detalhes = @() }) -Metricas ([pscustomobject]@{}) -VistoriaGel $g
+    $htmlGel = New-RelatorioHtml -Resultado $jsonGel
+    if ($jsonGel.vistoria_gel -and [double] $jsonGel.vistoria_gel.latitude -eq -2.4997476 -and
+        $jsonGel.vistoria_gel.suporte_nome -eq 'OLNY TELECON' -and $jsonGel.vistoria_gel.eletrica_tomadas -eq '6' -and
+        $htmlGel -match 'Vistoria GEL' -and $htmlGel -match '-2.4997476' -and $htmlGel -match 'google.com/maps') {
+        Write-Host "[11] JSON traz 'vistoria_gel' e o relatorio traz a secao do GEL + link do mapa"
+    } else { Write-Host "    FALHA: JSON/relatorio do GEL (vg=$([bool]$jsonGel.vistoria_gel) html_sec=$($htmlGel -match 'Vistoria GEL'))"; $falhas++ }
+
+    try { Read-TextoPdf -Caminho $PSCommandPath; Write-Host "    FALHA: Read-TextoPdf devia falhar sem a lib / com nao-PDF"; $falhas++ }
+    catch { Write-Host "[11] Read-TextoPdf sem a biblioteca do PdfPig -> erro claro ($($_.Exception.Message.Substring(0,[Math]::Min(40,$_.Exception.Message.Length)))...)" }
 }
 finally {
     $Global:PastaDadosOverride = $null

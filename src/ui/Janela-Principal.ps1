@@ -40,6 +40,7 @@ $Global:AtualizandoRecomendacao = $false  # guarda: set programatico do combo de
 $Global:MedicoesPasso5     = @()     # [{idx;med}] das medicoes testaveis no seletor do passo 5
 $Global:MedicaoPasso5Idx   = -1      # indice em $Global:Medicoes da medicao aberta no passo 5 (-1 = ultima)
 $Global:AtualizandoMedicaoP5 = $false # guarda: set programatico do combo de medicoes do passo 5
+$Global:VistoriaGel        = $null   # anexo do GEL (coordenadas/suporte/eletrica) do local atual
 
 $Global:FeitoSalvar        = $false  # checklist do passo 7
 $Global:FeitoTransmitir    = $false
@@ -290,6 +291,9 @@ function New-JanelaPrincipal {
     $window.FindName('btnWizVoltar').Add_Click({ Invoke-WizardVoltar })
     $window.FindName('btnWizProximo').Add_Click({ Invoke-WizardProximo })
     $window.FindName('btnRefazerTeste').Add_Click({ Invoke-WizardProximo })
+    $window.FindName('btnAnexarGel').Add_Click({ Invoke-AnexarGel })
+    $window.FindName('btnGelRegistrar').Add_Click({ Invoke-GelRegistrar })
+    $window.FindName('btnGelCancelar').Add_Click({ Invoke-GelCancelar })
     $window.FindName('btnRelerPlacas').Add_Click({ Invoke-RelerPlacas })
     $window.FindName('btnRelerLan').Add_Click({ Invoke-RelerAdaptador 'lan' })
     $window.FindName('btnRelerWifi').Add_Click({ Invoke-RelerAdaptador 'wifi' })
@@ -1126,6 +1130,7 @@ function Update-DetalheLocal {
     }
     if (-not $sel) {
         $card.Visibility = 'Collapsed'
+        $cg = $w.FindName('cardGel'); if ($cg) { $cg.Visibility = 'Collapsed' }
         if ($Global:WizardStep -eq 2) {
             $w.FindName('btnWizProximo').Visibility   = 'Visible'
             $w.FindName('btnRefazerTeste').Visibility = 'Collapsed'
@@ -1138,6 +1143,7 @@ function Update-DetalheLocal {
     if ($idSel -and $idSel -ne $Global:LocalMedicoesId) {
         if (@($Global:Medicoes).Count) { Write-Log 'Local trocado - medicoes anteriores descartadas.' -Nivel Aviso }
         Reset-Medicoes
+        $Global:VistoriaGel = $null
         $Global:LocalMedicoesId = $idSel
     }
 
@@ -1168,6 +1174,7 @@ function Update-DetalheLocal {
         $lbl.Foreground = $cinza
     }
     $card.Visibility = 'Visible'
+    Update-CardGel
 
     # Passo 2: local ja testado (e nao ha diagnostico em andamento) -> some o
     # "Proximo" do rodape e aparece "Refazer o teste" no proprio cartao.
@@ -1176,6 +1183,109 @@ function Update-DetalheLocal {
         $w.FindName('btnWizProximo').Visibility   = if ($jaTestado) { 'Collapsed' } else { 'Visible' }
         $w.FindName('btnRefazerTeste').Visibility = if ($jaTestado) { 'Visible' } else { 'Collapsed' }
     }
+}
+
+# ----------------------------------------------------- ANEXO DO FORMULARIO GEL
+# Mostra o card do GEL no passo 2 e reflete o que ja foi registrado.
+function Update-CardGel {
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    $card = $w.FindName('cardGel'); if (-not $card) { return }
+    $card.Visibility = 'Visible'
+    $w.FindName('panelGelConf').Visibility = 'Collapsed'
+    $g = $Global:VistoriaGel
+    $res = $w.FindName('txtGelResumo')
+    $st  = $w.FindName('txtGelStatus')
+    if ($g) {
+        $partes = @()
+        if ($null -ne $g.lat -and $null -ne $g.long) { $partes += ('coordenadas {0}, {1}' -f $g.lat, $g.long) }
+        if ($g.suporte_nome -or $g.suporte_telefone) { $partes += 'suporte do link' }
+        if ($g.eletrica_tensao -or $g.eletrica_tomadas) { $partes += 'dados eletricos' }
+        $res.Text = 'Formulario GEL anexado: ' + (($partes -join ' - '))
+        $res.Visibility = 'Visible'
+        $st.Text = 'anexado - use "Anexar" de novo para substituir.'
+    } else {
+        $res.Visibility = 'Collapsed'
+        $st.Text = ''
+    }
+}
+
+# Botao "Anexar formulario GEL (PDF)": abre o seletor, le o PDF e preenche a
+# tela de conferencia.
+function Invoke-AnexarGel {
+    $w = $Global:JanelaPrincipal
+    $st = $w.FindName('txtGelStatus')
+    $dlg = New-Object Microsoft.Win32.OpenFileDialog
+    $dlg.Filter = 'PDF do GEL (*.pdf)|*.pdf'
+    $dlg.Title  = 'Selecione o PDF da vistoria do GEL'
+    if (-not $dlg.ShowDialog()) { return }
+
+    $st.Text = 'Lendo o PDF...'
+    try {
+        $txt = Read-TextoPdf -Caminho $dlg.FileName
+    } catch {
+        $st.Text = "Nao consegui ler o PDF: $_"
+        Write-Log "Anexo GEL - leitura falhou: $_" -Nivel Erro
+        return
+    }
+    $p = ConvertFrom-VistoriaGel -Texto $txt
+    if (-not $p.achou_algo) {
+        $st.Text = 'PDF lido, mas nao reconheci os campos do GEL. Preencha na mao abaixo se quiser.'
+    } else {
+        $st.Text = 'Campos extraidos - confira e ajuste.'
+    }
+    $w.FindName('txtGelLat').Text      = if ($null -ne $p.lat)  { "$($p.lat)"  } else { '' }
+    $w.FindName('txtGelLong').Text     = if ($null -ne $p.long) { "$($p.long)" } else { '' }
+    $w.FindName('txtGelPrec').Text     = if ($null -ne $p.precisao_m) { "$($p.precisao_m)" } else { '' }
+    $w.FindName('txtGelTensao').Text   = [string] $p.eletrica_tensao
+    $w.FindName('txtGelTomadas').Text  = [string] $p.eletrica_tomadas
+    $w.FindName('txtGelExtensao').Text = [string] $p.eletrica_extensao
+    $w.FindName('txtGelSupNome').Text  = [string] $p.suporte_nome
+    $w.FindName('txtGelSupTel').Text   = [string] $p.suporte_telefone
+    $w.FindName('panelGelConf').Visibility = 'Visible'
+    $w.FindName('txtGelResumo').Visibility = 'Collapsed'
+}
+
+function Invoke-GelCancelar {
+    $w = $Global:JanelaPrincipal
+    $w.FindName('panelGelConf').Visibility = 'Collapsed'
+    Update-CardGel
+}
+
+# "Registrar": grava o que estiver na tela de conferencia em $Global:VistoriaGel.
+function Invoke-GelRegistrar {
+    $w = $Global:JanelaPrincipal
+    $st = $w.FindName('txtGelStatus')
+
+    $latTxt  = (([string] $w.FindName('txtGelLat').Text)  -replace ',', '.').Trim()
+    $longTxt = (([string] $w.FindName('txtGelLong').Text) -replace ',', '.').Trim()
+    $precTxt = (([string] $w.FindName('txtGelPrec').Text) -replace ',', '.').Trim()
+
+    $lat = $null; $long = $null; $prec = $null
+    $la = 0.0; $lo = 0.0; $pr = 0.0
+    if ($latTxt -and [double]::TryParse($latTxt, [Globalization.NumberStyles]::Float, [Globalization.CultureInfo]::InvariantCulture, [ref] $la)) { $lat = $la }
+    if ($longTxt -and [double]::TryParse($longTxt, [Globalization.NumberStyles]::Float, [Globalization.CultureInfo]::InvariantCulture, [ref] $lo)) { $long = $lo }
+    if ($precTxt -and [double]::TryParse($precTxt, [Globalization.NumberStyles]::Float, [Globalization.CultureInfo]::InvariantCulture, [ref] $pr)) { $prec = $pr }
+
+    if (($latTxt -or $longTxt) -and ($null -eq $lat -or $null -eq $long)) {
+        $st.Text = 'Latitude/Longitude invalidas (use ponto decimal, ex.: -2.4997476).'
+        return
+    }
+
+    $Global:VistoriaGel = [pscustomobject]@{
+        lat               = $lat
+        long              = $long
+        precisao_m        = $prec
+        suporte_nome      = ([string] $w.FindName('txtGelSupNome').Text).Trim()
+        suporte_telefone  = ([string] $w.FindName('txtGelSupTel').Text).Trim()
+        eletrica_tensao   = ([string] $w.FindName('txtGelTensao').Text).Trim()
+        eletrica_tomadas  = ([string] $w.FindName('txtGelTomadas').Text).Trim()
+        eletrica_extensao = ([string] $w.FindName('txtGelExtensao').Text).Trim()
+        mapa_link         = if ($null -ne $lat -and $null -ne $long) { Get-LinkGoogleMaps -Lat $lat -Long $long } else { '' }
+        anexado_em        = (Get-Date).ToString('o')
+    }
+    Write-Log 'Formulario GEL anexado ao local.' -Nivel Ok
+    Update-CardGel
 }
 
 # ------------------------------------------------------------- PASSO 3: REDE LOCAL
@@ -2806,7 +2916,8 @@ function Invoke-ExportarRelatorio {
             -VpnImpossivel ([bool] $w.FindName('chkVpnImpossivel').IsChecked) `
             -VpnMotivo (([string] $w.FindName('txtVpnMotivo').Text).Trim()) `
             -Medicoes $Global:Medicoes -ConexaoRecomendada $rec `
-            -MotivoRecomendacao ([string] $Global:MotivoRecomendacao)
+            -MotivoRecomendacao ([string] $Global:MotivoRecomendacao) `
+            -VistoriaGel $Global:VistoriaGel
     } catch {
         $st.Text = "Falha ao montar o relatorio: $_"
         Write-Log "Falha ao montar o relatorio: $_" -Nivel Erro
@@ -2916,6 +3027,7 @@ function Initialize-Admin {
     $w.FindName('txtIperfServidorCfg').Text = if ($ip) { [string] $ip.servidor } else { '' }
     $w.FindName('txtIperfPortaCfg').Text    = if ($ip -and $ip.porta) { [string] $ip.porta } else { '5201' }
     $w.FindName('txtIperfDuracaoCfg').Text  = if ($ip -and $ip.duracao_s) { [string] $ip.duracao_s } else { '10' }
+    $w.FindName('txtMapsKeyCfg').Text = Get-ChaveMapsStatic
     $w.FindName('lblAmbienteMsg').Text = ''
 }
 
@@ -2936,11 +3048,14 @@ function Invoke-SalvarAmbiente {
     if (-not $okP -or $porta -lt 1 -or $porta -gt 65535) { $msg.Foreground = $vermelho; $msg.Text = 'Porta invalida (1-65535).'; return }
     if (-not $okD -or $dur -lt 3 -or $dur -gt 60) { $msg.Foreground = $vermelho; $msg.Text = 'Duracao invalida (3-60 s).'; return }
 
+    $mapsKey = ([string] $w.FindName('txtMapsKeyCfg').Text).Trim()
+
     try {
-        $arq = Save-ConfigAmbiente -Servidor $srv -Porta $porta -Duracao $dur
+        $arq = Save-ConfigAmbiente -Servidor $srv -Porta $porta -Duracao $dur -MapsKey $mapsKey
         $msg.Foreground = [Windows.Media.Brushes]::LightGreen
-        $msg.Text = "Servidor iperf3 salvo neste computador ($srv`:$porta)."
-        Write-Log "Ambiente iperf3 salvo pelo admin: $srv`:$porta / ${dur}s -> $arq" -Nivel Ok
+        $extra = if ($mapsKey) { ' + chave do Google Maps' } else { '' }
+        $msg.Text = "Ambiente salvo neste computador ($srv`:$porta$extra)."
+        Write-Log "Ambiente salvo pelo admin: iperf3 $srv`:$porta / ${dur}s ; maps_key=$(if ($mapsKey) { 'definida' } else { 'vazia' }) -> $arq" -Nivel Ok
     } catch {
         $msg.Foreground = $vermelho
         $msg.Text = "Falha ao salvar: $_"
@@ -3519,7 +3634,8 @@ function Invoke-SalvarResultado {
             -VpnImpossivel ([bool] $w.FindName('chkVpnImpossivel').IsChecked) `
             -VpnMotivo (([string] $w.FindName('txtVpnMotivo').Text).Trim()) `
             -Medicoes $Global:Medicoes -ConexaoRecomendada $rec `
-            -MotivoRecomendacao ([string] $Global:MotivoRecomendacao)
+            -MotivoRecomendacao ([string] $Global:MotivoRecomendacao) `
+            -VistoriaGel $Global:VistoriaGel
         Write-Log "Resultado salvo: $caminho" -Nivel Ok
         $Global:FeitoSalvar          = $true
         $Global:UltimoResultadoSalvo = $caminho

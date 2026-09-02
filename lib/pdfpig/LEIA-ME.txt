@@ -1,0 +1,29 @@
+Biblioteca de leitura de PDF (PdfPig) — usada pelo anexo do formulario do GEL
+============================================================================
+
+O DICON le o PDF da vistoria do GEL com o PdfPig (licenca Apache-2.0).
+Sem estes arquivos, o botao "Anexar formulario GEL (PDF)" avisa que a
+biblioteca esta ausente e nao le o PDF (o resto do DICON funciona normal).
+
+O que copiar para ESTA pasta (lib\pdfpig\):
+
+  UglyToad.PdfPig.dll
+  UglyToad.PdfPig.Core.dll
+  UglyToad.PdfPig.Fonts.dll
+  UglyToad.PdfPig.Tokenization.dll
+  UglyToad.PdfPig.Tokens.dll
+  System.Memory.dll
+  System.Buffers.dll
+  System.Numerics.Vectors.dll
+  System.Runtime.CompilerServices.Unsafe.dll
+
+Como obter (uma vez, numa maquina com internet):
+
+  1. Instale o .NET SDK (ou tenha o "nuget.exe").
+  2. Rode:  nuget install UglyToad.PdfPig -Version 0.1.9 -OutputDirectory pkg
+     (ou baixe o .nupkg em https://www.nuget.org/packages/PdfPig e renomeie
+      para .zip para extrair)
+  3. Dentro dos pacotes baixados, pegue os .dll da pasta
+     lib\netstandard2.0\ de cada um e copie para ca.
+
+Depois de copiar, o anexo do GEL passa a ler o PDF automaticamente.
