@@ -256,18 +256,21 @@ try {
     # 4d. checagem de um meio (celular) pelo overlay: Fase 1 (Ookla) + Fase 2 (VPN)
     $Global:VpnSimulada = $true
     $Global:FaseLocalPayload.Wireless.conectado = $true      # rede Wi-Fi conectada
-    # so operadora, sem marcar "e o meu celular" -> Wi-Fi armado, Celular nao
     $w.FindName('cboOperadoraCel').Text = 'Vivo'
-    Update-PainelMeios
-    if ($w.FindName('btnCheckWifi').IsEnabled -and -not $w.FindName('btnCheckCelular').IsEnabled) {
-        Write-Host "[4d] rede conectada = Wi-Fi do local por padrao (Celular so ao marcar 'e o meu celular')"
-    } else { Write-Host "    FALHA: gate Wi-Fi/Celular (wifi.en=$($w.FindName('btnCheckWifi').IsEnabled) cel.en=$($w.FindName('btnCheckCelular').IsEnabled))"; $falhas++ }
-    $w.FindName('chkCelHotspot').IsChecked = $true
-    Update-PainelMeios
+    $Global:MeioSelecionado = '' ; Update-PainelMeios
+    if (-not $w.FindName('btnCheckWifi').IsEnabled -and -not $w.FindName('btnCheckCelular').IsEnabled) {
+        Write-Host "[4d] sem card selecionado -> nenhum 'Rodar checagem' habilitado"
+    } else { Write-Host "    FALHA: botao habilitado sem selecao (wifi.en=$($w.FindName('btnCheckWifi').IsEnabled) cel.en=$($w.FindName('btnCheckCelular').IsEnabled))"; $falhas++ }
+    Select-MeioParaChecar 'wifi'
+    if ($w.FindName('btnCheckWifi').IsEnabled -and -not $w.FindName('btnCheckCelular').IsEnabled -and
+        $Global:MeioSelecionado -eq 'wifi') {
+        Write-Host "[4d] clicar no card WI-FI seleciona-o e libera so o seu botao"
+    } else { Write-Host "    FALHA: selecao do card Wi-Fi (wifi.en=$($w.FindName('btnCheckWifi').IsEnabled) cel.en=$($w.FindName('btnCheckCelular').IsEnabled))"; $falhas++ }
+    Select-MeioParaChecar 'celular'
     if ($w.FindName('btnCheckCelular').IsEnabled -and -not $w.FindName('btnCheckWifi').IsEnabled -and
-        "$($w.FindName('txtWifiModoCel').Visibility)" -eq 'Visible') {
-        Write-Host "[4d] marcar 'e o meu celular' -> Celular libera, Wi-Fi trava + aviso no card Wi-Fi"
-    } else { Write-Host "    FALHA: chkCelHotspot nao alternou os cards (cel.en=$($w.FindName('btnCheckCelular').IsEnabled) wifi.en=$($w.FindName('btnCheckWifi').IsEnabled))"; $falhas++ }
+        "$($w.FindName('txtWifiSelDica').Visibility)" -eq 'Visible') {
+        Write-Host "[4d] clicar no card CELULAR troca a selecao -> Celular libera, Wi-Fi trava"
+    } else { Write-Host "    FALHA: troca de selecao p/ Celular (cel.en=$($w.FindName('btnCheckCelular').IsEnabled) wifi.en=$($w.FindName('btnCheckWifi').IsEnabled))"; $falhas++ }
     Invoke-CheckMeio 'celular'
     Invoke-Pump
     if ("$($w.FindName('overlayCheck').Visibility)" -eq 'Visible' -and $Global:CheckMeioAtivo -and
@@ -332,7 +335,7 @@ try {
 
     # 4g. Fase 2 sem VPN: a saida "nao consegui conectar a VPN" + motivo registra o meio; depois limpa
     $Global:VpnSimulada = $false
-    $w.FindName('chkCelHotspot').IsChecked = $false ; Update-PainelMeios   # rede atual = Wi-Fi do local
+    Select-MeioParaChecar 'wifi'   # rede atual = Wi-Fi do local
     Invoke-CheckMeio 'wifi'
     Invoke-Pump
     Invoke-ChkAvancar   # Iniciar -> Fase 1

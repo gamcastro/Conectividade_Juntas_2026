@@ -112,10 +112,12 @@ justificativa):
 **Multi-meio (hub-and-spoke):** um Local pode ser medido por até 3 **meios** de
 conexão — `lan` (rede cabeada), `wifi_local` (Wi-Fi do próprio local),
 `celular` (Wi-Fi roteada de celular). Como a placa Wi-Fi só fica numa rede por
-vez, o técnico declara qual é: o checkbox **`chkCelHotspot`** ("a rede Wi-Fi
-conectada é o roteamento do meu celular") no card CELULAR — marcado + operadora
-preenchida arma o card CELULAR e trava o WI-FI (aviso `txtWifiModoCel`);
-desmarcado, a rede conectada é tratada como Wi-Fi do local. Cada meio gera uma
+vez, o técnico **clica no card** do meio que vai testar (LAN / WI-FI / CELULAR)
+— `Select-MeioParaChecar` grava `$Global:MeioSelecionado`, o card ganha **borda
+azul** e só o seu `btnCheck*` fica habilitado; clicar em WI-FI declara que a
+rede conectada é a do local, clicar em CELULAR declara que é o roteamento do
+celular (aí a operadora é obrigatória). Se só a LAN estiver conectada, ela já
+vem selecionada. Cada meio gera uma
 **medição** (Fase 1 Ookla + Fase 2 VPN) em `$Global:Medicoes`; meios que não
 servem ao Local são marcados **"não aplicável" + motivo** (`$Global:MeiosNaoAplicaveis`).
 Ao fim, o motor `Get-ConexaoRecomendada` (`src/decisao/Invoke-MotorDecisao.ps1`)
@@ -128,9 +130,10 @@ recomendado** (salvo override manual do técnico no combo da decisão final).
 1. informação do teste → 2. Junta/Local (com cartão de detalhe) →
 3. **meios de conexão** — *painel de 3 cards*: `Invoke-ProbeRedeLocal`
 (`Invoke-FaseLocal -SemInternet`, async) inventaria as placas; cada card
-(`cardLan`/`cardWifiPlaca`/`cardCelular`) tem um `badge*` (NÃO TESTADO /
-TESTANDO… / TESTADO: <veredito> na cor do veredito / NÃO SE APLICA - INVIÁVEL),
-um botão **`btnCheck{Lan,Wifi,Celular}`** ("Rodar checagem"), e o checkbox
+(`cardLan`/`cardWifiPlaca`/`cardCelular`, clicáveis para selecionar) tem um
+`badge*` (NÃO TESTADO / TESTANDO… / TESTADO: <veredito> na cor do veredito /
+NÃO SE APLICA - INVIÁVEL), um botão **`btnCheck{Lan,Wifi,Celular}`**
+("Rodar checagem", habilitado só no card selecionado e conectado), e o checkbox
 "não se aplica a este local" — marcá-lo abre o card **`cardNaJustif`** abaixo da
 grade (`Open-CardNaJustif`: `txtNaJustif` + `btnNaRegistrar`/`btnNaCancelar`,
 `$Global:NaMeioPendente`); "Registrar" (`Invoke-NaRegistrar` → `Set-MeioNaoAplicavel`)

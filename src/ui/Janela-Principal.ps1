@@ -22,6 +22,7 @@ $Global:TarefaRedeState    = $null   # runspace da fase local / conexao Wi-Fi
 $Global:LoginEmAndamento   = $false   # trava reentrancia de Enter-Sessao (duplo-clique em "Entrar")
 $Global:FaseLocalPayload   = $null   # {Lan;Wireless;Internet;Quando} da fase 1 (sem VPN)
 $Global:FaseLocalTipo      = ''      # meio da checagem em curso: '' | 'lan' | 'wifi' | 'celular'
+$Global:MeioSelecionado    = ''      # card do passo 3 selecionado p/ testar: '' | 'lan' | 'wifi' | 'celular'
 $Global:CheckMeioAtivo     = $false  # overlay de checagem de um meio esta aberto/rodando
 $Global:ChkFase            = ''      # estado do overlay: ''|f1-pronto|f1-rodando|f2-pronto|f2-rodando|fim
 $Global:NaMeioPendente     = ''      # meio com "nao se aplica" marcado, aguardando a justificativa
@@ -290,7 +291,9 @@ function New-JanelaPrincipal {
     $window.FindName('btnRefazerTeste').Add_Click({ Invoke-WizardProximo })
     $window.FindName('btnRelerPlacas').Add_Click({ Invoke-RelerPlacas })
     $window.FindName('cboOperadoraCel').Add_LostFocus({ Update-PainelMeios })
-    $window.FindName('chkCelHotspot').Add_Click({ Update-PainelMeios })
+    $window.FindName('cardLan').Add_MouseLeftButtonUp({ Select-MeioParaChecar 'lan' })
+    $window.FindName('cardWifiPlaca').Add_MouseLeftButtonUp({ Select-MeioParaChecar 'wifi' })
+    $window.FindName('cardCelular').Add_MouseLeftButtonUp({ Select-MeioParaChecar 'celular' })
     foreach ($n in 'chkNaLan', 'chkNaWifi', 'chkNaCelular') {
         $window.FindName($n).Add_Click({ Update-NaoAplicavelMeio })
     }
@@ -1115,6 +1118,7 @@ function Update-DetalheLocal {
     if ($Global:FaseLocalPayload) {
         $Global:FaseLocalPayload = $null
         $Global:FaseLocalTipo    = ''
+        $Global:MeioSelecionado  = ''
     }
     if (-not $sel) {
         $card.Visibility = 'Collapsed'
@@ -1444,19 +1448,31 @@ function Update-PainelMeios {
         $tcel.Foreground = if ($wifiUp) { $verde } else { $cinza }
     }
 
-    # A placa Wi-Fi so pode estar numa rede por vez: o tecnico diz se essa rede
-    # e o Wi-Fi do local ou o roteamento do celular (chkCelHotspot no card CELULAR).
-    $modoCel = [bool] $w.FindName('chkCelHotspot').IsChecked
-    $tmc = $w.FindName('txtWifiModoCel')
-    if ($tmc) { $tmc.Visibility = if ($wifiUp -and $modoCel) { 'Visible' } else { 'Collapsed' } }
+    # A placa Wi-Fi so fica numa rede por vez: o tecnico escolhe, clicando no card,
+    # se essa rede e o Wi-Fi do local (card WI-FI) ou o roteamento do celular (card
+    # CELULAR). O card selecionado ganha borda azul e libera o "Rodar checagem".
+    $sel = [string] $Global:MeioSelecionado
+    if ($sel) {
+        $selNaKey = if ($sel -eq 'wifi') { 'wifi_local' } else { $sel }
+        if ($Global:MeiosNaoAplicaveis.ContainsKey($selNaKey) -or $Global:NaMeioPendente -eq $selNaKey) {
+            $Global:MeioSelecionado = ''; $sel = ''
+        }
+    }
+    # caso obvio: so a LAN conectada (sem Wi-Fi) -> ja seleciona a LAN. Com Wi-Fi
+    # conectado a escolha e do tecnico (Wi-Fi do local x roteamento do celular).
+    if (-not $sel -and $lanUp -and -not $wifiUp -and -not $Global:MeiosNaoAplicaveis.ContainsKey('lan')) {
+        $Global:MeioSelecionado = 'lan'; $sel = 'lan'
+    }
+    $tws = $w.FindName('txtWifiSelDica')
+    if ($tws) { $tws.Visibility = if ($wifiUp -and $sel -ne 'wifi') { 'Visible' } else { 'Collapsed' } }
     $tcd = $w.FindName('txtCelDica')
     if ($tcd) {
-        $tcd.Text = if ($wifiUp -and $modoCel) {
-            'Rede "{0}" tratada como roteamento de celular. Informe a operadora e rode a checagem.' -f $wf.ssid
-        } elseif ($wifiUp) {
-            'Ja ha um Wi-Fi conectado. Se essa rede for o roteamento do seu celular, marque a caixa abaixo.'
+        $tcd.Text = if (-not $wifiUp) {
+            'Ligue o roteamento no celular, conecte a rede dele pela bandeja do Windows, clique neste card e informe a operadora.'
+        } elseif ($sel -eq 'celular') {
+            'Rede "{0}" sera testada como roteamento de celular. Informe a operadora e rode a checagem.' -f $wf.ssid
         } else {
-            'Ligue o roteamento no celular, conecte a rede dele pela bandeja do Windows, marque a caixa abaixo e informe a operadora.'
+            'Se "{0}" e o roteamento do seu celular, clique neste card para seleciona-lo e informe a operadora.' -f $wf.ssid
         }
     }
 
@@ -1476,33 +1492,40 @@ function Update-PainelMeios {
     }
     $operCel = ([string] $w.FindName('cboOperadoraCel').Text).Trim()
     $livre   = -not $Global:CheckMeioAtivo
+    $azulSel = $w.TryFindResource('Dicon.Accent')
+    if (-not $azulSel) {
+        $azulSel = [Windows.Media.SolidColorBrush]::new([Windows.Media.ColorConverter]::ConvertFromString('#3B82F6'))
+        $azulSel.Freeze()
+    }
 
-    # (card, badge, meio, botao, conectado, extraOK)
-    # Wi-Fi do local: conectado E o tecnico NAO marcou "e o meu celular".
-    # Celular: conectado E marcou "e o meu celular" E informou a operadora.
+    # (card, badge, meio, botao, selKey, conectado, extraOK)
+    # Wi-Fi do local x Celular: a mesma conexao Wi-Fi; o que decide qual meio roda
+    # e o card selecionado (borda azul). Celular ainda exige a operadora.
     $defs = @(
-        @('cardLan',       'badgeLan',      'lan',        'btnCheckLan',      $lanUp,                                  $true),
-        @('cardWifiPlaca', 'badgeWifi',     'wifi_local', 'btnCheckWifi',     ([bool] $wf.conectado -and -not $modoCel), $true),
-        @('cardCelular',   'badgeCelular',  'celular',    'btnCheckCelular',  ([bool] $wf.conectado -and $modoCel),      [bool] $operCel)
+        @('cardLan',       'badgeLan',      'lan',        'btnCheckLan',      'lan',      $lanUp,                 $true),
+        @('cardWifiPlaca', 'badgeWifi',     'wifi_local', 'btnCheckWifi',     'wifi',     ([bool] $wf.conectado), $true),
+        @('cardCelular',   'badgeCelular',  'celular',    'btnCheckCelular',  'celular',  ([bool] $wf.conectado), [bool] $operCel)
     )
     foreach ($d in $defs) {
         $cd    = $w.FindName($d[0])
         $badge = $w.FindName($d[1])
         $meio  = $d[2]
         $btn   = $w.FindName($d[3])
-        $conectado = [bool] $d[4]
-        $extraOK   = [bool] $d[5]
+        $selKey    = $d[4]
+        $conectado = [bool] $d[5]
+        $extraOK   = [bool] $d[6]
         $naMeio = $Global:MeiosNaoAplicaveis.ContainsKey($meio)
+        $selecionado = ($sel -eq $selKey) -and -not $naMeio
 
         $e = & $estadoMeio $meio
         if ($badge) { $badge.Text = $e.txt; $badge.Foreground = $e.cor }
         if ($cd) {
-            $cd.BorderBrush     = $e.borda
-            $cd.BorderThickness = [Windows.Thickness]::new(2)
+            $cd.BorderBrush     = if ($selecionado) { $azulSel } else { $e.borda }
+            $cd.BorderThickness = [Windows.Thickness]::new($(if ($selecionado) { 2.5 } else { 2 }))
             $cd.Opacity         = if ($naMeio) { 0.6 } else { 1.0 }
         }
         if ($btn) {
-            $btn.IsEnabled = $conectado -and $extraOK -and -not $naMeio -and $livre
+            $btn.IsEnabled = $selecionado -and $conectado -and $extraOK -and -not $naMeio -and $livre
             $btn.Content   = if (@($Global:Medicoes | Where-Object { $_.meio -eq $meio -and -not $_.nao_aplicavel }).Count) {
                 'Refazer checagem'
             } else { 'Rodar checagem' }
@@ -2033,6 +2056,19 @@ function Reset-OverlayCheck {
     Set-ChkBotao
 }
 
+# Passo 3: clicar num card seleciona aquele meio para a checagem (borda azul +
+# libera o "Rodar checagem"). So um card fica selecionado por vez.
+function Select-MeioParaChecar {
+    param([string] $Meio)   # 'lan' | 'wifi' | 'celular'
+    if ($Global:CheckMeioAtivo) { return }
+    if (-not $Global:FaseLocalPayload) { return }
+    $naKey = if ($Meio -eq 'wifi') { 'wifi_local' } else { $Meio }
+    if ($Global:MeiosNaoAplicaveis.ContainsKey($naKey) -or $Global:NaMeioPendente -eq $naKey) { return }
+    if ($Global:MeioSelecionado -eq $Meio) { return }
+    $Global:MeioSelecionado = $Meio
+    Update-PainelMeios
+}
+
 # Card do meio: "Rodar checagem" -> abre o overlay (nao inicia sozinho).
 function Invoke-CheckMeio {
     param([string] $Meio)   # 'lan' | 'wifi' | 'celular'
@@ -2042,26 +2078,19 @@ function Invoke-CheckMeio {
         Write-Log 'Ja ha uma checagem em andamento. Conclua-a antes de comecar outra.' -Nivel Aviso
         return
     }
+    if ($Global:MeioSelecionado -ne $Meio) {
+        Write-Log 'Clique no card deste meio para seleciona-lo antes de rodar a checagem.' -Nivel Aviso
+        return
+    }
     $p = $Global:FaseLocalPayload
     $conectado = if ($Meio -eq 'lan') { [bool] ($p -and $p.Lan.conectado) } else { [bool] ($p -and $p.Wireless.conectado) }
     if (-not $conectado) {
         Write-Log 'Conecte este meio e use o botao de reler placas antes de rodar a checagem.' -Nivel Aviso
         return
     }
-    $modoCel = [bool] $w.FindName('chkCelHotspot').IsChecked
-    if ($Meio -eq 'wifi' -and $modoCel) {
-        Write-Log 'A rede conectada esta marcada como roteamento de celular - use o card CELULAR (ou desmarque a caixa).' -Nivel Aviso
+    if ($Meio -eq 'celular' -and -not ([string] $w.FindName('cboOperadoraCel').Text).Trim()) {
+        Write-Log 'Informe a operadora do celular antes de rodar a checagem.' -Nivel Aviso
         return
-    }
-    if ($Meio -eq 'celular') {
-        if (-not $modoCel) {
-            Write-Log 'Marque "a rede Wi-Fi conectada e o roteamento do meu celular" no card CELULAR.' -Nivel Aviso
-            return
-        }
-        if (-not ([string] $w.FindName('cboOperadoraCel').Text).Trim()) {
-            Write-Log 'Informe a operadora do celular antes de rodar a checagem.' -Nivel Aviso
-            return
-        }
     }
 
     $Global:FaseLocalTipo  = $Meio
@@ -2476,6 +2505,7 @@ function Reset-RodadaMeio {
 function Reset-PainelFaseLocal {
     $Global:FaseLocalPayload = $null
     $Global:FaseLocalTipo    = ''
+    $Global:MeioSelecionado  = ''
     $Global:CheckMeioAtivo   = $false
     Reset-Velocimetro
     Reset-Velocimetro -Suf 'Vpn'
@@ -2483,7 +2513,6 @@ function Reset-PainelFaseLocal {
     if ($w) {
         $ov = $w.FindName('overlayCheck'); if ($ov) { $ov.Visibility = 'Collapsed' }
         $w.FindName('cboOperadoraCel').Text = ''
-        $ch = $w.FindName('chkCelHotspot'); if ($ch) { $ch.IsChecked = $false }
         $Global:NaMeioPendente = ''
         $cj = $w.FindName('cardNaJustif'); if ($cj) { $cj.Visibility = 'Collapsed' }
         $tj = $w.FindName('txtNaJustif');  if ($tj) { $tj.Text = '' }
