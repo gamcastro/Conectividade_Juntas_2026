@@ -7,9 +7,8 @@
 #  PRODUCAO (a copia em main tem $CanalPadrao = 'main'):
 #      iex (irm 'https://raw.githubusercontent.com/gamcastro/Conectividade_Juntas_2026/main/setup/Baixar-e-Instalar.ps1')
 #
-#  Pasta padrao (se D: for disco fixo, senao C:):
-#      producao     -> <D|C>:\Aplic\DICON
-#      homologacao  -> <D|C>:\Aplic\DICON-HOMOLOG
+#  Pasta padrao: <D|C>:\Aplic\DICON  (producao)  /  ...\DICON-HOMOLOG  (homolog).
+#  Se \Aplic nao for gravavel pelo usuario, cai em %LOCALAPPDATA%\DICON[-HOMOLOG].
 #  Sobrescreve com  $env:DICON_DEST.
 #
 #  O endpoint /exec ja vem embutido por canal ($EndpointPadrao); so precisa de
@@ -43,17 +42,42 @@ function Save-ZipRemoto {
     return $false
 }
 
-# Pasta padrao por canal: D:\Aplic\... se D: for disco fixo, senao C:\Aplic\...
+# A pasta (ou o pai dela) e gravavel por este usuario?
+function Test-CaminhoGravavel {
+    param([string] $Dir)
+    try {
+        if (-not (Test-Path -LiteralPath $Dir)) {
+            New-Item -ItemType Directory -Path $Dir -Force -ErrorAction Stop | Out-Null
+        }
+        $probe = Join-Path $Dir ('.w-' + [guid]::NewGuid().ToString('N'))
+        [IO.File]::WriteAllText($probe, 'x')
+        Remove-Item -LiteralPath $probe -Force -ErrorAction SilentlyContinue
+        return $true
+    } catch { return $false }
+}
+
+# Pasta padrao por canal: <D|C>:\Aplic\... se der pra gravar, senao %LOCALAPPDATA%.
 function Get-DestPadrao {
     param([string] $Canal)
-    $temD = $false
-    try {
-        $temD = [bool]([System.IO.DriveInfo]::GetDrives() |
-            Where-Object { $_.Name -eq 'D:\' -and $_.IsReady -and $_.DriveType -eq 'Fixed' })
-    } catch { }
-    $drive = if ($temD) { 'D:' } else { 'C:' }
     $nome  = if ($Canal -eq 'main') { 'DICON' } else { 'DICON-HOMOLOG' }
-    return (Join-Path "$drive\Aplic" $nome)
+    $cands = @()
+    foreach ($drv in 'D:', 'C:') {
+        try {
+            $di = [System.IO.DriveInfo]::new($drv + '\')
+            if ($di.IsReady -and $di.DriveType -eq 'Fixed') { $cands += (Join-Path "$drv\Aplic" $nome) }
+        } catch { }
+    }
+    $cands += (Join-Path $env:LOCALAPPDATA $nome)   # sempre gravavel pelo usuario
+    foreach ($c in $cands) {
+        if (Test-CaminhoGravavel (Split-Path $c -Parent)) { return $c }
+    }
+    return $cands[-1]
+}
+
+# Test-Path que nao estoura em "Acesso negado" (pasta de outro usuario/admin).
+function Test-PathSeguro {
+    param([string] $Caminho)
+    try { return [bool] (Test-Path -LiteralPath $Caminho) } catch { return $null }
 }
 
 $Branch   = if ($env:DICON_BRANCH) { $env:DICON_BRANCH } else { $CanalPadrao }
@@ -66,7 +90,19 @@ $Repo     = 'https://github.com/gamcastro/Conectividade_Juntas_2026'
 $OoklaZip = 'https://install.speedtest.net/app/cli/ookla-speedtest-1.2.0-win64.zip'
 
 # --- 1. codigo: instala do zero ou atualiza o que ja existe --------------------
-if (Test-Path (Join-Path $Dest 'src')) {
+$temSrc = Test-PathSeguro (Join-Path $Dest 'src')
+if ($null -eq $temSrc -and -not $env:DICON_DEST) {
+    $alt = Join-Path $env:LOCALAPPDATA (Split-Path $Dest -Leaf)
+    Write-Host "Sem acesso a '$Dest' (pasta de admin/outro usuario). Instalando em '$alt'." -ForegroundColor Yellow
+    Write-Host "  (para usar '$Dest', um admin roda: icacls `"$(Split-Path $Dest -Parent)`" /grant *S-1-5-32-545:(OI)(CI)M /T)" -ForegroundColor DarkGray
+    $Dest   = $alt
+    $temSrc = Test-PathSeguro (Join-Path $Dest 'src')
+}
+if ($null -eq $temSrc) {
+    Write-Host "Sem acesso a '$Dest'. Defina `$env:DICON_DEST para uma pasta gravavel e rode de novo." -ForegroundColor Red
+    return
+}
+if ($temSrc) {
     Write-Host "Ja existe um DICON em $Dest - atualizando o codigo (Atualizar-DICON -Force)." -ForegroundColor Cyan
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Dest 'setup\Atualizar-DICON.ps1') -Force -Branch $Branch
 } else {
