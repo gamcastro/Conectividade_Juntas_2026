@@ -100,7 +100,7 @@ function New-RelatorioHtml {
     $corFinal = Get-CorVeredito $cl.final
     $rotFinal = ConvertTo-HtmlSafe (Get-RotuloVeredito $cl.final)
     $justFinal = if ($cl.ajustada -and $cl.justificativa) {
-        '<p class="small"><b>Ajuste da decis' + [char]0x00E3 + 'o:</b> ' + (ConvertTo-HtmlSafe ([string] $cl.justificativa)) + '</p>'
+        '<p class="small"><b>Ajuste da recomenda' + [char]0x00E7 + [char]0x00E3 + 'o:</b> ' + (ConvertTo-HtmlSafe ([string] $cl.justificativa)) + '</p>'
     } else { '' }
 
     $vpnBanner = ''
@@ -313,7 +313,7 @@ $($trs -join "`n")
 
   <h2>Relat&oacute;rio de Diagn&oacute;stico de Conectividade</h2>
   <p class="resumo">ZE $($loc.zona_eleitoral) &mdash; $(ConvertTo-HtmlSafe $loc.municipio_termo) (sede: $(ConvertTo-HtmlSafe $loc.municipio_sede))</p>
-  <div class="final">Decis&atilde;o final: $rotFinal</div>
+  <div class="final">Recomenda&ccedil;&atilde;o final: $rotFinal</div>
   $justFinal
   $vpnBanner
 $blocoRecomendacao

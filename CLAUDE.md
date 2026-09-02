@@ -131,7 +131,7 @@ Ao fim, o motor `Get-ConexaoRecomendada` (`src/decisao/Invoke-MotorDecisao.ps1`)
 melhor veredito e, no empate, maior download pela VPN; se ninguém fechou a VPN,
 recomenda o de maior download na Rede Local, marcado **provisório** e Local
 inviável; nada → "nenhuma". O **veredito final do Local = veredito do meio
-recomendado** (salvo override manual do técnico no combo da decisão final).
+recomendado** (salvo override manual do técnico no combo da recomendação final).
 
 1. informação do teste → 2. Junta/Local (com cartão de detalhe) →
 3. **meios de conexão** — *painel de 3 cards*: `Invoke-ProbeRedeLocal`
@@ -179,7 +179,8 @@ marcados "não aplicável" (rótulo — motivo); se nenhum meio foi testado (tod
 combo `cboConexaoRec` (candidatos + "nenhuma") pré-selecionado por
 `Get-ConexaoRecomendada`, `txtMotivoRec` (**motivo obrigatório**,
 `Test-RecomendacaoValida` é o gate 5→6) e a tabela read-only `dgMedicoes` de
-todas as medições do Local; o card da decisão final continua acima →
+todas as medições do Local; o card da recomendação final (rótulo "RECOMENDAÇÃO
+FINAL", override manual do veredito) continua acima →
 6. conclusão: **Salvar** / **Transmitir** / **Exportar relatório (PDF)** + checklist.
 Os runspaces são `Start-TarefaRede` (`$Global:TarefaRedeState`, Fase 1/probe) e
 `Start-DiagnosticoAssincrono` (`$Global:DiagRunState`, Fase 2, com `-AoConcluir`).

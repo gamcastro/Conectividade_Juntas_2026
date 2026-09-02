@@ -72,7 +72,7 @@ $Global:WizardTitulos = @(
     'Junta Especial'
     'Meios de conex' + [char]0x00E3 + 'o'
     ('Resultado por m' + [char]0x00E9 + 'trica')
-    ('Decis' + [char]0x00E3 + 'o final')
+    ('Recomenda' + [char]0x00E7 + [char]0x00E3 + 'o final')
     ('Conclus' + [char]0x00E3 + 'o')
 )
 $Global:WizardNPassos = $Global:WizardPassos.Count
@@ -1089,7 +1089,7 @@ function Get-JustificativasFaltando {
         $decFinal = [string] $w.FindName('cboDecisaoFinal').SelectedItem
         $justDec  = [string] $w.FindName('txtJustDecisao').Text
         if ($decFinal -and $decFinal -ne $Global:DecisaoRecalculada -and [string]::IsNullOrWhiteSpace($justDec)) {
-            $falta += 'Decisao final'
+            $falta += 'Recomendacao final'
         }
     }
     return @($falta)

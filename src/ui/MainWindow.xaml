@@ -976,7 +976,7 @@
                         </StackPanel>
                     </ScrollViewer>
 
-                    <!-- PASSO 5: decisao final -->
+                    <!-- PASSO 5: recomendacao final -->
                     <ScrollViewer x:Name="stepDecisao" Visibility="Collapsed"
                                   VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">
                         <StackPanel>
@@ -994,7 +994,7 @@
                                             CornerRadius="2" Margin="0,0,14,0"
                                             Background="{DynamicResource Dicon.Text3}"/>
                                     <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,20,0">
-                                        <TextBlock Text="DECIS&#195;O FINAL" FontFamily="Consolas" FontSize="9"
+                                        <TextBlock Text="RECOMENDA&#199;&#195;O FINAL" FontFamily="Consolas" FontSize="9"
                                                    Foreground="{DynamicResource Dicon.Text3}"/>
                                         <TextBlock x:Name="txtDecisaoPalavra" Text="&#8212;"
                                                    FontFamily="{DynamicResource Dicon.Display}" FontWeight="Bold"
@@ -1017,7 +1017,7 @@
                                 </Grid>
                             </Border>
                             <TextBlock Style="{DynamicResource SubtituloTela}" Margin="0,12,0,0"
-                                       Text="A decis&#227;o final vem do pior caso entre as m&#233;tricas. Voc&#234; pode sobrescrev&#234;-la aqui &#8212; nesse caso, informe o motivo."/>
+                                       Text="A recomenda&#231;&#227;o final vem do pior caso entre as m&#233;tricas. Voc&#234; pode sobrescrev&#234;-la aqui &#8212; nesse caso, informe o motivo."/>
 
                             <!-- conexao recomendada para o local (multi-meio) -->
                             <Border Style="{DynamicResource Cartao}" Padding="16,14" Margin="0,16,0,0">
