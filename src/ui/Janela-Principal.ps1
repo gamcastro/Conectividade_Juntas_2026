@@ -1209,18 +1209,34 @@ function Start-TarefaRede {
     $handle = $ps.BeginInvoke()
     $timer = [Windows.Threading.DispatcherTimer]::new()
     $timer.Interval = [TimeSpan]::FromMilliseconds(200)
-    $Global:TarefaRedeState = @{ PS = $ps; RS = $rs; Handle = $handle; Timer = $timer; AoConcluir = $AoConcluir; Concluido = $false }
+    $Global:TarefaRedeState = @{ PS = $ps; RS = $rs; Handle = $handle; Timer = $timer; AoConcluir = $AoConcluir; Concluido = $false; Inicio = (Get-Date); LimiteS = 150 }
 
     $timer.Add_Tick({
       # Blindagem total: nada aqui pode escapar para o loop do ShowDialog
       # (senao a janela fecha com "excecao ao chamar ShowDialog").
       try {
         $st = $Global:TarefaRedeState
+        if ($null -eq $st -or $st.Concluido) { return }
+        # Watchdog: se o runspace travou (ex.: netsh/CIM sem responder), nao
+        # deixa o passo 3 "verificando..." pra sempre - aborta e sinaliza erro.
+        if (-not $st.Handle.IsCompleted) {
+            if (((Get-Date) - $st.Inicio).TotalSeconds -lt $st.LimiteS) { return }
+            $st.Concluido = $true
+            $st.Timer.Stop()
+            $Global:TarefaRedeState = $null
+            # nao chamar .Stop()/.EndInvoke() num pipeline travado (pode prender a
+            # thread de UI). So dispose - a thread do runspace fica abandonada.
+            try { $st.PS.Dispose() } catch { }
+            try { $st.RS.Dispose() } catch { }
+            try { & $st.AoConcluir $null 'a checagem demorou demais e foi cancelada (verifique o Wi-Fi/servico de rede)' } catch {
+                try { Set-FaseLocalOcupado $false } catch { }
+            }
+            return
+        }
         # Concluido: se um tick ja enfileirado disparar de novo (o processamento
         # abaixo demora mais que o intervalo do timer), ele nao pode reprocessar
         # o mesmo slot -> senao dava EndInvoke/Dispose em dobro ("o fluxo nao era
         # legivel").
-        if ($null -eq $st -or $st.Concluido -or -not $st.Handle.IsCompleted) { return }
         $st.Concluido = $true
         $st.Timer.Stop()
         $Global:TarefaRedeState = $null

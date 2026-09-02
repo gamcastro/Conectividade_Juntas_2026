@@ -176,15 +176,33 @@ function Get-AdaptadorLan {
 # de rede pode sair trocado, mas os campos que a gente le (SSID/Sinal/Estado)
 # sao ASCII.
 function Invoke-Netsh {
-    param([string[]] $Argumentos, [int] $TimeoutS = 15)
+    param([string[]] $Argumentos, [int] $TimeoutS = 12)
     $netsh = Join-Path $env:SystemRoot 'System32\netsh.exe'
     if (-not (Test-Path $netsh)) { return '' }
+    # Start-Process + redirecionamento para ARQUIVO (nao pipe) + WaitForExit com
+    # timeout: 'netsh wlan show networks' pode travar por minutos com certos
+    # drivers Wi-Fi (forca um scan e bloqueia). Sem o timeout o passo 3 ficava
+    # "verificando as placas..." pra sempre. Arquivo (nao StreamReader) evita o
+    # deadlock/"o fluxo nao era legivel" no runspace MTA.
+    $out = $err = $null
     try {
-        $saida = & $netsh @Argumentos 2>$null
-        return [string]::Join("`n", @($saida))
+        $tmp = [IO.Path]::GetTempPath()
+        $out = Join-Path $tmp ('dicon-netsh-{0}.out' -f [guid]::NewGuid().ToString('N'))
+        $err = Join-Path $tmp ('dicon-netsh-{0}.err' -f [guid]::NewGuid().ToString('N'))
+        $p = Start-Process -FilePath $netsh -ArgumentList $Argumentos -NoNewWindow -PassThru `
+            -RedirectStandardOutput $out -RedirectStandardError $err
+        if (-not $p.WaitForExit($TimeoutS * 1000)) {
+            try { $p.Kill() } catch { }
+            Write-Log ("netsh {0} nao respondeu em {1}s - ignorado." -f ($Argumentos -join ' '), $TimeoutS) -Nivel Aviso
+            return ''
+        }
+        if (Test-Path $out) { return [string] (Get-Content -LiteralPath $out -Raw -ErrorAction SilentlyContinue) }
+        return ''
     } catch {
         Write-Log ("netsh {0} falhou: {1}" -f ($Argumentos -join ' '), $_) -Nivel Aviso
         return ''
+    } finally {
+        foreach ($f in $out, $err) { if ($f) { Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue } }
     }
 }
 
@@ -262,12 +280,9 @@ function Get-AdaptadorWireless {
     }
 
     try {
-        # dois modos: alguns drivers so listam a rede associada em 'show networks'
-        # simples; 'mode=bssid' costuma trazer todas as visiveis.
-        $blob = @(
-            (Invoke-Netsh -Argumentos @('wlan', 'show', 'networks')),
-            (Invoke-Netsh -Argumentos @('wlan', 'show', 'networks', 'mode=bssid'))
-        ) -join "`n"
+        # so a lista simples (cosmetico: "N rede(s) por perto"). O 'mode=bssid'
+        # forcava um scan e podia travar minutos com certos drivers - removido.
+        $blob = Invoke-Netsh -Argumentos @('wlan', 'show', 'networks') -TimeoutS 8
         $redes = foreach ($ln in ($blob -split "`r?`n")) {
             if ($ln -match '^\s*SSID\s+\d+\s*:\s*(.*\S)\s*$') { $Matches[1] }
         }
