@@ -12,9 +12,12 @@
 #      homologacao  -> <D|C>:\Aplic\DICON-HOMOLOG
 #  Sobrescreve com  $env:DICON_DEST.
 #
+#  O endpoint /exec ja vem embutido por canal ($EndpointPadrao); so precisa de
+#  $env:DICON_ENDPOINT para apontar para outro Web App.
+#
 #  Outras opcoes (definir ANTES do comando, todas opcionais):
 #      $env:DICON_BRANCH   = 'main'              # forca o canal
-#      $env:DICON_ENDPOINT = 'https://.../exec'  # URL /exec do Web App
+#      $env:DICON_ENDPOINT = 'https://.../exec'  # outra URL /exec
 #      $env:DICON_PIN      = '1234'              # PIN do admin
 #      $env:DICON_IPERF    = '10.11.9.20'        # servidor iperf3
 #      $env:DICON_DEPSZIP  = 'D:\pen\DICON-deps.zip'
@@ -25,9 +28,11 @@ $ErrorActionPreference = 'Stop'
 try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 } catch { }
 $ProgressPreference = 'SilentlyContinue'
 
-# Canal desta copia do script. Na branch 'main' este valor e 'main' (o merge
-# homologacao->main deve manter 'main' aqui).
-$CanalPadrao = 'homologacao'
+# Canal + URL /exec do Web App desta copia. Na branch 'main' estes dois valores
+# sao 'main' e a URL de PRODUCAO (o merge homologacao->main resolve o conflito
+# mantendo os valores de 'main').
+$CanalPadrao    = 'homologacao'
+$EndpointPadrao = 'https://script.google.com/macros/s/AKfycbxHMpUwQuDH1SwRiLersK1Qbk3x90Xpu76zxnPl12Upthotd3UiaTd_eOPQ01FF2PBk/exec'
 
 function Save-ZipRemoto {
     param([string] $Url, [string] $OutFile, [int] $Tentativas = 3)
@@ -53,7 +58,7 @@ function Get-DestPadrao {
 
 $Branch   = if ($env:DICON_BRANCH) { $env:DICON_BRANCH } else { $CanalPadrao }
 $Dest     = if ($env:DICON_DEST)   { $env:DICON_DEST }   else { Get-DestPadrao $Branch }
-$Endpoint = [string] $env:DICON_ENDPOINT
+$Endpoint = if ($env:DICON_ENDPOINT) { $env:DICON_ENDPOINT } else { $EndpointPadrao }
 $Pin      = [string] $env:DICON_PIN
 $Iperf    = [string] $env:DICON_IPERF
 $DepsZip  = [string] $env:DICON_DEPSZIP
