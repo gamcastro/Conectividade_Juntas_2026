@@ -25,8 +25,10 @@ Script), em vez de criar um BI/dashboard separado.
 - **GUI WPF + MahApps.Metro** (`MetroWindow`, tema DICON) — DLLs versionadas em
   `lib/mahapps/`; tema em `src/ui/Tema.xaml`; fonte Archivo em
   `assets/marca/tema/fonts/`. Aplicada só na branch `homologacao` por ora.
-- **iperf3** (client Windows, `bin/iperf3/iperf3.exe` — não versionado) — banda
-  real pela VPN contra servidor iperf3 num Ubuntu no CPD (endereço/porta/duração
+- **iperf3** (client Windows em `bin/iperf3/` — **versionado** no repo:
+  `iperf3.exe` BSD-3 + `cygwin1.dll` LGPLv3 + `cygcrypto-3.dll` + `cygz.dll`,
+  licenças em `bin/iperf3/LICENSES.md`; `Atualizar-DICON.ps1` espelha essa pasta)
+  — banda real pela VPN contra servidor iperf3 num Ubuntu no CPD (endereço/porta/duração
   editáveis na tela de **Administração** → `Save-ConfigAmbiente` grava o bloco
   `iperf3` em `config/ambiente.json` local, PIN do admin). `Test-BandaVpn`
   (`src/testes/Test-Banda.ps1`) roda download (`-R`) e upload (`-f m`), lê a

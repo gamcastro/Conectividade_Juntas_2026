@@ -54,6 +54,17 @@ function Test-BandaVpn {
         [int]    $Porta   = 5201,
         [int]    $Duracao = 10
     )
+    # Hook de teste: $Global:BandaVpnSimulada devolve um resultado fixo sem tocar
+    # no iperf3.exe (mesmo padrao de $Global:FaseLocalSimulada / $Global:VpnSimulada).
+    if ($Global:BandaVpnSimulada) {
+        $s = $Global:BandaVpnSimulada
+        Write-EventoIperf @{
+            fase = 'fim'; estado = 'fim'; ok = [bool] $s.iperf_ok; erro = [string] $s.iperf_erro
+            download = $s.DownloadMbps; upload = $s.UploadMbps; servidor = [string] $s.servidor
+        }
+        return $s
+    }
+
     $out = [pscustomobject]@{
         iperf_ok = $false; iperf_erro = ''
         servidor = ('{0}:{1}' -f $Servidor, $Porta)

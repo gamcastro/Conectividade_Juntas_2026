@@ -14,10 +14,11 @@
 /config/canal
 
 # Binários de terceiros (baixados no setup, não versionados)
-/bin/iperf3/*
 /bin/geckodriver/*
 /bin/chromedriver/*
 /lib/Selenium/*
+# iperf3 (BSD-3 / Cygwin LGPLv3 / OpenSSL Apache-2.0 / zlib) é redistribuível
+# e VAI no repositório — ver bin/iperf3/LICENSES.md
 # Ookla Speedtest CLI — colocado manualmente em tools\, nunca versionado
 /tools/speedtest.exe
 /tools/speedtest.md

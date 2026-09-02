@@ -1,5 +1,5 @@
 {
-  "_comentario": "Binarios de terceiros que o setup baixa. NUNCA vao ao repositorio (ver .gitignore). 'url' = download direto (melhor esforco); 'pagina' = pagina oficial para baixar a mao se o download falhar. 'sha256' vazio = nao verifica.",
+  "_comentario": "Binarios de terceiros que o setup baixa. NUNCA vao ao repositorio (ver .gitignore). 'url' = download direto (melhor esforco); 'pagina' = pagina oficial para baixar a mao se o download falhar. 'sha256' vazio = nao verifica. OBS: o iperf3 saiu daqui - agora vai versionado em bin/iperf3/ (licenca redistribuivel).",
   "dependencias": [
     {
       "id": "speedtest",
@@ -11,19 +11,6 @@
       "destino": "tools",
       "sha256": "",
       "licenca": "Proprietario (Ookla). Ao instalar, voce aceita o EULA da Ookla.",
-      "obrigatorio": true
-    },
-    {
-      "id": "iperf3",
-      "nome": "iperf3 (build Windows)",
-      "url": "",
-      "pagina": "https://iperf.fr/iperf-download.php",
-      "tipo": "zip",
-      "extrair": ["iperf3.exe", "*.dll"],
-      "destino": "bin/iperf3",
-      "achatar": true,
-      "sha256": "",
-      "licenca": "BSD-3-Clause",
       "obrigatorio": true
     },
     {
