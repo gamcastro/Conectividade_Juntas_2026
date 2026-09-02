@@ -46,6 +46,16 @@ function OK($t)     { Write-Host "  [ok]   $t" -ForegroundColor Green }
 function Aviso($t)  { Write-Host "  [!]    $t" -ForegroundColor Yellow }
 function Erro($t)   { Write-Host "  [x]    $t" -ForegroundColor Red }
 
+# Grava texto (UTF-8 sem BOM) com retentativa: o antivirus costuma segurar um
+# arquivo recem-criado por um instante -> "sendo usado por outro processo".
+function Save-TextoResiliente {
+    param([string] $Arquivo, [string] $Texto)
+    for ($t = 1; $t -le 6; $t++) {
+        try { [IO.File]::WriteAllText($Arquivo, $Texto, [Text.UTF8Encoding]::new($false)); return }
+        catch { if ($t -eq 6) { throw }; Start-Sleep -Milliseconds 400 }
+    }
+}
+
 # ---------------------------------------------------------------- pre-requisitos
 Titulo 'Pre-requisitos'
 Write-Host "  Pasta: $RaizApp"
@@ -89,7 +99,7 @@ function Set-JsonCampo {
     $alvo = $doc
     for ($i = 0; $i -lt $partes.Count - 1; $i++) { $alvo = $alvo.$($partes[$i]) }
     $alvo.$($partes[-1]) = $Valor
-    $doc | ConvertTo-Json -Depth 10 | Set-Content -Path $Arquivo -Encoding UTF8
+    Save-TextoResiliente $Arquivo ($doc | ConvertTo-Json -Depth 10)
 }
 
 if (-not $Endpoint) {
@@ -139,7 +149,7 @@ if ($precisaPin) {
     $sha  = [Security.Cryptography.SHA256]::Create()
     try { $hash = ($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($Pin)) | ForEach-Object { $_.ToString('x2') }) -join '' }
     finally { $sha.Dispose() }
-    [pscustomobject]@{ pin_sha256 = $hash } | ConvertTo-Json | Set-Content -Path $arqAdmin -Encoding UTF8
+    Save-TextoResiliente $arqAdmin ([pscustomobject]@{ pin_sha256 = $hash } | ConvertTo-Json)
     OK "PIN gravado em config\admin.json"
     Write-Host "  (Web App: cadastre a propriedade ADMIN_PIN_SHA256 = $hash no Apps Script)" -ForegroundColor DarkGray
 } else {
