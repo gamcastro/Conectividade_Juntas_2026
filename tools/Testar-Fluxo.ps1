@@ -299,16 +299,28 @@ try {
         Write-Host "[4e] banner de recomendacao: '$($w.FindName('txtRecMeios').Text)'"
     } else { Write-Host "    FALHA: banner de recomendacao (vis=$($w.FindName('cardRecMeios').Visibility) txt='$($w.FindName('txtRecMeios').Text)')"; $falhas++ }
 
-    # 4f. "nao se aplica" + motivo desabilita o card do meio (LAN); depois desmarca
+    # 4f. "nao se aplica" -> abre o card de justificativa; "Registrar" desabilita o card do meio
     $w.FindName('chkNaLan').IsChecked = $true
-    $w.FindName('txtMotivoNaLan').Text = 'sem ponto de rede na sala'
     Update-NaoAplicavelMeio
     Invoke-Pump
+    if ("$($w.FindName('cardNaJustif').Visibility)" -eq 'Visible' -and $Global:NaMeioPendente -eq 'lan') {
+        Write-Host "[4f] marcar 'nao se aplica' abre o card de justificativa"
+    } else { Write-Host "    FALHA: card de justificativa nao abriu (vis=$($w.FindName('cardNaJustif').Visibility) pend='$($Global:NaMeioPendente)')"; $falhas++ }
+    Invoke-NaRegistrar   # sem texto -> nao registra
+    if (-not $Global:MeiosNaoAplicaveis.ContainsKey('lan')) { Write-Host "[4f] 'Registrar' sem justificativa nao grava" }
+    else { Write-Host "    FALHA: registrou sem justificativa"; $falhas++ }
+    $w.FindName('txtNaJustif').Text = 'sem ponto de rede na sala'
+    Invoke-NaRegistrar
+    Invoke-Pump
     if ($Global:MeiosNaoAplicaveis.ContainsKey('lan') -and -not $w.FindName('btnCheckLan').IsEnabled -and
-        [double] $w.FindName('cardLan').Opacity -lt 1) {
-        Write-Host "[4f] LAN 'nao se aplica' -> card desabilitado (opacity $($w.FindName('cardLan').Opacity))"
-    } else { Write-Host "    FALHA: 'nao aplicavel' nao desabilitou o card (chave=$($Global:MeiosNaoAplicaveis.ContainsKey('lan')) btn.en=$($w.FindName('btnCheckLan').IsEnabled))"; $falhas++ }
+        "$($w.FindName('cardNaJustif').Visibility)" -eq 'Collapsed' -and
+        "$($w.FindName('txtNaMotivoCardLan').Visibility)" -eq 'Visible' -and
+        "$($w.FindName('txtNaMotivoCardLan').Text)" -match 'sem ponto de rede') {
+        Write-Host "[4f] 'Registrar' fecha o card e o motivo aparece no card LAN (inviavel)"
+    } else { Write-Host "    FALHA: registrar NA (chave=$($Global:MeiosNaoAplicaveis.ContainsKey('lan')) card=$($w.FindName('cardNaJustif').Visibility) motivo='$($w.FindName('txtNaMotivoCardLan').Text)')"; $falhas++ }
     $w.FindName('chkNaLan').IsChecked = $false ; Update-NaoAplicavelMeio ; Invoke-Pump
+    if (-not $Global:MeiosNaoAplicaveis.ContainsKey('lan')) { Write-Host "[4f] desmarcar o checkbox remove o 'nao aplicavel'" }
+    else { Write-Host "    FALHA: desmarcar nao removeu o NA"; $falhas++ }
 
     # 4g. Fase 2 sem VPN: a saida "nao consegui conectar a VPN" + motivo registra o meio; depois limpa
     $Global:VpnSimulada = $false

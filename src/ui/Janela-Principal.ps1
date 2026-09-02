@@ -24,6 +24,7 @@ $Global:FaseLocalPayload   = $null   # {Lan;Wireless;Internet;Quando} da fase 1 
 $Global:FaseLocalTipo      = ''      # meio da checagem em curso: '' | 'lan' | 'wifi' | 'celular'
 $Global:CheckMeioAtivo     = $false  # overlay de checagem de um meio esta aberto/rodando
 $Global:ChkFase            = ''      # estado do overlay: ''|f1-pronto|f1-rodando|f2-pronto|f2-rodando|fim
+$Global:NaMeioPendente     = ''      # meio com "nao se aplica" marcado, aguardando a justificativa
 
 # --- multi-meio: o local pode ter varias medicoes, uma por meio de conexao ---
 $Global:Medicoes           = @()     # medicoes ja concluidas/marcadas neste local
@@ -292,9 +293,8 @@ function New-JanelaPrincipal {
     foreach ($n in 'chkNaLan', 'chkNaWifi', 'chkNaCelular') {
         $window.FindName($n).Add_Click({ Update-NaoAplicavelMeio })
     }
-    foreach ($n in 'txtMotivoNaLan', 'txtMotivoNaWifi', 'txtMotivoNaCelular') {
-        $window.FindName($n).Add_LostFocus({ Update-NaoAplicavelMeio })
-    }
+    $window.FindName('btnNaRegistrar').Add_Click({ Invoke-NaRegistrar })
+    $window.FindName('btnNaCancelar').Add_Click({ Invoke-NaCancelar })
     $window.FindName('btnExportarPdf').Add_Click({ Invoke-ExportarRelatorio })
     $window.FindName('btnTransmitirResultado').Add_Click({ Invoke-TransmitirResultado })
     $window.FindName('btnDiagVoltar').Add_Click({ Show-View 'viewHome' })
@@ -1272,33 +1272,80 @@ function Set-FaseLocalOcupado {
     if ($r) { $r.IsActive = $Ocupado; $r.Visibility = if ($Ocupado) { 'Visible' } else { 'Collapsed' } }
 }
 
-# chkNa* + o campo de motivo POR CARD: marca/desmarca meios "nao aplicaveis".
-# Marcado + motivo preenchido -> Set-MeioNaoAplicavel (o card fica desabilitado).
+# Nome do checkbox "nao se aplica" de cada meio.
+function Get-ChkNaNome {
+    param([string] $Meio)
+    switch ($Meio) { 'lan' { 'chkNaLan' } 'wifi_local' { 'chkNaWifi' } 'celular' { 'chkNaCelular' } default { '' } }
+}
+
+# Abre o card de justificativa "nao se aplica" para um meio.
+function Open-CardNaJustif {
+    param([string] $Meio)
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    # ja havia outro meio pendente sem registrar -> desmarca o checkbox dele
+    if ($Global:NaMeioPendente -and $Global:NaMeioPendente -ne $Meio) {
+        $c = $w.FindName((Get-ChkNaNome $Global:NaMeioPendente)); if ($c) { $c.IsChecked = $false }
+    }
+    $Global:NaMeioPendente = $Meio
+    $w.FindName('txtNaJustifMeio').Text = 'Meio: ' + (Get-RotuloMeio $Meio '')
+    $ja = if ($Global:MeiosNaoAplicaveis.ContainsKey($Meio)) { [string] $Global:MeiosNaoAplicaveis[$Meio] } else { '' }
+    $w.FindName('txtNaJustif').Text = $ja
+    $w.FindName('cardNaJustif').Visibility = 'Visible'
+    try { $w.FindName('txtNaJustif').Focus() } catch { }
+}
+
+# Botao "Registrar" do card de justificativa: grava e fecha; o motivo aparece
+# no card do meio, em vermelho (inviavel).
+function Invoke-NaRegistrar {
+    $w = $Global:JanelaPrincipal
+    $meio = [string] $Global:NaMeioPendente
+    if (-not $meio) { $w.FindName('cardNaJustif').Visibility = 'Collapsed'; return }
+    $motivo = ([string] $w.FindName('txtNaJustif').Text).Trim()
+    if (-not $motivo) { Write-Log 'Informe a justificativa antes de registrar.' -Nivel Aviso; return }
+    Set-MeioNaoAplicavel -Meio $meio -Motivo $motivo
+    $Global:NaMeioPendente = ''
+    $w.FindName('txtNaJustif').Text = ''
+    $w.FindName('cardNaJustif').Visibility = 'Collapsed'
+    Write-Log ('Meio {0} marcado como NAO APLICAVEL (inviavel): {1}' -f (Get-RotuloMeio $meio ''), $motivo) -Nivel Aviso
+    Update-PainelMeios
+}
+
+# Botao "Cancelar" do card de justificativa: fecha e desmarca o checkbox se o
+# meio ainda nao estava registrado.
+function Invoke-NaCancelar {
+    $w = $Global:JanelaPrincipal
+    $meio = [string] $Global:NaMeioPendente
+    $Global:NaMeioPendente = ''
+    $w.FindName('cardNaJustif').Visibility = 'Collapsed'
+    $w.FindName('txtNaJustif').Text = ''
+    if ($meio -and -not $Global:MeiosNaoAplicaveis.ContainsKey($meio)) {
+        $c = $w.FindName((Get-ChkNaNome $meio)); if ($c) { $c.IsChecked = $false }
+    }
+    Update-PainelMeios
+}
+
+# Handler do clique nos checkboxes "nao se aplica": marcou -> abre o card de
+# justificativa; desmarcou -> remove o "nao aplicavel".
 function Update-NaoAplicavelMeio {
     $w = $Global:JanelaPrincipal
     if (-not $w) { return }
-    # (chk, meio, caixaMotivo, dica)
-    $trios = @(
-        @('chkNaLan',     'lan',        'txtMotivoNaLan',     'dicaNaLan'),
-        @('chkNaWifi',     'wifi_local', 'txtMotivoNaWifi',    'dicaNaWifi'),
-        @('chkNaCelular',  'celular',    'txtMotivoNaCelular', 'dicaNaCelular')
-    )
-    foreach ($t in $trios) {
-        $chk    = $w.FindName($t[0])
-        $meio   = $t[1]
-        $caixa  = $w.FindName($t[2])
-        $dica   = $w.FindName($t[3])
-        $marcado = [bool] $chk.IsChecked
-        $vis = if ($marcado) { 'Visible' } else { 'Collapsed' }
-        if ($caixa) { $caixa.Visibility = $vis }
-        if ($dica)  { $dica.Visibility  = $vis }
-        $motivo = if ($caixa) { ([string] $caixa.Text).Trim() } else { '' }
-        if ($marcado -and $motivo) {
-            Set-MeioNaoAplicavel -Meio $meio -Motivo $motivo
-        } elseif (-not $marcado -and $Global:MeiosNaoAplicaveis.ContainsKey($meio)) {
+    foreach ($m in @(@('chkNaLan', 'lan'), @('chkNaWifi', 'wifi_local'), @('chkNaCelular', 'celular'))) {
+        $chk  = $w.FindName($m[0])
+        $meio = $m[1]
+        if (-not $chk) { continue }
+        $marcado    = [bool] $chk.IsChecked
+        $registrado = $Global:MeiosNaoAplicaveis.ContainsKey($meio)
+        $pendente   = ($Global:NaMeioPendente -eq $meio)
+        if ($marcado -and -not $registrado -and -not $pendente) {
+            Open-CardNaJustif -Meio $meio
+        } elseif (-not $marcado -and $registrado) {
             $Global:MeiosNaoAplicaveis.Remove($meio)
             $Global:Medicoes = @($Global:Medicoes | Where-Object { -not ($_.meio -eq $meio -and $_.nao_aplicavel) })
-            if ($caixa) { $caixa.Text = '' }
+        } elseif (-not $marcado -and $pendente) {
+            $Global:NaMeioPendente = ''
+            $w.FindName('cardNaJustif').Visibility = 'Collapsed'
+            $w.FindName('txtNaJustif').Text = ''
         }
     }
     Update-PainelMeios
@@ -1399,7 +1446,10 @@ function Update-PainelMeios {
     # --- estado (badge + borda) e botao de cada meio ----------------------
     $estadoMeio = {
         param($meio)
-        if ($Global:MeiosNaoAplicaveis.ContainsKey($meio)) { return @{ txt = 'NAO APLICAVEL'; cor = $cinza; borda = $hair } }
+        if ($Global:MeiosNaoAplicaveis.ContainsKey($meio)) {
+            $ci = Get-PincelVeredito 'inviavel'
+            return @{ txt = 'NAO SE APLICA - INVIAVEL'; cor = $ci; borda = $ci }
+        }
         $m = @($Global:Medicoes | Where-Object { $_.meio -eq $meio -and -not $_.nao_aplicavel } | Select-Object -Last 1)
         if ($m) {
             $c = Get-PincelVeredito $m.veredito
@@ -1429,8 +1479,8 @@ function Update-PainelMeios {
         if ($badge) { $badge.Text = $e.txt; $badge.Foreground = $e.cor }
         if ($cd) {
             $cd.BorderBrush     = $e.borda
-            $cd.BorderThickness = [Windows.Thickness]::new($(if ($naMeio) { 1 } else { 2 }))
-            $cd.Opacity         = if ($naMeio) { 0.45 } else { 1.0 }
+            $cd.BorderThickness = [Windows.Thickness]::new(2)
+            $cd.Opacity         = if ($naMeio) { 0.6 } else { 1.0 }
         }
         if ($btn) {
             $btn.IsEnabled = $conectado -and $extraOK -and -not $naMeio -and $livre
@@ -1440,15 +1490,21 @@ function Update-PainelMeios {
         }
     }
 
-    # sincroniza os checkboxes "nao aplicavel" + a visibilidade dos motivos
+    # sincroniza os checkboxes "nao aplicavel" e mostra o motivo registrado no card
     foreach ($par in @(
-        @('chkNaLan', 'lan', 'txtMotivoNaLan', 'dicaNaLan'),
-        @('chkNaWifi', 'wifi_local', 'txtMotivoNaWifi', 'dicaNaWifi'),
-        @('chkNaCelular', 'celular', 'txtMotivoNaCelular', 'dicaNaCelular'))) {
-        $na = $Global:MeiosNaoAplicaveis.ContainsKey($par[1])
-        $c = $w.FindName($par[0]); if ($c -and [bool] $c.IsChecked -ne $na) { $c.IsChecked = $na }
-        $vis = if ([bool] ($w.FindName($par[0]).IsChecked)) { 'Visible' } else { 'Collapsed' }
-        foreach ($nn in $par[2], $par[3]) { $x = $w.FindName($nn); if ($x) { $x.Visibility = $vis } }
+        @('chkNaLan', 'lan', 'txtNaMotivoCardLan'),
+        @('chkNaWifi', 'wifi_local', 'txtNaMotivoCardWifi'),
+        @('chkNaCelular', 'celular', 'txtNaMotivoCardCelular'))) {
+        $meio = $par[1]
+        $na   = $Global:MeiosNaoAplicaveis.ContainsKey($meio)
+        $pend = ($Global:NaMeioPendente -eq $meio)
+        $c = $w.FindName($par[0])
+        if ($c) { $alvo = ($na -or $pend); if ([bool] $c.IsChecked -ne $alvo) { $c.IsChecked = $alvo } }
+        $tt = $w.FindName($par[2])
+        if ($tt) {
+            if ($na) { $tt.Text = 'Nao se aplica: ' + [string] $Global:MeiosNaoAplicaveis[$meio]; $tt.Visibility = 'Visible' }
+            else { $tt.Text = ''; $tt.Visibility = 'Collapsed' }
+        }
     }
 
     if ($cardWifi) { $cardWifi.Visibility = if ($wf.presente) { 'Visible' } else { 'Collapsed' } }
@@ -2397,14 +2453,14 @@ function Reset-PainelFaseLocal {
     if ($w) {
         $ov = $w.FindName('overlayCheck'); if ($ov) { $ov.Visibility = 'Collapsed' }
         $w.FindName('cboOperadoraCel').Text = ''
+        $Global:NaMeioPendente = ''
+        $cj = $w.FindName('cardNaJustif'); if ($cj) { $cj.Visibility = 'Collapsed' }
+        $tj = $w.FindName('txtNaJustif');  if ($tj) { $tj.Text = '' }
         foreach ($n in 'chkNaLan', 'chkNaWifi', 'chkNaCelular') {
             $c = $w.FindName($n); if ($c) { $c.IsChecked = $false }
         }
-        foreach ($n in 'txtMotivoNaLan', 'txtMotivoNaWifi', 'txtMotivoNaCelular') {
+        foreach ($n in 'txtNaMotivoCardLan', 'txtNaMotivoCardWifi', 'txtNaMotivoCardCelular') {
             $t = $w.FindName($n); if ($t) { $t.Text = ''; $t.Visibility = 'Collapsed' }
-        }
-        foreach ($n in 'dicaNaLan', 'dicaNaWifi', 'dicaNaCelular') {
-            $t = $w.FindName($n); if ($t) { $t.Visibility = 'Collapsed' }
         }
     }
     Update-PainelMeios

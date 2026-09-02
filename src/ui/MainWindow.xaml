@@ -743,12 +743,9 @@
                                                 Margin="0,2,0,0" Padding="16,7"/>
                                         <CheckBox x:Name="chkNaLan" Margin="0,10,0,0" FontSize="11"
                                                   Content="Nao se aplica a este local"/>
-                                        <TextBox x:Name="txtMotivoNaLan" Margin="0,6,0,0" MinHeight="42"
-                                                 TextWrapping="Wrap" AcceptsReturn="True" FontSize="11"
-                                                 VerticalContentAlignment="Top" Padding="6,4" Visibility="Collapsed"/>
-                                        <TextBlock x:Name="dicaNaLan" FontSize="10" TextWrapping="Wrap" Margin="0,3,0,0"
-                                                   Foreground="{DynamicResource Dicon.Text3}" Visibility="Collapsed"
-                                                   Text="Por que nao se aplica (ex.: sem ponto de rede na sala)."/>
+                                        <TextBlock x:Name="txtNaMotivoCardLan" Margin="0,6,0,0" FontSize="11"
+                                                   TextWrapping="Wrap" Visibility="Collapsed"
+                                                   Foreground="{DynamicResource Dicon.Inviavel}"/>
                                         <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
                                             <Ellipse x:Name="dotLan" Width="10" Height="10" Margin="0,0,8,0"
                                                      VerticalAlignment="Center" Fill="{DynamicResource Dicon.Text3}"/>
@@ -793,12 +790,9 @@
                                                 Margin="0,2,0,0" Padding="16,7"/>
                                         <CheckBox x:Name="chkNaWifi" Margin="0,10,0,0" FontSize="11"
                                                   Content="Nao se aplica a este local"/>
-                                        <TextBox x:Name="txtMotivoNaWifi" Margin="0,6,0,0" MinHeight="42"
-                                                 TextWrapping="Wrap" AcceptsReturn="True" FontSize="11"
-                                                 VerticalContentAlignment="Top" Padding="6,4" Visibility="Collapsed"/>
-                                        <TextBlock x:Name="dicaNaWifi" FontSize="10" TextWrapping="Wrap" Margin="0,3,0,0"
-                                                   Foreground="{DynamicResource Dicon.Text3}" Visibility="Collapsed"
-                                                   Text="Por que nao se aplica (ex.: local sem Wi-Fi proprio)."/>
+                                        <TextBlock x:Name="txtNaMotivoCardWifi" Margin="0,6,0,0" FontSize="11"
+                                                   TextWrapping="Wrap" Visibility="Collapsed"
+                                                   Foreground="{DynamicResource Dicon.Inviavel}"/>
                                         <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
                                             <Ellipse x:Name="dotWifi" Width="10" Height="10" Margin="0,0,8,0"
                                                      VerticalAlignment="Center" Fill="{DynamicResource Dicon.Text3}"/>
@@ -835,12 +829,9 @@
                                                 Margin="0,2,0,0" Padding="16,7"/>
                                         <CheckBox x:Name="chkNaCelular" Margin="0,10,0,0" FontSize="11"
                                                   Content="Nao se aplica a este local"/>
-                                        <TextBox x:Name="txtMotivoNaCelular" Margin="0,6,0,0" MinHeight="42"
-                                                 TextWrapping="Wrap" AcceptsReturn="True" FontSize="11"
-                                                 VerticalContentAlignment="Top" Padding="6,4" Visibility="Collapsed"/>
-                                        <TextBlock x:Name="dicaNaCelular" FontSize="10" TextWrapping="Wrap" Margin="0,3,0,0"
-                                                   Foreground="{DynamicResource Dicon.Text3}" Visibility="Collapsed"
-                                                   Text="Por que nao se aplica (ex.: sem sinal de celular no local)."/>
+                                        <TextBlock x:Name="txtNaMotivoCardCelular" Margin="0,6,0,0" FontSize="11"
+                                                   TextWrapping="Wrap" Visibility="Collapsed"
+                                                   Foreground="{DynamicResource Dicon.Inviavel}"/>
                                         <TextBlock x:Name="txtCelDica" Margin="0,10,0,0" TextWrapping="Wrap" FontSize="11"
                                                    Foreground="{DynamicResource Dicon.Text3}"
                                                    Text="Ligue o roteamento no celular, conecte a rede dele pela bandeja do Windows e informe a operadora."/>
@@ -861,6 +852,27 @@
                                     </StackPanel>
                                 </Border>
                             </Grid>
+
+                            <Border x:Name="cardNaJustif" Style="{DynamicResource Cartao}" Padding="18,16"
+                                    Margin="0,12,0,0" Visibility="Collapsed">
+                                <StackPanel>
+                                    <TextBlock Text="Meio que N&#195;O se aplica a este local" Style="{DynamicResource SecaoTela}"
+                                               Margin="0,0,0,6"/>
+                                    <TextBlock x:Name="txtNaJustifMeio" FontFamily="Consolas" FontSize="11"
+                                               Foreground="{DynamicResource Dicon.Text3}" Margin="0,0,0,8"/>
+                                    <TextBlock Text="Justificativa (obrigat&#243;ria &#8212; vai no relat&#243;rio; o meio fica INVI&#193;VEL):"
+                                               FontSize="12" Foreground="{DynamicResource Dicon.Text2}" Margin="0,0,0,4"/>
+                                    <TextBox x:Name="txtNaJustif" MinHeight="70" TextWrapping="Wrap" AcceptsReturn="True"
+                                             AcceptsTab="False" VerticalContentAlignment="Top"
+                                             VerticalScrollBarVisibility="Auto" Padding="8,6"/>
+                                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                        <Button x:Name="btnNaRegistrar" Content="Registrar"
+                                                Style="{DynamicResource BotaoPrimario}" Padding="20,7"/>
+                                        <Button x:Name="btnNaCancelar" Content="Cancelar"
+                                                Style="{DynamicResource BotaoFantasma}" Margin="10,0,0,0" Padding="16,7"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
 
                             <Border x:Name="cardRecMeios" Style="{DynamicResource Faixa}" Margin="0,14,0,0"
                                     Visibility="Collapsed">

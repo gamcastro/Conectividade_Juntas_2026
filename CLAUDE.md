@@ -125,10 +125,13 @@ recomendado** (salvo override manual do técnico no combo da decisão final).
 3. **meios de conexão** — *painel de 3 cards*: `Invoke-ProbeRedeLocal`
 (`Invoke-FaseLocal -SemInternet`, async) inventaria as placas; cada card
 (`cardLan`/`cardWifiPlaca`/`cardCelular`) tem um `badge*` (NÃO TESTADO /
-TESTANDO… / TESTADO: <veredito> na cor do veredito / NÃO APLICÁVEL), um botão
-**`btnCheck{Lan,Wifi,Celular}`** ("Rodar checagem"), e o checkbox "não aplicável"
-+ `txtMotivoNa{Lan,Wifi,Celular}` **por card** — marcar desabilita o card
-(`Update-NaoAplicavelMeio`). Botão ↻ `btnRelerPlacas` (`Invoke-RelerPlacas`)
+TESTANDO… / TESTADO: <veredito> na cor do veredito / NÃO SE APLICA - INVIÁVEL),
+um botão **`btnCheck{Lan,Wifi,Celular}`** ("Rodar checagem"), e o checkbox
+"não se aplica a este local" — marcá-lo abre o card **`cardNaJustif`** abaixo da
+grade (`Open-CardNaJustif`: `txtNaJustif` + `btnNaRegistrar`/`btnNaCancelar`,
+`$Global:NaMeioPendente`); "Registrar" (`Invoke-NaRegistrar` → `Set-MeioNaoAplicavel`)
+fecha o card e carimba a justificativa em vermelho no card do meio
+(`txtNaMotivoCard*`), que fica inviável; desmarcar o checkbox remove o NA. Botão ↻ `btnRelerPlacas` (`Invoke-RelerPlacas`)
 reinventaria as placas sem sair do passo. Wi-Fi só pela bandeja do Windows
 (`cardWifiBandeja` explica). Clicar em "Rodar checagem" de um card →
 **`Invoke-CheckMeio <meio>`** abre o **overlay modal `overlayCheck`**
