@@ -115,6 +115,8 @@ recomendado** (salvo override manual do técnico no combo da decisão final).
 (`cardLan`/`cardWifiPlaca`/`cardCelular`) com badge por meio (NÃO TESTADO /
 TESTADO: <veredito> / NÃO APLICÁVEL), rádio de escolha (`rbUsarLan`/`rbUsarWifi`/
 `rbUsarCelular`) e checkbox "não aplicável" + `txtMotivoNaMeio` (obrigatório).
+Botão ↻ `btnRelerPlacas` (`Invoke-RelerPlacas`) reinventaria as placas sem sair
+do passo (ex.: cabo plugado depois de abrir a tela).
 "Rodar checagem local" (`Invoke-RodarFaseLocal` → `Complete-FaseLocal`) só
 habilita com conexão e faz o teste de internet (ping/DNS/download Ookla);
 celular exige operadora (`cboOperadoraCel`). Trocar de Local zera todas as

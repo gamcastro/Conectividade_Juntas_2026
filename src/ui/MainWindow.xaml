@@ -656,9 +656,21 @@
                                        FontSize="11" Foreground="{DynamicResource Dicon.Text3}"
                                        Visibility="Collapsed"/>
 
-                            <TextBlock x:Name="txtLocEscolha" Margin="0,8,0,0" TextWrapping="Wrap" FontSize="12"
-                                       Foreground="{DynamicResource Dicon.Text2}"
-                                       Text="Escolha o meio de conexao a testar nesta rodada (LAN, Wi-Fi do local ou roteamento do celular). Voce pode testar mais de um meio no mesmo local."/>
+                            <Grid Margin="0,8,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock x:Name="txtLocEscolha" Grid.Column="0" TextWrapping="Wrap" FontSize="12"
+                                           VerticalAlignment="Center" Foreground="{DynamicResource Dicon.Text2}"
+                                           Text="Escolha o meio de conexao a testar nesta rodada (LAN, Wi-Fi do local ou roteamento do celular). Voce pode testar mais de um meio no mesmo local."/>
+                                <Button x:Name="btnRelerPlacas" Grid.Column="1" Width="32" Height="32" Margin="10,0,0,0"
+                                        Style="{DynamicResource BotaoFantasma}" Padding="0"
+                                        ToolTip="Reler o status das placas de rede (ex.: acabei de plugar o cabo)">
+                                    <TextBlock Text="&#8635;" FontSize="17" HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"/>
+                                </Button>
+                            </Grid>
 
                             <!-- escolha do meio: 3 cartoes lado a lado -->
                             <Grid x:Name="cardFaseLocal" Margin="0,8,0,0" Visibility="Collapsed">

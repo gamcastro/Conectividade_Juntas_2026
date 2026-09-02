@@ -270,6 +270,7 @@ function New-JanelaPrincipal {
     $window.FindName('btnWizProximo').Add_Click({ Invoke-WizardProximo })
     $window.FindName('btnRefazerTeste').Add_Click({ Invoke-WizardProximo })
     $window.FindName('btnRodarFaseLocal').Add_Click({ Invoke-RodarFaseLocal })
+    $window.FindName('btnRelerPlacas').Add_Click({ Invoke-RelerPlacas })
     $window.FindName('btnConectarWifi').Add_Click({ Invoke-ConectarWifi })
     $window.FindName('chkTetheringCelular').Add_Click({ Update-TetheringCelular })
     $window.FindName('rbUsarLan').Add_Checked({ Set-FaseLocalTipo 'lan' })
@@ -1205,7 +1206,8 @@ function Set-FaseLocalOcupado {
         $ring.IsActive   = $Ocupado
         $ring.Visibility = if ($Ocupado) { 'Visible' } else { 'Collapsed' }
     }
-    foreach ($n in 'btnRodarFaseLocal', 'btnConectarWifi', 'btnJaConecteiWifi', 'btnWizProximo', 'btnWizVoltar', 'rbUsarLan', 'rbUsarWifi') {
+    foreach ($n in 'btnRodarFaseLocal', 'btnRelerPlacas', 'btnConectarWifi', 'btnJaConecteiWifi',
+        'btnWizProximo', 'btnWizVoltar', 'rbUsarLan', 'rbUsarWifi') {
         $c = $w.FindName($n); if ($c) { $c.IsEnabled = -not $Ocupado }
     }
 }
@@ -1459,6 +1461,22 @@ function Update-PainelFaseLocal {
 }
 
 # Probe rapido ao ENTRAR no passo 3: so inventaria as placas (sem internet).
+# Botao de recarregar (canto da tela do passo 3): reinventaria as placas -
+# pega cabo plugado/desplugado e mudanca de Wi-Fi sem sair do passo.
+function Invoke-RelerPlacas {
+    if ($Global:TarefaRedeState) {
+        Write-Log 'Aguarde a checagem em andamento terminar.' -Nivel Aviso
+        return
+    }
+    $p = $Global:FaseLocalPayload
+    if ($p -and $p.PSObject.Properties['Internet'] -and $p.Internet) {
+        Write-Log 'Relendo as placas - o teste de velocidade anterior sera descartado; rode a checagem de novo.' -Nivel Aviso
+    } else {
+        Write-Log 'Relendo o status das placas de rede...' -Nivel Info
+    }
+    Invoke-ProbeRedeLocal
+}
+
 function Invoke-ProbeRedeLocal {
     if ($Global:FaseLocalSimulada) {
         $s = $Global:FaseLocalSimulada

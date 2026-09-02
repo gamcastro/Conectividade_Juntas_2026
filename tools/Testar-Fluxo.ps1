@@ -196,6 +196,15 @@ try {
         Write-Host "[4c] probe ao entrar: placas mostradas ($hostTxt); 'Rodar checagem' travado ate escolher a placa"
     } else { Write-Host "    FALHA: probe do passo 3 (card=$($w.FindName('cardFaseLocal').Visibility) inet=$($w.FindName('cardInternetLocal').Visibility) rodar.en=$($w.FindName('btnRodarFaseLocal').IsEnabled) host='$hostTxt')"; $falhas++ }
 
+    # 4c-0b. botao "reler placas" reinventaria sem sair do passo 3
+    $antHost = "$($w.FindName('txtLocHost').Text)"
+    Invoke-RelerPlacas
+    Invoke-Pump
+    if ($Global:WizardStep -eq 3 -and $w.FindName('cardFaseLocal').Visibility -eq 'Visible' -and
+        "$($w.FindName('txtLocHost').Text)" -eq $antHost) {
+        Write-Host "[4c] 'reler placas' reinventaria e mantem o passo 3"
+    } else { Write-Host "    FALHA: 'reler placas' (step=$($Global:WizardStep) card=$($w.FindName('cardFaseLocal').Visibility))"; $falhas++ }
+
     # 4c-0. escolher a placa cabeada (LAN) libera "Rodar checagem local"
     $w.FindName('rbUsarLan').IsChecked = $true
     Invoke-Pump
