@@ -4,6 +4,26 @@
 # Tudo e baixado por Sync-* e cacheado em data/*.json. Em campo (sem internet)
 # so se le o cache com Get-*.
 
+# Versao (ModuleVersion) publicada no canal desta instalacao (config/canal),
+# lida direto do GitHub. Devolve a string da versao ou $null. Nao lanca.
+function Get-VersaoRemota {
+    try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 } catch { }
+    $canal = 'main'
+    try {
+        $arq = Join-Path $Global:RaizApp 'config\canal'
+        if (Test-Path $arq) {
+            $c = ([string] (Get-Content $arq -Raw -ErrorAction Stop)).Trim()
+            if ($c) { $canal = $c }
+        }
+    } catch { }
+    $url = "https://raw.githubusercontent.com/gamcastro/Conectividade_Juntas_2026/$canal/src/Conectividade.psd1"
+    try {
+        $txt = (Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 12).Content
+        if ($txt -match "ModuleVersion\s*=\s*'([^']+)'") { return $Matches[1] }
+    } catch { }
+    return $null
+}
+
 function Get-PastaDados {
     # Testes usam $Global:PastaDadosOverride para nao tocar no data/ real.
     $p = if ($Global:PastaDadosOverride) { $Global:PastaDadosOverride } else { Join-Path $Global:RaizApp 'data' }

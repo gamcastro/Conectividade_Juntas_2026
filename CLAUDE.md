@@ -84,6 +84,11 @@ Grids empilhados alternados por `Visibility` (`$Global:Views`, `Show-View`).
 O rail recolhe/expande (`btnRailToggle` → `Invoke-ToggleRail` / `Set-RailRecolhido`:
 214 px ↔ 56 px só-ícones, oculta `railCabTexto`/`railRodape`/`lblNav*`;
 estado em `$Global:RailRecolhido`, sessão).
+**Auto-update**: ao entrar na home (e após "Atualizar dados"), `Test-AtualizacaoApp`
+compara `$Global:VersaoApp` com `Get-VersaoRemota` (lê `ModuleVersion` do
+`src/Conectividade.psd1` no canal de `config/canal`, no GitHub raw). Se houver
+versão maior, o botão `btnAtualizarApp` (rodapé do rail) aparece → `Invoke-AtualizarApp`
+(confirma, roda `setup/Atualizar-DICON.ps1 -Force` numa janela nova e fecha o DICON).
 **Locais** (`viewLocais`, item `navLocais` no rail): tela de referência com os
 locais de vistoria do roteiro do técnico (`Get-LocaisDoTecnico` achata
 `$Global:RoteiroAtual.juntas[].locais[]`), grade `dgLocais` + busca livre

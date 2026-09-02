@@ -82,6 +82,10 @@
                     <TextBlock x:Name="txtRailVersao" Margin="0,8,0,0" HorizontalAlignment="Center"
                                FontFamily="Consolas" FontSize="9"
                                Foreground="{DynamicResource Dicon.Text3}"/>
+                    <Button x:Name="btnAtualizarApp" Margin="0,6,0,0" HorizontalAlignment="Center"
+                            Style="{DynamicResource BotaoFantasma}" FontSize="11" Padding="10,4"
+                            Foreground="{DynamicResource Dicon.Ressalva}" Visibility="Collapsed"
+                            ToolTip="Baixar e instalar a versao mais recente"/>
                 </StackPanel>
 
                 <StackPanel VerticalAlignment="Top" Margin="0,14,0,0">

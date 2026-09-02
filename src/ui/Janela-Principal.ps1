@@ -60,6 +60,7 @@ $Global:Views = @('viewLogin', 'viewHome', 'viewGuia', 'viewLocais', 'viewDiag',
 $Global:LocaisTecnico            = @()      # locais do roteiro do tecnico (achatados)
 $Global:AtualizandoFiltroLocais  = $false   # guarda: preenchimento programatico dos combos
 $Global:RailRecolhido            = $false   # menu lateral recolhido (so icones)?
+$Global:VersaoNova               = ''       # versao mais recente no canal (se > a atual)
 
 $Global:WizardPassos  = @('stepInfo', 'stepJunta', 'stepLocal', 'stepDiag', 'stepResultado', 'stepDecisao', 'stepFim')
 $Global:WizardTitulos = @(
@@ -317,6 +318,7 @@ function New-JanelaPrincipal {
     $window.FindName('btnTrocarUsuario').Add_Click({ Invoke-TrocarUsuario })
 
     $window.FindName('btnRailToggle').Add_Click({ Invoke-ToggleRail })
+    $window.FindName('btnAtualizarApp').Add_Click({ Invoke-AtualizarApp })
 
     # rail de navegacao (RadioButtons) - handlers ignoram mudanca programatica
     $window.FindName('navGuia').Add_Checked({ if (-not $Global:NavegandoPrograma) { Show-GuiaBordo } })
@@ -432,6 +434,57 @@ function Set-RailRecolhido {
 function Invoke-ToggleRail {
     $Global:RailRecolhido = -not $Global:RailRecolhido
     Set-RailRecolhido $Global:RailRecolhido
+}
+
+# ---------------------------------------------------------- ATUALIZACAO DA FERRAMENTA
+
+# Checa (async, best-effort) se ha versao nova no canal desta instalacao.
+function Test-AtualizacaoApp {
+    if ($Global:ModoTeste -or $Global:TarefaRedeState) { return }
+    Start-TarefaRede -Script 'Get-VersaoRemota' -AoConcluir {
+        param($res, $erro)
+        if (-not $erro -and $res) { Update-AvisoVersao ([string] $res) }
+    }
+}
+
+# Mostra/oculta o botao "Atualizar" no rodape do rail conforme a versao remota.
+function Update-AvisoVersao {
+    param([string] $Remota)
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    $b = $w.FindName('btnAtualizarApp')
+    if (-not $b) { return }
+    $temNova = $false
+    try { $temNova = [version] $Remota -gt [version] $Global:VersaoApp }
+    catch { $temNova = ($Remota -and $Remota -ne $Global:VersaoApp) }
+    if ($temNova) {
+        $Global:VersaoNova = $Remota
+        $b.Content    = ([char]0x2B06) + " Atualizar (v$Remota)"
+        $b.Visibility = 'Visible'
+        Write-Log ("Versao nova do DICON disponivel: v{0} (voce esta na v{1}). Clique em 'Atualizar' no menu." -f $Remota, $Global:VersaoApp) -Nivel Aviso
+    } else {
+        $Global:VersaoNova = ''
+        $b.Visibility = 'Collapsed'
+    }
+}
+
+# Fecha o DICON e abre o Atualizar-DICON.ps1 numa janela propria.
+function Invoke-AtualizarApp {
+    $w = $Global:JanelaPrincipal
+    $upd = Join-Path $Global:RaizApp 'setup\Atualizar-DICON.ps1'
+    if (-not (Test-Path $upd)) { Write-Log 'setup\Atualizar-DICON.ps1 nao encontrado nesta instalacao.' -Nivel Erro; return }
+    $alvo = if ($Global:VersaoNova) { " para a v$($Global:VersaoNova)" } else { '' }
+    $msg  = "Atualizar o DICON$alvo?`n`nA ferramenta vai fechar e o atualizador abre numa janela. " +
+            "Quando terminar, reabra o DICON pelo atalho da area de trabalho."
+    $r = [System.Windows.MessageBox]::Show($w, $msg, 'Atualizar DICON',
+        [System.Windows.MessageBoxButton]::YesNo, [System.Windows.MessageBoxImage]::Question)
+    if ($r -ne [System.Windows.MessageBoxResult]::Yes) { return }
+    try {
+        Start-Process powershell.exe -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-NoExit', '-File', $upd, '-Force')
+        $w.Close()
+    } catch {
+        Write-Log "Nao consegui abrir o atualizador: $_" -Nivel Erro
+    }
 }
 
 # ------------------------------------------------------------- LOGIN
@@ -607,6 +660,7 @@ function Enter-Home {
 
     try { Update-AvisoPendentes } catch { Write-Log "Aviso de pendentes falhou: $_" -Nivel Aviso }
     try { $w.FindName('painelLogHome').Visibility = if ($Global:LogHome.Count) { 'Visible' } else { 'Collapsed' } } catch { }
+    try { Test-AtualizacaoApp } catch { }   # checa versao nova (best-effort, silencioso)
     Show-View 'viewHome'
 }
 
@@ -701,7 +755,7 @@ function Invoke-AtualizarDados {
     } -AoConcluir {
         param($res, $erro)
         Initialize-SeletorJuntas
-        if ($Global:SessaoAtual) { Enter-Home -Sessao $Global:SessaoAtual }
+        if ($Global:SessaoAtual) { Enter-Home -Sessao $Global:SessaoAtual }   # Enter-Home ja checa versao nova
     }
 }
 

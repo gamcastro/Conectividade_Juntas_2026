@@ -108,6 +108,15 @@ try {
     if ($w.FindName('viewHome').Visibility -ne 'Visible') { Write-Host "[2] FALHA: nao foi para a home"; $falhas++ }
     else { Write-Host "[2] Login OK -> home ($($w.FindName('txtSaudacao').Text))" }
 
+    # 2c-versao. aviso de versao nova no rodape do rail
+    Update-AvisoVersao '99.99.99'
+    if ("$($w.FindName('btnAtualizarApp').Visibility)" -eq 'Visible' -and "$($w.FindName('btnAtualizarApp').Content)" -match '99\.99\.99') {
+        Write-Host "[2c] versao nova -> botao 'Atualizar' aparece no rail"
+    } else { Write-Host "    FALHA: aviso de versao nova"; $falhas++ }
+    Update-AvisoVersao $Global:VersaoApp
+    if ("$($w.FindName('btnAtualizarApp').Visibility)" -eq 'Collapsed') { Write-Host "[2c] mesma versao -> botao oculto" }
+    else { Write-Host "    FALHA: botao 'Atualizar' nao sumiu com a mesma versao"; $falhas++ }
+
     # 2d. menu lateral recolhe/expande
     $lRail0 = $w.FindName('railNav').Width
     Invoke-ToggleRail
