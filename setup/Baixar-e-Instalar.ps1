@@ -161,6 +161,8 @@ if (Test-Path $stExe) {
 if (Test-Path (Join-Path $Dest 'config\admin.json')) {
     Write-Host ''
     Write-Host "DICON ja configurado. Para rebaixar binarios: cd '$Dest'; .\setup\Instalar-DICON.ps1 -Force" -ForegroundColor DarkGray
+    # garante/atualiza o atalho na area de trabalho (o setup nao roda de novo)
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Dest 'setup\Criar-Atalho.ps1')
     Write-Host "Abrir: cd '$Dest'; .\Iniciar-Diagnostico.bat" -ForegroundColor White
 } else {
     $psArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $Dest 'setup\Instalar-DICON.ps1'))

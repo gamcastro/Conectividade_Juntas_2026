@@ -251,6 +251,10 @@ if ($SoConfig -or $PularDeps) {
 
 Remove-Item $Tmp -Recurse -Force -ErrorAction SilentlyContinue
 
+# ---------------------------------------------------------------- atalho
+Titulo 'Atalho na area de trabalho'
+& (Join-Path $PSScriptRoot 'Criar-Atalho.ps1')
+
 # ---------------------------------------------------------------- resumo
 Titulo 'Resumo'
 $checa = @(
