@@ -87,7 +87,6 @@ function New-RelatorioHtml {
 
     $quando = try { [datetime] $r.coletado_em } catch { Get-Date }
     $tipoLocal = if ($loc.tipo -eq 'principal') { 'Local Principal' } else { 'Local de Conting' + [char]0x00EA + 'ncia' }
-    $vpn = if ($amb.vpn_ativa -eq $true) { 'ativa' } elseif ($amb.vpn_ativa -eq $false) { 'n' + [char]0x00E3 + 'o detectada' } else { 'n/d' }
 
     $linhas = foreach ($a in @($r.avaliacao)) {
         $regra = ConvertTo-HtmlSafe (Get-FaixaEmPalavras $a.direcao $a.limiar_viavel $a.limiar_ressalva $a.unidade)
@@ -375,8 +374,6 @@ $($linhas -join "`n")
     <div><b>Coletado em:</b> $($quando.ToString('dd/MM/yyyy HH:mm:ss'))</div>
     <div><b>Computador:</b> $(ConvertTo-HtmlSafe $amb.host)</div>
     <div><b>Usu&aacute;rio:</b> $(ConvertTo-HtmlSafe $amb.usuario)</div>
-    <div><b>VPN da JE:</b> $vpn</div>
-    <div><b>Interface:</b> $(ConvertTo-HtmlSafe $amb.interface_principal)</div>
   </div>
 
   <div class="rodape">Gerado pela ferramenta DICON &mdash; TRE-MA em $geradoEm. Vers&atilde;o $($r.versao_ferramenta).</div>
