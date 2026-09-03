@@ -1168,6 +1168,9 @@
                                                Text=" no canto superior direito para reler as placas e atualizar o status do Wi-Fi."/></TextBlock>
                                 </StackPanel>
                             </Border>
+
+                            <TextBlock x:Name="txtMeiosPendentes" TextWrapping="Wrap" FontSize="12" Margin="4,14,0,0"
+                                       Foreground="{DynamicResource Dicon.Ressalva}" Visibility="Collapsed"/>
                         </StackPanel>
                     </ScrollViewer>
 

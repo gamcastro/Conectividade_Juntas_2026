@@ -193,18 +193,30 @@ formulário GEL** saiu daqui e vive na tela `viewLocalDetalhe`) →
 (`cardLan`/`cardWifiPlaca`/`cardCelular`, clicáveis para selecionar) tem um
 `badge*` (NÃO TESTADO / TESTANDO… / TESTADO: <veredito> na cor do veredito /
 NÃO SE APLICA - INVIÁVEL), um botão **`btnCheck{Lan,Wifi,Celular}`**
-("Rodar checagem", habilitado só no card selecionado e conectado), e o checkbox
+("Rodar checagem"), e o checkbox
 "não se aplica a este local" — marcá-lo abre o card **`cardNaJustif`** abaixo da
 grade (`Open-CardNaJustif`: `txtNaJustif` + `btnNaRegistrar`/`btnNaCancelar`,
 `$Global:NaMeioPendente`); "Registrar" (`Invoke-NaRegistrar` → `Set-MeioNaoAplicavel`)
 fecha o card e carimba a justificativa em vermelho no card do meio
 (`txtNaMotivoCard*`), que fica inviável; desmarcar o checkbox remove o NA.
+**Ordem fixa** (`$Global:OrdemMeios` = `lan`/`wifi_local`/`celular`): o botão de um
+meio só habilita quando **todos os anteriores** já foram testados ou marcados
+"não se aplica" (`Test-MeioLiberadoNaOrdem`, `Get-EstadoMeioPasso3`). A LAN, se
+conectada e ainda pendente, já vem selecionada. Ao terminar a checagem da **LAN**
+(`Complete-CheckMeio` seta `$Global:AvisarRetirarCaboLan`), `Close-OverlayCheck`
+mostra uma `MessageBox` lembrando o técnico de **tirar o cabo de rede** antes do
+Wi-Fi. O **`btnWizProximo` só fica visível** quando os 3 meios estão testados ou NA
+(qualquer combinação); `txtMeiosPendentes` explica quando está escondido.
+**Congelamento**: assim que um meio é testado, `New-MedicaoAtual` guarda um
+`snapshot_adaptador` (cópia dos dados da placa — IP/gateway/MAC…) na medição;
+`Update-PainelMeios` (via `Get-MedicaoMeio`) passa a renderizar esse card **do
+snapshot**, não do payload vivo — um probe geral ou o ↻ depois **não apagam** o
+que o meio tinha no teste; só "Refazer checagem" renova.
 **Releitura**: cada card tem um ↻ próprio (`btnRelerLan`/`btnRelerWifi`/`btnRelerCel`
 + `ringReler*`) → **`Invoke-RelerAdaptador 'lan'|'wifi'`** relê **só aquela placa**
-(`Get-AdaptadorLan`/`Get-AdaptadorWireless` no runspace) e mescla em
-`$Global:FaseLocalPayload.Lan`/`.Wireless`, **preservando o outro card** (cenário:
-testei a LAN, tirei o cabo, liguei o Wi-Fi — o card LAN mantém o IP/gateway já
-coletados); o ↻ do topo (`btnRelerPlacas`) ainda relê tudo. Se o IP da placa LAN
+(`Get-AdaptadorLan`/`Get-AdaptadorWireless` no runspace) e mescla no payload vivo
+`$Global:FaseLocalPayload.Lan`/`.Wireless` (útil para os meios **ainda não
+testados**); o ↻ do topo (`btnRelerPlacas`) relê tudo, sem tocar nos snapshots. Se o IP da placa LAN
 começa com **10.11.** ou **10.198.** (`Test-RedeJusticaEleitoral`), o card LAN
 mostra o selo verde **"REDE DA JUSTIÇA ELEITORAL"** (`cardLocJE`; também no JSON
 `rede_local.lan_rede_je` e no PDF). Wi-Fi só pela bandeja do Windows
