@@ -82,7 +82,7 @@ function Write-CacheJson {
     # deixa o cache antigo truncado ou vazio.
     $alvo = Join-Path (Get-PastaDados) $Nome
     $tmp  = '{0}.tmp{1}' -f $alvo, $PID
-    $doc | ConvertTo-Json -Depth 10 | Set-Content -Path $tmp -Encoding UTF8
+    Write-TextoArquivo -Caminho $tmp -Conteudo ($doc | ConvertTo-Json -Depth 10)
     for ($i = 1; $i -le 6; $i++) {
         try { Move-Item -Path $tmp -Destination $alvo -Force; return }
         catch { if ($i -eq 6) { Remove-Item $tmp -Force -EA SilentlyContinue; throw }; Start-Sleep -Milliseconds 250 }

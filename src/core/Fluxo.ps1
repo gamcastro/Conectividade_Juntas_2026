@@ -91,7 +91,8 @@ function Save-Diagnostico {
         [string] $VpnMotivo,
         $Medicoes,
         $ConexaoRecomendada,
-        [string] $MotivoRecomendacao
+        [string] $MotivoRecomendacao,
+        $VistoriaGel
     )
 
     $cfgEnvio = Get-Config 'envio'
@@ -101,7 +102,8 @@ function Save-Diagnostico {
         -Local $Local -Avaliacoes $Avaliacoes -ClassificacaoFinal $ClassificacaoFinal -TecnicoNome $TecnicoNome `
         -FaseLocal $FaseLocal -Tethering $Tethering -Operadora $Operadora `
         -VpnImpossivel $VpnImpossivel -VpnMotivo $VpnMotivo `
-        -Medicoes $Medicoes -ConexaoRecomendada $ConexaoRecomendada -MotivoRecomendacao $MotivoRecomendacao
+        -Medicoes $Medicoes -ConexaoRecomendada $ConexaoRecomendada -MotivoRecomendacao $MotivoRecomendacao `
+        -VistoriaGel $VistoriaGel
     $caminho = Save-ResultadoLocal -Resultado $resultado
 
     if ($cfgEnvio.modo -eq 'na-hora') {

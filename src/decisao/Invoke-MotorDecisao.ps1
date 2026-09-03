@@ -106,6 +106,46 @@ function Get-ConexaoRecomendada {
     }
 }
 
+# Avaliacao da FASE 1 (rede local, sem VPN) a partir do resultado do Speedtest
+# (Ookla). Mesma forma de Invoke-MotorDecisao().Detalhes, com a metrica prefixada
+# "rl_" (p/ nao colidir com as linhas da Fase 2) e sem 'carregamento_web' (nao ha
+# Selenium sem a VPN). So devolve linhas se o Speedtest tiver medido.
+function Get-DetalhesRedeLocal {
+    param($Internet, [psobject] $Limiares)
+    if (-not $Internet -or -not $Limiares) { return @() }
+    $g = {
+        param($o, $n)
+        $p = $o.PSObject.Properties[$n]
+        if ($p) { $p.Value } else { $null }
+    }
+    if (-not (& $g $Internet 'speedtest_ok')) { return @() }
+    $met = [pscustomobject]@{
+        LatenciaMediaMs   = (& $g $Internet 'ping_ms')
+        JitterMs          = (& $g $Internet 'jitter_ms')
+        PerdaPercentual   = (& $g $Internet 'perda_pct')
+        BandaDownloadMbps = (& $g $Internet 'download_mbps')
+        BandaUploadMbps   = (& $g $Internet 'upload_mbps')
+        CarregamentoWebS  = $null
+    }
+    $dec = Invoke-MotorDecisao -Metricas $met -Limiares $Limiares
+    $out = @()
+    foreach ($d in @($dec.Detalhes)) {
+        if ($d.metrica -eq 'carregamento_web_s') { continue }
+        $out += [pscustomobject]@{
+            metrica         = 'rl_' + $d.metrica
+            rotulo          = $d.rotulo
+            unidade         = $d.unidade
+            direcao         = $d.direcao
+            valor           = $d.valor
+            limiar_viavel   = $d.limiar_viavel
+            limiar_ressalva = $d.limiar_ressalva
+            classe          = $d.classe
+            motivo          = $d.motivo
+        }
+    }
+    return $out
+}
+
 function Invoke-MotorDecisao {
     param(
         [psobject] $Metricas,

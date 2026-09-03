@@ -26,7 +26,9 @@ function Set-Sessao {
         papel        = $Papel
         ultimo_login = (Get-Date).ToString('o')
     }
-    $doc | ConvertTo-Json | Set-Content -Path (Get-CaminhoSessao) -Encoding UTF8
+    # Write-TextoArquivo (nao Set-Content): evita o "O fluxo nao era legivel" do
+    # provider FileSystem do PS 5.1 quando o antivirus esta com o handle do arquivo.
+    Write-TextoArquivo -Caminho (Get-CaminhoSessao) -Conteudo ($doc | ConvertTo-Json)
     return $doc
 }
 

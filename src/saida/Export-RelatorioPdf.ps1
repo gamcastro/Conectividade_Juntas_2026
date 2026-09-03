@@ -54,6 +54,17 @@ function Get-RotuloVeredito {
     }
 }
 
+# Faixa aceitavel por extenso (sem simbolos <= / >=), p/ o relatorio.
+function Get-FaixaEmPalavras {
+    param($Direcao, $LimiarViavel, $LimiarRessalva, $Unidade)
+    $u = [string] $Unidade
+    $a = [char]0x00E1
+    if ($Direcao -eq 'max') {
+        return ('vi{0}vel: menor que {1} {3} / ressalva: menor que {2} {3}' -f $a, $LimiarViavel, $LimiarRessalva, $u)
+    }
+    return ('vi{0}vel: maior que {1} {3} / ressalva: maior que {2} {3}' -f $a, $LimiarViavel, $LimiarRessalva, $u)
+}
+
 function Get-CorVeredito {
     param([string] $Classe)
     switch ($Classe) {
@@ -76,14 +87,9 @@ function New-RelatorioHtml {
 
     $quando = try { [datetime] $r.coletado_em } catch { Get-Date }
     $tipoLocal = if ($loc.tipo -eq 'principal') { 'Local Principal' } else { 'Local de Conting' + [char]0x00EA + 'ncia' }
-    $vpn = if ($amb.vpn_ativa -eq $true) { 'ativa' } elseif ($amb.vpn_ativa -eq $false) { 'n' + [char]0x00E3 + 'o detectada' } else { 'n/d' }
 
     $linhas = foreach ($a in @($r.avaliacao)) {
-        $regra = if ($a.direcao -eq 'max') {
-            'vi' + [char]0x00E1 + 'vel &le; {0}{2} / ressalva &le; {1}{2}' -f $a.limiar_viavel, $a.limiar_ressalva, $a.unidade
-        } else {
-            'vi' + [char]0x00E1 + 'vel &ge; {0}{2} / ressalva &ge; {1}{2}' -f $a.limiar_viavel, $a.limiar_ressalva, $a.unidade
-        }
+        $regra = ConvertTo-HtmlSafe (Get-FaixaEmPalavras $a.direcao $a.limiar_viavel $a.limiar_ressalva $a.unidade)
         $badge = '<span style="color:{0};font-weight:600">{1}</span>' -f (Get-CorVeredito $a.classe_final), (ConvertTo-HtmlSafe (Get-RotuloVeredito $a.classe_final))
         $just  = if ($a.ajustada) { ConvertTo-HtmlSafe ([string] $a.justificativa) } else { '&mdash;' }
         @"
@@ -100,7 +106,7 @@ function New-RelatorioHtml {
     $corFinal = Get-CorVeredito $cl.final
     $rotFinal = ConvertTo-HtmlSafe (Get-RotuloVeredito $cl.final)
     $justFinal = if ($cl.ajustada -and $cl.justificativa) {
-        '<p class="small"><b>Ajuste da decis' + [char]0x00E3 + 'o:</b> ' + (ConvertTo-HtmlSafe ([string] $cl.justificativa)) + '</p>'
+        '<p class="small"><b>Ajuste da recomenda' + [char]0x00E7 + [char]0x00E3 + 'o:</b> ' + (ConvertTo-HtmlSafe ([string] $cl.justificativa)) + '</p>'
     } else { '' }
 
     $vpnBanner = ''
@@ -127,7 +133,8 @@ function New-RelatorioHtml {
 
     $blocoRecomendacao = ''
     if ($rec -and $rec.rotulo) {
-        $corRec = Get-CorVeredito $rec.veredito
+        # Aqui NAO vai o veredito (soa estranho "conexao recomendada ... inviavel"):
+        # a classificacao do local ja consta em "Recomendacao final" no topo.
         $prov = if ($rec.provisoria) {
             '<br><span style="font-weight:400">Recomenda&ccedil;&atilde;o provis&oacute;ria &mdash; nenhum meio fechou a VPN da Justi&ccedil;a Eleitoral neste local.</span>'
         } else { '' }
@@ -136,7 +143,7 @@ function New-RelatorioHtml {
         } else { '' }
         $blocoRecomendacao = @"
   <h2>Conex&atilde;o recomendada para este local</h2>
-  <div class="final" style="border-color:$corRec;color:$corRec">$(ConvertTo-HtmlSafe ([string] $rec.rotulo)) &mdash; $(ConvertTo-HtmlSafe (Get-RotuloVeredito $rec.veredito))$prov</div>
+  <div class="final" style="border-color:#c9ced6;color:#1f2430">$(ConvertTo-HtmlSafe ([string] $rec.rotulo))$prov</div>
   $motRec
 "@
     }
@@ -203,6 +210,42 @@ $($trs -join "`n")
     $campos += '<div style="grid-column:1/3"><b>Tipo de internet:</b> {0}</div>' -f (ConvertTo-HtmlSafe $loc.tipo_internet)
     $blocoLocal = $campos -join "`n    "
 
+    # Bloco "Vistoria GEL" (anexo) - so aparece se um formulario do GEL foi anexado.
+    $blocoGel = ''
+    $vg = if ($r.PSObject.Properties['vistoria_gel']) { $r.vistoria_gel } else { $null }
+    if ($vg) {
+        $gc = @()
+        if ($null -ne $vg.latitude -and $null -ne $vg.longitude) {
+            $latS  = ("$($vg.latitude)")  -replace ',', '.'
+            $longS = ("$($vg.longitude)") -replace ',', '.'
+            $precS = (("$($vg.precisao_m)") -replace ',', '.').Trim()
+            $prec = if ($precS -and $precS -ne '0') { (' &middot; precis&atilde;o ~{0} m' -f $precS) } else { '' }
+            $gc += '<div style="grid-column:1/3"><b>Coordenadas:</b> {0}, {1}{2}</div>' -f $latS, $longS, $prec
+            $lnk = if ($vg.mapa_link) { [string] $vg.mapa_link }
+                   else { 'https://www.google.com/maps?q={0},{1}' -f $latS, $longS }
+            $gc += '<div style="grid-column:1/3"><b>Mapa:</b> <a href="{0}">{0}</a></div>' -f (ConvertTo-HtmlSafe $lnk)
+        }
+        if ($vg.suporte_nome)      { $gc += '<div style="grid-column:1/3"><b>Suporte ao link local:</b> {0}</div>' -f (ConvertTo-HtmlSafe ([string] $vg.suporte_nome)) }
+        if ($vg.suporte_telefone)  { $gc += '<div style="grid-column:1/3"><b>Telefone do suporte:</b> {0}</div>' -f (ConvertTo-HtmlSafe ([string] $vg.suporte_telefone)) }
+        $ele = @()
+        if ($vg.eletrica_tensao)   { $ele += ('tens&atilde;o {0}' -f (ConvertTo-HtmlSafe ([string] $vg.eletrica_tensao))) }
+        if ($vg.eletrica_tomadas)  { $ele += ('{0} tomada(s)' -f (ConvertTo-HtmlSafe ([string] $vg.eletrica_tomadas))) }
+        if ($vg.eletrica_extensao) { $ele += ('extens&atilde;o el&eacute;trica: {0}' -f (ConvertTo-HtmlSafe ([string] $vg.eletrica_extensao))) }
+        if ($ele.Count)            { $gc += '<div style="grid-column:1/3"><b>El&eacute;trica:</b> {0}</div>' -f ($ele -join ' &middot; ') }
+
+        if ($gc.Count) {
+            $imgMapa = ''
+            if ($null -ne $vg.latitude -and $null -ne $vg.longitude) {
+                $chave = Get-ChaveMapsStatic
+                if ($chave) {
+                    $du = Get-MapaEstaticoDataUri -Lat $vg.latitude -Long $vg.longitude -Chave $chave
+                    if ($du) { $imgMapa = '<div style="margin:6px 0 12px"><img src="{0}" alt="mapa" style="max-width:520px;border:1px solid #d6dae2;border-radius:4px"></div>' -f $du }
+                }
+            }
+            $blocoGel = "  <h2>Vistoria GEL (formul&aacute;rio anexado)</h2>`n$imgMapa`n  <div class=""grid2"">`n    " + ($gc -join "`n    ") + "`n  </div>`n"
+        }
+    }
+
     # Bloco "Rede local (antes da VPN)" - so aparece se a fase 1 foi coletada.
     $rl = if ($r.PSObject.Properties['rede_local']) { $r.rede_local } else { $null }
     $blocoRedeLocal = ''
@@ -229,6 +272,10 @@ $($trs -join "`n")
             $ce += '<div style="grid-column:1/3"><b>Conex&atilde;o:</b> roteamento (tethering) do celular do t&eacute;cnico{0}</div>' -f $op
         }
         $ce += '<div><b>Placa de rede (LAN):</b> {0}</div>' -f $lanS
+        if ($rl.PSObject.Properties['lan_rede_je'] -and $rl.lan_rede_je) {
+            $ce += '<div style="grid-column:1/3;margin-top:2px;padding:4px 8px;background:#eaf7ee;' +
+                   'border-left:3px solid #4FC177"><b>Rede da Justi&ccedil;a Eleitoral:</b> a placa cabeada recebeu IP interno da JE.</div>'
+        }
         if ($rl.ip_local)        { $ce += '<div><b>IP na rede local:</b> {0}</div>' -f (ConvertTo-HtmlSafe ([string] $rl.ip_local)) }
         if ($rl.PSObject.Properties['ip_origem'] -and $rl.ip_origem) { $ce += '<div><b>Obten&ccedil;&atilde;o do IP:</b> {0}</div>' -f (ConvertTo-HtmlSafe ([string] $rl.ip_origem)) }
         if ($rl.mascara)         { $ce += '<div><b>M&aacute;scara:</b> {0}</div>' -f (ConvertTo-HtmlSafe ([string] $rl.mascara)) }
@@ -251,11 +298,40 @@ $($trs -join "`n")
             if ($rl.internet_servidor)   { $ce += '<div><b>Servidor:</b> {0}</div>' -f (ConvertTo-HtmlSafe ([string] $rl.internet_servidor)) }
             if ($rl.internet_ip_externo) { $ce += '<div><b>IP externo:</b> {0}</div>' -f (ConvertTo-HtmlSafe ([string] $rl.internet_ip_externo)) }
             if ($rl.internet_resultado_url) { $ce += '<div style="grid-column:1/3"><b>Resultado Ookla:</b> {0}</div>' -f (ConvertTo-HtmlSafe ([string] $rl.internet_resultado_url)) }
-        } elseif ($rl.PSObject.Properties['speedtest_erro'] -and $rl.speedtest_erro) {
-            $ce += '<div style="grid-column:1/3"><b>Speedtest (Ookla):</b> {0}</div>' -f (ConvertTo-HtmlSafe ([string] $rl.speedtest_erro))
+        } else {
+            $falhaTipo = if ($rl.PSObject.Properties['speedtest_falha_tipo']) { [string] $rl.speedtest_falha_tipo } else { '' }
+            $diag = if ($rl.PSObject.Properties['speedtest_diagnostico']) { [string] $rl.speedtest_diagnostico } else { '' }
+            if ($diag -and ($falhaTipo -eq 'handshake' -or $falhaTipo -eq 'bloqueio')) {
+                $rot = if ($falhaTipo -eq 'handshake') { 'Rede local fraca / inst&aacute;vel' } else { 'Speedtest bloqueado no local' }
+                $ce += ('<div style="grid-column:1/3;margin-top:4px;padding:6px 10px;background:#fff8e1;' +
+                        'border-left:3px solid #e0a800"><b>{0}:</b> {1}</div>') -f $rot, (ConvertTo-HtmlSafe $diag)
+            } elseif ($rl.PSObject.Properties['speedtest_erro'] -and $rl.speedtest_erro) {
+                $ce += '<div style="grid-column:1/3"><b>Speedtest (Ookla):</b> {0}</div>' -f (ConvertTo-HtmlSafe ([string] $rl.speedtest_erro))
+            }
         }
 
-        $blocoRedeLocal = "  <h2>Rede local (antes da VPN do TRE)</h2>`n  <div class=""grid2"">`n    " + ($ce -join "`n    ") + "`n  </div>`n"
+        $tabRl = ''
+        $avRl = @(if ($rl.PSObject.Properties['internet_avaliacao']) { $rl.internet_avaliacao })
+        if ($avRl.Count) {
+            $linRl = foreach ($a in $avRl) {
+                $cls = ConvertTo-HtmlSafe (Get-RotuloVeredito $a.classe_final)
+                $cor = Get-CorVeredito $a.classe_final
+                $val = ConvertTo-HtmlSafe (Format-ValorMetrica $a.valor $a.unidade)
+                $faixa = ConvertTo-HtmlSafe (Get-FaixaEmPalavras $a.direcao $a.limiar_viavel $a.limiar_ressalva $a.unidade)
+                $mot = if ($a.ajustada -and $a.justificativa) { ' &mdash; ' + (ConvertTo-HtmlSafe ([string] $a.justificativa)) } else { '' }
+                "      <tr><td>$(ConvertTo-HtmlSafe ([string] $a.rotulo))</td><td class=""mono"">$val</td><td class=""mono small"">$faixa</td><td style=""color:$cor;font-weight:600"">$cls$mot</td></tr>"
+            }
+            $tabRl = @"
+  <p class="small" style="margin:8px 0 2px"><b>Avalia&ccedil;&atilde;o da rede local (sem VPN)</b></p>
+  <table>
+    <thead><tr><th>M&eacute;trica</th><th>Valor</th><th>Faixa aceit&aacute;vel</th><th>Classifica&ccedil;&atilde;o</th></tr></thead>
+    <tbody>
+$($linRl -join "`n")
+    </tbody>
+  </table>
+"@
+        }
+        $blocoRedeLocal = "  <h2>Rede local (antes da VPN do TRE)</h2>`n  <div class=""grid2"">`n    " + ($ce -join "`n    ") + "`n  </div>`n" + $tabRl
     }
 
     @"
@@ -305,7 +381,7 @@ $($trs -join "`n")
 
   <h2>Relat&oacute;rio de Diagn&oacute;stico de Conectividade</h2>
   <p class="resumo">ZE $($loc.zona_eleitoral) &mdash; $(ConvertTo-HtmlSafe $loc.municipio_termo) (sede: $(ConvertTo-HtmlSafe $loc.municipio_sede))</p>
-  <div class="final">Decis&atilde;o final: $rotFinal</div>
+  <div class="final">Recomenda&ccedil;&atilde;o final: $rotFinal</div>
   $justFinal
   $vpnBanner
 $blocoRecomendacao
@@ -315,6 +391,7 @@ $blocoRecomendacao
     $blocoLocal
   </div>
 
+$blocoGel
 $blocoRedeLocal
 $blocoMeios
   <h2>M&eacute;tricas medidas</h2>
@@ -334,8 +411,6 @@ $($linhas -join "`n")
     <div><b>Coletado em:</b> $($quando.ToString('dd/MM/yyyy HH:mm:ss'))</div>
     <div><b>Computador:</b> $(ConvertTo-HtmlSafe $amb.host)</div>
     <div><b>Usu&aacute;rio:</b> $(ConvertTo-HtmlSafe $amb.usuario)</div>
-    <div><b>VPN da JE:</b> $vpn</div>
-    <div><b>Interface:</b> $(ConvertTo-HtmlSafe $amb.interface_principal)</div>
   </div>
 
   <div class="rodape">Gerado pela ferramenta DICON &mdash; TRE-MA em $geradoEm. Vers&atilde;o $($r.versao_ferramenta).</div>
@@ -376,6 +451,9 @@ function Export-RelatorioPdf {
         '--disable-gpu'
         '--no-first-run'
         '--no-pdf-header-footer'
+        '--disable-logging'
+        '--log-level=3'
+        '--disable-breakpad'
         ('--user-data-dir="{0}"' -f $userDir)
         ('--print-to-pdf="{0}"' -f $Caminho)
         ('"{0}"' -f $uri)

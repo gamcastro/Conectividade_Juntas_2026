@@ -16,12 +16,17 @@ $Global:LimiarRows         = $null   # ObservableCollection[LimiarRow] da tela d
 $Global:NavegandoPrograma  = $false  # guarda: Show-View mexendo no rail sem disparar handler
 $Global:TemaCarregado      = $false  # MahApps + Application ja inicializados neste processo?
 $Global:MostrarTodasJuntas = $false  # admin: incluir Juntas fora da rota no seletor
-$Global:WizardStep         = 1       # passo atual do assistente de diagnostico (1..7)
+$Global:WizardStep         = 1       # passo atual do assistente de diagnostico (1..6)
 $Global:HomeTrabalhoState  = $null   # runspace do "Atualizar dados"/"Reenviar" async
 $Global:TarefaRedeState    = $null   # runspace da fase local / conexao Wi-Fi
 $Global:LoginEmAndamento   = $false   # trava reentrancia de Enter-Sessao (duplo-clique em "Entrar")
 $Global:FaseLocalPayload   = $null   # {Lan;Wireless;Internet;Quando} da fase 1 (sem VPN)
-$Global:FaseLocalTipo      = ''      # placa escolhida no passo 3: '' | 'lan' | 'wifi'
+$Global:RelerAdaptadorTipo = ''      # placa sendo relida no passo 3: '' | 'lan' | 'wifi'
+$Global:FaseLocalTipo      = ''      # meio da checagem em curso: '' | 'lan' | 'wifi' | 'celular'
+$Global:MeioSelecionado    = ''      # card do passo 3 selecionado p/ testar: '' | 'lan' | 'wifi' | 'celular'
+$Global:CheckMeioAtivo     = $false  # overlay de checagem de um meio esta aberto/rodando
+$Global:ChkFase            = ''      # estado do overlay: ''|f1-pronto|f1-rodando|f2-pronto|f2-rodando|fim
+$Global:NaMeioPendente     = ''      # meio com "nao se aplica" marcado, aguardando a justificativa
 
 # --- multi-meio: o local pode ter varias medicoes, uma por meio de conexao ---
 $Global:Medicoes           = @()     # medicoes ja concluidas/marcadas neste local
@@ -35,6 +40,7 @@ $Global:AtualizandoRecomendacao = $false  # guarda: set programatico do combo de
 $Global:MedicoesPasso5     = @()     # [{idx;med}] das medicoes testaveis no seletor do passo 5
 $Global:MedicaoPasso5Idx   = -1      # indice em $Global:Medicoes da medicao aberta no passo 5 (-1 = ultima)
 $Global:AtualizandoMedicaoP5 = $false # guarda: set programatico do combo de medicoes do passo 5
+$Global:VistoriaGel        = $null   # anexo do GEL (coordenadas/suporte/eletrica) do local atual
 
 $Global:FeitoSalvar        = $false  # checklist do passo 7
 $Global:FeitoTransmitir    = $false
@@ -62,16 +68,16 @@ $Global:AtualizandoFiltroLocais  = $false   # guarda: preenchimento programatico
 $Global:RailRecolhido            = $false   # menu lateral recolhido (so icones)?
 $Global:VersaoNova               = ''       # versao mais recente no canal (se > a atual)
 
-$Global:WizardPassos  = @('stepInfo', 'stepJunta', 'stepLocal', 'stepDiag', 'stepResultado', 'stepDecisao', 'stepFim')
+$Global:WizardPassos  = @('stepInfo', 'stepJunta', 'stepLocal', 'stepResultado', 'stepDecisao', 'stepFim')
 $Global:WizardTitulos = @(
     ('Informa' + [char]0x00E7 + [char]0x00E3 + 'o do teste')
     'Junta Especial'
-    'Rede local (sem VPN)'
-    ('Diagn' + [char]0x00F3 + 'stico com a VPN')
+    'Meios de conex' + [char]0x00E3 + 'o'
     ('Resultado por m' + [char]0x00E9 + 'trica')
-    ('Decis' + [char]0x00E3 + 'o final')
+    ('Recomenda' + [char]0x00E7 + [char]0x00E3 + 'o final')
     ('Conclus' + [char]0x00E3 + 'o')
 )
+$Global:WizardNPassos = $Global:WizardPassos.Count
 
 function Import-Xaml {
     param([string] $Caminho)
@@ -265,13 +271,16 @@ function New-JanelaPrincipal {
         if ($lv) { $lv.Text = "DICON v$ver - homologacao" }
     }
 
-    # diagnostico
-    $window.FindName('btnRodar').Add_Click({ Invoke-ExecucaoNaJanela })
+    # diagnostico - overlay de checagem de meio
+    $window.FindName('btnCheckLan').Add_Click({ Invoke-CheckMeio 'lan' })
+    $window.FindName('btnCheckWifi').Add_Click({ Invoke-CheckMeio 'wifi' })
+    $window.FindName('btnCheckCelular').Add_Click({ Invoke-CheckMeio 'celular' })
+    $window.FindName('btnChkIniciar').Add_Click({ Invoke-ChkAvancar })
+    $window.FindName('btnChkFechar').Add_Click({ Close-OverlayCheck })
+    $window.FindName('btnChkVpnImpossivel').Add_Click({ Invoke-CheckVpnImpossivel })
     $window.FindName('btnAbrirFortiClient').Add_Click({ Invoke-AbrirFortiClient })
     $window.FindName('btnReverificarVpn').Add_Click({ Invoke-ReverificarVpn })
-    $window.FindName('btnTestarOutroMeio').Add_Click({ Invoke-TestarOutroMeio })
     $window.FindName('chkVpnImpossivel').Add_Click({ Update-VpnImpossivel })
-    $window.FindName('txtVpnMotivo').Add_TextChanged({ Update-Passo4Nav })
     $window.FindName('btnAtualizar').Add_Click({ Invoke-AtualizarListaJuntas })
     $window.FindName('cboJunta').Add_SelectionChanged({ Update-ComboLocais })
     $window.FindName('cboLocal').Add_SelectionChanged({ Update-DetalheLocal })
@@ -282,21 +291,22 @@ function New-JanelaPrincipal {
     $window.FindName('btnWizVoltar').Add_Click({ Invoke-WizardVoltar })
     $window.FindName('btnWizProximo').Add_Click({ Invoke-WizardProximo })
     $window.FindName('btnRefazerTeste').Add_Click({ Invoke-WizardProximo })
-    $window.FindName('btnRodarFaseLocal').Add_Click({ Invoke-RodarFaseLocal })
+    $window.FindName('btnAnexarGel').Add_Click({ Invoke-AnexarGel })
+    $window.FindName('btnGelRegistrar').Add_Click({ Invoke-GelRegistrar })
+    $window.FindName('btnGelCancelar').Add_Click({ Invoke-GelCancelar })
     $window.FindName('btnRelerPlacas').Add_Click({ Invoke-RelerPlacas })
-    $window.FindName('chkTetheringCelular').Add_Click({ Update-TetheringCelular })
-    $window.FindName('rbUsarLan').Add_Checked({ Set-FaseLocalTipo 'lan' })
-    $window.FindName('rbUsarWifi').Add_Checked({ Set-FaseLocalTipo 'wifi' })
-    $window.FindName('rbUsarCelular').Add_Checked({ Set-FaseLocalTipo 'celular' })
-    $window.FindName('cboOperadoraCel').Add_LostFocus({
-            $w2 = $Global:JanelaPrincipal
-            $w2.FindName('cboOperadora').Text = ([string] $w2.FindName('cboOperadoraCel').Text).Trim()
-            Update-PainelFaseLocal
-        })
+    $window.FindName('btnRelerLan').Add_Click({ Invoke-RelerAdaptador 'lan' })
+    $window.FindName('btnRelerWifi').Add_Click({ Invoke-RelerAdaptador 'wifi' })
+    $window.FindName('btnRelerCel').Add_Click({ Invoke-RelerAdaptador 'wifi' })
+    $window.FindName('cboOperadoraCel').Add_LostFocus({ Update-PainelMeios })
+    $window.FindName('cardLan').Add_MouseLeftButtonUp({ Select-MeioParaChecar 'lan' })
+    $window.FindName('cardWifiPlaca').Add_MouseLeftButtonUp({ Select-MeioParaChecar 'wifi' })
+    $window.FindName('cardCelular').Add_MouseLeftButtonUp({ Select-MeioParaChecar 'celular' })
     foreach ($n in 'chkNaLan', 'chkNaWifi', 'chkNaCelular') {
         $window.FindName($n).Add_Click({ Update-NaoAplicavelMeio })
     }
-    $window.FindName('txtMotivoNaMeio').Add_LostFocus({ Update-NaoAplicavelMeio })
+    $window.FindName('btnNaRegistrar').Add_Click({ Invoke-NaRegistrar })
+    $window.FindName('btnNaCancelar').Add_Click({ Invoke-NaCancelar })
     $window.FindName('btnExportarPdf').Add_Click({ Invoke-ExportarRelatorio })
     $window.FindName('btnTransmitirResultado').Add_Click({ Invoke-TransmitirResultado })
     $window.FindName('btnDiagVoltar').Add_Click({ Show-View 'viewHome' })
@@ -306,7 +316,7 @@ function New-JanelaPrincipal {
             if (-not $Global:AtualizandoDecisao) { $Global:DecisaoFinalTocada = $true }
             Update-VisibilidadeJustDecisao
         })
-    $window.FindName('cboMedicaoPasso5').Add_SelectionChanged({ Invoke-TrocarMedicaoPasso5 })
+    $window.FindName('tabsMedicoes').Add_SelectionChanged({ Invoke-TrocarMedicaoPasso5 })
     $window.FindName('cboConexaoRec').Add_SelectionChanged({
             if (-not $Global:AtualizandoRecomendacao) { Update-ContextoRecomendacao }
         })
@@ -968,39 +978,35 @@ function Show-WizardPasso {
     param([int] $N)
     $w = $Global:JanelaPrincipal
     if (-not $w) { return }
+    $nMax = $Global:WizardNPassos
     if ($N -lt 1) { $N = 1 }
-    if ($N -gt 7) { $N = 7 }
+    if ($N -gt $nMax) { $N = $nMax }
     $Global:WizardStep = $N
 
-    for ($i = 0; $i -lt 7; $i++) {
+    for ($i = 0; $i -lt $nMax; $i++) {
         $vis = if ($i -eq ($N - 1)) { 'Visible' } else { 'Collapsed' }
         $w.FindName($Global:WizardPassos[$i]).Visibility = $vis
     }
     $w.FindName('txtWizTitulo').Text = $Global:WizardTitulos[$N - 1]
-    $w.FindName('txtWizPasso').Text  = 'Passo {0} de 7' -f $N
+    $w.FindName('txtWizPasso').Text  = 'Passo {0} de {1}' -f $N, $nMax
     $w.FindName('prgWizard').Value   = $N
 
     $w.FindName('btnWizVoltar').IsEnabled = ($N -gt 1)
-    $w.FindName('btnRefazerTeste').Visibility = 'Collapsed'
+    $rf = $w.FindName('btnRefazerTeste'); if ($rf) { $rf.Visibility = 'Collapsed' }
     $prox = $w.FindName('btnWizProximo')
-    $prox.Visibility = if ($N -lt 7) { 'Visible' } else { 'Collapsed' }
-    $prox.Content    = if ($N -eq 6) { 'Concluir' } else { 'Pr' + [char]0x00F3 + 'ximo' }
-    $prox.IsEnabled  = $true   # passo 4 recalcula em Update-Passo4Nav
+    $prox.Visibility = if ($N -lt $nMax) { 'Visible' } else { 'Collapsed' }
+    $prox.Content    = if ($N -eq ($nMax - 1)) { 'Concluir' } else { 'Pr' + [char]0x00F3 + 'ximo' }
+    $prox.IsEnabled  = $true
 
     switch ($N) {
         2 { Update-DetalheLocal }
         3 {
             if (-not $Global:FaseLocalPayload) { Invoke-ProbeRedeLocal }
-            Update-PainelFaseLocal
+            Update-PainelMeios
         }
-        4 {
-            $sel = $w.FindName('cboLocal').SelectedItem
-            $w.FindName('txtDiagLocal').Text = if ($sel) { 'Local: ' + $sel.Rotulo } else { 'Volte e selecione o local.' }
-            Update-EstadoVpn
-        }
-        5 { Update-SeletorMedicoes }
-        6 { Update-DecisaoRecalculada; Update-Passo6Recomendacao }
-        7 { Update-ResumoFim }
+        4 { Update-SeletorMedicoes }
+        5 { Update-DecisaoRecalculada; Update-Passo6Recomendacao }
+        6 { Update-ResumoFim }
     }
 }
 
@@ -1020,58 +1026,35 @@ function Invoke-WizardProximo {
             Show-WizardPasso 3
         }
         3 {
-            $p = $Global:FaseLocalPayload
-            # todos os 3 meios marcados "nao aplicavel" -> nada a testar, vai ao resultado
+            if ($Global:CheckMeioAtivo) {
+                Write-Log 'Conclua a checagem do meio aberta antes de avancar.' -Nivel Aviso
+                return
+            }
             $todosNA = $Global:MeiosNaoAplicaveis.ContainsKey('lan') -and
                        $Global:MeiosNaoAplicaveis.ContainsKey('wifi_local') -and
                        $Global:MeiosNaoAplicaveis.ContainsKey('celular')
-            if ($todosNA -and -not @($Global:Medicoes | Where-Object { -not $_.nao_aplicavel }).Count) {
+            $temMedicao = @($Global:Medicoes | Where-Object { $_ -and -not $_.nao_aplicavel }).Count -ge 1
+            if (-not $temMedicao -and -not $todosNA) {
+                Write-Log 'Rode a checagem em pelo menos um meio (ou marque os que nao se aplicam a este local).' -Nivel Aviso
+                return
+            }
+            if ($todosNA -and -not $temMedicao -and -not $Global:DiagPayload) {
                 Write-Log 'Todos os meios marcados como nao aplicaveis - o local sera registrado como inviavel.' -Nivel Aviso
                 Set-DiagnosticoVpnImpossivel -Motivo 'Nenhum meio de conexao se aplica a este local.'
-                Show-WizardPasso 5
-                return
-            }
-            if (-not $p -or $null -eq $p.Internet) {
-                Write-Log 'Rode a checagem da internet do local (ou marque os meios como nao aplicaveis) antes de avancar.' -Nivel Aviso
-                return
-            }
-            if ($Global:FaseLocalTipo -eq 'celular' -and
-                -not ([string] $w.FindName('cboOperadoraCel').Text).Trim()) {
-                Write-Log 'Informe a operadora do celular usado no roteamento.' -Nivel Aviso
-                return
             }
             Show-WizardPasso 4
         }
         4 {
-            if ([bool] $w.FindName('chkVpnImpossivel').IsChecked) {
-                $motivo = ([string] $w.FindName('txtVpnMotivo').Text).Trim()
-                if (-not $motivo) {
-                    Write-Log 'Descreva por que nao foi possivel conectar a VPN da JE.' -Nivel Aviso
-                    return
-                }
-                if (-not $Global:DiagPayload) { Set-DiagnosticoVpnImpossivel -Motivo $motivo }
-                Add-MedicaoAtual
-                Show-WizardPasso 5
-                return
-            }
-            if (-not $Global:DiagPayload) {
-                Write-Log 'Rode o diagnostico antes de avancar.' -Nivel Aviso
-                return
-            }
-            Add-MedicaoAtual
-            Show-WizardPasso 5
-        }
-        5 {
             Save-AjustesPasso5   # guarda a medicao aberta antes de checar
             $falta = Get-JustificativasFaltando -MetricasApenas
             if ($falta.Count) { Write-Log ('Justificativa obrigatoria em: {0}' -f ($falta -join ', ')) -Nivel Erro; return }
-            Show-WizardPasso 6
+            Show-WizardPasso 5
         }
-        6 {
+        5 {
             $falta = Get-JustificativasFaltando
             if ($falta.Count) { Write-Log ('Justificativa obrigatoria em: {0}' -f ($falta -join ', ')) -Nivel Erro; return }
             if (-not (Test-RecomendacaoValida)) { return }
-            Show-WizardPasso 7
+            Show-WizardPasso 6
         }
     }
 }
@@ -1114,7 +1097,7 @@ function Get-JustificativasFaltando {
         $decFinal = [string] $w.FindName('cboDecisaoFinal').SelectedItem
         $justDec  = [string] $w.FindName('txtJustDecisao').Text
         if ($decFinal -and $decFinal -ne $Global:DecisaoRecalculada -and [string]::IsNullOrWhiteSpace($justDec)) {
-            $falta += 'Decisao final'
+            $falta += 'Recomendacao final'
         }
     }
     return @($falta)
@@ -1137,19 +1120,17 @@ function Update-DetalheLocal {
     $card = $w.FindName('cardDetalheLocal')
     if (-not $card) { return }
 
-    # Trocar de Local / voltar ao passo 2 invalida a checagem da rede local:
-    # ao reentrar no passo 3 uma nova checagem e feita do zero.
+    # Trocar de Local / voltar ao passo 2 invalida o inventario das placas:
+    # ao reentrar no passo 3 um novo probe e feito do zero (as medicoes ja
+    # registradas ficam - so somem quando o Local muda, mais abaixo).
     if ($Global:FaseLocalPayload) {
         $Global:FaseLocalPayload = $null
         $Global:FaseLocalTipo    = ''
-        $ck = $w.FindName('chkTetheringCelular'); if ($ck) { $ck.IsChecked = $false }
-        $op = $w.FindName('cboOperadora');        if ($op) { $op.Text = '' }
-        foreach ($n in 'rbUsarLan', 'rbUsarWifi', 'rbUsarCelular') {
-            $c = $w.FindName($n); if ($c) { $c.IsChecked = $false }
-        }
+        $Global:MeioSelecionado  = ''
     }
     if (-not $sel) {
         $card.Visibility = 'Collapsed'
+        $cg = $w.FindName('cardGel'); if ($cg) { $cg.Visibility = 'Collapsed' }
         if ($Global:WizardStep -eq 2) {
             $w.FindName('btnWizProximo').Visibility   = 'Visible'
             $w.FindName('btnRefazerTeste').Visibility = 'Collapsed'
@@ -1162,6 +1143,7 @@ function Update-DetalheLocal {
     if ($idSel -and $idSel -ne $Global:LocalMedicoesId) {
         if (@($Global:Medicoes).Count) { Write-Log 'Local trocado - medicoes anteriores descartadas.' -Nivel Aviso }
         Reset-Medicoes
+        $Global:VistoriaGel = $null
         $Global:LocalMedicoesId = $idSel
     }
 
@@ -1192,6 +1174,7 @@ function Update-DetalheLocal {
         $lbl.Foreground = $cinza
     }
     $card.Visibility = 'Visible'
+    Update-CardGel
 
     # Passo 2: local ja testado (e nao ha diagnostico em andamento) -> some o
     # "Proximo" do rodape e aparece "Refazer o teste" no proprio cartao.
@@ -1200,6 +1183,109 @@ function Update-DetalheLocal {
         $w.FindName('btnWizProximo').Visibility   = if ($jaTestado) { 'Collapsed' } else { 'Visible' }
         $w.FindName('btnRefazerTeste').Visibility = if ($jaTestado) { 'Visible' } else { 'Collapsed' }
     }
+}
+
+# ----------------------------------------------------- ANEXO DO FORMULARIO GEL
+# Mostra o card do GEL no passo 2 e reflete o que ja foi registrado.
+function Update-CardGel {
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    $card = $w.FindName('cardGel'); if (-not $card) { return }
+    $card.Visibility = 'Visible'
+    $w.FindName('panelGelConf').Visibility = 'Collapsed'
+    $g = $Global:VistoriaGel
+    $res = $w.FindName('txtGelResumo')
+    $st  = $w.FindName('txtGelStatus')
+    if ($g) {
+        $partes = @()
+        if ($null -ne $g.lat -and $null -ne $g.long) { $partes += ('coordenadas {0}, {1}' -f $g.lat, $g.long) }
+        if ($g.suporte_nome -or $g.suporte_telefone) { $partes += 'suporte do link' }
+        if ($g.eletrica_tensao -or $g.eletrica_tomadas) { $partes += 'dados eletricos' }
+        $res.Text = 'Formulario GEL anexado: ' + (($partes -join ' - '))
+        $res.Visibility = 'Visible'
+        $st.Text = 'anexado - use "Anexar" de novo para substituir.'
+    } else {
+        $res.Visibility = 'Collapsed'
+        $st.Text = ''
+    }
+}
+
+# Botao "Anexar formulario GEL (PDF)": abre o seletor, le o PDF e preenche a
+# tela de conferencia.
+function Invoke-AnexarGel {
+    $w = $Global:JanelaPrincipal
+    $st = $w.FindName('txtGelStatus')
+    $dlg = New-Object Microsoft.Win32.OpenFileDialog
+    $dlg.Filter = 'PDF do GEL (*.pdf)|*.pdf'
+    $dlg.Title  = 'Selecione o PDF da vistoria do GEL'
+    if (-not $dlg.ShowDialog()) { return }
+
+    $st.Text = 'Lendo o PDF...'
+    try {
+        $txt = Read-TextoPdf -Caminho $dlg.FileName
+    } catch {
+        $st.Text = "Nao consegui ler o PDF: $_"
+        Write-Log "Anexo GEL - leitura falhou: $_" -Nivel Erro
+        return
+    }
+    $p = ConvertFrom-VistoriaGel -Texto $txt
+    if (-not $p.achou_algo) {
+        $st.Text = 'PDF lido, mas nao reconheci os campos do GEL. Preencha na mao abaixo se quiser.'
+    } else {
+        $st.Text = 'Campos extraidos - confira e ajuste.'
+    }
+    $w.FindName('txtGelLat').Text      = if ($null -ne $p.lat)  { "$($p.lat)"  } else { '' }
+    $w.FindName('txtGelLong').Text     = if ($null -ne $p.long) { "$($p.long)" } else { '' }
+    $w.FindName('txtGelPrec').Text     = if ($null -ne $p.precisao_m) { "$($p.precisao_m)" } else { '' }
+    $w.FindName('txtGelTensao').Text   = [string] $p.eletrica_tensao
+    $w.FindName('txtGelTomadas').Text  = [string] $p.eletrica_tomadas
+    $w.FindName('txtGelExtensao').Text = [string] $p.eletrica_extensao
+    $w.FindName('txtGelSupNome').Text  = [string] $p.suporte_nome
+    $w.FindName('txtGelSupTel').Text   = [string] $p.suporte_telefone
+    $w.FindName('panelGelConf').Visibility = 'Visible'
+    $w.FindName('txtGelResumo').Visibility = 'Collapsed'
+}
+
+function Invoke-GelCancelar {
+    $w = $Global:JanelaPrincipal
+    $w.FindName('panelGelConf').Visibility = 'Collapsed'
+    Update-CardGel
+}
+
+# "Registrar": grava o que estiver na tela de conferencia em $Global:VistoriaGel.
+function Invoke-GelRegistrar {
+    $w = $Global:JanelaPrincipal
+    $st = $w.FindName('txtGelStatus')
+
+    $latTxt  = (([string] $w.FindName('txtGelLat').Text)  -replace ',', '.').Trim()
+    $longTxt = (([string] $w.FindName('txtGelLong').Text) -replace ',', '.').Trim()
+    $precTxt = (([string] $w.FindName('txtGelPrec').Text) -replace ',', '.').Trim()
+
+    $lat = $null; $long = $null; $prec = $null
+    $la = 0.0; $lo = 0.0; $pr = 0.0
+    if ($latTxt -and [double]::TryParse($latTxt, [Globalization.NumberStyles]::Float, [Globalization.CultureInfo]::InvariantCulture, [ref] $la)) { $lat = $la }
+    if ($longTxt -and [double]::TryParse($longTxt, [Globalization.NumberStyles]::Float, [Globalization.CultureInfo]::InvariantCulture, [ref] $lo)) { $long = $lo }
+    if ($precTxt -and [double]::TryParse($precTxt, [Globalization.NumberStyles]::Float, [Globalization.CultureInfo]::InvariantCulture, [ref] $pr)) { $prec = $pr }
+
+    if (($latTxt -or $longTxt) -and ($null -eq $lat -or $null -eq $long)) {
+        $st.Text = 'Latitude/Longitude invalidas (use ponto decimal, ex.: -2.4997476).'
+        return
+    }
+
+    $Global:VistoriaGel = [pscustomobject]@{
+        lat               = $lat
+        long              = $long
+        precisao_m        = $prec
+        suporte_nome      = ([string] $w.FindName('txtGelSupNome').Text).Trim()
+        suporte_telefone  = ([string] $w.FindName('txtGelSupTel').Text).Trim()
+        eletrica_tensao   = ([string] $w.FindName('txtGelTensao').Text).Trim()
+        eletrica_tomadas  = ([string] $w.FindName('txtGelTomadas').Text).Trim()
+        eletrica_extensao = ([string] $w.FindName('txtGelExtensao').Text).Trim()
+        mapa_link         = if ($null -ne $lat -and $null -ne $long) { Get-LinkGoogleMaps -Lat $lat -Long $long } else { '' }
+        anexado_em        = (Get-Date).ToString('o')
+    }
+    Write-Log 'Formulario GEL anexado ao local.' -Nivel Ok
+    Update-CardGel
 }
 
 # ------------------------------------------------------------- PASSO 3: REDE LOCAL
@@ -1242,18 +1328,34 @@ function Start-TarefaRede {
     $handle = $ps.BeginInvoke()
     $timer = [Windows.Threading.DispatcherTimer]::new()
     $timer.Interval = [TimeSpan]::FromMilliseconds(200)
-    $Global:TarefaRedeState = @{ PS = $ps; RS = $rs; Handle = $handle; Timer = $timer; AoConcluir = $AoConcluir; Concluido = $false }
+    $Global:TarefaRedeState = @{ PS = $ps; RS = $rs; Handle = $handle; Timer = $timer; AoConcluir = $AoConcluir; Concluido = $false; Inicio = (Get-Date); LimiteS = 150 }
 
     $timer.Add_Tick({
       # Blindagem total: nada aqui pode escapar para o loop do ShowDialog
       # (senao a janela fecha com "excecao ao chamar ShowDialog").
       try {
         $st = $Global:TarefaRedeState
+        if ($null -eq $st -or $st.Concluido) { return }
+        # Watchdog: se o runspace travou (ex.: netsh/CIM sem responder), nao
+        # deixa o passo 3 "verificando..." pra sempre - aborta e sinaliza erro.
+        if (-not $st.Handle.IsCompleted) {
+            if (((Get-Date) - $st.Inicio).TotalSeconds -lt $st.LimiteS) { return }
+            $st.Concluido = $true
+            $st.Timer.Stop()
+            $Global:TarefaRedeState = $null
+            # nao chamar .Stop()/.EndInvoke() num pipeline travado (pode prender a
+            # thread de UI). So dispose - a thread do runspace fica abandonada.
+            try { $st.PS.Dispose() } catch { }
+            try { $st.RS.Dispose() } catch { }
+            try { & $st.AoConcluir $null 'a checagem demorou demais e foi cancelada (verifique o Wi-Fi/servico de rede)' } catch {
+                try { Set-FaseLocalOcupado $false } catch { }
+            }
+            return
+        }
         # Concluido: se um tick ja enfileirado disparar de novo (o processamento
         # abaixo demora mais que o intervalo do timer), ele nao pode reprocessar
         # o mesmo slot -> senao dava EndInvoke/Dispose em dobro ("o fluxo nao era
         # legivel").
-        if ($null -eq $st -or $st.Concluido -or -not $st.Handle.IsCompleted) { return }
         $st.Concluido = $true
         $st.Timer.Stop()
         $Global:TarefaRedeState = $null
@@ -1276,68 +1378,102 @@ function Start-TarefaRede {
     $timer.Start()
 }
 
-# Trava os botoes do passo 3 e mostra o anel enquanto a fase local roda.
+# Trava a navegacao + o botao de reler placas enquanto o probe/checagem roda.
 function Set-FaseLocalOcupado {
     param([bool] $Ocupado)
     $w = $Global:JanelaPrincipal
     if (-not $w) { return }
-    $ring = $w.FindName('ringLocal')
-    if ($ring) {
-        $ring.IsActive   = $Ocupado
-        $ring.Visibility = if ($Ocupado) { 'Visible' } else { 'Collapsed' }
-    }
-    foreach ($n in 'btnRodarFaseLocal', 'btnRelerPlacas',
-        'btnWizProximo', 'btnWizVoltar', 'rbUsarLan', 'rbUsarWifi') {
+    foreach ($n in 'btnRelerPlacas', 'btnRelerLan', 'btnRelerWifi', 'btnRelerCel',
+        'btnWizProximo', 'btnWizVoltar',
+        'btnCheckLan', 'btnCheckWifi', 'btnCheckCelular') {
         $c = $w.FindName($n); if ($c) { $c.IsEnabled = -not $Ocupado }
     }
+    $r = $w.FindName('ringMeios')
+    if ($r) { $r.IsActive = $Ocupado; $r.Visibility = if ($Ocupado) { 'Visible' } else { 'Collapsed' } }
 }
 
-# Escolha da placa (radio nos cartoes) -> revalida o passo 3.
-function Set-FaseLocalTipo {
-    param([string] $Tipo)
-    $Global:FaseLocalTipo = $Tipo
+# Nome do checkbox "nao se aplica" de cada meio.
+function Get-ChkNaNome {
+    param([string] $Meio)
+    switch ($Meio) { 'lan' { 'chkNaLan' } 'wifi_local' { 'chkNaWifi' } 'celular' { 'chkNaCelular' } default { '' } }
+}
+
+# Abre o card de justificativa "nao se aplica" para um meio.
+function Open-CardNaJustif {
+    param([string] $Meio)
     $w = $Global:JanelaPrincipal
-    if ($w) {
-        # o "meio celular" e a antiga marca de tethering: mantem o estado legado
-        # coerente para todo o codigo a jusante (JSON, relatorio...).
-        $ck = $w.FindName('chkTetheringCelular')
-        if ($ck) { $ck.IsChecked = ($Tipo -eq 'celular') }
-        if ($Tipo -eq 'celular') {
-            $w.FindName('cboOperadora').Text = ([string] $w.FindName('cboOperadoraCel').Text).Trim()
-        }
+    if (-not $w) { return }
+    # ja havia outro meio pendente sem registrar -> desmarca o checkbox dele
+    if ($Global:NaMeioPendente -and $Global:NaMeioPendente -ne $Meio) {
+        $c = $w.FindName((Get-ChkNaNome $Global:NaMeioPendente)); if ($c) { $c.IsChecked = $false }
     }
-    Update-PainelFaseLocal
+    $Global:NaMeioPendente = $Meio
+    $w.FindName('txtNaJustifMeio').Text = 'Meio: ' + (Get-RotuloMeio $Meio '')
+    $ja = if ($Global:MeiosNaoAplicaveis.ContainsKey($Meio)) { [string] $Global:MeiosNaoAplicaveis[$Meio] } else { '' }
+    $w.FindName('txtNaJustif').Text = $ja
+    $w.FindName('cardNaJustif').Visibility = 'Visible'
+    try { $w.FindName('txtNaJustif').Focus() } catch { }
 }
 
-# chkNaLan/Wifi/Celular + o campo de motivo: marca/desmarca meios "nao aplicaveis".
+# Botao "Registrar" do card de justificativa: grava e fecha; o motivo aparece
+# no card do meio, em vermelho (inviavel).
+function Invoke-NaRegistrar {
+    $w = $Global:JanelaPrincipal
+    $meio = [string] $Global:NaMeioPendente
+    if (-not $meio) { $w.FindName('cardNaJustif').Visibility = 'Collapsed'; return }
+    $motivo = ([string] $w.FindName('txtNaJustif').Text).Trim()
+    if (-not $motivo) { Write-Log 'Informe a justificativa antes de registrar.' -Nivel Aviso; return }
+    Set-MeioNaoAplicavel -Meio $meio -Motivo $motivo
+    $Global:NaMeioPendente = ''
+    $w.FindName('txtNaJustif').Text = ''
+    $w.FindName('cardNaJustif').Visibility = 'Collapsed'
+    Write-Log ('Meio {0} marcado como NAO APLICAVEL (inviavel): {1}' -f (Get-RotuloMeio $meio ''), $motivo) -Nivel Aviso
+    Update-PainelMeios
+}
+
+# Botao "Cancelar" do card de justificativa: fecha e desmarca o checkbox se o
+# meio ainda nao estava registrado.
+function Invoke-NaCancelar {
+    $w = $Global:JanelaPrincipal
+    $meio = [string] $Global:NaMeioPendente
+    $Global:NaMeioPendente = ''
+    $w.FindName('cardNaJustif').Visibility = 'Collapsed'
+    $w.FindName('txtNaJustif').Text = ''
+    if ($meio -and -not $Global:MeiosNaoAplicaveis.ContainsKey($meio)) {
+        $c = $w.FindName((Get-ChkNaNome $meio)); if ($c) { $c.IsChecked = $false }
+    }
+    Update-PainelMeios
+}
+
+# Handler do clique nos checkboxes "nao se aplica": marcou -> abre o card de
+# justificativa; desmarcou -> remove o "nao aplicavel".
 function Update-NaoAplicavelMeio {
     $w = $Global:JanelaPrincipal
     if (-not $w) { return }
-    $map = @{ chkNaLan = 'lan'; chkNaWifi = 'wifi_local'; chkNaCelular = 'celular' }
-    $motivo = ([string] $w.FindName('txtMotivoNaMeio').Text).Trim()
-    $algumMarcado = $false
-    foreach ($ctl in $map.Keys) {
-        $meio = $map[$ctl]
-        $marcado = [bool] $w.FindName($ctl).IsChecked
-        if ($marcado) {
-            $algumMarcado = $true
-            if ($motivo) { Set-MeioNaoAplicavel -Meio $meio -Motivo $motivo }
-        } elseif ($Global:MeiosNaoAplicaveis.ContainsKey($meio)) {
+    foreach ($m in @(@('chkNaLan', 'lan'), @('chkNaWifi', 'wifi_local'), @('chkNaCelular', 'celular'))) {
+        $chk  = $w.FindName($m[0])
+        $meio = $m[1]
+        if (-not $chk) { continue }
+        $marcado    = [bool] $chk.IsChecked
+        $registrado = $Global:MeiosNaoAplicaveis.ContainsKey($meio)
+        $pendente   = ($Global:NaMeioPendente -eq $meio)
+        if ($marcado -and -not $registrado -and -not $pendente) {
+            Open-CardNaJustif -Meio $meio
+        } elseif (-not $marcado -and $registrado) {
             $Global:MeiosNaoAplicaveis.Remove($meio)
             $Global:Medicoes = @($Global:Medicoes | Where-Object { -not ($_.meio -eq $meio -and $_.nao_aplicavel) })
+        } elseif (-not $marcado -and $pendente) {
+            $Global:NaMeioPendente = ''
+            $w.FindName('cardNaJustif').Visibility = 'Collapsed'
+            $w.FindName('txtNaJustif').Text = ''
         }
     }
-    $vis = if ($algumMarcado) { 'Visible' } else { 'Collapsed' }
-    $w.FindName('txtMotivoNaMeio').Visibility = $vis
-    $w.FindName('txtMotivoNaDica').Visibility = $vis
-    if (-not $algumMarcado) { $w.FindName('txtMotivoNaMeio').Text = '' }
-    Update-PainelFaseLocal
+    Update-PainelMeios
 }
 
-# Preenche o cartao da placa de rede + regras de habilitacao do passo 3.
-# $Global:FaseLocalPayload pode estar so com as placas (probe, Internet=$null)
-# ou completo (apos "Rodar checagem local", com Internet).
-function Update-PainelFaseLocal {
+# Passo 3: preenche os 3 cards de meio (inventario das placas + estado da
+# checagem) e libera o botao "Rodar checagem" de cada card.
+function Update-PainelMeios {
     $w = $Global:JanelaPrincipal
     if (-not $w) { return }
     $card = $w.FindName('cardFaseLocal')
@@ -1347,22 +1483,26 @@ function Update-PainelFaseLocal {
     $vermelho = Get-PincelVeredito 'inviavel'
     $cinza    = [Windows.Media.SolidColorBrush]::new([Windows.Media.ColorConverter]::ConvertFromString('#7D8698'))
     $cinza.Freeze()
+    $hair = $w.TryFindResource('Dicon.Hair')
 
     $cardWifi = $w.FindName('cardWifiBandeja')
 
+    $rm = $w.FindName('ringMeios')
     if (-not $p) {
         if ($card) { $card.Visibility = 'Collapsed' }
-        $w.FindName('cardInternetLocal').Visibility = 'Collapsed'
         if ($cardWifi) { $cardWifi.Visibility = 'Collapsed' }
-        $w.FindName('txtLocDica').Visibility = 'Collapsed'
+        $w.FindName('cardRecMeios').Visibility = 'Collapsed'
         $w.FindName('txtLocEscolha').Text = 'Verificando as placas de rede deste computador...'
-        $w.FindName('btnRodarFaseLocal').IsEnabled = $false
-        $w.FindName('chkTetheringCelular').IsEnabled = $false
+        if ($rm) { $rm.IsActive = $true; $rm.Visibility = 'Visible' }
+        foreach ($n in 'btnCheckLan', 'btnCheckWifi', 'btnCheckCelular') {
+            $b = $w.FindName($n); if ($b) { $b.IsEnabled = $false }
+        }
         return
     }
-    $w.FindName('txtLocEscolha').Text = 'Escolha o meio de conexao a testar nesta rodada. Voce pode testar mais de um meio no mesmo local; marque os que nao se aplicam.'
+    if ($rm) { $rm.IsActive = $false; $rm.Visibility = 'Collapsed' }
+    $w.FindName('txtLocEscolha').Text = 'Rode a checagem de cada meio que serve a este local. Marque os que nao se aplicam.'
 
-    $lan = $p.Lan; $wf = $p.Wireless; $it = $p.Internet
+    $lan = $p.Lan; $wf = $p.Wireless
     $hostNb = if ($p.PSObject.Properties['Host']) { [string] $p.Host } else { '' }
     Set-LinhaDetalhe $w.FindName('txtLocHost') 'Computador' $hostNb
 
@@ -1387,6 +1527,13 @@ function Update-PainelFaseLocal {
     Set-LinhaDetalhe $w.FindName('txtLocVel')     'Enlace'          $(if ($lan.velocidade_mbps) { "$($lan.velocidade_mbps) Mbps" } else { '' })
     Set-LinhaDetalhe $w.FindName('txtLocOrigem')  'Obtencao do IP'   ([string] $lan.ip_origem)
 
+    # IP 10.11.* / 10.198.* na placa cabeada = notebook plugado na rede da JE.
+    $je = $w.FindName('cardLocJE')
+    if ($je) {
+        $ehJE = $lanUp -and (Test-RedeJusticaEleitoral ([string] $lan.ipv4))
+        $je.Visibility = if ($ehJE) { 'Visible' } else { 'Collapsed' }
+    }
+
     $wifiUp = [bool] $wf.conectado
     $tw = $w.FindName('txtLocWifi'); $dw = $w.FindName('dotWifi')
     if ($wifiUp) {
@@ -1401,7 +1548,6 @@ function Update-PainelFaseLocal {
         $tw.Text = 'Sem placa Wi-Fi neste computador'
         $tw.Foreground = $cinza ; $dw.Fill = $cinza
     }
-    # sem Wi-Fi associado -> nao mostra IP/gateway/mascara/MAC/origem (evita dado velho)
     Set-LinhaDetalhe $w.FindName('txtLocWifiIp')   'IP na rede local' $(if ($wifiUp) { [string] $wf.ipv4 } else { '' })
     Set-LinhaDetalhe $w.FindName('txtLocWifiGw')   'Gateway'          $(if ($wifiUp) { [string] $wf.gateway } else { '' })
     Set-LinhaDetalhe $w.FindName('txtLocWifiMask') 'Mascara'          $(if ($wifiUp) { [string] $wf.mascara } else { '' })
@@ -1416,25 +1562,6 @@ function Update-PainelFaseLocal {
         $twd.Visibility = if ($twd.Text) { 'Visible' } else { 'Collapsed' }
     }
 
-    # card do speedtest: as linhas ja foram transmitidas ao vivo pelo runspace;
-    # aqui so garantimos o resultado final (ou o erro) a partir do payload.
-    $ci = $w.FindName('cardInternetLocal')
-    if ($it) {
-        $ci.Visibility = 'Visible'
-        $preenche = { param($n) if ($it.PSObject.Properties[$n]) { $it.($n) } }
-        if ($it.speedtest_ok) {
-            Update-SpeedtestPainel -It $it
-        } else {
-            $w.FindName('painelSpeedResultado').Visibility = 'Collapsed'
-            $te = $w.FindName('txtSpeedErro')
-            $te.Text = [string] (& $preenche 'speedtest_erro')
-            $te.Visibility = if ($te.Text) { 'Visible' } else { 'Collapsed' }
-        }
-    } else {
-        $ci.Visibility = 'Collapsed'
-    }
-
-    # cartao "celular": conexao Wi-Fi (o roteamento usa a mesma placa)
     $tcel = $w.FindName('txtLocCel')
     if ($tcel) {
         $tcel.Text = if ($wifiUp) { 'Conectado a "{0}" ({1}%)' -f $wf.ssid, $wf.sinal_pct }
@@ -1443,103 +1570,221 @@ function Update-PainelFaseLocal {
         $tcel.Foreground = if ($wifiUp) { $verde } else { $cinza }
     }
 
-    # --- badges de estado dos 3 meios (a partir das medicoes) -------------
+    # A placa Wi-Fi so fica numa rede por vez: o tecnico escolhe, clicando no card,
+    # se essa rede e o Wi-Fi do local (card WI-FI) ou o roteamento do celular (card
+    # CELULAR). O card selecionado ganha borda azul e libera o "Rodar checagem".
+    $sel = [string] $Global:MeioSelecionado
+    if ($sel) {
+        $selNaKey = if ($sel -eq 'wifi') { 'wifi_local' } else { $sel }
+        if ($Global:MeiosNaoAplicaveis.ContainsKey($selNaKey) -or $Global:NaMeioPendente -eq $selNaKey) {
+            $Global:MeioSelecionado = ''; $sel = ''
+        }
+    }
+    # caso obvio: so a LAN conectada (sem Wi-Fi) -> ja seleciona a LAN. Com Wi-Fi
+    # conectado a escolha e do tecnico (Wi-Fi do local x roteamento do celular).
+    if (-not $sel -and $lanUp -and -not $wifiUp -and -not $Global:MeiosNaoAplicaveis.ContainsKey('lan')) {
+        $Global:MeioSelecionado = 'lan'; $sel = 'lan'
+    }
+    $tws = $w.FindName('txtWifiSelDica')
+    if ($tws) { $tws.Visibility = if ($wifiUp -and $sel -ne 'wifi') { 'Visible' } else { 'Collapsed' } }
+    $tcd = $w.FindName('txtCelDica')
+    if ($tcd) {
+        $tcd.Text = if (-not $wifiUp) {
+            'Ligue o roteamento no celular, conecte a rede dele pela bandeja do Windows, clique neste card e informe a operadora.'
+        } elseif ($sel -eq 'celular') {
+            'Rede "{0}" sera testada como roteamento de celular. Informe a operadora e rode a checagem.' -f $wf.ssid
+        } else {
+            'Se "{0}" e o roteamento do seu celular, clique neste card para seleciona-lo e informe a operadora.' -f $wf.ssid
+        }
+    }
+
+    # --- estado (badge + borda) e botao de cada meio ----------------------
     $estadoMeio = {
         param($meio)
-        if ($Global:MeiosNaoAplicaveis.ContainsKey($meio)) { return @{ txt = 'NAO APLICAVEL'; cor = $cinza } }
+        if ($Global:MeiosNaoAplicaveis.ContainsKey($meio)) {
+            $ci = Get-PincelVeredito 'inviavel'
+            return @{ txt = 'NAO SE APLICA - INVIAVEL'; cor = $ci; borda = $ci }
+        }
         $m = @($Global:Medicoes | Where-Object { $_.meio -eq $meio -and -not $_.nao_aplicavel } | Select-Object -Last 1)
         if ($m) {
-            return @{ txt = 'TESTADO: ' + (Get-PalavraVeredito $m.veredito).ToUpper(); cor = (Get-PincelVeredito $m.veredito) }
+            $c = Get-PincelVeredito $m.veredito
+            return @{ txt = 'TESTADO: ' + (Get-PalavraVeredito $m.veredito).ToUpper(); cor = $c; borda = $c }
         }
-        @{ txt = 'NAO TESTADO'; cor = $cinza }
+        @{ txt = 'NAO TESTADO'; cor = $cinza; borda = $hair }
     }
-    foreach ($par in @(@('badgeLan', 'lan'), @('badgeWifi', 'wifi_local'), @('badgeCelular', 'celular'))) {
-        $b = $w.FindName($par[0])
-        if ($b) { $e = & $estadoMeio $par[1]; $b.Text = $e.txt; $b.Foreground = $e.cor }
+    $operCel = ([string] $w.FindName('cboOperadoraCel').Text).Trim()
+    $livre   = -not $Global:CheckMeioAtivo
+    $azulSel = $w.TryFindResource('Dicon.Accent')
+    if (-not $azulSel) {
+        $azulSel = [Windows.Media.SolidColorBrush]::new([Windows.Media.ColorConverter]::ConvertFromString('#3B82F6'))
+        $azulSel.Freeze()
     }
-    # sincroniza os checkboxes "nao aplicavel" com o estado
-    foreach ($par in @(@('chkNaLan', 'lan'), @('chkNaWifi', 'wifi_local'), @('chkNaCelular', 'celular'))) {
+
+    # (card, badge, meio, botao, selKey, conectado, extraOK)
+    # Wi-Fi do local x Celular: a mesma conexao Wi-Fi; o que decide qual meio roda
+    # e o card selecionado (borda azul). Celular ainda exige a operadora.
+    $defs = @(
+        @('cardLan',       'badgeLan',      'lan',        'btnCheckLan',      'lan',      $lanUp,                 $true),
+        @('cardWifiPlaca', 'badgeWifi',     'wifi_local', 'btnCheckWifi',     'wifi',     ([bool] $wf.conectado), $true),
+        @('cardCelular',   'badgeCelular',  'celular',    'btnCheckCelular',  'celular',  ([bool] $wf.conectado), [bool] $operCel)
+    )
+    foreach ($d in $defs) {
+        $cd    = $w.FindName($d[0])
+        $badge = $w.FindName($d[1])
+        $meio  = $d[2]
+        $btn   = $w.FindName($d[3])
+        $selKey    = $d[4]
+        $conectado = [bool] $d[5]
+        $extraOK   = [bool] $d[6]
+        $naMeio = $Global:MeiosNaoAplicaveis.ContainsKey($meio)
+        $selecionado = ($sel -eq $selKey) -and -not $naMeio
+
+        $e = & $estadoMeio $meio
+        if ($badge) { $badge.Text = $e.txt; $badge.Foreground = $e.cor }
+        if ($cd) {
+            $cd.BorderBrush     = if ($selecionado) { $azulSel } else { $e.borda }
+            $cd.BorderThickness = [Windows.Thickness]::new($(if ($selecionado) { 2.5 } else { 2 }))
+            $cd.Opacity         = if ($naMeio) { 0.6 } else { 1.0 }
+        }
+        if ($btn) {
+            $btn.IsEnabled = $selecionado -and $conectado -and $extraOK -and -not $naMeio -and $livre
+            $btn.Content   = if (@($Global:Medicoes | Where-Object { $_.meio -eq $meio -and -not $_.nao_aplicavel }).Count) {
+                'Refazer checagem'
+            } else { 'Rodar checagem' }
+        }
+    }
+
+    # sincroniza os checkboxes "nao aplicavel" e mostra o motivo registrado no card
+    foreach ($par in @(
+        @('chkNaLan', 'lan', 'txtNaMotivoCardLan'),
+        @('chkNaWifi', 'wifi_local', 'txtNaMotivoCardWifi'),
+        @('chkNaCelular', 'celular', 'txtNaMotivoCardCelular'))) {
+        $meio = $par[1]
+        $na   = $Global:MeiosNaoAplicaveis.ContainsKey($meio)
+        $pend = ($Global:NaMeioPendente -eq $meio)
         $c = $w.FindName($par[0])
-        if ($c) { $c.IsChecked = $Global:MeiosNaoAplicaveis.ContainsKey($par[1]) }
+        if ($c) { $alvo = ($na -or $pend); if ([bool] $c.IsChecked -ne $alvo) { $c.IsChecked = $alvo } }
+        $tt = $w.FindName($par[2])
+        if ($tt) {
+            if ($na) { $tt.Text = 'Nao se aplica: ' + [string] $Global:MeiosNaoAplicaveis[$meio]; $tt.Visibility = 'Visible' }
+            else { $tt.Text = ''; $tt.Visibility = 'Collapsed' }
+        }
     }
 
-    # --- escolha do meio (radio) + regras de habilitacao -----------------
-    $tipo = [string] $Global:FaseLocalTipo
-    $rbL = $w.FindName('rbUsarLan'); $rbW = $w.FindName('rbUsarWifi'); $rbC = $w.FindName('rbUsarCelular')
-    $naLan = $Global:MeiosNaoAplicaveis.ContainsKey('lan')
-    $naWf  = $Global:MeiosNaoAplicaveis.ContainsKey('wifi_local')
-    $naCel = $Global:MeiosNaoAplicaveis.ContainsKey('celular')
-
-    if ($rbL) { $rbL.IsEnabled = [bool] $lan.conectado -and -not $naLan }
-    if ($rbW) { $rbW.IsEnabled = [bool] $wf.presente   -and -not $naWf  }
-    if ($rbC) { $rbC.IsEnabled = [bool] $wf.presente   -and -not $naCel }
-
-    if ($tipo -eq 'lan'     -and $rbL -and -not $rbL.IsEnabled) { $tipo = ''; $rbL.IsChecked = $false }
-    if ($tipo -eq 'wifi'    -and $rbW -and -not $rbW.IsEnabled) { $tipo = ''; $rbW.IsChecked = $false }
-    if ($tipo -eq 'celular' -and $rbC -and -not $rbC.IsEnabled) { $tipo = ''; $rbC.IsChecked = $false }
-    $Global:FaseLocalTipo = $tipo
-
-    # realce + esmaecimento do cartao (borda accent no escolhido; opaco no NA)
-    $accent = $w.TryFindResource('Dicon.Accent')
-    $hair   = $w.TryFindResource('Dicon.Hair')
-    foreach ($par in @(@('cardLan', 'lan', $naLan), @('cardWifiPlaca', 'wifi', $naWf), @('cardCelular', 'celular', $naCel))) {
-        $cd = $w.FindName($par[0])
-        if (-not $cd) { continue }
-        $sel = ($tipo -eq $par[1])
-        $cd.BorderBrush     = if ($sel) { $accent } else { $hair }
-        $cd.BorderThickness = [Windows.Thickness]::new($(if ($sel) { 2 } else { 1 }))
-        $cd.Opacity         = if ($par[2]) { 0.5 } else { 1.0 }
-    }
-
-    # card informativo "conecte pelo Windows": so aparece se ha placa Wi-Fi
-    if ($cardWifi) {
-        $cardWifi.Visibility = if ($wf.presente) { 'Visible' } else { 'Collapsed' }
-    }
-
-    # botao "Rodar checagem local": meio escolhido E aquela via conectada
-    $operCel  = ([string] $w.FindName('cboOperadoraCel').Text).Trim()
-    $prontoLan  = ($tipo -eq 'lan')     -and $lanUp
-    $prontoWifi = ($tipo -eq 'wifi')    -and $wifiUp
-    $prontoCel  = ($tipo -eq 'celular') -and $wifiUp -and $operCel
-    $w.FindName('btnRodarFaseLocal').IsEnabled = $prontoLan -or $prontoWifi -or $prontoCel
-
-    $dica = $w.FindName('txtLocDica')
-    $msg =
-        if ($prontoLan -or $prontoWifi -or $prontoCel) { '' }
-        elseif (-not $tipo) { 'Escolha um meio de conexao nos cartoes acima (ou marque os que nao se aplicam a este local).' }
-        elseif ($tipo -eq 'wifi'    -and -not $wifiUp) { 'Conecte-se a rede Wi-Fi do local no card abaixo para liberar a checagem.' }
-        elseif ($tipo -eq 'celular' -and -not $wifiUp) { 'Conecte-se a rede roteada do celular no card abaixo para liberar a checagem.' }
-        elseif ($tipo -eq 'celular' -and -not $operCel) { 'Informe a operadora do celular no cartao do meio Celular.' }
-        elseif ($tipo -eq 'lan'     -and -not $lanUp)  { 'A rede cabeada nao esta conectada. Ligue o cabo ou escolha outro meio.' }
-        else { '' }
-    $dica.Text = $msg
-    $dica.Visibility = if ($msg) { 'Visible' } else { 'Collapsed' }
-
+    if ($cardWifi) { $cardWifi.Visibility = if ($wf.presente) { 'Visible' } else { 'Collapsed' } }
     $card.Visibility = 'Visible'
+    Update-BannerRecomendacao
+}
+
+# Banner "Recomendacao para este local: usar <meio>" no passo 3 (aparece quando
+# ha pelo menos um meio testado).
+function Update-BannerRecomendacao {
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    $card = $w.FindName('cardRecMeios')
+    if (-not $card) { return }
+    $testados = @($Global:Medicoes | Where-Object { $_ -and -not $_.nao_aplicavel -and $_.veredito -ne 'nao_testado' })
+    if (-not $testados.Count) { $card.Visibility = 'Collapsed'; return }
+
+    $rec = Get-RecomendacaoLocal
+    $card.Visibility = 'Visible'
+    if (-not $rec -or $rec.meio -eq 'nenhuma') {
+        $w.FindName('txtRecMeios').Text = 'Recomendacao para este local: nenhum meio testado ate agora serve. Continue testando os outros meios.'
+    } else {
+        $w.FindName('txtRecMeios').Text = 'Recomendacao para este local: usar {0} -- {1}.' -f $rec.rotulo, (Get-RotuloVeredito $rec.veredito)
+    }
+    $obs = $w.FindName('txtRecMeiosObs')
+    if ($rec -and $rec.provisoria) {
+        $obs.Text = 'Provisoria: nenhum meio fechou a VPN. Teste os demais meios ou conclua sabendo que o local fica inviavel.'
+        $obs.Visibility = 'Visible'
+    } else { $obs.Visibility = 'Collapsed' }
 }
 
 # Probe rapido ao ENTRAR no passo 3: so inventaria as placas (sem internet).
 # Botao de recarregar (canto da tela do passo 3): reinventaria as placas -
 # pega cabo plugado/desplugado e mudanca de Wi-Fi sem sair do passo.
 function Invoke-RelerPlacas {
-    if ($Global:TarefaRedeState) {
+    if ($Global:TarefaRedeState -or $Global:CheckMeioAtivo) {
         Write-Log 'Aguarde a checagem em andamento terminar.' -Nivel Aviso
         return
     }
-    $p = $Global:FaseLocalPayload
-    if ($p -and $p.PSObject.Properties['Internet'] -and $p.Internet) {
-        Write-Log 'Relendo as placas - o teste de velocidade anterior sera descartado; rode a checagem de novo.' -Nivel Aviso
-    } else {
-        Write-Log 'Relendo o status das placas de rede...' -Nivel Info
-    }
+    Write-Log 'Relendo TODAS as placas de rede...' -Nivel Info
     Invoke-ProbeRedeLocal
+}
+
+# Spinner + trava so no card da placa que esta sendo relida (nao no probe geral).
+function Set-RelerAdaptadorOcupado {
+    param([string] $Tipo, [bool] $Ocupado)
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    $rings = if ($Tipo -eq 'lan') { @('ringRelerLan') } else { @('ringRelerWifi', 'ringRelerCel') }
+    foreach ($n in $rings) {
+        $r = $w.FindName($n)
+        if ($r) { $r.IsActive = $Ocupado; $r.Visibility = if ($Ocupado) { 'Visible' } else { 'Collapsed' } }
+    }
+    # uma tarefa de rede por vez: trava tudo enquanto roda; ao liberar, o
+    # Update-PainelMeios recalcula o estado real dos botoes "Rodar checagem".
+    foreach ($n in 'btnRelerPlacas', 'btnRelerLan', 'btnRelerWifi', 'btnRelerCel', 'btnWizProximo', 'btnWizVoltar') {
+        $c = $w.FindName($n); if ($c) { $c.IsEnabled = -not $Ocupado }
+    }
+    if ($Ocupado) {
+        foreach ($n in 'btnCheckLan', 'btnCheckWifi', 'btnCheckCelular') {
+            $c = $w.FindName($n); if ($c) { $c.IsEnabled = $false }
+        }
+    }
+}
+
+# Botao (do card) para reler SO uma placa - preserva o que ja foi coletado da
+# outra. Ex.: ja testei a LAN, tirei o cabo e liguei o Wi-Fi -> releio so o
+# Wi-Fi e o card LAN mantem o IP/gateway/... da coleta anterior.
+function Invoke-RelerAdaptador {
+    param([string] $Tipo)   # 'lan' | 'wifi'
+    if ($Global:TarefaRedeState -or $Global:CheckMeioAtivo) {
+        Write-Log 'Aguarde a checagem em andamento terminar.' -Nivel Aviso
+        return
+    }
+    if (-not $Global:FaseLocalPayload) { Invoke-ProbeRedeLocal; return }
+
+    if ($Global:FaseLocalSimulada) {
+        $s = $Global:FaseLocalSimulada
+        if ($Tipo -eq 'lan') { $Global:FaseLocalPayload.Lan = $s.Lan }
+        else { $Global:FaseLocalPayload.Wireless = $s.Wireless }
+        Update-PainelMeios
+        return
+    }
+
+    $Global:RelerAdaptadorTipo = $Tipo
+    Set-RelerAdaptadorOcupado $Tipo $true
+    $rot = if ($Tipo -eq 'lan') { 'cabeada (LAN)' } else { 'Wi-Fi' }
+    $script = if ($Tipo -eq 'lan') { 'Get-AdaptadorLan' } else { 'Get-AdaptadorWireless' }
+    Write-Log ("Relendo so a placa {0} (o outro card fica como esta)..." -f $rot) -Nivel Info
+    Start-TarefaRede -Script $script -AoConcluir { param($res, $erro) Complete-RelerAdaptador $res $erro }
+}
+
+function Complete-RelerAdaptador {
+    param($Novo, $Erro)
+    $tipo = [string] $Global:RelerAdaptadorTipo
+    $Global:RelerAdaptadorTipo = ''
+    Set-RelerAdaptadorOcupado $tipo $false
+
+    if ($Erro) { Write-Log ("Nao consegui reler a placa: {0}" -f $Erro) -Nivel Aviso; Update-PainelMeios; return }
+    if (-not $Novo -or -not $Global:FaseLocalPayload) { Write-Log 'Releitura da placa nao retornou dados.' -Nivel Aviso; Update-PainelMeios; return }
+
+    if ($tipo -eq 'lan') {
+        $Global:FaseLocalPayload.Lan = $Novo
+        Write-Log ('Placa LAN relida: {0}' -f $(if ($Novo.conectado) { "conectada - IP $($Novo.ipv4)" } else { 'sem conexao' })) -Nivel Info
+    } else {
+        $Global:FaseLocalPayload.Wireless = $Novo
+        Write-Log ('Placa Wi-Fi relida: {0}' -f $(if ($Novo.conectado) { "conectada a `"$($Novo.ssid)`"" } else { 'sem conexao' })) -Nivel Info
+    }
+    Update-PainelMeios
 }
 
 function Invoke-ProbeRedeLocal {
     if ($Global:FaseLocalSimulada) {
         $s = $Global:FaseLocalSimulada
         $Global:FaseLocalPayload = [pscustomobject]@{ Host = $s.Host; Lan = $s.Lan; Wireless = $s.Wireless; Internet = $null; Quando = $s.Quando }
-        Update-PainelFaseLocal
+        Update-PainelMeios
         return
     }
     Set-FaseLocalOcupado $true
@@ -1581,7 +1826,7 @@ function Complete-ProbeRedeLocal {
     }
 
     $Global:FaseLocalPayload = $Payload
-    Update-PainelFaseLocal
+    Update-PainelMeios
 }
 
 # Rola cada coluna do teste de internet para o fim quando chega linha nova.
@@ -1914,60 +2159,310 @@ function Update-IperfPainel {
     }
 }
 
-# Botao "Rodar checagem local": teste de velocidade Ookla (speedtest.exe).
-function Invoke-RodarFaseLocal {
-    $p = $Global:FaseLocalPayload
-    $tipo = [string] $Global:FaseLocalTipo
-    $ok = ($tipo -eq 'lan'     -and $p -and [bool] $p.Lan.conectado) -or `
-          ($tipo -eq 'wifi'    -and $p -and [bool] $p.Wireless.conectado) -or `
-          ($tipo -eq 'celular' -and $p -and [bool] $p.Wireless.conectado)
-    if (-not $ok) {
-        Write-Log 'Escolha o meio (LAN, Wi-Fi do local ou celular) e conecte-o antes de rodar a checagem.' -Nivel Aviso
-        return
-    }
-    Write-Log ("Checagem local pelo meio: {0}" -f (Get-RotuloMeio (Get-MeioDoPasso3).meio (Get-MeioDoPasso3).operadora)) -Nivel Info
-    Reset-Velocimetro
-    $w = $Global:JanelaPrincipal
-    if ($w) {
-        $w.FindName('cardInternetLocal').Visibility = 'Visible'
-        $w.FindName('txtVeloFase').Text = 'iniciando...'
-    }
+# =============================================================== OVERLAY: CHECAGEM DE UM MEIO
+# Cada card do passo 3 tem seu botao "Rodar checagem" -> Invoke-CheckMeio, que
+# abre o overlay modal. O tecnico avanca a mao: "Iniciar" roda a Fase 1;
+# "Testar a VPN" roda a Fase 2; ao fim, "Concluir" fecha. Fase 3 (Selenium)
+# fica "em implementacao". Uma checagem por vez ($Global:CheckMeioAtivo);
+# estado da maquina em $Global:ChkFase ('f1-pronto'|'f1-rodando'|'f2-pronto'|
+# 'f2-rodando'|'fim').
 
-    if ($Global:FaseLocalSimulada) { Complete-FaseLocal $Global:FaseLocalSimulada $null; return }
-    Set-FaseLocalOcupado $true
-    Write-Log 'Rodando o Speedtest (Ookla), sem a VPN do TRE...' -Nivel Destaque
-    Start-TarefaRede -Script 'Invoke-FaseLocal' -AoConcluir { param($res, $erro) Complete-FaseLocal $res $erro }
-}
-
-function Complete-FaseLocal {
-    param($Payload, $Erro)
-    Set-FaseLocalOcupado $false
-    if ($Erro) { Write-Log "Checagem da rede local falhou: $Erro" -Nivel Erro; return }
-    if ($Payload -and $Global:FaseLocalTipo) {
-        $Payload | Add-Member -NotePropertyName TipoUsado -NotePropertyValue ([string] $Global:FaseLocalTipo) -Force
-    }
-    $Global:FaseLocalPayload = $Payload
-    Update-PainelFaseLocal
-
-    $it = if ($Payload) { $Payload.Internet } else { $null }
-    if ($it -and $it.speedtest_ok) {
-        Write-Log 'Rede local checada. Conecte a VPN do TRE e clique em Proximo.' -Nivel Ok
-    } elseif ($it -and $it.speedtest_erro) {
-        Write-Log ("Speedtest nao concluiu: {0}" -f $it.speedtest_erro) -Nivel Erro
-        Write-Log 'Voce ainda pode avancar - a falha vai no relatorio.' -Nivel Aviso
-    } else {
-        Write-Log 'Checagem da rede local sem resultado de velocidade.' -Nivel Aviso
-    }
-}
-
-# "Testei pelo roteamento do celular" -> libera/limpa o campo Operadora.
-function Update-TetheringCelular {
+# Botao "Iniciar"/"Testar a VPN" do overlay: texto + visibilidade por $Global:ChkFase.
+function Set-ChkBotao {
     $w = $Global:JanelaPrincipal
     if (-not $w) { return }
-    $on = [bool] $w.FindName('chkTetheringCelular').IsChecked
-    $cbo = $w.FindName('cboOperadora')
-    $cbo.IsEnabled = $on
-    if (-not $on) { $cbo.Text = '' }
+    $b = $w.FindName('btnChkIniciar')
+    if (-not $b) { return }
+    switch ($Global:ChkFase) {
+        'f1-pronto'  { $b.Content = 'Iniciar checagem da rede local';   $b.Visibility = 'Visible'; $b.IsEnabled = $true }
+        'f2-pronto'  { $b.Content = 'Testar a VPN (Fase 2)';            $b.Visibility = 'Visible'; $b.IsEnabled = $true }
+        'f2-vpn-ok'  { $b.Content = 'Iniciar diagnostico com a VPN';    $b.Visibility = 'Visible'; $b.IsEnabled = $true }
+        default      { $b.Visibility = 'Collapsed' }
+    }
+    $r = $w.FindName('ringChk')
+    if ($r) {
+        $rod = $Global:ChkFase -in @('f1-rodando', 'f2-rodando')
+        $r.IsActive = $rod ; $r.Visibility = if ($rod) { 'Visible' } else { 'Collapsed' }
+    }
+}
+
+# Alterna as 3 colunas do corpo entre Fase 1 (Ookla) e Fase 2 (iperf3).
+function Set-ChkFaseView {
+    param([string] $Fase)   # 'nenhuma' | 'f1' | 'f2'
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    $f1 = ($Fase -ne 'f2')
+    foreach ($n in 'grpF1Conn', 'canvasVelo', 'prgSpeed') {
+        $c = $w.FindName($n); if ($c) { $c.Visibility = if ($f1) { 'Visible' } else { 'Collapsed' } }
+    }
+    foreach ($n in 'grpF2Conn', 'canvasVeloVpn', 'prgSpeedVpn') {
+        $c = $w.FindName($n); if ($c) { $c.Visibility = if ($f1) { 'Collapsed' } else { 'Visible' } }
+    }
+}
+
+# dot + texto de um passo do stepper do overlay.
+function Set-ChkStep {
+    param([int] $N, [string] $Estado, [string] $Texto = '')
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    $dot = $w.FindName("dotChkS$N"); $lbl = $w.FindName("txtChkS$N")
+    if (-not $dot) { return }
+    $cor = switch ($Estado) {
+        'rodando' { '#E8B93E' } 'ok' { '#4FC177' }
+        'erro'    { '#E8695C' } 'semvpn' { '#E8695C' }
+        default   { '#7D8698' }
+    }
+    $palavra = switch ($Estado) {
+        'rodando' { 'rodando...' } 'ok' { 'ok' } 'erro' { 'erro' }
+        'semvpn'  { 'sem VPN' }    default { 'pendente' }
+    }
+    $b = [Windows.Media.SolidColorBrush]::new([Windows.Media.ColorConverter]::ConvertFromString($cor)); $b.Freeze()
+    $dot.Fill = $b
+    $base = @('1. Rede local (sem VPN)', '2. Diagnostico com a VPN', '3. Sistema de totalizacao (Selenium)')[$N - 1]
+    $lbl.Text = if ($Texto) { "$base - $Texto" } else { "$base - $palavra" }
+}
+
+function Reset-OverlayCheck {
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    Set-ChkStep 1 'pendente'
+    Set-ChkStep 2 'pendente'
+    Set-ChkStep 3 'pendente' 'em implementacao'
+    $w.FindName('panelChkVpnGate').Visibility = 'Collapsed'
+    $w.FindName('chkVpnImpossivel').IsChecked = $false
+    $w.FindName('txtVpnMotivo').Text = ''
+    $w.FindName('txtVpnMotivo').Visibility = 'Collapsed'
+    $w.FindName('txtVpnMotivoDica').Visibility = 'Collapsed'
+    $w.FindName('btnChkVpnImpossivel').Visibility = 'Collapsed'
+    $w.FindName('btnChkFechar').Content = 'Cancelar'
+    foreach ($n in 'painelSpeedResultado', 'painelIperfResultado', 'txtSpeedErro', 'txtIperfErro', 'ringDiag') {
+        $c = $w.FindName($n); if ($c) { $c.Visibility = 'Collapsed' }
+    }
+    $rv = $w.FindName('txtChkResultadoVazio'); if ($rv) { $rv.Visibility = 'Visible' }
+    foreach ($n in 'txtIperfInfo', 'txtIperfServidor') { $c = $w.FindName($n); if ($c) { $c.Text = '' } }
+    Reset-Velocimetro
+    Reset-Velocimetro -Suf 'Vpn'
+    Set-ChkFaseView 'f1'
+    $Global:ChkFase = 'f1-pronto'
+    Set-ChkBotao
+}
+
+# Passo 3: clicar num card seleciona aquele meio para a checagem (borda azul +
+# libera o "Rodar checagem"). So um card fica selecionado por vez.
+function Select-MeioParaChecar {
+    param([string] $Meio)   # 'lan' | 'wifi' | 'celular'
+    if ($Global:CheckMeioAtivo) { return }
+    if (-not $Global:FaseLocalPayload) { return }
+    $naKey = if ($Meio -eq 'wifi') { 'wifi_local' } else { $Meio }
+    if ($Global:MeiosNaoAplicaveis.ContainsKey($naKey) -or $Global:NaMeioPendente -eq $naKey) { return }
+    if ($Global:MeioSelecionado -eq $Meio) { return }
+    $Global:MeioSelecionado = $Meio
+    Update-PainelMeios
+}
+
+# Card do meio: "Rodar checagem" -> abre o overlay (nao inicia sozinho).
+function Invoke-CheckMeio {
+    param([string] $Meio)   # 'lan' | 'wifi' | 'celular'
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    if ($Global:CheckMeioAtivo -or $Global:TarefaRedeState -or $Global:DiagRunState) {
+        Write-Log 'Ja ha uma checagem em andamento. Conclua-a antes de comecar outra.' -Nivel Aviso
+        return
+    }
+    if ($Global:MeioSelecionado -ne $Meio) {
+        Write-Log 'Clique no card deste meio para seleciona-lo antes de rodar a checagem.' -Nivel Aviso
+        return
+    }
+    $p = $Global:FaseLocalPayload
+    $conectado = if ($Meio -eq 'lan') { [bool] ($p -and $p.Lan.conectado) } else { [bool] ($p -and $p.Wireless.conectado) }
+    if (-not $conectado) {
+        Write-Log 'Conecte este meio e use o botao de reler placas antes de rodar a checagem.' -Nivel Aviso
+        return
+    }
+    if ($Meio -eq 'celular' -and -not ([string] $w.FindName('cboOperadoraCel').Text).Trim()) {
+        Write-Log 'Informe a operadora do celular antes de rodar a checagem.' -Nivel Aviso
+        return
+    }
+
+    $Global:FaseLocalTipo  = $Meio
+    $Global:CheckMeioAtivo = $true
+    $Global:DiagPayload    = $null
+    if ($Global:LogEntries) { $Global:LogEntries.Clear() }
+
+    $mo  = Get-MeioDoPasso3
+    $rot = Get-RotuloMeio $mo.meio $mo.operadora
+    $w.FindName('txtChkMeioTitulo').Text = ([string] $rot).ToUpper()
+    Reset-OverlayCheck
+    $w.FindName('overlayCheck').Visibility = 'Visible'
+    Update-PainelMeios
+
+    Write-Log ("Checagem do meio: {0} - clique em Iniciar." -f $rot) -Nivel Destaque
+}
+
+# Botao "Iniciar" / "Testar a VPN" do overlay.
+function Invoke-ChkAvancar {
+    switch ($Global:ChkFase) {
+        'f1-pronto' { Start-CheckFase1 }
+        'f2-pronto' { Start-CheckFase2 }      # so verifica a VPN (nao roda o teste)
+        'f2-vpn-ok' { Start-DiagnosticoVpn }  # VPN confirmada -> agora roda a Fase 2
+        default     { }
+    }
+}
+
+function Start-CheckFase1 {
+    $w = $Global:JanelaPrincipal
+    $Global:ChkFase = 'f1-rodando'
+    Set-ChkBotao
+    Set-ChkStep 1 'rodando'
+    Set-ChkFaseView 'f1'
+    $w.FindName('painelSpeedResultado').Visibility = 'Collapsed'
+    $w.FindName('txtChkResultadoVazio').Visibility = 'Visible'
+    Reset-Velocimetro
+    $w.FindName('txtVeloFase').Text = 'iniciando...'
+    Write-Log 'Fase 1: teste de velocidade (Ookla), sem a VPN...' -Nivel Info
+    if ($Global:FaseLocalSimulada) { Complete-CheckFase1 $Global:FaseLocalSimulada $null; return }
+    Set-FaseLocalOcupado $true
+    Start-TarefaRede -Script 'Invoke-FaseLocal' -AoConcluir { param($res, $erro) Complete-CheckFase1 $res $erro }
+}
+
+function Complete-CheckFase1 {
+    param($Payload, $Erro)
+    Set-FaseLocalOcupado $false
+    $w = $Global:JanelaPrincipal
+    if ($Erro) {
+        Write-Log "Fase 1 falhou: $Erro" -Nivel Erro
+        Set-ChkStep 1 'erro'
+    } else {
+        if ($Payload -and $Global:FaseLocalTipo) {
+            $Payload | Add-Member -NotePropertyName TipoUsado -NotePropertyValue ([string] $Global:FaseLocalTipo) -Force
+        }
+        $Global:FaseLocalPayload = $Payload
+        $it = if ($Payload) { $Payload.Internet } else { $null }
+        if ($it -and $it.speedtest_ok) {
+            Update-SpeedtestPainel -It $it
+            $w.FindName('txtChkResultadoVazio').Visibility = 'Collapsed'
+            Write-Log 'Fase 1 concluida.' -Nivel Ok
+            Set-ChkStep 1 'ok'
+        } else {
+            $te = $w.FindName('txtSpeedErro')
+            $diag = if ($it -and $it.PSObject.Properties['speedtest_diagnostico']) { [string] $it.speedtest_diagnostico } else { '' }
+            $te.Text = if ($diag) { $diag }
+                       elseif ($it -and $it.speedtest_erro) { [string] $it.speedtest_erro }
+                       else { 'sem resultado de velocidade' }
+            $te.Visibility = 'Visible'
+            Write-Log ("Fase 1 sem velocidade: {0}" -f $te.Text) -Nivel Aviso
+            Set-ChkStep 1 'erro'
+        }
+    }
+    $Global:ChkFase = 'f2-pronto'
+    Set-ChkBotao
+    Write-Log 'Clique em "Testar a VPN (Fase 2)" quando estiver com a VPN do TRE conectada.' -Nivel Info
+}
+
+# Botao "Testar a VPN (Fase 2)": SO verifica a VPN e mostra o estado. Nao dispara
+# o diagnostico - o tecnico confere o IP da VPN e clica em "Iniciar diagnostico".
+function Start-CheckFase2 {
+    $w = $Global:JanelaPrincipal
+    Set-ChkStep 2 'rodando' 'verificando a VPN'
+    Set-ChkFaseView 'f2'
+    # limpa a 3a coluna: some o resultado da Fase 1 e o do iperf de uma rodada anterior
+    foreach ($n in 'painelSpeedResultado', 'painelIperfResultado') {
+        $c = $w.FindName($n); if ($c) { $c.Visibility = 'Collapsed' }
+    }
+    $w.FindName('txtChkResultadoVazio').Visibility = 'Visible'
+    Update-EstadoVpn
+    if (Test-VpnAtiva) {
+        $Global:ChkFase = 'f2-vpn-ok'
+        $w.FindName('panelChkVpnGate').Visibility = 'Visible'
+        Set-ChkStep 2 'rodando' 'VPN conectada - clique em Iniciar'
+        Set-ChkBotao
+        Write-Log 'VPN da JE conectada. Confira o IP e clique em "Iniciar diagnostico com a VPN".' -Nivel Ok
+    } else {
+        $Global:ChkFase = 'f2-pronto'
+        Set-ChkBotao
+        Write-Log 'Fase 2 aguardando a VPN da JE. Abra o FortiClient e conecte, depois "Verificar novamente".' -Nivel Aviso
+        $w.FindName('panelChkVpnGate').Visibility = 'Visible'
+        $w.FindName('btnChkVpnImpossivel').Visibility = 'Visible'
+        Set-ChkStep 2 'rodando' 'aguardando a VPN'
+    }
+}
+
+# Botao "Iniciar diagnostico com a VPN": agora sim roda a bateria da Fase 2.
+function Start-DiagnosticoVpn {
+    $w = $Global:JanelaPrincipal
+    if (-not (Test-VpnAtiva)) {
+        Write-Log 'A VPN caiu. Reconecte pelo FortiClient e clique em "Verificar novamente".' -Nivel Aviso
+        Start-CheckFase2
+        return
+    }
+    $Global:ChkFase = 'f2-rodando'
+    Set-ChkBotao
+    $w.FindName('panelChkVpnGate').Visibility = 'Collapsed'
+    Reset-Velocimetro -Suf 'Vpn'
+    $w.FindName('txtVeloFaseVpn').Text = 'iniciando...'
+    $rd = $w.FindName('ringDiag'); if ($rd) { $rd.IsActive = $true; $rd.Visibility = 'Visible' }
+    Write-Log 'Fase 2: diagnostico com a VPN (ping + iperf3)...' -Nivel Info
+    Set-ChkStep 2 'rodando'
+    Set-ProgressoDiag $true
+    $sel  = $w.FindName('cboLocal').SelectedItem
+    $selD = if ($sel) { $sel.Dados } else { $null }
+    Start-DiagnosticoAssincrono -Local $selD -AoConcluir { param($res, $erro) Complete-CheckFase2 $res $erro }
+}
+
+function Complete-CheckFase2 {
+    param($Payload, $Erro)
+    Set-ProgressoDiag $false
+    $w = $Global:JanelaPrincipal
+    $rd = $w.FindName('ringDiag'); if ($rd) { $rd.IsActive = $false; $rd.Visibility = 'Collapsed' }
+    if ($Erro) {
+        Write-Log "Fase 2 falhou: $Erro" -Nivel Erro
+        Set-ChkStep 2 'erro'
+    } else {
+        Show-PainelResultado -Payload $Payload
+        if ($Payload -and $Payload.PSObject.Properties['Iperf'] -and $Payload.Iperf) { Update-IperfPainel -Iperf $Payload.Iperf }
+        $w.FindName('txtChkResultadoVazio').Visibility = 'Collapsed'
+        Write-Log 'Fase 2 concluida.' -Nivel Ok
+        $ver = if ($Payload -and $Payload.Decisao) { [string] $Payload.Decisao.Classificacao } else { 'inviavel' }
+        Set-ChkStep 2 $(if ($ver -eq 'inviavel') { 'erro' } else { 'ok' })
+    }
+    Complete-CheckMeio
+}
+
+# Botao "Registrar este meio sem a VPN" (no gate da Fase 2).
+function Invoke-CheckVpnImpossivel {
+    $w = $Global:JanelaPrincipal
+    $motivo = ([string] $w.FindName('txtVpnMotivo').Text).Trim()
+    if (-not [bool] $w.FindName('chkVpnImpossivel').IsChecked -or -not $motivo) {
+        Write-Log 'Marque "nao foi possivel conectar a VPN" e descreva o motivo.' -Nivel Aviso
+        return
+    }
+    Set-DiagnosticoVpnImpossivel -Motivo $motivo
+    Write-Log 'Meio registrado sem a VPN (inviavel).' -Nivel Aviso
+    Set-ChkStep 2 'semvpn'
+    $w.FindName('panelChkVpnGate').Visibility = 'Collapsed'
+    Complete-CheckMeio
+}
+
+function Complete-CheckMeio {
+    $w = $Global:JanelaPrincipal
+    $Global:ChkFase = 'fim'
+    Set-ChkBotao
+    Add-MedicaoAtual
+    Write-Log 'Checagem do meio concluida. Clique em "Concluir" para fechar.' -Nivel Ok
+    $b = $w.FindName('btnChkFechar'); if ($b) { $b.Content = 'Concluir' }
+}
+
+# Botao "Cancelar"/"Concluir" do overlay.
+function Close-OverlayCheck {
+    if ($Global:TarefaRedeState -or $Global:DiagRunState) {
+        Write-Log 'Aguarde a etapa em andamento terminar antes de fechar.' -Nivel Aviso
+        return
+    }
+    $Global:CheckMeioAtivo = $false
+    $Global:ChkFase = ''
+    $w = $Global:JanelaPrincipal
+    if ($w) { $w.FindName('overlayCheck').Visibility = 'Collapsed' }
+    Update-PainelMeios
 }
 
 # ------------------------------------------------------- MULTI-MEIO (medicoes)
@@ -2219,25 +2714,29 @@ function Reset-RodadaMeio {
     Reset-PainelFaseLocal
 }
 
-# Zera o passo 3 (rede local) ao abrir o assistente limpo / pelo guia.
+# Zera o passo 3 (painel de meios) ao abrir o assistente limpo / pelo guia.
 function Reset-PainelFaseLocal {
     $Global:FaseLocalPayload = $null
     $Global:FaseLocalTipo    = ''
+    $Global:MeioSelecionado  = ''
+    $Global:CheckMeioAtivo   = $false
     Reset-Velocimetro
+    Reset-Velocimetro -Suf 'Vpn'
     $w = $Global:JanelaPrincipal
     if ($w) {
-        $w.FindName('chkTetheringCelular').IsChecked = $false
-        $w.FindName('cboOperadora').Text       = ''
-        $w.FindName('cboOperadora').IsEnabled  = $false
-        $w.FindName('cboOperadoraCel').Text    = ''
-        foreach ($n in 'rbUsarLan', 'rbUsarWifi', 'rbUsarCelular', 'chkNaLan', 'chkNaWifi', 'chkNaCelular') {
+        $ov = $w.FindName('overlayCheck'); if ($ov) { $ov.Visibility = 'Collapsed' }
+        $w.FindName('cboOperadoraCel').Text = ''
+        $Global:NaMeioPendente = ''
+        $cj = $w.FindName('cardNaJustif'); if ($cj) { $cj.Visibility = 'Collapsed' }
+        $tj = $w.FindName('txtNaJustif');  if ($tj) { $tj.Text = '' }
+        foreach ($n in 'chkNaLan', 'chkNaWifi', 'chkNaCelular') {
             $c = $w.FindName($n); if ($c) { $c.IsChecked = $false }
         }
-        $w.FindName('txtMotivoNaMeio').Text = ''
-        $w.FindName('txtMotivoNaMeio').Visibility = 'Collapsed'
-        $w.FindName('txtMotivoNaDica').Visibility = 'Collapsed'
+        foreach ($n in 'txtNaMotivoCardLan', 'txtNaMotivoCardWifi', 'txtNaMotivoCardCelular') {
+            $t = $w.FindName($n); if ($t) { $t.Text = ''; $t.Visibility = 'Collapsed' }
+        }
     }
-    Update-PainelFaseLocal
+    Update-PainelMeios
 }
 
 # Atualiza os check-marks do passo 7 (verde = feito, vermelho = pendente).
@@ -2412,12 +2911,13 @@ function Invoke-ExportarRelatorio {
         $res = New-ResultadoJson -Ambiente $p.Ambiente -Metricas $p.Metricas -Decisao $p.Decisao -Local $p.Local `
             -Avaliacoes $avaliacoes -ClassificacaoFinal @{ final = $decFinal; justificativa = $justDec } `
             -TecnicoNome ($Global:SessaoAtual.tecnico_nome) -FaseLocal $Global:FaseLocalPayload `
-            -Tethering ([bool] $w.FindName('chkTetheringCelular').IsChecked) `
-            -Operadora (([string] $w.FindName('cboOperadora').Text).Trim()) `
+            -Tethering ($rec -and $rec.meio -eq 'celular') `
+            -Operadora ([string] $(if ($rec) { $rec.operadora } else { '' })) `
             -VpnImpossivel ([bool] $w.FindName('chkVpnImpossivel').IsChecked) `
             -VpnMotivo (([string] $w.FindName('txtVpnMotivo').Text).Trim()) `
             -Medicoes $Global:Medicoes -ConexaoRecomendada $rec `
-            -MotivoRecomendacao ([string] $Global:MotivoRecomendacao)
+            -MotivoRecomendacao ([string] $Global:MotivoRecomendacao) `
+            -VistoriaGel $Global:VistoriaGel
     } catch {
         $st.Text = "Falha ao montar o relatorio: $_"
         Write-Log "Falha ao montar o relatorio: $_" -Nivel Erro
@@ -2527,6 +3027,7 @@ function Initialize-Admin {
     $w.FindName('txtIperfServidorCfg').Text = if ($ip) { [string] $ip.servidor } else { '' }
     $w.FindName('txtIperfPortaCfg').Text    = if ($ip -and $ip.porta) { [string] $ip.porta } else { '5201' }
     $w.FindName('txtIperfDuracaoCfg').Text  = if ($ip -and $ip.duracao_s) { [string] $ip.duracao_s } else { '10' }
+    $w.FindName('txtMapsKeyCfg').Text = Get-ChaveMapsStatic
     $w.FindName('lblAmbienteMsg').Text = ''
 }
 
@@ -2547,11 +3048,14 @@ function Invoke-SalvarAmbiente {
     if (-not $okP -or $porta -lt 1 -or $porta -gt 65535) { $msg.Foreground = $vermelho; $msg.Text = 'Porta invalida (1-65535).'; return }
     if (-not $okD -or $dur -lt 3 -or $dur -gt 60) { $msg.Foreground = $vermelho; $msg.Text = 'Duracao invalida (3-60 s).'; return }
 
+    $mapsKey = ([string] $w.FindName('txtMapsKeyCfg').Text).Trim()
+
     try {
-        $arq = Save-ConfigAmbiente -Servidor $srv -Porta $porta -Duracao $dur
+        $arq = Save-ConfigAmbiente -Servidor $srv -Porta $porta -Duracao $dur -MapsKey $mapsKey
         $msg.Foreground = [Windows.Media.Brushes]::LightGreen
-        $msg.Text = "Servidor iperf3 salvo neste computador ($srv`:$porta)."
-        Write-Log "Ambiente iperf3 salvo pelo admin: $srv`:$porta / ${dur}s -> $arq" -Nivel Ok
+        $extra = if ($mapsKey) { ' + chave do Google Maps' } else { '' }
+        $msg.Text = "Ambiente salvo neste computador ($srv`:$porta$extra)."
+        Write-Log "Ambiente salvo pelo admin: iperf3 $srv`:$porta / ${dur}s ; maps_key=$(if ($mapsKey) { 'definida' } else { 'vazia' }) -> $arq" -Nivel Ok
     } catch {
         $msg.Foreground = $vermelho
         $msg.Text = "Falha ao salvar: $_"
@@ -2737,65 +3241,43 @@ function Invoke-AtualizarListaJuntas {
     }
 }
 
-# Passo 4: estado da VPN da JE. Sem VPN -> "Rodar diagnostico" desabilitado e
-# aparecem "Abrir o FortiClient" + "Verificar novamente".
+# Gate da VPN no overlay (Fase 2). Sem VPN -> aparecem "Abrir o FortiClient" +
+# "Verificar novamente" e a saida "nao consegui conectar a VPN".
 function Update-EstadoVpn {
     $w = $Global:JanelaPrincipal
     if (-not $w) { return }
-    $sel = $w.FindName('cboLocal').SelectedItem
-    $vpn = Test-VpnAtiva
+    $d = Get-DetalheVpn
+    $vpn = [bool] $d.ativa
 
     $verde    = Get-PincelVeredito 'viavel'
     $vermelho = Get-PincelVeredito 'inviavel'
     $tv = $w.FindName('txtDiagVpn'); $dv = $w.FindName('dotVpn')
-    if ($vpn) {
-        $tv.Text = 'VPN da Justica Eleitoral conectada.'
-        $tv.Foreground = $verde ; $dv.Fill = $verde
-    } else {
-        $tv.Text = 'VPN da Justica Eleitoral NAO detectada - conecte pelo FortiClient antes de rodar o diagnostico.'
-        $tv.Foreground = $vermelho ; $dv.Fill = $vermelho
-    }
-    $impossivel = [bool] $w.FindName('chkVpnImpossivel').IsChecked
-    $w.FindName('btnRodar').IsEnabled = [bool] $sel -and $vpn -and (-not $impossivel)
-    $vis = if ($vpn -or $impossivel) { 'Collapsed' } else { 'Visible' }
-    $w.FindName('btnAbrirFortiClient').Visibility = $vis
-    $w.FindName('btnReverificarVpn').Visibility   = $vis
-    Update-Passo4Nav
-}
-
-# "Proximo" no passo 4 so habilita se o diagnostico rodou OU se o tecnico
-# marcou "nao consegui conectar a VPN" e descreveu o motivo.
-function Update-Passo4Nav {
-    $w = $Global:JanelaPrincipal
-    if (-not $w -or $Global:WizardStep -ne 4) { return }
-    $impossivelOk = [bool] $w.FindName('chkVpnImpossivel').IsChecked -and
-        (-not [string]::IsNullOrWhiteSpace([string] $w.FindName('txtVpnMotivo').Text))
-    $pronto = ($null -ne $Global:DiagPayload) -or $impossivelOk
-    $w.FindName('btnWizProximo').IsEnabled = $pronto
-
-    # "testar outro meio": aparece quando a bateria deste meio ja concluiu.
-    $card = $w.FindName('cardOutroMeio')
-    if ($card) {
-        $card.Visibility = if ($pronto) { 'Visible' } else { 'Collapsed' }
-        if ($pronto) {
-            $feitas = @($Global:Medicoes | Where-Object { -not $_.nao_aplicavel } |
-                ForEach-Object { '{0} ({1})' -f $_.rotulo, (Get-PalavraVeredito $_.veredito) })
-            $na = @($Global:Medicoes | Where-Object { $_.nao_aplicavel } | ForEach-Object { '{0} (nao aplicavel)' -f $_.rotulo })
-            $tudo = @($feitas + $na)
-            $w.FindName('txtMedicoesFeitas').Text = if ($tudo.Count) {
-                'Ja medidos neste local: ' + ($tudo -join '  ·  ') + '.  Este meio ainda nao foi registrado.'
-            } else {
-                'Este e o primeiro meio testado neste local.'
+    if ($tv) {
+        if ($vpn) {
+            $linhas = @('VPN da Justica Eleitoral conectada.')
+            if ($d.ipv4) {
+                $marca = if (Test-RedeJusticaEleitoral $d.ipv4) { '  (faixa interna da JE)' } else { '' }
+                $linhas += ('IP da VPN: {0}{1}' -f $d.ipv4, $marca)
             }
+            if ($d.nome)    { $linhas += ('Interface: {0}' -f $d.nome) }
+            if ($d.gateway) { $linhas += ('Gateway: {0}' -f $d.gateway) }
+            if (@($d.dns).Count) { $linhas += ('DNS: {0}' -f ((@($d.dns)) -join ', ')) }
+            $tv.Text = ($linhas -join "`n")
+            $tv.Foreground = $verde ; $dv.Fill = $verde
+        } else {
+            $tv.Text = 'VPN da Justica Eleitoral NAO detectada - conecte pelo FortiClient e clique em "Verificar novamente".'
+            $tv.Foreground = $vermelho ; $dv.Fill = $vermelho
         }
     }
-}
-
-# "Testar outro meio neste local": guarda a medicao atual e volta ao passo 3.
-function Invoke-TestarOutroMeio {
-    Add-MedicaoAtual
-    Reset-RodadaMeio
-    Show-WizardPasso 3
+    $bf = $w.FindName('btnAbrirFortiClient'); if ($bf) { $bf.Visibility = if ($vpn) { 'Collapsed' } else { 'Visible' } }
+    $bv = $w.FindName('btnReverificarVpn');   if ($bv) { $bv.Visibility = if ($vpn) { 'Collapsed' } else { 'Visible' } }
+    # VPN conectada -> some a saida de escape "nao consegui a VPN" (nao faz sentido)
+    if ($vpn) {
+        $ci = $w.FindName('chkVpnImpossivel'); if ($ci) { $ci.IsChecked = $false }
+        foreach ($n in 'chkVpnImpossivel', 'txtVpnMotivo', 'txtVpnMotivoDica', 'btnChkVpnImpossivel') {
+            $c = $w.FindName($n); if ($c) { $c.Visibility = 'Collapsed' }
+        }
+    }
 }
 
 # Checkbox "Nao foi possivel conectar a VPN" -> libera/limpa o campo de motivo.
@@ -2807,7 +3289,6 @@ function Update-VpnImpossivel {
     $w.FindName('txtVpnMotivo').Visibility     = $vis
     $w.FindName('txtVpnMotivoDica').Visibility = $vis
     if (-not $on) { $w.FindName('txtVpnMotivo').Text = '' }
-    Update-EstadoVpn   # recomputa "Rodar diagnostico" / botoes do FortiClient + Update-Passo4Nav
 }
 
 # Registra o local como INVIAVEL por VPN indisponivel (sem rodar a bateria).
@@ -2826,7 +3307,14 @@ function Set-DiagnosticoVpnImpossivel {
     Write-Log ("VPN impossivel de conectar - local registrado como INVIAVEL. Motivo: {0}" -f $Motivo) -Nivel Aviso
 }
 
-function Invoke-ReverificarVpn { Update-EstadoVpn }
+function Invoke-ReverificarVpn {
+    Update-EstadoVpn
+    # no overlay: se a VPN subiu agora, mostra a confirmacao (IP da VPN etc.) e
+    # troca o botao para "Iniciar diagnostico" - NAO dispara o teste sozinho.
+    if ($Global:CheckMeioAtivo -and -not $Global:DiagRunState -and -not $Global:DiagPayload -and (Test-VpnAtiva)) {
+        Start-CheckFase2
+    }
+}
 
 function Invoke-AbrirFortiClient {
     if ($Global:ModoTeste) { Write-Log 'FortiClient (modo teste, nao abre).' -Nivel Info; return }
@@ -2845,32 +3333,6 @@ function Invoke-AbrirFortiClient {
     }
 }
 
-function Invoke-ExecucaoNaJanela {
-    $w = $Global:JanelaPrincipal
-    if (-not $w) { return }
-
-    $selLocal = $w.FindName('cboLocal').SelectedItem
-    if (-not $selLocal) {
-        Write-Log 'Selecione a Junta Especial e o local antes de rodar o diagnostico.' -Nivel Aviso
-        return
-    }
-    if (-not (Test-VpnAtiva)) {
-        Write-Log 'VPN da Justica Eleitoral nao conectada. Abra o FortiClient e conecte antes de rodar.' -Nivel Erro
-        Update-EstadoVpn
-        return
-    }
-
-    $w.FindName('btnRodar').IsEnabled = $false
-    Set-ProgressoDiag $true
-    $Global:LogEntries.Clear()
-    Clear-PainelResultado
-    Reset-Velocimetro -Suf 'Vpn'
-    $w.FindName('cardIperfVpn').Visibility = 'Visible'
-    $w.FindName('txtVeloFaseVpn').Text = 'iniciando...'
-
-    Start-DiagnosticoAssincrono -Local $selLocal.Dados
-}
-
 # ------------------------------------------------------------- PAINEL DE RESULTADOS
 
 function Clear-PainelResultado {
@@ -2882,8 +3344,14 @@ function Clear-PainelResultado {
     $Global:DecisaoFinalTocada = $false
     $Global:MedicaoPasso5Idx   = -1
 
-    $bm = $w.FindName('boxMedicaoPasso5'); if ($bm) { $bm.Visibility = 'Collapsed' }
-    $w.FindName('dgAvaliacao').ItemsSource = @()
+    $tb = $w.FindName('tabsMedicoes')
+    if ($tb) { $Global:AtualizandoMedicaoP5 = $true; $tb.Items.Clear(); $tb.Visibility = 'Collapsed'; $Global:AtualizandoMedicaoP5 = $false }
+    $cn = $w.FindName('cardNaResumo');  if ($cn) { $cn.Visibility = 'Collapsed' }
+    $sm = $w.FindName('txtSemMedicoes'); if ($sm) { $sm.Visibility = 'Collapsed' }
+    $w.FindName('dgAvaliacaoVpn').ItemsSource = @()
+    $w.FindName('dgAvaliacaoRl').ItemsSource = @()
+    $cr = $w.FindName('cardAvaliacaoRl'); if ($cr) { $cr.Visibility = 'Collapsed' }
+    $tn = $w.FindName('txtRedeLocalNota'); if ($tn) { $tn.Visibility = 'Collapsed' }
     $Global:AtualizandoDecisao = $true
     $w.FindName('cboDecisaoFinal').SelectedItem = $null
     $Global:AtualizandoDecisao = $false
@@ -2898,7 +3366,6 @@ function Clear-PainelResultado {
     $w.FindName('txtVpnMotivo').Text = ''
     $w.FindName('txtVpnMotivo').Visibility = 'Collapsed'
     $w.FindName('txtVpnMotivoDica').Visibility = 'Collapsed'
-    $w.FindName('cardIperfVpn').Visibility = 'Collapsed'
     Reset-Velocimetro -Suf 'Vpn'
     $Global:FeitoSalvar     = $false
     $Global:FeitoTransmitir = $false
@@ -2920,20 +3387,36 @@ function Update-VisibilidadeJustDecisao {
 
 function Complete-Diagnostico {
     param($Payload, $Erro)
-    $w = $Global:JanelaPrincipal
-
     Set-ProgressoDiag $false
-    $w.FindName('btnRodar').IsEnabled = $true
-
     if ($Erro) {
         Write-Log "Diagnostico falhou: $Erro" -Nivel Erro
         return
     }
     Show-PainelResultado -Payload $Payload
     if ($Payload.PSObject.Properties['Iperf'] -and $Payload.Iperf) { Update-IperfPainel -Iperf $Payload.Iperf }
-    Update-Passo4Nav
-    # nao avanca sozinho: o tecnico confere o log e clica em "Proximo".
-    Write-Log 'Diagnostico concluido. Revise e clique em "Proximo".' -Nivel Ok
+    Write-Log 'Diagnostico concluido.' -Nivel Ok
+}
+
+# Nota acima do grid do passo 4 sobre a checagem da rede local (Fase 1, sem VPN).
+function Set-NotaRedeLocal {
+    param($Internet, [bool] $TemLinhas)
+    $w = $Global:JanelaPrincipal
+    $t = $w.FindName('txtRedeLocalNota')
+    if (-not $t) { return }
+    if ($TemLinhas) {
+        $t.Text = 'As linhas "Rede local" vem do Speedtest da Ookla (sem a VPN) e entram no pior caso junto com as da VPN.'
+        $t.Visibility = 'Visible'
+    } elseif ($Internet) {
+        $diag = if ($Internet.PSObject.Properties['speedtest_diagnostico']) { [string] $Internet.speedtest_diagnostico } else { '' }
+        $err  = if ($Internet.PSObject.Properties['speedtest_erro']) { [string] $Internet.speedtest_erro } else { '' }
+        $msg  = if ($diag) { $diag } elseif ($err) { $err } else { '' }
+        if ($msg) {
+            $t.Text = 'Rede local (sem VPN): nao foi medida. ' + $msg
+            $t.Visibility = 'Visible'
+        } else { $t.Visibility = 'Collapsed' }
+    } else {
+        $t.Visibility = 'Collapsed'
+    }
 }
 
 function Show-PainelResultado {
@@ -2942,22 +3425,44 @@ function Show-PainelResultado {
     $Global:DiagPayload        = $Payload
     $Global:DecisaoFinalTocada = $false
 
-    $rows = [System.Collections.ObjectModel.ObservableCollection[object]]::new()
-    foreach ($d in @($Payload.Decisao.Detalhes)) {
-        $row = New-AvaliacaoRow -Detalhe $d
+    $rows    = [System.Collections.ObjectModel.ObservableCollection[object]]::new()
+    $rowsVpn = [System.Collections.ObjectModel.ObservableCollection[object]]::new()
+    $rowsRl  = [System.Collections.ObjectModel.ObservableCollection[object]]::new()
+    $addRow = {
+        param($d, $fase, $dest)
+        $row = New-AvaliacaoRow -Detalhe $d -Fase $fase
         if ($Overrides -and $Overrides.ContainsKey([string] $d.metrica)) {
             $o = $Overrides[[string] $d.metrica]
             if ($o.classe_final) { $row.ClasseFinal = [string] $o.classe_final }
             $row.Justificativa = [string] $o.justificativa
         }
         $rows.Add($row)
+        $dest.Add($row)
         $row.add_PropertyChanged({
                 param($s, $e)
                 if ($e.PropertyName -eq 'ClasseFinal') { Update-DecisaoRecalculada }
             })
     }
+    # linhas da Fase 2 (com a VPN do TRE)
+    foreach ($d in @($Payload.Decisao.Detalhes)) { & $addRow $d 'Com a VPN' $rowsVpn }
+
+    # linhas da Fase 1 (rede local, sem VPN) - do Speedtest da Ookla; entram no
+    # pior caso junto com as da VPN.
+    $rli = if ($Payload.PSObject.Properties['RedeLocalInternet'] -and $Payload.RedeLocalInternet) { $Payload.RedeLocalInternet }
+           elseif ($Global:FaseLocalPayload) { $Global:FaseLocalPayload.Internet }
+           else { $null }
+    $d1 = @(Get-DetalhesRedeLocal -Internet $rli -Limiares (Get-LimiaresConfig))
+    foreach ($d in $d1) { & $addRow $d 'Rede local' $rowsRl }
+
     $Global:AvaliacaoRows = $rows
-    $w.FindName('dgAvaliacao').ItemsSource = $rows
+    $w.FindName('dgAvaliacaoVpn').ItemsSource = $rowsVpn
+    $w.FindName('dgAvaliacaoRl').ItemsSource  = $rowsRl
+
+    Set-NotaRedeLocal $rli ($rowsRl.Count -gt 0)
+    $dgRl = $w.FindName('dgAvaliacaoRl')
+    $dgRl.Visibility = if ($rowsRl.Count) { 'Visible' } else { 'Collapsed' }
+    $notaVis = "$($w.FindName('txtRedeLocalNota').Visibility)" -eq 'Visible'
+    $w.FindName('cardAvaliacaoRl').Visibility = if ($rowsRl.Count -or $notaVis) { 'Visible' } else { 'Collapsed' }
 
     $des = @(if ($Payload.Decisao.PSObject.Properties['MetricasDesativadas']) { $Payload.Decisao.MetricasDesativadas })
     $lblDes = $w.FindName('txtMetricasDesativadas')
@@ -2973,13 +3478,12 @@ function Show-PainelResultado {
     Update-DecisaoRecalculada
 }
 
-# Passo 5: monta o seletor de medicoes (so aparece com 2+ meios testados) e
-# abre a medicao correspondente ao meio que acabou de rodar.
+# Passo 4 (resultado): monta uma ABA por meio testado + o resumo dos meios "nao
+# aplicaveis", e abre a aba do meio que acabou de rodar.
 function Update-SeletorMedicoes {
     $w = $Global:JanelaPrincipal
     if (-not $w) { return }
-    $box = $w.FindName('boxMedicaoPasso5')
-    $cbo = $w.FindName('cboMedicaoPasso5')
+    $tabs = $w.FindName('tabsMedicoes')
 
     $pares = @()
     for ($i = 0; $i -lt @($Global:Medicoes).Count; $i++) {
@@ -2990,18 +3494,25 @@ function Update-SeletorMedicoes {
     }
     $Global:MedicoesPasso5 = $pares
 
+    # resumo dos meios marcados "nao se aplica"
+    $na = @($Global:Medicoes | Where-Object { $_ -and $_.nao_aplicavel })
+    $cardNa = $w.FindName('cardNaResumo')
+    if ($cardNa) {
+        if ($na.Count) {
+            $w.FindName('txtNaResumo').Text = 'Meios que NAO se aplicam a este local: ' +
+                (($na | ForEach-Object { '{0} - {1}' -f $_.rotulo, ([string] $_.motivo_na) }) -join '     |     ')
+            $cardNa.Visibility = 'Visible'
+        } else { $cardNa.Visibility = 'Collapsed' }
+    }
+
     if ($pares.Count -eq 0) {
-        if ($box) { $box.Visibility = 'Collapsed' }
+        if ($tabs) { $Global:AtualizandoMedicaoP5 = $true; $tabs.Items.Clear(); $tabs.Visibility = 'Collapsed'; $Global:AtualizandoMedicaoP5 = $false }
+        $w.FindName('txtSemMedicoes').Visibility = 'Visible'
         $Global:MedicaoPasso5Idx = -1
         return
     }
-    if ($pares.Count -eq 1) {
-        if ($box) { $box.Visibility = 'Collapsed' }
-        $Global:MedicaoPasso5Idx = $pares[0].idx
-        return
-    }
+    $w.FindName('txtSemMedicoes').Visibility = 'Collapsed'
 
-    if ($box) { $box.Visibility = 'Visible' }
     # abre na ultima medicao registrada, ou na que ja estava aberta
     $sel = $pares.Count - 1
     if ($Global:MedicaoPasso5Idx -ge 0) {
@@ -3010,8 +3521,29 @@ function Update-SeletorMedicoes {
         }
     }
     $Global:AtualizandoMedicaoP5 = $true
-    $cbo.ItemsSource   = @($pares | ForEach-Object { '{0}  -  {1}' -f $_.med.rotulo, (Get-PalavraVeredito $_.med.veredito) })
-    $cbo.SelectedIndex = $sel
+    $tabs.Items.Clear()
+    $pincelMudo = $w.TryFindResource('Dicon.Text3')
+    foreach ($p in $pares) {
+        $ti = [Windows.Controls.TabItem]::new()
+        $sp = [Windows.Controls.StackPanel]::new(); $sp.Orientation = 'Horizontal'
+        $dot = [Windows.Shapes.Ellipse]::new()
+        $dot.Width = 9; $dot.Height = 9; $dot.VerticalAlignment = 'Center'
+        $dot.Margin = [Windows.Thickness]::new(0, 0, 8, 0)
+        try { $dot.Fill = Get-PincelVeredito $p.med.veredito } catch { }
+        $sp.Children.Add($dot) | Out-Null
+        $tr = [Windows.Controls.TextBlock]::new()
+        $tr.Text = [string] $p.med.rotulo; $tr.VerticalAlignment = 'Center'
+        $sp.Children.Add($tr) | Out-Null
+        $tv = [Windows.Controls.TextBlock]::new()
+        $tv.Text = '  ' + (Get-PalavraVeredito $p.med.veredito)
+        $tv.VerticalAlignment = 'Center'; $tv.FontSize = 10
+        if ($pincelMudo) { $tv.Foreground = $pincelMudo }
+        $sp.Children.Add($tv) | Out-Null
+        $ti.Header = $sp
+        $tabs.Items.Add($ti) | Out-Null
+    }
+    $tabs.Visibility = 'Visible'
+    $tabs.SelectedIndex = $sel
     $Global:AtualizandoMedicaoP5 = $false
 
     Show-MedicaoNoPasso5 -Par $pares[$sel]
@@ -3025,22 +3557,23 @@ function Show-MedicaoNoPasso5 {
 
     $localRef = if ($Global:DiagPayload) { $Global:DiagPayload.Local } else { $null }
     $payload = [pscustomobject]@{
-        Ambiente = $m.ambiente
-        Metricas = $m.metricas
-        Decisao  = $m.decisao
-        Local    = $localRef
-        Iperf    = $m.iperf
+        Ambiente          = $m.ambiente
+        Metricas          = $m.metricas
+        Decisao           = $m.decisao
+        Local             = $localRef
+        Iperf             = $m.iperf
+        RedeLocalInternet = (Get-Prop $m.fase_local 'Internet')
     }
     $ovr = @{}
     foreach ($a in @($m.avaliacoes)) { if ($a -and $a.metrica) { $ovr[[string] $a.metrica] = $a } }
     Show-PainelResultado -Payload $payload -Overrides $ovr
 }
 
-# Handler do combo de medicoes do passo 5: salva a aberta e mostra a escolhida.
+# Handler das abas de medicao do passo 4: salva a aberta e mostra a escolhida.
 function Invoke-TrocarMedicaoPasso5 {
     if ($Global:AtualizandoMedicaoP5) { return }
     $w = $Global:JanelaPrincipal
-    $i = $w.FindName('cboMedicaoPasso5').SelectedIndex
+    $i = $w.FindName('tabsMedicoes').SelectedIndex
     $pares = @($Global:MedicoesPasso5)
     if ($i -lt 0 -or $i -ge $pares.Count) { return }
     Save-AjustesPasso5
@@ -3096,12 +3629,13 @@ function Invoke-SalvarResultado {
             -ClassificacaoFinal @{ final = $decFinal; justificativa = $justDec } `
             -TecnicoNome ($Global:SessaoAtual.tecnico_nome) `
             -FaseLocal $Global:FaseLocalPayload `
-            -Tethering ([bool] $w.FindName('chkTetheringCelular').IsChecked) `
-            -Operadora (([string] $w.FindName('cboOperadora').Text).Trim()) `
+            -Tethering ($rec -and $rec.meio -eq 'celular') `
+            -Operadora ([string] $(if ($rec) { $rec.operadora } else { '' })) `
             -VpnImpossivel ([bool] $w.FindName('chkVpnImpossivel').IsChecked) `
             -VpnMotivo (([string] $w.FindName('txtVpnMotivo').Text).Trim()) `
             -Medicoes $Global:Medicoes -ConexaoRecomendada $rec `
-            -MotivoRecomendacao ([string] $Global:MotivoRecomendacao)
+            -MotivoRecomendacao ([string] $Global:MotivoRecomendacao) `
+            -VistoriaGel $Global:VistoriaGel
         Write-Log "Resultado salvo: $caminho" -Nivel Ok
         $Global:FeitoSalvar          = $true
         $Global:UltimoResultadoSalvo = $caminho
@@ -3150,7 +3684,7 @@ function Invoke-ReenvioPendentes {
 }
 
 function Start-DiagnosticoAssincrono {
-    param($Local)
+    param($Local, [scriptblock] $AoConcluir)
 
     $rs = [runspacefactory]::CreateRunspace()
     $rs.ApartmentState = 'MTA'
@@ -3178,7 +3712,7 @@ function Start-DiagnosticoAssincrono {
 
     $timer = [Windows.Threading.DispatcherTimer]::new()
     $timer.Interval = [TimeSpan]::FromMilliseconds(250)
-    $Global:DiagRunState = @{ PS = $ps; RS = $rs; Handle = $handle; Timer = $timer }
+    $Global:DiagRunState = @{ PS = $ps; RS = $rs; Handle = $handle; Timer = $timer; AoConcluir = $AoConcluir }
 
     $timer.Add_Tick({
       try {
@@ -3201,7 +3735,8 @@ function Start-DiagnosticoAssincrono {
         }
 
         try {
-            Complete-Diagnostico -Payload $payload -Erro $erro
+            if ($st.AoConcluir) { & $st.AoConcluir $payload $erro }
+            else { Complete-Diagnostico -Payload $payload -Erro $erro }
         } catch {
             Write-Log "Falha ao montar o painel apos o diagnostico: $_" -Nivel Erro
         }

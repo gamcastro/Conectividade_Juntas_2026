@@ -21,6 +21,33 @@ function Get-Prop {
     return $null
 }
 
+# Avaliacao da Fase 1 (rede local, sem VPN) para o JSON: classifica o resultado
+# do Speedtest contra os limiares e aplica os ajustes do tecnico (chaves "rl_").
+function Get-AvaliacaoRedeLocalJson {
+    param($Internet, $Overrides)
+    $det = @(Get-DetalhesRedeLocal -Internet $Internet -Limiares (Get-LimiaresConfig))
+    $out = @()
+    foreach ($d in $det) {
+        $o  = if ($Overrides) { $Overrides[$d.metrica] } else { $null }
+        $cf = if ($o -and $o.classe_final) { [string] $o.classe_final } else { [string] $d.classe }
+        $ju = if ($o) { [string] $o.justificativa } else { '' }
+        $out += [pscustomobject]@{
+            metrica           = $d.metrica
+            rotulo            = $d.rotulo
+            valor             = $d.valor
+            unidade           = $d.unidade
+            direcao           = $d.direcao
+            limiar_viavel     = $d.limiar_viavel
+            limiar_ressalva   = $d.limiar_ressalva
+            classe_automatica = $d.classe
+            classe_final      = $cf
+            ajustada          = ($cf -ne $d.classe)
+            justificativa     = $ju
+        }
+    }
+    return $out
+}
+
 function New-ResultadoJson {
     param(
         [psobject] $Ambiente,
@@ -42,7 +69,9 @@ function New-ResultadoJson {
         # recomendacao final (objeto de Get-ConexaoRecomendada). Opcionais.
         $Medicoes,
         $ConexaoRecomendada,
-        [string]   $MotivoRecomendacao
+        [string]   $MotivoRecomendacao,
+        # Anexo do formulario GEL (coordenadas / suporte / eletrica). Opcional.
+        $VistoriaGel
     )
 
     # index metrica -> override do tecnico
@@ -95,6 +124,7 @@ function New-ResultadoJson {
             lan_conectada          = [bool] (Get-Prop $lan 'conectado')
             lan_adaptador          = [string] (Get-Prop $lan 'nome')
             lan_descricao          = [string] (Get-Prop $lan 'descricao')
+            lan_rede_je            = [bool] (Test-RedeJusticaEleitoral ([string] (Get-Prop $lan 'ipv4')))
             tethering_celular      = [bool] $Tethering
             operadora              = [string] $Operadora
             ip_local               = [string] (Get-Prop $ativa 'ipv4')
@@ -112,6 +142,8 @@ function New-ResultadoJson {
             wireless_redes         = @(Get-Prop $wf 'redes_disponiveis')
             speedtest_ok           = [bool] (Get-Prop $it 'speedtest_ok')
             speedtest_erro         = [string] (Get-Prop $it 'speedtest_erro')
+            speedtest_falha_tipo   = [string] (Get-Prop $it 'speedtest_falha_tipo')
+            speedtest_diagnostico  = [string] (Get-Prop $it 'speedtest_diagnostico')
             internet_provedor      = [string] (Get-Prop $it 'isp')
             internet_ip_externo    = [string] (Get-Prop $it 'ip_externo')
             internet_servidor      = ((([string] (Get-Prop $it 'servidor_nome')) + ' - ' + ([string] (Get-Prop $it 'servidor_local'))).Trim(' -'))
@@ -122,6 +154,7 @@ function New-ResultadoJson {
             internet_download_mbps = (Get-Prop $it 'download_mbps')
             internet_upload_mbps   = (Get-Prop $it 'upload_mbps')
             internet_resultado_url = [string] (Get-Prop $it 'resultado_url')
+            internet_avaliacao     = @(Get-AvaliacaoRedeLocalJson $it $ovr)
         }
     }
 
@@ -131,6 +164,8 @@ function New-ResultadoJson {
         if (-not $m) { continue }
         $mIt  = Get-Prop (Get-Prop $m 'fase_local') 'Internet'
         $mMet = Get-Prop $m 'metricas'
+        $mOvr = @{}
+        foreach ($a in @(Get-Prop $m 'avaliacoes')) { if ($a -and $a.metrica) { $mOvr[[string] $a.metrica] = $a } }
         $medicoesJson += [pscustomobject]@{
             meio                 = [string] (Get-Prop $m 'meio')
             operadora            = [string] (Get-Prop $m 'operadora')
@@ -140,6 +175,9 @@ function New-ResultadoJson {
             rede_local_ok        = [bool] (Get-Prop $m 'rede_local_ok')
             rede_local_download  = (Get-Prop $m 'rede_local_download')
             rede_local_provedor  = [string] (Get-Prop $mIt 'isp')
+            rede_local_falha_tipo  = [string] (Get-Prop $mIt 'speedtest_falha_tipo')
+            rede_local_diagnostico = [string] (Get-Prop $mIt 'speedtest_diagnostico')
+            rede_local_avaliacao   = @(Get-AvaliacaoRedeLocalJson $mIt $mOvr)
             vpn_conectou         = [bool] (Get-Prop $m 'vpn_conectou')
             vpn_motivo           = [string] (Get-Prop $m 'vpn_motivo')
             vpn_download_mbps     = (Get-Prop $mMet 'BandaDownloadMbps')
@@ -189,6 +227,19 @@ function New-ResultadoJson {
             tipo_internet       = $Local.tipo_internet
         }
         rede_local        = $redeLocal
+        vistoria_gel       = $(if ($VistoriaGel) {
+            [pscustomobject]@{
+                latitude          = (Get-Prop $VistoriaGel 'lat')
+                longitude         = (Get-Prop $VistoriaGel 'long')
+                precisao_m        = (Get-Prop $VistoriaGel 'precisao_m')
+                mapa_link         = [string] (Get-Prop $VistoriaGel 'mapa_link')
+                suporte_nome      = [string] (Get-Prop $VistoriaGel 'suporte_nome')
+                suporte_telefone  = [string] (Get-Prop $VistoriaGel 'suporte_telefone')
+                eletrica_tensao   = [string] (Get-Prop $VistoriaGel 'eletrica_tensao')
+                eletrica_tomadas  = [string] (Get-Prop $VistoriaGel 'eletrica_tomadas')
+                eletrica_extensao = [string] (Get-Prop $VistoriaGel 'eletrica_extensao')
+            }
+        } else { $null })
         vpn               = [pscustomobject]@{ impossivel = [bool] $VpnImpossivel; motivo = [string] $VpnMotivo }
         medicoes          = @($medicoesJson)
         conexao_recomendada = $recJson

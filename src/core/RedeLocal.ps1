@@ -10,6 +10,14 @@
 # Depois desta fase o tecnico conecta a VPN do TRE e roda a bateria "com VPN"
 # (Invoke-DiagnosticoCompleto).
 
+# Faixas IPv4 internas da Justica Eleitoral (TRE-MA). Se a placa cabeada (LAN)
+# recebeu um IP nessas faixas, o notebook ja esta plugado na rede da JE.
+function Test-RedeJusticaEleitoral {
+    param([string] $Ip)
+    if (-not $Ip) { return $false }
+    return ($Ip -match '^10\.11\.' -or $Ip -match '^10\.198\.')
+}
+
 # --------------------------------------------------------------- configuracao
 function Get-ConfigRedeLocal {
     $def = [pscustomobject]@{
@@ -176,15 +184,33 @@ function Get-AdaptadorLan {
 # de rede pode sair trocado, mas os campos que a gente le (SSID/Sinal/Estado)
 # sao ASCII.
 function Invoke-Netsh {
-    param([string[]] $Argumentos, [int] $TimeoutS = 15)
+    param([string[]] $Argumentos, [int] $TimeoutS = 12)
     $netsh = Join-Path $env:SystemRoot 'System32\netsh.exe'
     if (-not (Test-Path $netsh)) { return '' }
+    # Start-Process + redirecionamento para ARQUIVO (nao pipe) + WaitForExit com
+    # timeout: 'netsh wlan show networks' pode travar por minutos com certos
+    # drivers Wi-Fi (forca um scan e bloqueia). Sem o timeout o passo 3 ficava
+    # "verificando as placas..." pra sempre. Arquivo (nao StreamReader) evita o
+    # deadlock/"o fluxo nao era legivel" no runspace MTA.
+    $out = $err = $null
     try {
-        $saida = & $netsh @Argumentos 2>$null
-        return [string]::Join("`n", @($saida))
+        $tmp = [IO.Path]::GetTempPath()
+        $out = Join-Path $tmp ('dicon-netsh-{0}.out' -f [guid]::NewGuid().ToString('N'))
+        $err = Join-Path $tmp ('dicon-netsh-{0}.err' -f [guid]::NewGuid().ToString('N'))
+        $p = Start-Process -FilePath $netsh -ArgumentList $Argumentos -NoNewWindow -PassThru `
+            -RedirectStandardOutput $out -RedirectStandardError $err
+        if (-not $p.WaitForExit($TimeoutS * 1000)) {
+            try { $p.Kill() } catch { }
+            Write-Log ("netsh {0} nao respondeu em {1}s - ignorado." -f ($Argumentos -join ' '), $TimeoutS) -Nivel Aviso
+            return ''
+        }
+        if (Test-Path $out) { return [string] (Get-Content -LiteralPath $out -Raw -ErrorAction SilentlyContinue) }
+        return ''
     } catch {
         Write-Log ("netsh {0} falhou: {1}" -f ($Argumentos -join ' '), $_) -Nivel Aviso
         return ''
+    } finally {
+        foreach ($f in $out, $err) { if ($f) { Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue } }
     }
 }
 
@@ -262,12 +288,9 @@ function Get-AdaptadorWireless {
     }
 
     try {
-        # dois modos: alguns drivers so listam a rede associada em 'show networks'
-        # simples; 'mode=bssid' costuma trazer todas as visiveis.
-        $blob = @(
-            (Invoke-Netsh -Argumentos @('wlan', 'show', 'networks')),
-            (Invoke-Netsh -Argumentos @('wlan', 'show', 'networks', 'mode=bssid'))
-        ) -join "`n"
+        # so a lista simples (cosmetico: "N rede(s) por perto"). O 'mode=bssid'
+        # forcava um scan e podia travar minutos com certos drivers - removido.
+        $blob = Invoke-Netsh -Argumentos @('wlan', 'show', 'networks') -TimeoutS 8
         $redes = foreach ($ln in ($blob -split "`r?`n")) {
             if ($ln -match '^\s*SSID\s+\d+\s*:\s*(.*\S)\s*$') { $Matches[1] }
         }
@@ -292,13 +315,47 @@ function ConvertTo-Mbps { param($BandwidthBytesSeg)
     [math]::Round(([double] $BandwidthBytesSeg) * 8 / 1e6, 2)
 }
 
+# Classifica por que o Speedtest (Ookla CLI) nao concluiu, a partir da mensagem
+# de erro. 'handshake' = nem baixou a config/lista de servidores da Ookla (a fase
+# de configuracao expirou) - o local TEM internet, mas a rede local nao segurou
+# uma conexao estavel para medir. Isso vira um dado do laudo (link fraco/instavel),
+# nao so um erro de ferramenta. Retorna @{ tipo; laudo }.
+function Resolve-FalhaSpeedtest {
+    param([string] $Mensagem, [int] $Tentativas = 1, [string] $SsidWifi = '', $SinalPct = $null)
+    $m = [string] $Mensagem
+    if ($m -match 'nao esta em tools|Copie o binario') { return @{ tipo = 'sem_binario'; laudo = '' } }
+    if ($m -match 'Configuration|Timeout was reached|TimeoutException|timed out|timeout') {
+        $ctx = ''
+        if ($SsidWifi) {
+            $ctx = ' Checagem por Wi-Fi ("' + $SsidWifi + '"'
+            if ($null -ne $SinalPct -and "$SinalPct" -ne '') { $ctx += ', sinal ' + $SinalPct + '%' }
+            $ctx += ').'
+        }
+        $vezes = if ($Tentativas -gt 1) { "$Tentativas tentativas" } else { 'a tentativa' }
+        return @{
+            tipo  = 'handshake'
+            laudo = ('Nao completou nem o handshake inicial do Speedtest: a fase de configuracao da ' +
+                     'Ookla (baixar a lista de servidores) expirou em ' + $vezes + '. O local TEM internet, ' +
+                     'mas a rede local nao sustentou uma conexao estavel o bastante para medir - indicio de ' +
+                     'sinal Wi-Fi fraco, perda de pacote ou micro-quedas do link.' + $ctx)
+        }
+    }
+    if ($m -match 'resolve|refused|denied|blocked|forbidden|proxy|\b407\b|SSL|TLS|certificate') {
+        return @{ tipo = 'bloqueio'; laudo = 'O Speedtest nao alcancou os servidores da Ookla - possivel bloqueio de rede/proxy a *.speedtest.net neste local.' }
+    }
+    return @{ tipo = 'desconhecido'; laudo = '' }
+}
+
 # Roda o speedtest.exe (Ookla CLI) em --format=jsonl, com velocimetro ao vivo.
 # Devolve o objeto achatado usado no relatorio / JSON.
 function Test-InternetLocal {
+    param($Wireless)   # objeto Wireless da Fase 1 (p/ contexto SSID/sinal no laudo)
     $cfg = Get-ConfigRedeLocal
     $r = [ordered]@{
-        speedtest_ok    = $false
-        speedtest_erro  = ''
+        speedtest_ok          = $false
+        speedtest_erro        = ''
+        speedtest_falha_tipo  = ''   # ''|handshake|bloqueio|sem_binario|desconhecido
+        speedtest_diagnostico = ''   # frase p/ o laudo quando a falha e "de rede", nao da ferramenta
         isp             = ''
         ip_externo      = ''
         servidor_nome   = ''
@@ -320,6 +377,7 @@ function Test-InternetLocal {
     $exe = Get-CaminhoSpeedtest
     if (-not $exe) {
         $r.speedtest_erro = 'speedtest.exe (Ookla CLI) nao esta em tools\. Copie o binario para a pasta e rode de novo.'
+        $r.speedtest_falha_tipo = 'sem_binario'
         Write-Log $r.speedtest_erro -Nivel Erro
         return [pscustomobject] $r
     }
@@ -339,13 +397,15 @@ function Test-InternetLocal {
     if ($cfg.speedtest_server_id) { $argv += ' --server-id={0}' -f $cfg.speedtest_server_id }
     if ($cfg.speedtest_extra_args) { $argv += ' ' + [string] $cfg.speedtest_extra_args }
 
-    # Ate 2 tentativas: em Wi-Fi de celular / hotspot o "Configuration - Timeout"
-    # da Ookla acontece de forma intermitente; a 2a tentativa costuma passar.
+    # Ate 3 tentativas, com espera crescente (0s / 3s / 6s): em Wi-Fi fraco, hotspot
+    # de celular ou link de satelite (Starlink) o "Configuration - Timeout" da Ookla
+    # e intermitente - as tentativas seguintes costumam passar quando o link melhora.
     $res = $null; $err = $null; $saida = $null
-    for ($tent = 1; $tent -le 2 -and -not $res; $tent++) {
+    for ($tent = 1; $tent -le 3 -and -not $res; $tent++) {
         if ($tent -gt 1) {
-            Write-Log 'Speedtest nao respondeu - tentando de novo em 3s...' -Nivel Aviso
-            Start-Sleep -Seconds 3
+            $espera = 3 * ($tent - 1)
+            Write-Log ("Speedtest nao respondeu - tentativa {0}/3 em {1}s..." -f $tent, $espera) -Nivel Aviso
+            Start-Sleep -Seconds $espera
         }
         Write-Log ("Speedtest (Ookla): {0} {1}" -f $exe, $argv) -Nivel Destaque
         $saida = Invoke-SpeedtestStreaming -Caminho $exe -Argumentos $argv -TimeoutS 120
@@ -366,6 +426,13 @@ function Test-InternetLocal {
                             elseif ($linhasErro.Count) { [string] ($linhasErro | Select-Object -Last 1) }
                             else { 'o speedtest nao concluiu (sem internet no local? provedor/proxy bloqueando *.speedtest.net?).' }
         Write-Log ("Speedtest falhou: {0}" -f $r.speedtest_erro) -Nivel Erro
+
+        $cls = Resolve-FalhaSpeedtest -Mensagem $r.speedtest_erro -Tentativas ($tent - 1) `
+            -SsidWifi ([string] (& { if ($Wireless) { $Wireless.ssid } })) `
+            -SinalPct (& { if ($Wireless) { $Wireless.sinal_pct } })
+        $r.speedtest_falha_tipo  = $cls.tipo
+        $r.speedtest_diagnostico = $cls.laudo
+        if ($cls.laudo) { Write-Log ("Rede local (laudo): {0}" -f $cls.laudo) -Nivel Aviso }
         return [pscustomobject] $r
     }
 
@@ -457,7 +524,7 @@ function Invoke-FaseLocal {
         Write-Log 'Wi-Fi: sem placa wireless neste computador.' -Nivel Info
     }
 
-    $net = if ($SemInternet) { $null } else { Test-InternetLocal }
+    $net = if ($SemInternet) { $null } else { Test-InternetLocal -Wireless $wf }
 
     [pscustomobject]@{
         Host     = [string] $env:COMPUTERNAME

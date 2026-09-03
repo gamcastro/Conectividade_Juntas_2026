@@ -13,7 +13,7 @@ function Save-ResultadoLocal {
     $nome    = '{0}_{1}.json' -f (Get-Date -Format 'yyyyMMdd_HHmmss_fff'), $id
     $caminho = Join-Path $pasta $nome
 
-    $Resultado | ConvertTo-Json -Depth 10 | Set-Content -Path $caminho -Encoding UTF8
+    Write-TextoArquivo -Caminho $caminho -Conteudo ($Resultado | ConvertTo-Json -Depth 10)
     Write-Log "Resultado salvo em $caminho" -Nivel Ok
     return $caminho
 }

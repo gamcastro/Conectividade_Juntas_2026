@@ -1,6 +1,25 @@
 ﻿# Leitura de configuracao. Usa config\<nome>.json se existir; senao cai no
 # config\<nome>.exemplo.json (util para rodar recem-clonado, sem configs reais).
 
+# Grava texto num arquivo de forma resiliente. Usa [IO.File]::WriteAllText em
+# vez de Set-Content: o provider FileSystem do PS 5.1 as vezes abre um
+# StreamReader sobre o arquivo novo (farejar encoding) e estoura "O fluxo nao
+# era legivel" quando o antivirus esta com o handle. Retry curto p/ o lock.
+function Write-TextoArquivo {
+    param(
+        [Parameter(Mandatory)] [string] $Caminho,
+        [string] $Conteudo = '',
+        [switch] $ComBom
+    )
+    $pai = Split-Path $Caminho -Parent
+    if ($pai -and -not (Test-Path $pai)) { New-Item -ItemType Directory -Path $pai -Force | Out-Null }
+    $enc = [Text.UTF8Encoding]::new([bool] $ComBom)
+    for ($i = 1; $i -le 6; $i++) {
+        try { [IO.File]::WriteAllText($Caminho, [string] $Conteudo, $enc); return }
+        catch { if ($i -eq 6) { throw }; Start-Sleep -Milliseconds 300 }
+    }
+}
+
 function Get-Config {
     param(
         [string] $Nome
@@ -27,7 +46,8 @@ function Save-ConfigAmbiente {
     param(
         [Parameter(Mandatory)] [string] $Servidor,
         [int] $Porta   = 5201,
-        [int] $Duracao = 10
+        [int] $Duracao = 10,
+        [string] $MapsKey                 # chave da Maps Static API (opcional)
     )
     $dir  = Join-Path $Global:RaizApp 'config'
     $alvo = Join-Path $dir 'ambiente.json'
@@ -44,7 +64,12 @@ function Save-ConfigAmbiente {
     if ($base.PSObject.Properties['iperf3']) { $base.iperf3 = $novoIperf }
     else { $base | Add-Member -NotePropertyName iperf3 -NotePropertyValue $novoIperf -Force }
 
-    if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
-    $base | ConvertTo-Json -Depth 8 | Set-Content -Path $alvo -Encoding UTF8
+    if ($PSBoundParameters.ContainsKey('MapsKey')) {
+        $gm = [pscustomobject]@{ static_key = ([string] $MapsKey).Trim() }
+        if ($base.PSObject.Properties['google_maps']) { $base.google_maps = $gm }
+        else { $base | Add-Member -NotePropertyName google_maps -NotePropertyValue $gm -Force }
+    }
+
+    Write-TextoArquivo -Caminho $alvo -Conteudo ($base | ConvertTo-Json -Depth 8)
     $alvo
 }
