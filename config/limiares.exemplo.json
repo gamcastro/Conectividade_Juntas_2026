@@ -1,9 +1,66 @@
 {
-  "_comentario": "VALORES PROVISORIOS. Ajustar apos validacao com o time do sistema de totalizacao (ver docs/limiares-referencia.md). 'ativo': false tira a metrica da bateria (o admin controla isso na tela de Administracao).",
-  "latencia_ms":          { "viavel_ate": 60,  "ressalva_ate": 120, "ativo": true },
-  "jitter_ms":            { "viavel_ate": 10,  "ressalva_ate": 30,  "ativo": true },
-  "perda_percentual":     { "viavel_ate": 1,   "ressalva_ate": 5,   "ativo": true },
-  "banda_download_mbps":  { "viavel_min": 20,  "ressalva_min": 8,   "ativo": true },
-  "banda_upload_mbps":    { "viavel_min": 10,  "ressalva_min": 4,   "ativo": true },
-  "carregamento_web_s":   { "viavel_ate": 5,   "ressalva_ate": 12,  "ativo": true }
+  "_comentario": "VALORES PROVISORIOS. Limiares de decisao por MEIO (lan / wifi_local / celular) x CENARIO (sem_vpn / com_vpn). Base do SEM VPN: pisos da ANATEL (Res. Interna 444/2025 - DVR, Tabela 5, valores de corte) - SCM (fixa) p/ lan e wifi_local, SMP (movel) p/ celular. NAO e medicao 'conforme ANATEL', so limiar informado pelos valores de referencia. COM VPN = SEM VPN + orcamento_vpn (aditivo p/ latencia/jitter/perda, haircut %% p/ banda). wifi_local NAO guarda valores: herda da LAN + folga (aditivo p/ latencia/jitter/perda/web, haircut %% p/ banda). carregamento_web so existe COM VPN. 'ativo': false tira a metrica da bateria (meio x cenario x metrica). Ajustar apos validacao em homologacao contra 10.11.1.38. Ver docs/limiares-referencia.md.",
+  "orcamento_vpn": {
+    "latencia_ms": 30,
+    "jitter_ms": 10,
+    "perda_percentual": 1,
+    "banda_download_pct": -30,
+    "banda_upload_pct": -30
+  },
+  "perfis": {
+    "lan": {
+      "sem_vpn": {
+        "latencia_ms":         { "viavel_ate": 20,  "ressalva_ate": 80, "ativo": true },
+        "jitter_ms":           { "viavel_ate": 10,  "ressalva_ate": 40, "ativo": true },
+        "perda_percentual":    { "viavel_ate": 0.5, "ressalva_ate": 2,  "ativo": true },
+        "banda_download_mbps": { "viavel_min": 25,  "ressalva_min": 5,  "ativo": true },
+        "banda_upload_mbps":   { "viavel_min": 5,   "ressalva_min": 1,  "ativo": true }
+      },
+      "com_vpn": {
+        "latencia_ms":         { "viavel_ate": 50,  "ressalva_ate": 110, "ativo": true },
+        "jitter_ms":           { "viavel_ate": 20,  "ressalva_ate": 50,  "ativo": true },
+        "perda_percentual":    { "viavel_ate": 1.5, "ressalva_ate": 3,   "ativo": true },
+        "banda_download_mbps": { "viavel_min": 18,  "ressalva_min": 4,   "ativo": true },
+        "banda_upload_mbps":   { "viavel_min": 3.5, "ressalva_min": 1,   "ativo": true },
+        "carregamento_web_s":  { "viavel_ate": 4,   "ressalva_ate": 12,  "ativo": true }
+      }
+    },
+    "celular": {
+      "sem_vpn": {
+        "latencia_ms":         { "viavel_ate": 40, "ressalva_ate": 100, "ativo": true },
+        "jitter_ms":           { "viavel_ate": 10, "ressalva_ate": 25,  "ativo": true },
+        "perda_percentual":    { "viavel_ate": 1,  "ressalva_ate": 2,   "ativo": true },
+        "banda_download_mbps": { "viavel_min": 15, "ressalva_min": 7,   "ativo": true },
+        "banda_upload_mbps":   { "viavel_min": 5,  "ressalva_min": 1.5, "ativo": true }
+      },
+      "com_vpn": {
+        "latencia_ms":         { "viavel_ate": 60,  "ressalva_ate": 130, "ativo": true },
+        "jitter_ms":           { "viavel_ate": 15,  "ressalva_ate": 35,  "ativo": true },
+        "perda_percentual":    { "viavel_ate": 1.5, "ressalva_ate": 4,   "ativo": true },
+        "banda_download_mbps": { "viavel_min": 10,  "ressalva_min": 5,   "ativo": true },
+        "banda_upload_mbps":   { "viavel_min": 4,   "ressalva_min": 1.5, "ativo": true },
+        "carregamento_web_s":  { "viavel_ate": 6,   "ressalva_ate": 18,  "ativo": true }
+      }
+    },
+    "wifi_local": {
+      "folga": {
+        "latencia_ms": 10,
+        "jitter_ms": 5,
+        "perda_percentual": 1,
+        "banda_download_pct": -20,
+        "banda_upload_pct": -20,
+        "carregamento_web_s": 3
+      },
+      "ativos": {
+        "sem_vpn": {
+          "latencia_ms": true, "jitter_ms": true, "perda_percentual": true,
+          "banda_download_mbps": true, "banda_upload_mbps": true
+        },
+        "com_vpn": {
+          "latencia_ms": true, "jitter_ms": true, "perda_percentual": true,
+          "banda_download_mbps": true, "banda_upload_mbps": true, "carregamento_web_s": true
+        }
+      }
+    }
+  }
 }

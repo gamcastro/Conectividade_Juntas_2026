@@ -1,29 +1,40 @@
-Biblioteca de leitura de PDF (PdfPig) — usada pelo anexo do formulario do GEL
+Biblioteca de leitura de PDF (PdfPig) - usada pelo anexo do formulario do GEL
 ============================================================================
 
-O DICON le o PDF da vistoria do GEL com o PdfPig (licenca Apache-2.0).
-Sem estes arquivos, o botao "Anexar formulario GEL (PDF)" avisa que a
-biblioteca esta ausente e nao le o PDF (o resto do DICON funciona normal).
+O DICON le o PDF da vistoria do GEL com o PdfPig (licenca Apache-2.0). As DLLs
+ja estao COMMITADAS aqui (como o iperf3), entao o anexo do GEL funciona numa
+instalacao nova sem passo extra. O Atualizar-DICON.ps1 espelha esta pasta.
 
-O que copiar para ESTA pasta (lib\pdfpig\):
+Arquivos nesta pasta (nao remover):
 
-  UglyToad.PdfPig.dll
+  UglyToad.PdfPig.dll                 (PdfPig 0.1.9, lib\netstandard2.0)
   UglyToad.PdfPig.Core.dll
   UglyToad.PdfPig.Fonts.dll
   UglyToad.PdfPig.Tokenization.dll
   UglyToad.PdfPig.Tokens.dll
-  System.Memory.dll
-  System.Buffers.dll
-  System.Numerics.Vectors.dll
-  System.Runtime.CompilerServices.Unsafe.dll
+  System.Memory.dll                   (System.Memory 4.5.5, lib\net461)
+  System.Buffers.dll                  (System.Buffers 4.5.1, lib\net461)
+  System.Numerics.Vectors.dll         (System.Numerics.Vectors 4.5.0, lib\net46)
+  System.Runtime.CompilerServices.Unsafe.dll  (4.5.3, lib\net461)
+  Microsoft.Bcl.HashCode.dll          (Microsoft.Bcl.HashCode 1.1.1, lib\net461)
 
-Como obter (uma vez, numa maquina com internet):
+O PowerShell 5.1 (.NET Framework) nao unifica as versoes desses assemblies do
+sistema sozinho - o PdfPig pede, p.ex., System.Buffers 4.0.2.0 e a DLL aqui e
+outra build. Por isso Read-TextoPdf (src\core\VistoriaGel.ps1) instala um
+handler AppDomain.AssemblyResolve que resolve por NOME SIMPLES para a DLL desta
+pasta (Register-ResolucaoPdfLib). Nao e preciso app.config nem binding redirect.
 
-  1. Instale o .NET SDK (ou tenha o "nuget.exe").
-  2. Rode:  nuget install UglyToad.PdfPig -Version 0.1.9 -OutputDirectory pkg
-     (ou baixe o .nupkg em https://www.nuget.org/packages/PdfPig e renomeie
-      para .zip para extrair)
-  3. Dentro dos pacotes baixados, pegue os .dll da pasta
-     lib\netstandard2.0\ de cada um e copie para ca.
+Como esta pasta foi montada (uma vez, numa maquina com internet):
 
-Depois de copiar, o anexo do GEL passa a ler o PDF automaticamente.
+  1. Baixe os .nupkg do nuget.org (flat container):
+       https://api.nuget.org/v3-flatcontainer/pdfpig/0.1.9/pdfpig.0.1.9.nupkg
+       https://api.nuget.org/v3-flatcontainer/system.memory/4.5.5/system.memory.4.5.5.nupkg
+       https://api.nuget.org/v3-flatcontainer/system.buffers/4.5.1/system.buffers.4.5.1.nupkg
+       https://api.nuget.org/v3-flatcontainer/system.numerics.vectors/4.5.0/system.numerics.vectors.4.5.0.nupkg
+       https://api.nuget.org/v3-flatcontainer/system.runtime.compilerservices.unsafe/4.5.3/system.runtime.compilerservices.unsafe.4.5.3.nupkg
+       https://api.nuget.org/v3-flatcontainer/microsoft.bcl.hashcode/1.1.1/microsoft.bcl.hashcode.1.1.1.nupkg
+  2. Cada .nupkg e um .zip. Extraia as DLLs das pastas lib\ indicadas acima
+     (UglyToad.* de lib\netstandard2.0 do pdfpig; as System.*/Microsoft.* das
+     pastas net461/net46 dos respectivos pacotes).
+  3. Copie so as 10 DLLs listadas para ca (sem .pdb/.xml, sem
+     UglyToad.PdfPig.DocumentLayoutAnalysis.dll nem UglyToad.PdfPig.Package.dll).

@@ -96,6 +96,38 @@ function Invoke-SpeedtestStreaming {
     [pscustomobject]@{ Eventos = $eventos; Erro = ($errBuf -join "`n") }
 }
 
+# Extrai os IDs de servidor da saida de "speedtest.exe --servers" (tabela ou
+# jsonl). Puro (recebe texto) para ser testavel sem o binario.
+function ConvertFrom-ListaServidoresSpeedtest {
+    param([string] $Texto)
+    $ids = New-Object System.Collections.Generic.List[string]
+    foreach ($ln in ($Texto -split "`r?`n")) {
+        $t = $ln.Trim()
+        if ($t -match '^(\d{3,7})\s+\S') { $ids.Add($Matches[1]); continue }
+        if ($t -and $t[0] -eq '{') {
+            try {
+                $o = $t | ConvertFrom-Json
+                if ($o -and $o.PSObject.Properties['servers']) {
+                    foreach ($s in @($o.servers)) { if ($s.id) { $ids.Add("$($s.id)") } }
+                }
+            } catch { }
+        }
+    }
+    @($ids | Select-Object -Unique)
+}
+
+# Lista os servidores Speedtest mais proximos (IDs). Usado no fallback quando o
+# servidor padrao/auto falha o teste de latencia.
+function Get-ServidoresSpeedtestProximos {
+    param([string] $Caminho, [int] $Max = 6)
+    $linhas = New-Object System.Collections.Generic.List[string]
+    try {
+        & $Caminho '--servers' '--accept-license' '--accept-gdpr' 2>&1 |
+            ForEach-Object { $linhas.Add([string] $_) }
+    } catch { }
+    @(ConvertFrom-ListaServidoresSpeedtest -Texto ($linhas -join "`n") | Select-Object -First $Max)
+}
+
 # --------------------------------------------------------------- placa LAN
 function ConvertTo-MascaraIpv4 {
     param([int] $Prefixo)
@@ -334,14 +366,14 @@ function Resolve-FalhaSpeedtest {
         $vezes = if ($Tentativas -gt 1) { "$Tentativas tentativas" } else { 'a tentativa' }
         return @{
             tipo  = 'handshake'
-            laudo = ('Nao completou nem o handshake inicial do Speedtest: a fase de configuracao da ' +
-                     'Ookla (baixar a lista de servidores) expirou em ' + $vezes + '. O local TEM internet, ' +
+            laudo = ('Nao completou nem a etapa inicial do teste de velocidade: a fase de configuracao ' +
+                     '(baixar a lista de servidores de medicao) expirou em ' + $vezes + '. O local TEM internet, ' +
                      'mas a rede local nao sustentou uma conexao estavel o bastante para medir - indicio de ' +
                      'sinal Wi-Fi fraco, perda de pacote ou micro-quedas do link.' + $ctx)
         }
     }
     if ($m -match 'resolve|refused|denied|blocked|forbidden|proxy|\b407\b|SSL|TLS|certificate') {
-        return @{ tipo = 'bloqueio'; laudo = 'O Speedtest nao alcancou os servidores da Ookla - possivel bloqueio de rede/proxy a *.speedtest.net neste local.' }
+        return @{ tipo = 'bloqueio'; laudo = 'O teste de velocidade nao alcancou os servidores de medicao - possivel bloqueio de rede/proxy neste local.' }
     }
     return @{ tipo = 'desconhecido'; laudo = '' }
 }
@@ -356,6 +388,7 @@ function Test-InternetLocal {
         speedtest_erro        = ''
         speedtest_falha_tipo  = ''   # ''|handshake|bloqueio|sem_binario|desconhecido
         speedtest_diagnostico = ''   # frase p/ o laudo quando a falha e "de rede", nao da ferramenta
+        servidor_fallback     = $false   # true = o servidor padrao/auto falhou e usamos outro da regiao
         isp             = ''
         ip_externo      = ''
         servidor_nome   = ''
@@ -397,17 +430,28 @@ function Test-InternetLocal {
     if ($cfg.speedtest_server_id) { $argv += ' --server-id={0}' -f $cfg.speedtest_server_id }
     if ($cfg.speedtest_extra_args) { $argv += ' ' + [string] $cfg.speedtest_extra_args }
 
-    # Ate 3 tentativas, com espera crescente (0s / 3s / 6s): em Wi-Fi fraco, hotspot
-    # de celular ou link de satelite (Starlink) o "Configuration - Timeout" da Ookla
-    # e intermitente - as tentativas seguintes costumam passar quando o link melhora.
+    # Tentativas no MESMO servidor, com espera crescente antes de cada uma: em
+    # Wi-Fi fraco, hotspot de celular ou link de satelite (Starlink) o
+    # "Configuration - Timeout" da Ookla e intermitente e a seguinte costuma
+    # passar quando o link melhora. Configuravel em config\rede-local.json
+    # (speedtest_tentativas / speedtest_esperas_s); default 3 tentativas, 0/5/12s.
+    $maxTent = 3
+    if ($cfg.PSObject.Properties['speedtest_tentativas']) {
+        $t = 0; if ([int]::TryParse([string] $cfg.speedtest_tentativas, [ref] $t) -and $t -ge 1 -and $t -le 8) { $maxTent = $t }
+    }
+    $esperas = @(0, 5, 12)
+    if ($cfg.PSObject.Properties['speedtest_esperas_s'] -and @($cfg.speedtest_esperas_s).Count) {
+        $esperas = @($cfg.speedtest_esperas_s | ForEach-Object { $v = 0; [void][int]::TryParse([string] $_, [ref] $v); [math]::Max($v, 0) })
+    }
     $res = $null; $err = $null; $saida = $null
-    for ($tent = 1; $tent -le 3 -and -not $res; $tent++) {
+    for ($tent = 1; $tent -le $maxTent -and -not $res; $tent++) {
+        $espera = [int] $esperas[[math]::Min($tent - 1, $esperas.Count - 1)]
         if ($tent -gt 1) {
-            $espera = 3 * ($tent - 1)
-            Write-Log ("Speedtest nao respondeu - tentativa {0}/3 em {1}s..." -f $tent, $espera) -Nivel Aviso
-            Start-Sleep -Seconds $espera
+            $sufixo = if ($espera -gt 0) { " em ${espera}s..." } else { '...' }
+            Write-Log ("Teste de velocidade nao respondeu - tentativa {0}/{1}{2}" -f $tent, $maxTent, $sufixo) -Nivel Aviso
+            if ($espera -gt 0) { Start-Sleep -Seconds $espera }
         }
-        Write-Log ("Speedtest (Ookla): {0} {1}" -f $exe, $argv) -Nivel Destaque
+        Write-Log ("Teste de velocidade: {0} {1}" -f $exe, $argv) -Nivel Destaque
         $saida = Invoke-SpeedtestStreaming -Caminho $exe -Argumentos $argv -TimeoutS 120
         $res = @($saida.Eventos | Where-Object { $_.type -eq 'result' }) | Select-Object -Last 1
         $err = @($saida.Eventos | Where-Object { $_.type -eq 'error' }) | Select-Object -Last 1
@@ -425,15 +469,46 @@ function Test-InternetLocal {
                             elseif ($linhaReal) { [string] $linhaReal }
                             elseif ($linhasErro.Count) { [string] ($linhasErro | Select-Object -Last 1) }
                             else { 'o speedtest nao concluiu (sem internet no local? provedor/proxy bloqueando *.speedtest.net?).' }
-        Write-Log ("Speedtest falhou: {0}" -f $r.speedtest_erro) -Nivel Erro
+        Write-Log ("Teste de velocidade falhou: {0}" -f $r.speedtest_erro) -Nivel Erro
 
         $cls = Resolve-FalhaSpeedtest -Mensagem $r.speedtest_erro -Tentativas ($tent - 1) `
             -SsidWifi ([string] (& { if ($Wireless) { $Wireless.ssid } })) `
             -SinalPct (& { if ($Wireless) { $Wireless.sinal_pct } })
         $r.speedtest_falha_tipo  = $cls.tipo
         $r.speedtest_diagnostico = $cls.laudo
-        if ($cls.laudo) { Write-Log ("Rede local (laudo): {0}" -f $cls.laudo) -Nivel Aviso }
-        return [pscustomobject] $r
+
+        # Troca de servidor: o servidor padrao/auto da Ookla pode estar ruim
+        # (ex.: "Latency test failed" / "[0] Unknown error"), e o "Configuration
+        # - Timeout" (handshake) tambem costuma ser servidor default sobrecarregado
+        # e nao a rede do local -> vale tentar outros da regiao.
+        # (bloqueio/sem_binario dependem de proxy/DNS ou do binario -> trocar
+        # de servidor nao ajuda.)
+        if ($cls.tipo -eq 'desconhecido' -or $cls.tipo -eq 'handshake') {
+            $jaTentado = [string] $cfg.speedtest_server_id
+            $cands = @(Get-ServidoresSpeedtestProximos -Caminho $exe |
+                Where-Object { "$_" -and "$_" -ne $jaTentado } | Select-Object -First 3)
+            foreach ($sid in $cands) {
+                Write-Log ("Teste de velocidade: o servidor padrao falhou - tentando o servidor {0}..." -f $sid) -Nivel Aviso
+                $argv2 = '--format=jsonl --accept-license --accept-gdpr --server-id={0}' -f $sid
+                if ($cfg.speedtest_extra_args) { $argv2 += ' ' + [string] $cfg.speedtest_extra_args }
+                $saida = Invoke-SpeedtestStreaming -Caminho $exe -Argumentos $argv2 -TimeoutS 120
+                $res = @($saida.Eventos | Where-Object { $_.type -eq 'result' }) | Select-Object -Last 1
+                if ($res) {
+                    $r.servidor_fallback = $true
+                    Write-Log ("Teste de velocidade funcionou no servidor {0}. Considere fixar speedtest_server_id={0} em config\rede-local.json." -f $sid) -Nivel Ok
+                    break
+                }
+            }
+        }
+
+        if (-not $res) {
+            if ($cls.laudo) { Write-Log ("Rede local (laudo): {0}" -f $cls.laudo) -Nivel Aviso }
+            return [pscustomobject] $r
+        }
+        # um servidor alternativo respondeu -> limpa os campos de falha
+        $r.speedtest_erro = ''
+        $r.speedtest_falha_tipo = ''
+        $r.speedtest_diagnostico = ''
     }
 
     $r.speedtest_ok    = $true
@@ -470,7 +545,7 @@ function Test-InternetLocal {
         $r.resultado_url = [string] $res.result.url
         $r.resultado_id  = [string] $res.result.id
     }
-    Write-Log ("Speedtest OK: down {0} Mbps / up {1} Mbps / ping {2} ms ({3})" -f $r.download_mbps, $r.upload_mbps, $r.ping_ms, $r.isp) -Nivel Ok
+    Write-Log ("Teste de velocidade OK: down {0} Mbps / up {1} Mbps / ping {2} ms ({3})" -f $r.download_mbps, $r.upload_mbps, $r.ping_ms, $r.isp) -Nivel Ok
     [pscustomobject] $r
 }
 

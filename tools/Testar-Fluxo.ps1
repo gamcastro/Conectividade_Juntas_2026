@@ -194,6 +194,45 @@ try {
     if ("$($w.FindName('viewLocalDetalhe').Visibility)" -eq 'Visible' -and "$($w.FindName('txtLDPNome').Text)") {
         Write-Host "[3b] clicar num local abre a ficha completa ($($w.FindName('txtLDPNome').Text))"
     } else { Write-Host "    FALHA: ficha completa do local nao abriu (vis=$($w.FindName('viewLocalDetalhe').Visibility))"; $falhas++ }
+
+    # 3c. tela de detalhe: indicadores de status + card do GEL (movido do passo 2)
+    $dotsLd = @('dotLdTestado','dotLdSalvo','dotLdTransmitido','dotLdExportado','dotLdGel') |
+        ForEach-Object { $w.FindName($_) }
+    if (@($dotsLd | Where-Object { $_ }).Count -eq 5 -and @($dotsLd | Where-Object { $_.Fill }).Count -eq 5) {
+        Write-Host "[3c] 5 indicadores de status pintados na ficha do local"
+    } else { Write-Host "    FALHA: indicadores de status ausentes/sem cor na ficha do local"; $falhas++ }
+    if ("$($w.FindName('cardGel').Visibility)" -eq 'Visible') {
+        Write-Host "[3c] card do formulario GEL vive na ficha do local"
+    } else { Write-Host "    FALHA: cardGel nao visivel na ficha do local (vis=$($w.FindName('cardGel').Visibility))"; $falhas++ }
+    $anc = $w.FindName('cardGel'); $souDetalhe = $false
+    while ($anc) {
+        if ($anc -eq $w.FindName('viewLocalDetalhe')) { $souDetalhe = $true; break }
+        $anc = [Windows.LogicalTreeHelper]::GetParent($anc)
+    }
+    if ($souDetalhe) {
+        Write-Host "[3c] card do GEL vive dentro de viewLocalDetalhe (saiu do passo 2)"
+    } else { Write-Host "    FALHA: cardGel nao esta sob viewLocalDetalhe"; $falhas++ }
+
+    # 3d. persistencia do anexo GEL por local (data/vistoria-gel/<id>.json)
+    $gelId = 'ZE99-TESTE-PRINCIPAL'
+    Remove-VistoriaGel -LocalId $gelId
+    Save-VistoriaGel -LocalId $gelId -Dados ([pscustomobject]@{
+        lat = -2.5; long = -43.25; precisao_m = 6.5
+        suporte_nome = 'ACME'; suporte_telefone = '99 99999-9999'
+        eletrica_tensao = '220V'; eletrica_tomadas = '4'; eletrica_extensao = 'nao'
+    }) | Out-Null
+    $gelBack = Get-VistoriaGel -LocalId $gelId
+    if ($gelBack -and [double] $gelBack.lat -eq -2.5 -and "$($gelBack.suporte_nome)" -eq 'ACME') {
+        Write-Host "[3d] Save-VistoriaGel / Get-VistoriaGel round-trip OK"
+    } else { Write-Host "    FALHA: round-trip do anexo GEL"; $falhas++ }
+    if ((Get-StatusLocal -LocalId $gelId).gel) {
+        Write-Host "[3d] Get-StatusLocal reflete o anexo GEL"
+    } else { Write-Host "    FALHA: Get-StatusLocal nao viu o anexo GEL"; $falhas++ }
+    Remove-VistoriaGel -LocalId $gelId
+    if (-not (Get-StatusLocal -LocalId $gelId).gel) {
+        Write-Host "[3d] Remove-VistoriaGel limpa o anexo"
+    } else { Write-Host "    FALHA: Remove-VistoriaGel nao apagou o anexo"; $falhas++ }
+
     Invoke-VoltarAosLocais
     Invoke-Pump
     if ("$($w.FindName('viewLocais').Visibility)" -eq 'Visible' -and $w.FindName('dgLocais').SelectedIndex -lt 0) {
@@ -278,24 +317,85 @@ try {
     if ($Global:WizardStep -eq 3) { Write-Host "[4c] passo 3 bloqueia 'Proximo' sem meio testado" }
     else { Write-Host "    FALHA: avancou sem testar meio (step=$($Global:WizardStep))"; $falhas++ }
 
-    # 4d. checagem de um meio (celular) pelo overlay: Fase 1 (Ookla) + Fase 2 (VPN)
+    # 4c-2. ordem fixa LAN -> Wi-Fi -> Celular + isolamento de rede + "Proximo"
+    $Global:FaseLocalPayload.Lan.conectado = $true
+    $Global:FaseLocalPayload.Wireless.conectado = $true       # cabo E Wi-Fi ligados
+    $w.FindName('cboOperadoraCel').Text = 'Vivo'
+    Update-PainelMeios
+    # a vez e da LAN, mas o Wi-Fi esta conectado -> botao travado + aviso na tela
+    $lanTravadaPorWifi = -not $w.FindName('btnCheckLan').IsEnabled
+    $avisoIsolamento   = "$($w.FindName('cardMeioAviso').Visibility)" -eq 'Visible'
+    $wifi0 = -not $w.FindName('btnCheckWifi').IsEnabled       # 2o da ordem: travado
+    $cel0  = -not $w.FindName('btnCheckCelular').IsEnabled    # 3o da ordem: travado
+    $prox0 = "$($w.FindName('btnWizProximo').Visibility)" -eq 'Collapsed'
+    # LAN "nao se aplica" -> a vez passa ao Wi-Fi; com o cabo fora o botao libera
+    $w.FindName('chkNaLan').IsChecked = $true ; Update-NaoAplicavelMeio
+    $w.FindName('txtNaJustif').Text = 'sem ponto de rede' ; Invoke-NaRegistrar ; Invoke-Pump
+    $Global:FaseLocalPayload.Lan.conectado = $false          # cabo retirado p/ a etapa Wi-Fi
+    Update-PainelMeios
+    $wifi1 = $w.FindName('btnCheckWifi').IsEnabled
+    $cel1  = -not $w.FindName('btnCheckCelular').IsEnabled    # Celular (3o) ainda travado
+    # Wi-Fi e Celular tambem NA -> todos resolvidos -> "Proximo" aparece
+    $w.FindName('chkNaWifi').IsChecked = $true ; Update-NaoAplicavelMeio
+    $w.FindName('txtNaJustif').Text = 'x' ; Invoke-NaRegistrar ; Invoke-Pump
+    $w.FindName('chkNaCelular').IsChecked = $true ; Update-NaoAplicavelMeio
+    $w.FindName('txtNaJustif').Text = 'x' ; Invoke-NaRegistrar ; Invoke-Pump
+    $proxAll = "$($w.FindName('btnWizProximo').Visibility)" -eq 'Visible'
+    if ($lanTravadaPorWifi -and $avisoIsolamento -and $wifi0 -and $cel0 -and $prox0 -and $wifi1 -and $cel1 -and $proxAll) {
+        Write-Host "[4c] ordem LAN->Wi-Fi->Celular + isolamento de rede + 'Proximo' so com tudo resolvido"
+    } else { Write-Host "    FALHA: ordem/isolamento/Proximo (lanTrava=$lanTravadaPorWifi aviso=$avisoIsolamento w0=$wifi0 c0=$cel0 p0=$prox0 w1=$wifi1 c1=$cel1 pAll=$proxAll)"; $falhas++ }
+    # restaura: nenhum meio NA (nem no hashtable nem em Medicoes), sem selecao
+    foreach ($mk in 'lan', 'wifi_local', 'celular') { $Global:MeiosNaoAplicaveis.Remove($mk) }
+    $Global:Medicoes = @(@($Global:Medicoes) | Where-Object { $_ -and -not $_.nao_aplicavel })
+    $Global:NaMeioPendente = ''
+    $w.FindName('chkNaLan').IsChecked = $false ; $w.FindName('chkNaWifi').IsChecked = $false ; $w.FindName('chkNaCelular').IsChecked = $false
+    $w.FindName('cardNaJustif').Visibility = 'Collapsed'
+    $Global:FaseLocalPayload.Lan.conectado = $true
+    $Global:MeioSelecionado = ''
+    Update-PainelMeios
+
+    # 4c-3. meio ja testado preserva os dados da placa do momento do teste (um
+    # probe geral depois nao apaga; so refazer a checagem renova).
+    $snapFake = [pscustomobject]@{ conectado = $true; presente = $true; nome = 'LAN'; ipv4 = '10.55.0.9'
+        gateway = '10.55.0.1'; mascara = '255.255.255.0'; dns = @('10.55.0.1'); mac = 'AA-BB-CC-DD-EE-FF'
+        ip_origem = 'DHCP'; velocidade_mbps = 1000 }
+    $Global:Medicoes = @(@($Global:Medicoes) + [pscustomobject]@{ meio = 'lan'; operadora = ''
+        rotulo = 'Rede cabeada (LAN)'; nao_aplicavel = $false; snapshot_adaptador = $snapFake
+        veredito = 'viavel'; quando = (Get-Date).ToString('o') })
+    $ipLanReal = $Global:FaseLocalPayload.Lan.ipv4
+    $Global:FaseLocalPayload.Lan.ipv4 = '192.168.99.99'   # "probe geral" mexeu na placa
+    Update-PainelMeios ; Invoke-Pump
+    if ("$($w.FindName('txtLocIp').Text)" -match '10\.55\.0\.9' -and "$($w.FindName('txtLocGateway').Text)" -match '10\.55\.0\.1') {
+        Write-Host "[4c] meio ja testado preserva IP/gateway do teste (probe geral nao apaga)"
+    } else { Write-Host "    FALHA: card LAN nao preservou o snapshot (ip='$($w.FindName('txtLocIp').Text)')"; $falhas++ }
+    $Global:Medicoes = @(@($Global:Medicoes) | Where-Object { -not ($_.PSObject.Properties['snapshot_adaptador'] -and $_.snapshot_adaptador -eq $snapFake) })
+    $Global:FaseLocalPayload.Lan.ipv4 = $ipLanReal
+    Update-PainelMeios
+
+    # 4d. checagem de um meio (celular) pelo overlay: Fase 1 + Fase 2 (VPN).
+    # A ordem e rigida: LAN e Wi-Fi precisam estar resolvidos p/ a vez chegar ao Celular.
     $Global:VpnSimulada = $true
-    $Global:FaseLocalPayload.Wireless.conectado = $true      # rede Wi-Fi conectada
+    $Global:FaseLocalPayload.Lan.conectado = $false          # cabo fora (etapa Wi-Fi/Celular)
+    $Global:FaseLocalPayload.Wireless.conectado = $true       # placa Wi-Fi conectada
     $w.FindName('cboOperadoraCel').Text = 'Vivo'
     $Global:MeioSelecionado = '' ; Update-PainelMeios
     if (-not $w.FindName('btnCheckWifi').IsEnabled -and -not $w.FindName('btnCheckCelular').IsEnabled) {
-        Write-Host "[4d] sem card selecionado -> nenhum 'Rodar checagem' habilitado"
-    } else { Write-Host "    FALHA: botao habilitado sem selecao (wifi.en=$($w.FindName('btnCheckWifi').IsEnabled) cel.en=$($w.FindName('btnCheckCelular').IsEnabled))"; $falhas++ }
-    Select-MeioParaChecar 'wifi'
-    if ($w.FindName('btnCheckWifi').IsEnabled -and -not $w.FindName('btnCheckCelular').IsEnabled -and
-        $Global:MeioSelecionado -eq 'wifi') {
-        Write-Host "[4d] clicar no card WI-FI seleciona-o e libera so o seu botao"
-    } else { Write-Host "    FALHA: selecao do card Wi-Fi (wifi.en=$($w.FindName('btnCheckWifi').IsEnabled) cel.en=$($w.FindName('btnCheckCelular').IsEnabled))"; $falhas++ }
-    Select-MeioParaChecar 'celular'
-    if ($w.FindName('btnCheckCelular').IsEnabled -and -not $w.FindName('btnCheckWifi').IsEnabled -and
-        "$($w.FindName('txtWifiSelDica').Visibility)" -eq 'Visible') {
-        Write-Host "[4d] clicar no card CELULAR troca a selecao -> Celular libera, Wi-Fi trava"
-    } else { Write-Host "    FALHA: troca de selecao p/ Celular (cel.en=$($w.FindName('btnCheckCelular').IsEnabled) wifi.en=$($w.FindName('btnCheckWifi').IsEnabled))"; $falhas++ }
+        Write-Host "[4d] so a vez (LAN) e clicavel -> Wi-Fi e Celular travados"
+    } else { Write-Host "    FALHA: card fora da vez habilitado (wifi.en=$($w.FindName('btnCheckWifi').IsEnabled) cel.en=$($w.FindName('btnCheckCelular').IsEnabled))"; $falhas++ }
+    Select-MeioParaChecar 'celular'   # fora da ordem -> ignorado
+    if ($Global:MeioSelecionado -ne 'celular') {
+        Write-Host "[4d] clicar num card fora da ordem e ignorado (a vez ainda e da LAN)"
+    } else { Write-Host "    FALHA: selecao pulou a ordem (sel='$($Global:MeioSelecionado)')"; $falhas++ }
+    # LAN e Wi-Fi "nao se aplica" -> a vez passa ao Celular
+    foreach ($nap in @(@('chkNaLan', 'sem ponto de rede cabeada'), @('chkNaWifi', 'sem Wi-Fi proprio no local'))) {
+        $w.FindName($nap[0]).IsChecked = $true ; Update-NaoAplicavelMeio
+        $w.FindName('txtNaJustif').Text = $nap[1] ; Invoke-NaRegistrar ; Invoke-Pump
+    }
+    Update-PainelMeios
+    if ($Global:MeioSelecionado -eq 'celular' -and $w.FindName('btnCheckCelular').IsEnabled -and
+        -not $w.FindName('btnCheckLan').IsEnabled -and -not $w.FindName('btnCheckWifi').IsEnabled) {
+        Write-Host "[4d] a vez passa ao Celular: selecionado e 'Rodar checagem' liberado"
+    } else { Write-Host "    FALHA: a vez nao chegou ao Celular (sel='$($Global:MeioSelecionado)' cel.en=$($w.FindName('btnCheckCelular').IsEnabled))"; $falhas++ }
     Invoke-CheckMeio 'celular'
     Invoke-Pump
     if ("$($w.FindName('overlayCheck').Visibility)" -eq 'Visible' -and $Global:CheckMeioAtivo -and
@@ -343,6 +443,10 @@ try {
     } else { Write-Host "    FALHA: banner de recomendacao (vis=$($w.FindName('cardRecMeios').Visibility) txt='$($w.FindName('txtRecMeios').Text)')"; $falhas++ }
 
     # 4f. "nao se aplica" -> abre o card de justificativa; "Registrar" desabilita o card do meio
+    #    (a LAN esta NA desde o 4d; primeiro desmarca, depois refaz o ciclo)
+    $w.FindName('chkNaLan').IsChecked = $false ; Update-NaoAplicavelMeio ; Invoke-Pump
+    if (-not $Global:MeiosNaoAplicaveis.ContainsKey('lan')) { Write-Host "[4f] desmarcar o checkbox remove o 'nao aplicavel'" }
+    else { Write-Host "    FALHA: desmarcar nao removeu o NA"; $falhas++ }
     $w.FindName('chkNaLan').IsChecked = $true
     Update-NaoAplicavelMeio
     Invoke-Pump
@@ -361,13 +465,13 @@ try {
         "$($w.FindName('txtNaMotivoCardLan').Text)" -match 'sem ponto de rede') {
         Write-Host "[4f] 'Registrar' fecha o card e o motivo aparece no card LAN (inviavel)"
     } else { Write-Host "    FALHA: registrar NA (chave=$($Global:MeiosNaoAplicaveis.ContainsKey('lan')) card=$($w.FindName('cardNaJustif').Visibility) motivo='$($w.FindName('txtNaMotivoCardLan').Text)')"; $falhas++ }
-    $w.FindName('chkNaLan').IsChecked = $false ; Update-NaoAplicavelMeio ; Invoke-Pump
-    if (-not $Global:MeiosNaoAplicaveis.ContainsKey('lan')) { Write-Host "[4f] desmarcar o checkbox remove o 'nao aplicavel'" }
-    else { Write-Host "    FALHA: desmarcar nao removeu o NA"; $falhas++ }
 
     # 4g. Fase 2 sem VPN: a saida "nao consegui conectar a VPN" + motivo registra o meio; depois limpa
+    #    (LAN NA + Celular testado -> a vez agora e do Wi-Fi, apos desmarca-lo)
     $Global:VpnSimulada = $false
-    Select-MeioParaChecar 'wifi'   # rede atual = Wi-Fi do local
+    $w.FindName('chkNaWifi').IsChecked = $false ; Update-NaoAplicavelMeio ; Invoke-Pump
+    Select-MeioParaChecar 'wifi'   # a vez e do Wi-Fi (rede atual = Wi-Fi do local)
+    if ($Global:MeioSelecionado -ne 'wifi') { Write-Host "    FALHA: a vez nao chegou ao Wi-Fi (sel='$($Global:MeioSelecionado)')"; $falhas++ }
     Invoke-CheckMeio 'wifi'
     Invoke-Pump
     Invoke-ChkAvancar   # Iniciar -> Fase 1
@@ -396,9 +500,13 @@ try {
     Close-OverlayCheck
     $w.FindName('chkVpnImpossivel').IsChecked = $false ; Update-VpnImpossivel
     $Global:VpnSimulada = $true
-    $Global:Medicoes = @(@($Global:Medicoes) | Where-Object { $_.meio -ne 'wifi_local' })   # volta ao meio unico (celular)
-    $idxCel = [array]::IndexOf(@($Global:Medicoes), (@($Global:Medicoes | Where-Object { $_.meio -eq 'celular' })[0]))
-    Show-MedicaoNoPasso5 -Par ([pscustomobject]@{ idx = $idxCel; med = @($Global:Medicoes | Where-Object { $_.meio -eq 'celular' })[0] })
+    # volta ao meio unico (celular) p/ o restante do teste seguir igual: solta os NA
+    # de LAN/Wi-Fi (marcados no 4d/4f) e descarta as medicoes que nao sao do celular
+    $Global:MeiosNaoAplicaveis.Remove('lan')
+    $Global:MeiosNaoAplicaveis.Remove('wifi_local')
+    $Global:Medicoes = @(@($Global:Medicoes) | Where-Object { $_.meio -eq 'celular' -and -not $_.nao_aplicavel })
+    $Global:MeioSelecionado = ''
+    Show-MedicaoNoPasso5 -Par ([pscustomobject]@{ idx = 0; med = @($Global:Medicoes)[0] })
     Invoke-Pump
 
     # 4h. passo 3 -> 4 (resultado por metrica)
@@ -538,9 +646,11 @@ try {
         if ("$($doc.classificacao.final)" -eq "$($rec.veredito)") { Write-Host "[5d] decisao final do local = veredito do meio recomendado ('$($doc.classificacao.final)')" }
         else { Write-Host "    FALHA: classificacao.final ('$($doc.classificacao.final)') != veredito recomendado ('$($rec.veredito)')"; $falhas++ }
         $htmlRel = New-RelatorioHtml -Resultado $doc
-        if ($htmlRel -match 'Conex&atilde;o recomendada para este local' -and $htmlRel -match 'Meios de conex&atilde;o testados') {
-            Write-Host "[5d] relatorio HTML traz o bloco de conexao recomendada + tabela de meios"
-        } else { Write-Host "    FALHA: relatorio HTML sem os blocos multi-meio"; $falhas++ }
+        if ($htmlRel -match 'Painel de Viabilidade de Conectividade' -and $htmlRel -match 'Situa&ccedil;&atilde;o por meio' -and
+            $htmlRel -match 'Testes de comunica&ccedil;&atilde;o por meio' -and $htmlRel -match 'A4 landscape' -and
+            $htmlRel -match 'Conex&atilde;o recomendada' -and $htmlRel -match 'Conclus&atilde;o do diagn&oacute;stico') {
+            Write-Host "[5d] relatorio HTML: painel de viabilidade (paisagem) + testes por meio + conclusao"
+        } else { Write-Host "    FALHA: relatorio HTML sem o painel/estrutura nova"; $falhas++ }
     }
     $vok = [char]0x2713
     if ($Global:FeitoSalvar -and "$($w.FindName('chkFimSalvar').Text)" -eq $vok -and $w.FindName('btnTransmitirResultado').IsEnabled -and "$($w.FindName('chkFimTransmitir').Text)" -ne $vok) {
@@ -578,6 +688,35 @@ try {
     $prog = Get-ProgressoRoteiro -Roteiro $Global:RoteiroAtual -TecnicoNome 'TECNICO HEADLESS'
     if ($prog.Testados -eq 1 -and $prog.Total -eq 2) { Write-Host "[5e] progresso do roteiro: $($prog.Testados)/$($prog.Total)" }
     else { Write-Host "    FALHA: progresso $($prog.Testados)/$($prog.Total) (esperado 1/2)"; $falhas++ }
+
+    # 5f. "abrir relatorio completo" na tela do Local: anexa GEL + foto DEPOIS do
+    # teste e regenera o PDF a partir do resultado salvo (via Invoke-AbrirRelatorioLocal)
+    $Global:LocalDetalheAtual = [pscustomobject]@{ id = 'ZE99-TESTE-PRINCIPAL'; nome = 'LOCAL PRINCIPAL DE TESTE' }
+    Save-VistoriaGel -LocalId 'ZE99-TESTE-PRINCIPAL' -Dados ([pscustomobject]@{
+        lat = -2.5; long = -43.25; precisao_m = 5; esfera_administrativa = 'Estadual'
+        suporte_nome = 'ACME'; eletrica_tensao = '220 volts'; eletrica_tomadas = '4'
+    }) | Out-Null
+    Add-Type -AssemblyName PresentationCore
+    $pngF = Join-Path $env:TEMP ('ld-{0}.png' -f (Get-Random))
+    $wbF = New-Object Windows.Media.Imaging.WriteableBitmap 20, 20, 96, 96, ([Windows.Media.PixelFormats]::Bgr32), $null
+    $encF = New-Object Windows.Media.Imaging.PngBitmapEncoder
+    $encF.Frames.Add([Windows.Media.Imaging.BitmapFrame]::Create($wbF))
+    $fsF = [IO.File]::Create($pngF); try { $encF.Save($fsF) } finally { $fsF.Dispose() }
+    Add-FotoGel -LocalId 'ZE99-TESTE-PRINCIPAL' -Caminho $pngF | Out-Null
+    Remove-Item $pngF -Force -ErrorAction SilentlyContinue
+
+    Update-StatusLocalDetalhe
+    $btnRel = $w.FindName('btnLdRelatorio')
+    if ($btnRel -and $btnRel.IsEnabled) { Write-Host "[5f] 'Abrir relatorio' habilitado (local ja testado)" }
+    else { Write-Host "    FALHA: botao 'Abrir relatorio' deveria estar habilitado"; $falhas++ }
+    Invoke-AbrirRelatorioLocal
+    Invoke-Pump
+    $relTxt = [string] $w.FindName('txtLdRelatStatus').Text
+    if ($relTxt -match 'Relatorio:' -and (Test-Path ($relTxt -replace '^Relatorio:\s*', ''))) {
+        Write-Host "[5f] relatorio do local gerado a partir do resultado salvo ($(Split-Path ($relTxt -replace '^Relatorio:\s*','') -Leaf))"
+    } else { Write-Host "    FALHA: 'Abrir relatorio do local' (status='$relTxt')"; $falhas++ }
+    Remove-VistoriaGel -LocalId 'ZE99-TESTE-PRINCIPAL'
+    $Global:LocalDetalheAtual = $null
 
     # 6. menu Inicio -> assistente abre limpo no passo 1
     Open-DiagnosticoLimpo
@@ -621,15 +760,73 @@ try {
     if ($w.FindName('chkTodasJuntas').Visibility -ne 'Collapsed') { Write-Host "    FALHA: checkbox 'incluir Juntas fora da rota' deveria estar oculto"; $falhas++ }
     else { Write-Host "[8] checkbox 'incluir Juntas fora da rota' oculto (desativado por ora)" }
     Show-Admin
-    $nLim = $w.FindName('dgLimiares').Items.Count
-    Write-Host "[8] Admin: $nLim linha(s) de limiar"
-    if ($nLim -ne 6) { Write-Host "    FALHA: deveria ter 6 metricas"; $falhas++ }
-    if ($Global:LimiarRows[0].Ativo -ne $true) { Write-Host "    FALHA: limiar sem 'Na bateria' marcado por padrao"; $falhas++ }
-    else { Write-Host "[8] limiar vem com 'Na bateria' marcado" }
+    $nLan = $w.FindName('dgLimLan').Items.Count
+    $nWifi = $w.FindName('dgLimWifi').Items.Count
+    $nCel = $w.FindName('dgLimCel').Items.Count
+    Write-Host "[8] Admin: 3 abas de limiar (LAN=$nLan / Wi-Fi=$nWifi / Celular=$nCel linhas)"
+    if ($nLan -ne 6 -or $nWifi -ne 6 -or $nCel -ne 6) { Write-Host "    FALHA: cada aba deveria ter 6 metricas"; $falhas++ }
+    if ($Global:LimiarRowsLan[0].SemVpnAtivo -ne $true -or $Global:LimiarRowsLan[0].ComVpnAtivo -ne $true) {
+        Write-Host "    FALHA: limiar LAN sem 'Na bateria' marcado por padrao"; $falhas++
+    } else { Write-Host "[8] limiar vem com 'Na bateria' (SEM e COM VPN) marcado" }
+    # carregamento web (linha 6) so existe COM VPN
+    $rWeb = $Global:LimiarRowsLan[5]
+    if ("$($rWeb.Metrica)" -eq 'carregamento_web_s' -and -not $rWeb.SemVpnVisivel -and $rWeb.SemVpnAtivo -eq $false) {
+        Write-Host "[8] carregamento web fica so na coluna COM VPN"
+    } else { Write-Host "    FALHA: carregamento web deveria ser so COM VPN (vis=$($rWeb.SemVpnVisivel) at=$($rWeb.SemVpnAtivo))"; $falhas++ }
+    # LAN: SEM VPN != COM VPN (custo da VPN)
+    if ("$($Global:LimiarRowsLan[0].SemVpnIdeal)" -ne "$($Global:LimiarRowsLan[0].ComVpnIdeal)") {
+        Write-Host "[8] LAN: COM VPN diferente do SEM VPN (lat ideal $($Global:LimiarRowsLan[0].SemVpnIdeal) -> $($Global:LimiarRowsLan[0].ComVpnIdeal))"
+    } else { Write-Host "    FALHA: LAN COM VPN igual ao SEM VPN"; $falhas++ }
+    # Wi-Fi herda da LAN + folga: read-only + folga visivel + valor = LAN + folga
+    $wLat = $Global:LimiarRowsWifi[0]
+    if ($wLat.FolgaVisivel -and -not $wLat.CamposEditaveis -and "$($wLat.Folga)" -ne '' -and
+        [double]("$($wLat.SemVpnIdeal)" -replace ',', '.') -eq ([double]("$($Global:LimiarRowsLan[0].SemVpnIdeal)" -replace ',', '.') + [double]("$($wLat.Folga)" -replace ',', '.'))) {
+        Write-Host "[8] Wi-Fi do local herda da LAN + folga (lat $($Global:LimiarRowsLan[0].SemVpnIdeal) + $($wLat.Folga) = $($wLat.SemVpnIdeal), so leitura)"
+    } else { Write-Host "    FALHA: Wi-Fi nao herdou da LAN + folga (folgaVis=$($wLat.FolgaVisivel) edit=$($wLat.CamposEditaveis) folga=$($wLat.Folga) ideal=$($wLat.SemVpnIdeal))"; $falhas++ }
+    # Celular tem perfil proprio (SMP != SCM)
+    if ("$($Global:LimiarRowsCel[0].SemVpnLimite)" -ne "$($Global:LimiarRowsLan[0].SemVpnLimite)") {
+        Write-Host "[8] Celular tem perfil proprio (lat limite $($Global:LimiarRowsCel[0].SemVpnLimite) vs LAN $($Global:LimiarRowsLan[0].SemVpnLimite))"
+    } else { Write-Host "    FALHA: Celular igual a LAN"; $falhas++ }
+    # "Recalcular COM VPN" a partir do orcamento
+    $latComAntes = "$($Global:LimiarRowsLan[0].ComVpnIdeal)"
+    $w.FindName('txtOrcLat').Text = '25'
+    Invoke-AplicarOrcamento
+    if ("$($Global:LimiarRowsLan[0].ComVpnIdeal)" -eq '45') {
+        Write-Host "[8] 'Recalcular COM VPN': lat SEM VPN 20 + orcamento 25 = 45"
+    } else { Write-Host "    FALHA: recalcular COM VPN (antes=$latComAntes depois=$($Global:LimiarRowsLan[0].ComVpnIdeal))"; $falhas++ }
+    Show-Admin   # recarrega os valores do exemplo (desfaz o recalculo em memoria)
     $w.FindName('txtPinAdmin').Password = ''
     Invoke-SalvarLimiares
     if ($w.FindName('lblAdminMsg').Text -notmatch 'PIN') { Write-Host "    FALHA: salvou limiares sem PIN"; $falhas++ }
     else { Write-Host "[8] salvar limiares sem PIN bloqueado" }
+
+    # 8-2. Get-PerfilLimiares resolve os 6 perfis (meio x cenario)
+    $pLanSem = Get-PerfilLimiares -Meio lan -Cenario sem_vpn
+    $pLanCom = Get-PerfilLimiares -Meio lan -Cenario com_vpn
+    $pWifiSem = Get-PerfilLimiares -Meio wifi_local -Cenario sem_vpn
+    $pCelCom = Get-PerfilLimiares -Meio celular -Cenario com_vpn
+    if ($pLanSem.latencia_ms.ressalva_ate -eq 80 -and $pLanCom.latencia_ms.ressalva_ate -eq 110 -and
+        $pWifiSem.latencia_ms.viavel_ate -eq ($pLanSem.latencia_ms.viavel_ate + 10) -and
+        $pCelCom.latencia_ms.ressalva_ate -eq 130 -and
+        $pLanSem.carregamento_web_s.ativo -eq $false -and $pLanCom.carregamento_web_s.ativo -eq $true) {
+        Write-Host "[8] Get-PerfilLimiares: LAN sem/com VPN + Wi-Fi=LAN+folga + Celular proprio + web so COM VPN"
+    } else { Write-Host "    FALHA: Get-PerfilLimiares (lanSem=$($pLanSem.latencia_ms.ressalva_ate) lanCom=$($pLanCom.latencia_ms.ressalva_ate) wifi=$($pWifiSem.latencia_ms.viavel_ate) celCom=$($pCelCom.latencia_ms.ressalva_ate))"; $falhas++ }
+
+    # 8-3. cache no formato ANTIGO (Web App v1) NAO rebaixa os pisos nested do pacote
+    $flatV1 = [pscustomobject]@{
+        latencia_ms         = [pscustomobject]@{ viavel_ate = 60; ressalva_ate = 120; ativo = $true }
+        jitter_ms           = [pscustomobject]@{ viavel_ate = 10; ressalva_ate = 30;  ativo = $true }
+        perda_percentual    = [pscustomobject]@{ viavel_ate = 1;  ressalva_ate = 5;   ativo = $true }
+        banda_download_mbps = [pscustomobject]@{ viavel_min = 20; ressalva_min = 8;   ativo = $true }
+        banda_upload_mbps   = [pscustomobject]@{ viavel_min = 10; ressalva_min = 4;   ativo = $true }
+        carregamento_web_s  = [pscustomobject]@{ viavel_ate = 5;  ressalva_ate = 12;  ativo = $true }
+    }
+    Write-CacheJson -Nome 'limiares.json' -Campo 'limiares' -Itens $flatV1 -Origem 'teste v1 antigo'
+    $pLanSem2 = Get-PerfilLimiares -Meio lan -Cenario sem_vpn
+    if ((Test-LimiaresNested (Get-LimiaresConfig)) -and $pLanSem2.latencia_ms.viavel_ate -eq 20 -and $pLanSem2.latencia_ms.ressalva_ate -eq 80) {
+        Write-Host "[8] cache no formato antigo e ignorado - vale o config nested (LAN sem VPN lat 20/80, nao 60/120)"
+    } else { Write-Host "    FALHA: cache antigo rebaixou os limiares (lat $($pLanSem2.latencia_ms.viavel_ate)/$($pLanSem2.latencia_ms.ressalva_ate))"; $falhas++ }
+    Remove-Item (Join-Path $Global:RaizApp 'data\limiares.json') -Force -ErrorAction SilentlyContinue
 
     # 8b. ambiente iperf3: campos carregam da config e "Salvar ambiente" exige PIN
     $srvCfg = "$($w.FindName('txtIperfServidorCfg').Text)"
@@ -669,15 +866,39 @@ try {
         Write-Host "[10] falha de DNS -> 'bloqueio'; mensagem generica -> 'desconhecido' sem laudo"
     } else { Write-Host "    FALHA: classificacao bloqueio/desconhecido (b='$($fBlock.tipo)' u='$($fUnk.tipo)')"; $falhas++ }
 
-    # 11. anexo do GEL: extrator + links de mapa + bloco no JSON/relatorio
-    $fixGel = 'Sistema de Georreferenciamento Eleitoral Zona: 24 Municipio: HUMBERTO DE CAMPOS ' +
-        'Local: C. E. MANOEL DIAS DE SOUSA Coordenadas: -2.4997476' + [char]0x00BA + ',-43.25344546' + [char]0x00BA + '. Precisao 6.558 ' +
-        'Localizacao do Quadro de Energia: R. : Externo Ha energia eletrica? R. : Sim ' +
-        'Ha quantas tomadas funcionando? R. : 6 Qual a tensao da rede eletrica? R. : 220 volts ' +
-        'Ha necessidade de extensao eletrica? R. : Sim Qual o numero da unidade consumidora (UC)? R. : 3064-001367-9 ' +
-        'Qual o nome do tecnico ou empresa responsavel pelo suporte ao link local? R. : suporte Tec 98 30421747 ' +
-        'Qual o telefone do tecnico ou empresa responsavel pelo suporte ao link local? R. : OLNY TELECON ' +
-        'Qual o tempo de resposta do ping exaustivo utilizando o comando ping <endereco> -t? R. :'
+    # 10b. fallback de servidor: parser da lista "speedtest --servers" (tabela + jsonl)
+    $tabela = "  ID  Name                     Location          Country`n" +
+        "====================================================================`n" +
+        " 63579  PROFISSIONAL TELECOM     Mirassol d'Oeste  Brazil`n" +
+        " 14924  DATALIG TELECOM          Sao Luis          Brazil`n" +
+        " 72111  Mundonet Banda Larga     Sao Luis          Brazil`n"
+    $ids1 = ConvertFrom-ListaServidoresSpeedtest -Texto $tabela
+    $ids2 = ConvertFrom-ListaServidoresSpeedtest -Texto '{"type":"servers","servers":[{"id":111,"name":"A"},{"id":222},{"id":111}]}'
+    if ("$($ids1 -join ',')" -eq '63579,14924,72111' -and "$($ids2 -join ',')" -eq '111,222') {
+        Write-Host "[10] ConvertFrom-ListaServidoresSpeedtest le a tabela e o jsonl de servidores"
+    } else { Write-Host "    FALHA: parser da lista de servidores (tabela='$($ids1 -join ',')' jsonl='$($ids2 -join ',')')"; $falhas++ }
+
+    # 11. anexo do GEL: extrator + links de mapa + bloco no JSON/relatorio.
+    # Layout REAL do PDF do GEL: a resposta vem ANTES do marcador " R. :" e o
+    # rotulo "Coordenadas:" vem DEPOIS do valor. Acentos como o PDF entrega
+    # (inclusive "eletrica" com acento precomposto).
+    $fixGel = 'Sistema de Georreferenciamento Eleitoral Zona: 32 Tipo de local: Predio Externo ' +
+        'HUMBERTO DE CAMPOS Municipio: Local: C. E. MANOEL DIAS DE SOUSA ' +
+        '-2.4997476' + [char]0x00BA + ',-43.25344546' + [char]0x00BA + '. Precis' + [char]0x00E3 + 'o 6.558 Coordenadas: ' +
+        'Selecione a esfera administrativa do local vistoriado Estadual R. : ' +
+        'Localizacao Urbano R. : Tipo de local Escola R. : Observacoes: R. : ' +
+        'Infraestrutura Quantidade de salas necessarias para funcionar como secao eleitoral? 1 R. : ' +
+        'Ha abastecimento de agua? Sim R. : A climatizacao ou ventilacao e feita por: Ar condicionado R. : ' +
+        'Ha ilumina' + [char]0x00E7 + [char]0x00E3 + 'o? Sim R. : ' +
+        'Ha agua potavel disponivel para mesarias(os) e eleitoras(es)? Sim R. : ' +
+        'O predio esta em reforma? Nao R. : ' +
+        'Qual a configuracao de rede? DHCP R. : ' +
+        'Qual o nome do tecnico ou empresa responsavel pelo suporte ao link local? suporte Tec 98 30421747 R. : ' +
+        'Qual o telefone do tecnico ou empresa responsavel pelo suporte ao link local? OLNY TELECON R. : ' +
+        'Instalacoes eletricas Localizacao do Quadro de Energia: Externo R. : Ha energia el' + [char]0x00E9 + 'trica? Sim R. : ' +
+        'Ha quantas tomadas funcionando? 6 R. : Qual a tens' + [char]0x00E3 + 'o da rede el' + [char]0x00E9 + 'trica? 220 volts R. : ' +
+        'Ha necessidade de extens' + [char]0x00E3 + 'o el' + [char]0x00E9 + 'trica? Sim R. : ' +
+        'Qual o numero da unidade consumidora (UC) ou numero do poste ou numero do medidor? 3064-001367-9 R. :'
     $pg = ConvertFrom-VistoriaGel -Texto $fixGel
     if ([math]::Abs($pg.lat - (-2.4997476)) -lt 1e-6 -and [math]::Abs($pg.long - (-43.25344546)) -lt 1e-6 -and
         [math]::Abs([double] $pg.precisao_m - 6.558) -lt 1e-3 -and
@@ -685,6 +906,12 @@ try {
         $pg.suporte_nome -match 'suporte Tec' -and $pg.suporte_telefone -match 'OLNY') {
         Write-Host "[11] ConvertFrom-VistoriaGel extrai coordenadas + eletrica + suporte do texto do GEL"
     } else { Write-Host "    FALHA: extrator do GEL (lat=$($pg.lat) long=$($pg.long) prec=$($pg.precisao_m) tensao='$($pg.eletrica_tensao)' tomadas='$($pg.eletrica_tomadas)' ext='$($pg.eletrica_extensao)' sup='$($pg.suporte_nome)'/'$($pg.suporte_telefone)')"; $falhas++ }
+    if ($pg.esfera_administrativa -eq 'Estadual' -and $pg.localizacao -eq 'Urbano' -and $pg.tipo_local -eq 'Escola' -and
+        $pg.salas_necessarias -eq '1' -and $pg.agua -eq 'Sim' -and $pg.climatizacao -match 'Ar cond' -and
+        $pg.iluminacao -eq 'Sim' -and $pg.agua_potavel -eq 'Sim' -and $pg.predio_reforma -eq 'Nao' -and
+        $pg.quadro_energia -eq 'Externo' -and $pg.energia_eletrica -eq 'Sim') {
+        Write-Host "[11] ConvertFrom-VistoriaGel extrai tipo do local + infraestrutura + quadro de energia"
+    } else { Write-Host "    FALHA: novas secoes do GEL (esfera='$($pg.esfera_administrativa)' loc='$($pg.localizacao)' tipo='$($pg.tipo_local)' salas='$($pg.salas_necessarias)' agua='$($pg.agua)' clima='$($pg.climatizacao)' ilum='$($pg.iluminacao)' potavel='$($pg.agua_potavel)' reforma='$($pg.predio_reforma)' quadro='$($pg.quadro_energia)' energia='$($pg.energia_eletrica)')"; $falhas++ }
 
     $lnkG = Get-LinkGoogleMaps -Lat -2.5 -Long -43.25
     $urlM = Get-UrlMapaEstatico -Lat -2.5 -Long -43.25 -Chave 'FAKE123'
@@ -694,8 +921,30 @@ try {
     if ((Get-UrlMapaEstatico -Lat -2.5 -Long -43.25 -Chave '') -eq '') { Write-Host "[11] sem chave -> Get-UrlMapaEstatico vazio" }
     else { Write-Host "    FALHA: Get-UrlMapaEstatico deveria voltar vazio sem chave"; $falhas++ }
 
+    # fotos do GEL: gera um PNG minimo, anexa via Add-FotoGel, confere round-trip
+    Add-Type -AssemblyName PresentationCore
+    $pngT = Join-Path $env:TEMP ('gelfoto-{0}.png' -f (Get-Random))
+    $wbT = New-Object Windows.Media.Imaging.WriteableBitmap 24, 24, 96, 96, ([Windows.Media.PixelFormats]::Bgr32), $null
+    $encT = New-Object Windows.Media.Imaging.PngBitmapEncoder
+    $encT.Frames.Add([Windows.Media.Imaging.BitmapFrame]::Create($wbT))
+    $fspT = [IO.File]::Create($pngT); try { $encT.Save($fspT) } finally { $fspT.Dispose() }
+    Add-FotoGel -LocalId 'X' -Caminho $pngT | Out-Null
+    Add-FotoGel -LocalId 'X' -Caminho $pngT | Out-Null
+    Remove-Item $pngT -Force -ErrorAction SilentlyContinue
+    $fx = @(Get-FotosGel -LocalId 'X')
+    if ($fx.Count -eq 2 -and (Split-Path $fx[0] -Leaf) -eq 'foto-01.jpg' -and (Split-Path $fx[1] -Leaf) -eq 'foto-02.jpg') {
+        Write-Host "[11] Add-FotoGel/Get-FotosGel: 2 fotos numeradas (reduzidas p/ jpg)"
+    } else { Write-Host "    FALHA: fotos do GEL ($($fx.Count): $(($fx | ForEach-Object { Split-Path $_ -Leaf }) -join ','))"; $falhas++ }
+    Remove-FotoGel -LocalId 'X' -Nome 'foto-01.jpg'
+    if (@(Get-FotosGel -LocalId 'X').Count -eq 1) { Write-Host "[11] Remove-FotoGel tira so a selecionada" }
+    else { Write-Host "    FALHA: Remove-FotoGel"; $falhas++ }
+
     $g = [pscustomobject]@{
         lat = -2.4997476; long = -43.25344546; precisao_m = 6.558
+        esfera_administrativa = 'Estadual'; localizacao = 'Urbano'; tipo_local = 'Escola'
+        salas_necessarias = '1'; agua = 'Sim'; climatizacao = 'Ar condicionado'
+        iluminacao = 'Sim'; agua_potavel = 'Sim'; predio_reforma = 'Nao'
+        quadro_energia = 'Externo'; energia_eletrica = 'Sim'
         suporte_nome = 'OLNY TELECON'; suporte_telefone = '(98) 3042-1747'
         eletrica_tensao = '220 volts'; eletrica_tomadas = '6'; eletrica_extensao = 'Sim'
         mapa_link = (Get-LinkGoogleMaps -Lat -2.4997476 -Long -43.25344546)
@@ -705,12 +954,42 @@ try {
     $htmlGel = New-RelatorioHtml -Resultado $jsonGel
     if ($jsonGel.vistoria_gel -and [double] $jsonGel.vistoria_gel.latitude -eq -2.4997476 -and
         $jsonGel.vistoria_gel.suporte_nome -eq 'OLNY TELECON' -and $jsonGel.vistoria_gel.eletrica_tomadas -eq '6' -and
-        $htmlGel -match 'Vistoria GEL' -and $htmlGel -match '-2.4997476' -and $htmlGel -match 'google.com/maps') {
-        Write-Host "[11] JSON traz 'vistoria_gel' e o relatorio traz a secao do GEL + link do mapa"
-    } else { Write-Host "    FALHA: JSON/relatorio do GEL (vg=$([bool]$jsonGel.vistoria_gel) html_sec=$($htmlGel -match 'Vistoria GEL'))"; $falhas++ }
+        $jsonGel.vistoria_gel.tipo_local.esfera_administrativa -eq 'Estadual' -and
+        $jsonGel.vistoria_gel.infraestrutura.iluminacao -eq 'Sim' -and
+        $jsonGel.vistoria_gel.eletrica.quadro_energia -eq 'Externo' -and $jsonGel.vistoria_gel.fotos -eq 1 -and
+        $htmlGel -match 'Dados da vistoria \(importado do GEL\)' -and $htmlGel -match '-2.4997476' -and $htmlGel -match 'google.com/maps' -and
+        $htmlGel -match 'Tipo do local' -and $htmlGel -match 'Infraestrutura' -and $htmlGel -match 'Quadro de energia' -and
+        $htmlGel -match 'Registro fotogr&aacute;fico' -and $htmlGel -match '<img src="data:image/jpeg;base64,') {
+        Write-Host "[11] JSON traz 'vistoria_gel' em secoes + contagem de fotos; relatorio agrupa secoes + embute as fotos"
+    } else { Write-Host "    FALHA: JSON/relatorio do GEL (vg=$([bool]$jsonGel.vistoria_gel) fotos=$($jsonGel.vistoria_gel.fotos) html_infra=$($htmlGel -match 'Infraestrutura') html_foto=$($htmlGel -match 'Fotos da vistoria'))"; $falhas++ }
+    Remove-VistoriaGel -LocalId 'X'
 
-    try { Read-TextoPdf -Caminho $PSCommandPath; Write-Host "    FALHA: Read-TextoPdf devia falhar sem a lib / com nao-PDF"; $falhas++ }
-    catch { Write-Host "[11] Read-TextoPdf sem a biblioteca do PdfPig -> erro claro ($($_.Exception.Message.Substring(0,[Math]::Min(40,$_.Exception.Message.Length)))...)" }
+    # arquivo que nao e PDF -> erro (nao trava a GUI)
+    try { Read-TextoPdf -Caminho $PSCommandPath; Write-Host "    FALHA: Read-TextoPdf devia falhar com nao-PDF"; $falhas++ }
+    catch { Write-Host "[11] Read-TextoPdf com arquivo nao-PDF -> erro claro" }
+
+    # round-trip real: se as DLLs do PdfPig estao no repo, constroi um PDF com o
+    # proprio PdfPig, le de volta e confirma que ConvertFrom-VistoriaGel extrai.
+    if (Get-CaminhoPdfLib) {
+        try {
+            Register-ResolucaoPdfLib -Pasta (Join-Path $Global:RaizApp 'lib\pdfpig')
+            $pdfOut = Join-Path $env:TEMP ('dicon-teste-{0}.pdf' -f (Get-Random))
+            $bld = New-Object UglyToad.PdfPig.Writer.PdfDocumentBuilder
+            $pgB = $bld.AddPage([UglyToad.PdfPig.Content.PageSize]::A4)
+            $fnt = $bld.AddTrueTypeFont([IO.File]::ReadAllBytes("$env:WINDIR\Fonts\arial.ttf"))
+            [void] $pgB.AddText('Coordenadas: -2.4997476o,-43.25344546o. Precisao 6.558', 11,
+                (New-Object UglyToad.PdfPig.Core.PdfPoint(50, 700)), $fnt)
+            [IO.File]::WriteAllBytes($pdfOut, $bld.Build())
+            $lido = Read-TextoPdf -Caminho $pdfOut
+            Remove-Item $pdfOut -Force -ErrorAction SilentlyContinue
+            $vgL = ConvertFrom-VistoriaGel -Texto $lido
+            if ([math]::Abs($vgL.lat - (-2.4997476)) -lt 1e-6 -and [math]::Abs($vgL.long - (-43.25344546)) -lt 1e-6) {
+                Write-Host "[11] PdfPig no repo: build -> Read-TextoPdf -> extrai coordenadas OK"
+            } else { Write-Host "    FALHA: round-trip PdfPig (lat=$($vgL.lat) long=$($vgL.long))"; $falhas++ }
+        } catch { Write-Host "    FALHA: PdfPig nao carregou sob o PS 5.1 -> $_"; $falhas++ }
+    } else {
+        Write-Host "[11] PdfPig ausente de lib\pdfpig\ - round-trip pulado (anexo do GEL avisa e degrada)"
+    }
 }
 finally {
     $Global:PastaDadosOverride = $null

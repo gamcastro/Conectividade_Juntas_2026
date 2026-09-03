@@ -1,7 +1,7 @@
 ﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
-    Atualiza o codigo do DICON (src\, lib\mahapps\, assets\, bin\iperf3\,
+    Atualiza o codigo do DICON (src\, lib\mahapps\, lib\pdfpig\, assets\, bin\iperf3\,
     tools\*.ps1, Iniciar-Diagnostico.*) SEM tocar em config\, data\,
     bin\geckodriver\, bin\chromedriver\, lib\Selenium\, resultados\ e relatorios\.
 
@@ -98,7 +98,7 @@ if ($temGit) {
     if (-not $novo) { throw 'ZIP da branch nao extraiu como esperado.' }
 
     # pastas de codigo (+ iperf3, que agora vai no repo): espelha (remove sumidos)
-    foreach ($d in 'src', 'lib\mahapps', 'assets', 'apps-script', 'docs', 'setup', 'bin\iperf3') {
+    foreach ($d in 'src', 'lib\mahapps', 'lib\pdfpig', 'assets', 'apps-script', 'docs', 'setup', 'bin\iperf3') {
         $orig = Join-Path $novo.FullName $d
         $dest = Join-Path $RaizApp $d
         if (-not (Test-Path $orig)) { continue }
@@ -113,6 +113,12 @@ if ($temGit) {
     # tools\*.ps1 (NUNCA tools\speedtest.exe)
     Get-ChildItem (Join-Path $novo.FullName 'tools') -Filter '*.ps1' -ErrorAction SilentlyContinue |
         ForEach-Object { Copy-Item $_.FullName (Join-Path $RaizApp ('tools\' + $_.Name)) -Force }
+
+    # config\*.exemplo.json (referencia: limiares/rede-local/... com defaults novos).
+    # Copia aditiva - NUNCA toca nos .json reais (endpoint, PIN, canal, limiares salvos).
+    if (-not (Test-Path (Join-Path $RaizApp 'config'))) { New-Item -ItemType Directory -Path (Join-Path $RaizApp 'config') -Force | Out-Null }
+    Get-ChildItem (Join-Path $novo.FullName 'config') -Filter '*.exemplo.json' -ErrorAction SilentlyContinue |
+        ForEach-Object { Copy-Item $_.FullName (Join-Path $RaizApp ('config\' + $_.Name)) -Force }
 
     Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
     Write-Host "codigo atualizado a partir do ZIP." -ForegroundColor Green

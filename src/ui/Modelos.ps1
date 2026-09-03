@@ -88,13 +88,14 @@ namespace Conectividade
 '@
 }
 
-# Linha editavel da tela de Administracao (limiares).
-if (-not ('Conectividade.LimiarRow' -as [type])) {
+# Linha da tela de Administracao no formato NESTED (v0.6.67+): uma linha por
+# metrica, com colunas SEM VPN / COM VPN (e Folga so na aba Wi-Fi do local).
+if (-not ('Conectividade.PerfilLimiarRow' -as [type])) {
     Add-Type -Language CSharp @'
 using System.ComponentModel;
 namespace Conectividade
 {
-    public class LimiarRow : INotifyPropertyChanged
+    public class PerfilLimiarRow : INotifyPropertyChanged
     {
         public event PropertyChangedEventHandler PropertyChanged;
         private void Raise(string n)
@@ -106,17 +107,28 @@ namespace Conectividade
         public string Metrica      { get; set; }
         public string Rotulo       { get; set; }
         public string Direcao      { get; set; }   // "max" | "min"
-        public string DirecaoTexto { get; set; }
         public string Unidade      { get; set; }
 
-        private string _viavel;
-        public string LimiarViavel   { get { return _viavel; }   set { _viavel = value;   Raise("LimiarViavel"); } }
+        // flags de apresentacao (nao mudam em runtime)
+        public bool SemVpnVisivel  { get; set; }   // a metrica existe no cenario SEM VPN?
+        public bool CamposEditaveis { get; set; }  // LAN/Celular = true; Wi-Fi = false (computado)
+        public bool FolgaVisivel   { get; set; }   // aba Wi-Fi do local
 
-        private string _ressalva;
-        public string LimiarRessalva { get { return _ressalva; } set { _ressalva = value; Raise("LimiarRessalva"); } }
+        private string _semIdeal;
+        public string SemVpnIdeal   { get { return _semIdeal; }  set { _semIdeal = value;  Raise("SemVpnIdeal"); } }
+        private string _semLimite;
+        public string SemVpnLimite  { get { return _semLimite; } set { _semLimite = value; Raise("SemVpnLimite"); } }
+        private string _comIdeal;
+        public string ComVpnIdeal   { get { return _comIdeal; }  set { _comIdeal = value;  Raise("ComVpnIdeal"); } }
+        private string _comLimite;
+        public string ComVpnLimite  { get { return _comLimite; } set { _comLimite = value; Raise("ComVpnLimite"); } }
+        private string _folga;
+        public string Folga         { get { return _folga; }     set { _folga = value;     Raise("Folga"); } }
 
-        private bool _ativo = true;   // metrica entra na bateria de teste?
-        public bool Ativo { get { return _ativo; } set { _ativo = value; Raise("Ativo"); } }
+        private bool _semAtivo = true;
+        public bool SemVpnAtivo { get { return _semAtivo; } set { _semAtivo = value; Raise("SemVpnAtivo"); } }
+        private bool _comAtivo = true;
+        public bool ComVpnAtivo { get { return _comAtivo; } set { _comAtivo = value; Raise("ComVpnAtivo"); } }
     }
 }
 '@
@@ -160,12 +172,12 @@ function New-AvaliacaoRow {
 }
 
 $Global:MetricasInfo = @(
-    @{ metrica = 'latencia_ms';         rotulo = 'Latencia';          unidade = 'ms';   direcao = 'max' }
-    @{ metrica = 'jitter_ms';           rotulo = 'Jitter';            unidade = 'ms';   direcao = 'max' }
-    @{ metrica = 'perda_percentual';    rotulo = 'Perda de pacotes';  unidade = '%';    direcao = 'max' }
-    @{ metrica = 'banda_download_mbps'; rotulo = 'Download';          unidade = 'Mbps'; direcao = 'min' }
-    @{ metrica = 'banda_upload_mbps';   rotulo = 'Upload';            unidade = 'Mbps'; direcao = 'min' }
-    @{ metrica = 'carregamento_web_s';  rotulo = 'Carregamento web';  unidade = 's';    direcao = 'max' }
+    @{ metrica = 'latencia_ms';         rotulo = 'Latencia';          unidade = 'ms';   direcao = 'max'; cenarios = @('sem_vpn', 'com_vpn') }
+    @{ metrica = 'jitter_ms';           rotulo = 'Jitter';            unidade = 'ms';   direcao = 'max'; cenarios = @('sem_vpn', 'com_vpn') }
+    @{ metrica = 'perda_percentual';    rotulo = 'Perda de pacotes';  unidade = '%';    direcao = 'max'; cenarios = @('sem_vpn', 'com_vpn') }
+    @{ metrica = 'banda_download_mbps'; rotulo = 'Download';          unidade = 'Mbps'; direcao = 'min'; cenarios = @('sem_vpn', 'com_vpn'); pct = 'banda_download_pct' }
+    @{ metrica = 'banda_upload_mbps';   rotulo = 'Upload';            unidade = 'Mbps'; direcao = 'min'; cenarios = @('sem_vpn', 'com_vpn'); pct = 'banda_upload_pct' }
+    @{ metrica = 'carregamento_web_s';  rotulo = 'Carregamento web';  unidade = 's';    direcao = 'max'; cenarios = @('com_vpn') }
 )
 
 function Get-RotuloMetrica {
@@ -174,22 +186,47 @@ function Get-RotuloMetrica {
     if ($i) { $i.rotulo } else { [string] $Metrica }
 }
 
-function New-LimiarRow {
-    param($Info, $Limiar)
-    $sv = if ($Info.direcao -eq 'max') { 'viavel_ate' } else { 'viavel_min' }
-    $sr = if ($Info.direcao -eq 'max') { 'ressalva_ate' } else { 'ressalva_min' }
+# Extrai "ideal" / "limite" de um bloco de metrica resolvido (shape plano).
+function Get-ParIdealLimite {
+    param($Bloco, [string] $Direcao)
+    if ($null -eq $Bloco) { return @('', '') }
+    if ($Direcao -eq 'min') {
+        return @([string] $Bloco.viavel_min, [string] $Bloco.ressalva_min)
+    }
+    return @([string] $Bloco.viavel_ate, [string] $Bloco.ressalva_ate)
+}
 
-    $r = [Conectividade.LimiarRow]::new()
-    $r.Metrica       = $Info.metrica
-    $r.Rotulo        = $Info.rotulo
-    $r.Unidade       = $Info.unidade
-    $r.Direcao       = $Info.direcao
-    $r.DirecaoTexto  = if ($Info.direcao -eq 'max') { 'menor ' + [char]0x00E9 + ' melhor' } else { 'maior ' + [char]0x00E9 + ' melhor' }
-    $r.LimiarViavel   = [string] $Limiar.$sv
-    $r.LimiarRessalva = [string] $Limiar.$sr
-    # cache antigo pode nao ter 'ativo'; ausente = na bateria (e StrictMode
-    # lanca se acessarmos a propriedade direto)
-    $pAtivo = if ($Limiar) { $Limiar.PSObject.Properties['ativo'] } else { $null }
-    $r.Ativo = if ($pAtivo) { [bool] $pAtivo.Value } else { $true }
+# Linha da tela de Administracao (formato nested). $PerfilSem / $PerfilCom sao os
+# perfis PLANOS resolvidos (Get-PerfilLimiares) do meio para cada cenario.
+# $Folga (opcional) = bloco perfis.wifi_local.folga -> mostra a coluna Folga e
+# deixa Ideal/Limite read-only (valores computados).
+function New-PerfilLimiarRow {
+    param($Info, $PerfilSem, $PerfilCom, $Folga)
+
+    $r = [Conectividade.PerfilLimiarRow]::new()
+    $r.Metrica        = $Info.metrica
+    $r.Rotulo         = $Info.rotulo
+    $r.Unidade        = $Info.unidade
+    $r.Direcao        = $Info.direcao
+    $r.SemVpnVisivel  = ($Info.cenarios -contains 'sem_vpn')
+    $r.FolgaVisivel   = [bool] $Folga
+    $r.CamposEditaveis = (-not [bool] $Folga)
+
+    $ps = if ($PerfilSem) { $PerfilSem.($Info.metrica) } else { $null }
+    $pc = if ($PerfilCom) { $PerfilCom.($Info.metrica) } else { $null }
+    $parS = Get-ParIdealLimite $ps $Info.direcao
+    $parC = Get-ParIdealLimite $pc $Info.direcao
+    $r.SemVpnIdeal  = if ($r.SemVpnVisivel) { $parS[0] } else { '' }
+    $r.SemVpnLimite = if ($r.SemVpnVisivel) { $parS[1] } else { '' }
+    $r.ComVpnIdeal  = $parC[0]
+    $r.ComVpnLimite = $parC[1]
+    $r.SemVpnAtivo  = if ($ps) { [bool] (& { $p = $ps.PSObject.Properties['ativo']; if ($p) { $p.Value } else { $true } }) } else { $false }
+    $r.ComVpnAtivo  = if ($pc) { [bool] (& { $p = $pc.PSObject.Properties['ativo']; if ($p) { $p.Value } else { $true } }) } else { $true }
+
+    if ($Folga) {
+        $chave = if ($Info.direcao -eq 'min' -and $Info.pct) { $Info.pct } else { $Info.metrica }
+        $pf = $Folga.PSObject.Properties[$chave]
+        $r.Folga = if ($pf -and $null -ne $pf.Value) { [string] $pf.Value } else { '0' }
+    }
     return $r
 }

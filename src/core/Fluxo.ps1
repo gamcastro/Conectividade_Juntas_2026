@@ -5,7 +5,9 @@
 function Invoke-DiagnosticoCompleto {
     param(
         # Objeto do local selecionado (uma entrada de Get-Juntas).
-        $Local
+        $Local,
+        # Meio de conexao sendo medido (define o perfil de limiares COM VPN).
+        [ValidateSet('lan', 'wifi_local', 'celular')] [string] $Meio = 'lan'
     )
 
     if ($null -eq $Local) {
@@ -13,7 +15,7 @@ function Invoke-DiagnosticoCompleto {
     }
 
     $cfgAmbiente = Get-Config 'ambiente'
-    $limiares    = Get-LimiaresConfig
+    $limiares    = Get-PerfilLimiares -Meio $Meio -Cenario 'com_vpn'
 
     Write-Log 'Iniciando diagnostico de conectividade' -Nivel Destaque
     Write-Log ("Local: ZE {0} - {1} / {2} ({3})" -f $Local.zona_eleitoral, $Local.municipio_termo, $Local.nome, $Local.tipo) -Nivel Info
@@ -42,7 +44,7 @@ function Invoke-DiagnosticoCompleto {
     $band = if ($usaBanda) {
         Test-BandaVpn -Servidor $cfgAmbiente.iperf3.servidor -Porta $cfgAmbiente.iperf3.porta `
                       -Duracao $cfgAmbiente.iperf3.duracao_s
-    } else { Write-Log 'Teste de banda (iperf3) desativado pela configuracao (admin).' -Nivel Aviso; [pscustomobject]@{ DownloadMbps = $null; UploadMbps = $null } }
+    } else { Write-Log 'Teste de banda pela VPN desativado pela configuracao (admin).' -Nivel Aviso; [pscustomobject]@{ DownloadMbps = $null; UploadMbps = $null } }
 
     $web = if ($usaWeb) {
         Test-CarregamentoWeb -Url $cfgAmbiente.totalizacao.url `

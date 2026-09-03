@@ -7,10 +7,15 @@
  *                              planilha "Roteiros - Teste de Juntas Especiais").
  *   GET  ?recurso=roteiros  -> por roteiro: etapa, datas, trechos de viagem,
  *                              cidades e ids das Juntas resolvidas.
- *   GET  ?recurso=limiares  -> limiares de decisao (aba Limiares da planilha de
- *                              config); devolve os padroes se a aba nao existir.
- *   POST {acao:'limiares.salvar', pin, limiares} -> grava os limiares (so o
- *                              admin: PIN conferido contra a Script Property).
+ *   GET  ?recurso=limiares  -> limiares de decisao (aba Limiares, celula A2 = JSON
+ *                              NESTED por meio x cenario, v0.6.67+); devolve os
+ *                              padroes se a aba nao existir. Retrocompat: se a A2
+ *                              estiver vazia mas houver linhas no formato antigo
+ *                              (uma por metrica), converte para perfis.lan.
+ *   POST {acao:'limiares.salvar', pin, limiares} -> grava o JSON NESTED na
+ *                              celula A2 (so o admin: PIN conferido contra a
+ *                              Script Property). ** Exige redeploy manual (clasp)
+ *                              apos esta mudanca de formato. **
  *   POST {acao:'resultado', ...} -> grava um resultado (so se PLANILHA_RESULTADOS_ID).
  *
  * Implantacao: Implantar > Nova implantacao > "App da Web", Executar como Eu,
@@ -53,15 +58,82 @@ var MAP_DIRECAO = {
   banda_download_mbps: 'min', banda_upload_mbps: 'min', carregamento_web_s: 'max'
 };
 
-// Fallback / bootstrap (espelha config/limiares.exemplo.json).
+// Fallback / bootstrap (espelha config/limiares.exemplo.json - formato NESTED).
 var LIMIARES_PADRAO = {
-  latencia_ms:         { viavel_ate: 60,  ressalva_ate: 120 },
-  jitter_ms:           { viavel_ate: 10,  ressalva_ate: 30 },
-  perda_percentual:    { viavel_ate: 1,   ressalva_ate: 5 },
-  banda_download_mbps: { viavel_min: 20,  ressalva_min: 8 },
-  banda_upload_mbps:   { viavel_min: 10,  ressalva_min: 4 },
-  carregamento_web_s:  { viavel_ate: 5,   ressalva_ate: 12 }
+  orcamento_vpn: {
+    latencia_ms: 30, jitter_ms: 10, perda_percentual: 1,
+    banda_download_pct: -30, banda_upload_pct: -30
+  },
+  perfis: {
+    lan: {
+      sem_vpn: {
+        latencia_ms:         { viavel_ate: 20,  ressalva_ate: 80, ativo: true },
+        jitter_ms:           { viavel_ate: 10,  ressalva_ate: 40, ativo: true },
+        perda_percentual:    { viavel_ate: 0.5, ressalva_ate: 2,  ativo: true },
+        banda_download_mbps: { viavel_min: 25,  ressalva_min: 5,  ativo: true },
+        banda_upload_mbps:   { viavel_min: 5,   ressalva_min: 1,  ativo: true }
+      },
+      com_vpn: {
+        latencia_ms:         { viavel_ate: 50,  ressalva_ate: 110, ativo: true },
+        jitter_ms:           { viavel_ate: 20,  ressalva_ate: 50,  ativo: true },
+        perda_percentual:    { viavel_ate: 1.5, ressalva_ate: 3,   ativo: true },
+        banda_download_mbps: { viavel_min: 18,  ressalva_min: 4,   ativo: true },
+        banda_upload_mbps:   { viavel_min: 3.5, ressalva_min: 1,   ativo: true },
+        carregamento_web_s:  { viavel_ate: 4,   ressalva_ate: 12,  ativo: true }
+      }
+    },
+    celular: {
+      sem_vpn: {
+        latencia_ms:         { viavel_ate: 40, ressalva_ate: 100, ativo: true },
+        jitter_ms:           { viavel_ate: 10, ressalva_ate: 25,  ativo: true },
+        perda_percentual:    { viavel_ate: 1,  ressalva_ate: 2,   ativo: true },
+        banda_download_mbps: { viavel_min: 15, ressalva_min: 7,   ativo: true },
+        banda_upload_mbps:   { viavel_min: 5,  ressalva_min: 1.5, ativo: true }
+      },
+      com_vpn: {
+        latencia_ms:         { viavel_ate: 60,  ressalva_ate: 130, ativo: true },
+        jitter_ms:           { viavel_ate: 15,  ressalva_ate: 35,  ativo: true },
+        perda_percentual:    { viavel_ate: 1.5, ressalva_ate: 4,   ativo: true },
+        banda_download_mbps: { viavel_min: 10,  ressalva_min: 5,   ativo: true },
+        banda_upload_mbps:   { viavel_min: 4,   ressalva_min: 1.5, ativo: true },
+        carregamento_web_s:  { viavel_ate: 6,   ressalva_ate: 18,  ativo: true }
+      }
+    },
+    wifi_local: {
+      folga: {
+        latencia_ms: 10, jitter_ms: 5, perda_percentual: 1,
+        banda_download_pct: -20, banda_upload_pct: -20, carregamento_web_s: 3
+      },
+      ativos: {
+        sem_vpn: { latencia_ms: true, jitter_ms: true, perda_percentual: true, banda_download_mbps: true, banda_upload_mbps: true },
+        com_vpn: { latencia_ms: true, jitter_ms: true, perda_percentual: true, banda_download_mbps: true, banda_upload_mbps: true, carregamento_web_s: true }
+      }
+    }
+  }
 };
+
+// Converte o formato antigo (uma linha por metrica) para o NESTED novo, usando
+// as linhas como perfis.lan e semeando o resto com os padroes.
+function _migrarLimiaresAntigos(linhas) {
+  var lan = { sem_vpn: {}, com_vpn: {} };
+  for (var r = 1; r < linhas.length; r++) {
+    var metrica = String(linhas[r][0]).trim();
+    if (!MAP_DIRECAO[metrica]) continue;
+    var dir = MAP_DIRECAO[metrica];
+    var o = {};
+    o[(dir === 'max') ? 'viavel_ate' : 'viavel_min'] = Number(linhas[r][2]);
+    o[(dir === 'max') ? 'ressalva_ate' : 'ressalva_min'] = Number(linhas[r][3]);
+    var a = String(linhas[r][4] == null ? '' : linhas[r][4]).trim().toLowerCase();
+    o.ativo = !(a === 'false' || a === 'nao' || a === 'não' || a === '0' || a === 'n');
+    lan.com_vpn[metrica] = o;
+    if (metrica !== 'carregamento_web_s') lan.sem_vpn[metrica] = o;
+  }
+  var doc = JSON.parse(JSON.stringify(LIMIARES_PADRAO));
+  doc.perfis.lan = lan;
+  doc.perfis.celular = JSON.parse(JSON.stringify(lan));
+  doc._comentario = 'migrado do formato antigo (uma linha por metrica)';
+  return doc;
+}
 
 
 function doGet(e) {
@@ -446,47 +518,35 @@ function _abaLimiares(criar) {
   var aba = ss.getSheetByName(ABA_LIMIARES);
   if (!aba && criar) {
     aba = ss.insertSheet(ABA_LIMIARES);
-    aba.appendRow(['metrica', 'direcao', 'limiar_viavel', 'limiar_ressalva', 'ativo']);
+    aba.getRange(1, 1).setValue('limiares_json (editado pelo DICON - nao editar aqui a mao)');
   }
   return aba;
 }
 
-// Devolve { atualizado_em, origem, limiares:{ metrica:{viavel_ate|min, ressalva_ate|min} } }
+// Devolve { atualizado_em, origem, limiares:<doc NESTED> }.
+// Fonte: celula A2 da aba Limiares (JSON). Retrocompat: linhas do formato antigo.
 function lerLimiares() {
   var aba = _abaLimiares(false);
-  var limiares = {};
   var origem = 'padrao';
+  var doc = LIMIARES_PADRAO;
 
-  if (aba && aba.getLastRow() > 1) {
-    var linhas = aba.getDataRange().getValues();
-    for (var r = 1; r < linhas.length; r++) {
-      var metrica = String(linhas[r][0]).trim();
-      if (!MAP_DIRECAO[metrica]) continue;
-      var dir = MAP_DIRECAO[metrica];
-      var sv = (dir === 'max') ? 'viavel_ate' : 'viavel_min';
-      var sr = (dir === 'max') ? 'ressalva_ate' : 'ressalva_min';
-      var o = {};
-      o[sv] = Number(linhas[r][2]);
-      o[sr] = Number(linhas[r][3]);
-      // coluna 'ativo' (5a): vazio/ausente = ativo; so 'false'/'nao'/0 desativa
-      var a = String(linhas[r][4] == null ? '' : linhas[r][4]).trim().toLowerCase();
-      o.ativo = !(a === 'false' || a === 'nao' || a === 'não' || a === '0' || a === 'n');
-      limiares[metrica] = o;
-    }
-    origem = 'planilha';
-  }
-
-  // completa com os padroes o que faltar
-  for (var m in LIMIARES_PADRAO) {
-    if (!limiares[m]) {
-      var pd = {};
-      for (var k in LIMIARES_PADRAO[m]) pd[k] = LIMIARES_PADRAO[m][k];
-      pd.ativo = true;
-      limiares[m] = pd;
+  if (aba && aba.getLastRow() >= 2) {
+    var bruto = String(aba.getRange(2, 1).getValue() || '').trim();
+    if (bruto && bruto.charAt(0) === '{') {
+      try { doc = JSON.parse(bruto); origem = 'planilha'; }
+      catch (e) { doc = LIMIARES_PADRAO; origem = 'padrao (A2 invalida: ' + e + ')'; }
+    } else {
+      // sem JSON na A2: talvez ainda esteja o formato antigo (uma linha/metrica)
+      var linhas = aba.getDataRange().getValues();
+      var temAntigo = false;
+      for (var r = 1; r < linhas.length; r++) {
+        if (MAP_DIRECAO[String(linhas[r][0]).trim()]) { temAntigo = true; break; }
+      }
+      if (temAntigo) { doc = _migrarLimiaresAntigos(linhas); origem = 'planilha (migrado do formato antigo)'; }
     }
   }
 
-  return { atualizado_em: new Date().toISOString(), origem: origem, limiares: limiares };
+  return { atualizado_em: new Date().toISOString(), origem: origem, limiares: doc };
 }
 
 function salvarLimiares(body) {
@@ -499,23 +559,16 @@ function salvarLimiares(body) {
   }
 
   var lim = body.limiares || {};
-  var linhas = [];
-  for (var m in MAP_DIRECAO) {
-    var dir = MAP_DIRECAO[m];
-    var sv = (dir === 'max') ? 'viavel_ate' : 'viavel_min';
-    var sr = (dir === 'max') ? 'ressalva_ate' : 'ressalva_min';
-    var o = lim[m];
-    if (!o) return { status: 'erro', erro: 'faltou a metrica ' + m };
-    var v = Number(o[sv]);
-    var rr = Number(o[sr]);
-    if (!(v > 0) || !(rr > 0)) return { status: 'erro', erro: 'valores invalidos em ' + m };
-    var ativo = (o.ativo === false || o.ativo === 0 || String(o.ativo).toLowerCase() === 'false') ? 'false' : 'true';
-    linhas.push([m, dir, v, rr, ativo]);
+  if (!lim.perfis || !lim.perfis.lan || !lim.perfis.celular || !lim.perfis.wifi_local) {
+    return { status: 'erro', erro: 'limiares fora do formato nested (esperado perfis.lan / .celular / .wifi_local)' };
   }
 
   var aba = _abaLimiares(true);
-  aba.getRange(2, 1, Math.max(aba.getLastRow() - 1, 1), 5).clearContent();
-  aba.getRange(2, 1, linhas.length, 5).setValues(linhas);
+  // limpa qualquer resquicio do formato antigo e grava o JSON na A2
+  if (aba.getLastRow() > 1) {
+    aba.getRange(2, 1, aba.getLastRow() - 1, Math.max(aba.getLastColumn(), 5)).clearContent();
+  }
+  aba.getRange(2, 1).setValue(JSON.stringify(lim, null, 2));
 
   return { status: 'ok', salvo_em: new Date().toISOString() };
 }

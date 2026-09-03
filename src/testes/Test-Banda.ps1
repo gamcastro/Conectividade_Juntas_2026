@@ -73,19 +73,19 @@ function Test-BandaVpn {
     }
     $iperf = Join-Path $Global:RaizApp 'bin\iperf3\iperf3.exe'
     if (-not (Test-Path $iperf)) {
-        $out.iperf_erro = 'iperf3.exe nao esta em bin\iperf3\. Copie o binario e rode de novo.'
+        $out.iperf_erro = 'O analisador de banda nao esta instalado (bin\iperf3\). Copie o binario e rode de novo.'
         Write-Log $out.iperf_erro -Nivel Erro
         Write-EventoIperf @{ fase = 'fim'; estado = 'fim'; ok = $false; erro = $out.iperf_erro }
         return $out
     }
 
     Write-EventoIperf @{ fase = 'download'; estado = 'inicio'; servidor = $out.servidor; dur = $Duracao }
-    Write-Log ("Banda VPN: iperf3 -c {0} -p {1} -t {2} -R (download)" -f $Servidor, $Porta, $Duracao) -Nivel Info
+    Write-Log ("Banda pela VPN: servidor {0}:{1}, {2}s (download)" -f $Servidor, $Porta, $Duracao) -Nivel Info
     $dl = Invoke-IperfStreaming -Iperf $iperf -Fase 'download' -Duracao $Duracao `
         -Argumentos ("-c {0} -p {1} -t {2} -R -f m" -f $Servidor, $Porta, $Duracao)
 
     Write-EventoIperf @{ fase = 'upload'; estado = 'inicio'; dur = $Duracao }
-    Write-Log ("Banda VPN: iperf3 -c {0} -p {1} -t {2} (upload)" -f $Servidor, $Porta, $Duracao) -Nivel Info
+    Write-Log ("Banda pela VPN: servidor {0}:{1}, {2}s (upload)" -f $Servidor, $Porta, $Duracao) -Nivel Info
     $ul = Invoke-IperfStreaming -Iperf $iperf -Fase 'upload' -Duracao $Duracao `
         -Argumentos ("-c {0} -p {1} -t {2} -f m" -f $Servidor, $Porta, $Duracao)
 

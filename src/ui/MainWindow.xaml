@@ -517,7 +517,214 @@
 
                 <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Padding="0,0,10,0">
                     <StackPanel>
-                        <Border Style="{DynamicResource Cartao}" Padding="20,18">
+                        <!-- STATUS: testado / salvo / transmitido / relatorio exportado / GEL anexado -->
+                        <Border Style="{DynamicResource Cartao}" Padding="20,16">
+                            <StackPanel>
+                                <TextBlock Text="STATUS DO LOCAL" FontFamily="Consolas" FontSize="9"
+                                           Foreground="{DynamicResource Dicon.Text3}" Margin="0,0,0,12"/>
+                                <WrapPanel>
+                                    <Border Background="{DynamicResource Dicon.SurfaceAlt}" CornerRadius="12" Padding="12,6" Margin="0,0,8,8">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Ellipse x:Name="dotLdTestado" Width="9" Height="9" Margin="0,0,7,0" VerticalAlignment="Center"/>
+                                            <TextBlock Text="Testado" FontSize="12" Foreground="{DynamicResource Dicon.Text2}"/>
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Background="{DynamicResource Dicon.SurfaceAlt}" CornerRadius="12" Padding="12,6" Margin="0,0,8,8">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Ellipse x:Name="dotLdSalvo" Width="9" Height="9" Margin="0,0,7,0" VerticalAlignment="Center"/>
+                                            <TextBlock Text="Salvo" FontSize="12" Foreground="{DynamicResource Dicon.Text2}"/>
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Background="{DynamicResource Dicon.SurfaceAlt}" CornerRadius="12" Padding="12,6" Margin="0,0,8,8">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Ellipse x:Name="dotLdTransmitido" Width="9" Height="9" Margin="0,0,7,0" VerticalAlignment="Center"/>
+                                            <TextBlock Text="Transmitido" FontSize="12" Foreground="{DynamicResource Dicon.Text2}"/>
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Background="{DynamicResource Dicon.SurfaceAlt}" CornerRadius="12" Padding="12,6" Margin="0,0,8,8">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Ellipse x:Name="dotLdExportado" Width="9" Height="9" Margin="0,0,7,0" VerticalAlignment="Center"/>
+                                            <TextBlock Text="Relat&#243;rio exportado" FontSize="12" Foreground="{DynamicResource Dicon.Text2}"/>
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Background="{DynamicResource Dicon.SurfaceAlt}" CornerRadius="12" Padding="12,6" Margin="0,0,8,8">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Ellipse x:Name="dotLdGel" Width="9" Height="9" Margin="0,0,7,0" VerticalAlignment="Center"/>
+                                            <TextBlock Text="Formul&#225;rio GEL" FontSize="12" Foreground="{DynamicResource Dicon.Text2}"/>
+                                        </StackPanel>
+                                    </Border>
+                                </WrapPanel>
+                                <TextBlock x:Name="txtLdStatusInfo" Margin="0,4,0,0" FontFamily="Consolas" FontSize="11"
+                                           TextWrapping="Wrap" Foreground="{DynamicResource Dicon.Text3}"/>
+                                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                                    <Button x:Name="btnLdRelatorio" Content="Abrir relat&#243;rio completo (PDF)"
+                                            Style="{DynamicResource BotaoSecundario}"/>
+                                    <TextBlock x:Name="txtLdRelatStatus" Margin="12,0,0,0" VerticalAlignment="Center"
+                                               FontSize="12" TextWrapping="Wrap"
+                                               Foreground="{DynamicResource Dicon.Text3}"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- anexo: formulario do GEL (a qualquer tempo, nao so no teste) -->
+                        <Border x:Name="cardGel" Style="{DynamicResource Cartao}" Padding="20,18" Margin="0,12,0,0">
+                            <StackPanel>
+                                <TextBlock Text="FORMUL&#193;RIO DO GEL" FontFamily="Consolas" FontSize="9"
+                                           Foreground="{DynamicResource Dicon.Text3}" Margin="0,0,0,8"/>
+                                <TextBlock TextWrapping="Wrap" FontSize="11"
+                                           Foreground="{DynamicResource Dicon.Text3}" Margin="0,0,0,10"
+                                           Text="Anexe o PDF da vistoria do GEL deste local. O DICON extrai as coordenadas (mapa no relat&#243;rio), o suporte ao link local e os dados el&#233;tricos. Voc&#234; confere antes de registrar. Fica salvo no local e entra no relat&#243;rio quando o diagn&#243;stico for feito/exportado."/>
+                                <StackPanel Orientation="Horizontal">
+                                    <Button x:Name="btnAnexarGel" Content="Anexar formul&#225;rio GEL (PDF)"
+                                            Style="{DynamicResource BotaoSecundario}"/>
+                                    <Button x:Name="btnGelRemover" Content="Remover anexo"
+                                            Style="{DynamicResource BotaoFantasma}" Margin="8,0,0,0" Visibility="Collapsed"/>
+                                    <TextBlock x:Name="txtGelStatus" Margin="12,0,0,0" VerticalAlignment="Center"
+                                               TextWrapping="Wrap" FontSize="12"
+                                               Foreground="{DynamicResource Dicon.Text3}"/>
+                                </StackPanel>
+
+                                <Border x:Name="panelGelConf" Style="{DynamicResource Faixa}" Margin="0,12,0,0"
+                                        Visibility="Collapsed">
+                                    <StackPanel>
+                                        <TextBlock Text="Confira e ajuste antes de registrar" FontFamily="Consolas"
+                                                   FontSize="9" FontWeight="Bold"
+                                                   Foreground="{DynamicResource Dicon.Text3}" Margin="0,0,0,8"/>
+
+                                        <!-- Coordenadas -->
+                                        <TextBlock Text="COORDENADAS" FontFamily="Consolas" FontSize="9"
+                                                   Foreground="{DynamicResource Dicon.Text3}" Margin="0,4,0,4"/>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                                            </Grid.RowDefinitions>
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Latitude" Style="{DynamicResource Rotulo}" VerticalAlignment="Center" Margin="0,3,10,3"/>
+                                            <TextBox x:Name="txtGelLat" Grid.Row="0" Grid.Column="1" Margin="0,3,12,3" MinHeight="30" FontFamily="Consolas" VerticalContentAlignment="Center"/>
+                                            <TextBlock Grid.Row="0" Grid.Column="2" Text="Longitude" Style="{DynamicResource Rotulo}" VerticalAlignment="Center" Margin="0,3,10,3"/>
+                                            <TextBox x:Name="txtGelLong" Grid.Row="0" Grid.Column="3" Margin="0,3,0,3" MinHeight="30" FontFamily="Consolas" VerticalContentAlignment="Center"/>
+                                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Precis&#227;o (m)" Style="{DynamicResource Rotulo}" VerticalAlignment="Center" Margin="0,3,10,3"/>
+                                            <TextBox x:Name="txtGelPrec" Grid.Row="1" Grid.Column="1" Margin="0,3,12,3" MinHeight="30" FontFamily="Consolas" VerticalContentAlignment="Center"/>
+                                        </Grid>
+
+                                        <!-- Tipo do local -->
+                                        <TextBlock Text="TIPO DO LOCAL" FontFamily="Consolas" FontSize="9"
+                                                   Foreground="{DynamicResource Dicon.Text3}" Margin="0,10,0,4"/>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                                            </Grid.RowDefinitions>
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Esfera administrativa" Style="{DynamicResource Rotulo}" VerticalAlignment="Center" Margin="0,3,10,3"/>
+                                            <TextBox x:Name="txtGelEsfera" Grid.Row="0" Grid.Column="1" Margin="0,3,12,3" MinHeight="30" VerticalContentAlignment="Center"/>
+                                            <TextBlock Grid.Row="0" Grid.Column="2" Text="Localiza&#231;&#227;o" Style="{DynamicResource Rotulo}" VerticalAlignment="Center" Margin="0,3,10,3"/>
+                                            <TextBox x:Name="txtGelLocalizacao" Grid.Row="0" Grid.Column="3" Margin="0,3,0,3" MinHeight="30" VerticalContentAlignment="Center"/>
+                                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Tipo de local" Style="{DynamicResource Rotulo}" VerticalAlignment="Center" Margin="0,3,10,3"/>
+                                            <TextBox x:Name="txtGelTipoLocal" Grid.Row="1" Grid.Column="1" Margin="0,3,12,3" MinHeight="30" VerticalContentAlignment="Center"/>
+                                        </Grid>
+
+                                        <!-- Infraestrutura -->
+                                        <TextBlock Text="INFRAESTRUTURA" FontFamily="Consolas" FontSize="9"
+                                                   Foreground="{DynamicResource Dicon.Text3}" Margin="0,10,0,4"/>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                                            </Grid.RowDefinitions>
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Salas necess&#225;rias" Style="{DynamicResource Rotulo}" VerticalAlignment="Center" Margin="0,3,10,3"/>
+                                            <TextBox x:Name="txtGelSalas" Grid.Row="0" Grid.Column="1" Margin="0,3,12,3" MinHeight="30" VerticalContentAlignment="Center"/>
+                                            <TextBlock Grid.Row="0" Grid.Column="2" Text="Abastecimento de &#225;gua" Style="{DynamicResource Rotulo}" VerticalAlignment="Center" Margin="0,3,10,3"/>
+                                            <TextBox x:Name="txtGelAgua" Grid.Row="0" Grid.Column="3" Margin="0,3,0,3" MinHeight="30" VerticalContentAlignment="Center"/>
+                                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Climatiza&#231;&#227;o / ventila&#231;&#227;o" Style="{DynamicResource Rotulo}" VerticalAlignment="Center" Margin="0,3,10,3"/>
+                                            <TextBox x:Name="txtGelClima" Grid.Row="1" Grid.Column="1" Margin="0,3,12,3" MinHeight="30" VerticalContentAlignment="Center"/>
+                                            <TextBlock Grid.Row="1" Grid.Column="2" Text="Ilumina&#231;&#227;o" Style="{DynamicResource Rotulo}" VerticalAlignment="Center" Margin="0,3,10,3"/>
+                                            <TextBox x:Name="txtGelIluminacao" Grid.Row="1" Grid.Column="3" Margin="0,3,0,3" MinHeight="30" VerticalContentAlignment="Center"/>
+                                            <TextBlock Grid.Row="2" Grid.Column="0" Text="&#193;gua pot&#225;vel" Style="{DynamicResource Rotulo}" VerticalAlignment="Center" Margin="0,3,10,3"/>
+                                            <TextBox x:Name="txtGelAguaPot" Grid.Row="2" Grid.Column="1" Margin="0,3,12,3" MinHeight="30" VerticalContentAlignment="Center"/>
+                                            <TextBlock Grid.Row="2" Grid.Column="2" Text="Pr&#233;dio em reforma" Style="{DynamicResource Rotulo}" VerticalAlignment="Center" Margin="0,3,10,3"/>
+                                            <TextBox x:Name="txtGelReforma" Grid.Row="2" Grid.Column="3" Margin="0,3,0,3" MinHeight="30" VerticalContentAlignment="Center"/>
+                                        </Grid>
+
+                                        <!-- Instalacoes eletricas -->
+                                        <TextBlock Text="INSTALA&#199;&#213;ES EL&#201;TRICAS" FontFamily="Consolas" FontSize="9"
+                                                   Foreground="{DynamicResource Dicon.Text3}" Margin="0,10,0,4"/>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                                            </Grid.RowDefinitions>
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Quadro de energia" Style="{DynamicResource Rotulo}" VerticalAlignment="Center" Margin="0,3,10,3"/>
+                                            <TextBox x:Name="txtGelQuadro" Grid.Row="0" Grid.Column="1" Margin="0,3,12,3" MinHeight="30" VerticalContentAlignment="Center"/>
+                                            <TextBlock Grid.Row="0" Grid.Column="2" Text="Energia el&#233;trica" Style="{DynamicResource Rotulo}" VerticalAlignment="Center" Margin="0,3,10,3"/>
+                                            <TextBox x:Name="txtGelEnergia" Grid.Row="0" Grid.Column="3" Margin="0,3,0,3" MinHeight="30" VerticalContentAlignment="Center"/>
+                                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Tomadas" Style="{DynamicResource Rotulo}" VerticalAlignment="Center" Margin="0,3,10,3"/>
+                                            <TextBox x:Name="txtGelTomadas" Grid.Row="1" Grid.Column="1" Margin="0,3,12,3" MinHeight="30" VerticalContentAlignment="Center"/>
+                                            <TextBlock Grid.Row="1" Grid.Column="2" Text="Tens&#227;o" Style="{DynamicResource Rotulo}" VerticalAlignment="Center" Margin="0,3,10,3"/>
+                                            <TextBox x:Name="txtGelTensao" Grid.Row="1" Grid.Column="3" Margin="0,3,0,3" MinHeight="30" VerticalContentAlignment="Center"/>
+                                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Extens&#227;o el&#233;trica" Style="{DynamicResource Rotulo}" VerticalAlignment="Center" Margin="0,3,10,3"/>
+                                            <TextBox x:Name="txtGelExtensao" Grid.Row="2" Grid.Column="1" Margin="0,3,12,3" MinHeight="30" VerticalContentAlignment="Center"/>
+                                        </Grid>
+
+                                        <!-- Suporte ao link local -->
+                                        <TextBlock Text="SUPORTE AO LINK LOCAL" FontFamily="Consolas" FontSize="9"
+                                                   Foreground="{DynamicResource Dicon.Text3}" Margin="0,10,0,4"/>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Empresa / t&#233;cnico" Style="{DynamicResource Rotulo}" VerticalAlignment="Center" Margin="0,3,10,3"/>
+                                            <TextBox x:Name="txtGelSupNome" Grid.Row="0" Grid.Column="1" Margin="0,3,12,3" MinHeight="30" VerticalContentAlignment="Center"/>
+                                            <TextBlock Grid.Row="0" Grid.Column="2" Text="Telefone" Style="{DynamicResource Rotulo}" VerticalAlignment="Center" Margin="0,3,10,3"/>
+                                            <TextBox x:Name="txtGelSupTel" Grid.Row="0" Grid.Column="3" Margin="0,3,0,3" MinHeight="30" VerticalContentAlignment="Center"/>
+                                        </Grid>
+
+                                        <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                                            <Button x:Name="btnGelRegistrar" Content="Registrar"
+                                                    Style="{DynamicResource BotaoPrimario}" Padding="18,7"/>
+                                            <Button x:Name="btnGelCancelar" Content="Cancelar"
+                                                    Style="{DynamicResource BotaoFantasma}" Margin="8,0,0,0"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+
+                                <TextBlock x:Name="txtGelResumo" Margin="0,10,0,0" TextWrapping="Wrap" FontSize="12"
+                                           Foreground="{DynamicResource Dicon.Viavel}" Visibility="Collapsed"/>
+
+                                <!-- fotos da vistoria (baixadas do GEL web) -->
+                                <TextBlock Text="FOTOS DA VISTORIA" FontFamily="Consolas" FontSize="9"
+                                           Foreground="{DynamicResource Dicon.Text3}" Margin="0,16,0,4"/>
+                                <TextBlock TextWrapping="Wrap" FontSize="11" Margin="0,0,0,8"
+                                           Foreground="{DynamicResource Dicon.Text3}"
+                                           Text="As fotos tiradas no app do GEL ficam s&#243; no GEL web. Baixe-as l&#225; e adicione aqui (JPG/PNG) &#8212; elas entram numa se&#231;&#227;o do relat&#243;rio do DICON (reduzidas)."/>
+                                <StackPanel Orientation="Horizontal">
+                                    <Button x:Name="btnGelAddFotos" Content="Adicionar fotos"
+                                            Style="{DynamicResource BotaoSecundario}"/>
+                                    <Button x:Name="btnGelFotoRemover" Content="Remover selecionada"
+                                            Style="{DynamicResource BotaoFantasma}" Margin="8,0,0,0"/>
+                                    <TextBlock x:Name="txtGelFotosResumo" Margin="12,0,0,0" VerticalAlignment="Center"
+                                               FontSize="12" Foreground="{DynamicResource Dicon.Text3}"/>
+                                </StackPanel>
+                                <ListBox x:Name="lstGelFotos" Margin="0,8,0,0" MaxHeight="140"
+                                         FontFamily="Consolas" FontSize="12"
+                                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"/>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{DynamicResource Cartao}" Padding="20,18" Margin="0,12,0,0">
                             <StackPanel>
                                 <TextBlock Text="DADOS DO LOCAL" FontFamily="Consolas" FontSize="9"
                                            Foreground="{DynamicResource Dicon.Text3}" Margin="0,0,0,10"/>
@@ -592,7 +799,7 @@
                                     <TextBlock Foreground="{DynamicResource Dicon.Text2}" TextWrapping="Wrap"
                                                Margin="0,0,0,6">&#8226;  <Run FontWeight="Bold">Rede local, sem a VPN</Run>  &#8212;  placa de rede, IP que o computador pegou no local, Wi-Fi e a internet do local (ping, DNS, download).</TextBlock>
                                     <TextBlock Foreground="{DynamicResource Dicon.Text2}" TextWrapping="Wrap"
-                                               Margin="0,0,0,6">&#8226;  <Run FontWeight="Bold">Com a VPN da Justi&#231;a Eleitoral</Run>  &#8212;  lat&#234;ncia / jitter / perda (ping), banda (iperf3) e tempo de abertura da totaliza&#231;&#227;o (Firefox e Chrome).</TextBlock>
+                                               Margin="0,0,0,6">&#8226;  <Run FontWeight="Bold">Com a VPN da Justi&#231;a Eleitoral</Run>  &#8212;  lat&#234;ncia / jitter / perda (ping), banda pela VPN e tempo de abertura da totaliza&#231;&#227;o (Firefox e Chrome).</TextBlock>
                                 </StackPanel>
                                 <Border Style="{DynamicResource Faixa}" Margin="0,10,0,0">
                                     <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource Dicon.Text3}"
@@ -681,92 +888,6 @@
                                             Margin="0,12,0,0" Visibility="Collapsed"/>
                                 </StackPanel>
                             </Border>
-
-                            <!-- anexo: formulario do GEL (opcional) -->
-                            <Border x:Name="cardGel" Style="{DynamicResource Cartao}" Padding="16,14"
-                                    Margin="0,12,0,0" Visibility="Collapsed">
-                                <StackPanel>
-                                    <TextBlock Text="Formul&#225;rio do GEL (opcional)" Style="{DynamicResource SecaoTela}"
-                                               Margin="0,0,0,4"/>
-                                    <TextBlock TextWrapping="Wrap" FontSize="11"
-                                               Foreground="{DynamicResource Dicon.Text3}" Margin="0,0,0,10"
-                                               Text="Anexe o PDF da vistoria do GEL deste local. O DICON extrai as coordenadas (mapa no relat&#243;rio), o suporte ao link local e os dados el&#233;tricos. Voc&#234; confere antes de registrar."/>
-                                    <StackPanel Orientation="Horizontal">
-                                        <Button x:Name="btnAnexarGel" Content="Anexar formul&#225;rio GEL (PDF)"
-                                                Style="{DynamicResource BotaoSecundario}"/>
-                                        <TextBlock x:Name="txtGelStatus" Margin="12,0,0,0" VerticalAlignment="Center"
-                                                   TextWrapping="Wrap" FontSize="12"
-                                                   Foreground="{DynamicResource Dicon.Text3}"/>
-                                    </StackPanel>
-
-                                    <Border x:Name="panelGelConf" Style="{DynamicResource Faixa}" Margin="0,12,0,0"
-                                            Visibility="Collapsed">
-                                        <StackPanel>
-                                            <TextBlock Text="Confira e ajuste antes de registrar" FontFamily="Consolas"
-                                                       FontSize="9" FontWeight="Bold"
-                                                       Foreground="{DynamicResource Dicon.Text3}" Margin="0,0,0,8"/>
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                </Grid.ColumnDefinitions>
-                                                <Grid.RowDefinitions>
-                                                    <RowDefinition Height="Auto"/>
-                                                    <RowDefinition Height="Auto"/>
-                                                    <RowDefinition Height="Auto"/>
-                                                    <RowDefinition Height="Auto"/>
-                                                </Grid.RowDefinitions>
-                                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Latitude" Style="{DynamicResource Rotulo}"
-                                                           VerticalAlignment="Center" Margin="0,3,10,3"/>
-                                                <TextBox x:Name="txtGelLat" Grid.Row="0" Grid.Column="1" Margin="0,3,12,3"
-                                                         MinHeight="30" FontFamily="Consolas" VerticalContentAlignment="Center"/>
-                                                <TextBlock Grid.Row="0" Grid.Column="2" Text="Longitude" Style="{DynamicResource Rotulo}"
-                                                           VerticalAlignment="Center" Margin="0,3,10,3"/>
-                                                <TextBox x:Name="txtGelLong" Grid.Row="0" Grid.Column="3" Margin="0,3,0,3"
-                                                         MinHeight="30" FontFamily="Consolas" VerticalContentAlignment="Center"/>
-
-                                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Precis&#227;o (m)" Style="{DynamicResource Rotulo}"
-                                                           VerticalAlignment="Center" Margin="0,3,10,3"/>
-                                                <TextBox x:Name="txtGelPrec" Grid.Row="1" Grid.Column="1" Margin="0,3,12,3"
-                                                         MinHeight="30" FontFamily="Consolas" VerticalContentAlignment="Center"/>
-                                                <TextBlock Grid.Row="1" Grid.Column="2" Text="Tens&#227;o" Style="{DynamicResource Rotulo}"
-                                                           VerticalAlignment="Center" Margin="0,3,10,3"/>
-                                                <TextBox x:Name="txtGelTensao" Grid.Row="1" Grid.Column="3" Margin="0,3,0,3"
-                                                         MinHeight="30" VerticalContentAlignment="Center"/>
-
-                                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Tomadas" Style="{DynamicResource Rotulo}"
-                                                           VerticalAlignment="Center" Margin="0,3,10,3"/>
-                                                <TextBox x:Name="txtGelTomadas" Grid.Row="2" Grid.Column="1" Margin="0,3,12,3"
-                                                         MinHeight="30" VerticalContentAlignment="Center"/>
-                                                <TextBlock Grid.Row="2" Grid.Column="2" Text="Extens&#227;o el&#233;trica" Style="{DynamicResource Rotulo}"
-                                                           VerticalAlignment="Center" Margin="0,3,10,3"/>
-                                                <TextBox x:Name="txtGelExtensao" Grid.Row="2" Grid.Column="3" Margin="0,3,0,3"
-                                                         MinHeight="30" VerticalContentAlignment="Center"/>
-
-                                                <TextBlock Grid.Row="3" Grid.Column="0" Text="Suporte (nome)" Style="{DynamicResource Rotulo}"
-                                                           VerticalAlignment="Center" Margin="0,3,10,3"/>
-                                                <TextBox x:Name="txtGelSupNome" Grid.Row="3" Grid.Column="1" Margin="0,3,12,3"
-                                                         MinHeight="30" VerticalContentAlignment="Center"/>
-                                                <TextBlock Grid.Row="3" Grid.Column="2" Text="Suporte (telefone)" Style="{DynamicResource Rotulo}"
-                                                           VerticalAlignment="Center" Margin="0,3,10,3"/>
-                                                <TextBox x:Name="txtGelSupTel" Grid.Row="3" Grid.Column="3" Margin="0,3,0,3"
-                                                         MinHeight="30" VerticalContentAlignment="Center"/>
-                                            </Grid>
-                                            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                                                <Button x:Name="btnGelRegistrar" Content="Registrar"
-                                                        Style="{DynamicResource BotaoPrimario}" Padding="18,7"/>
-                                                <Button x:Name="btnGelCancelar" Content="Cancelar"
-                                                        Style="{DynamicResource BotaoFantasma}" Margin="8,0,0,0"/>
-                                            </StackPanel>
-                                        </StackPanel>
-                                    </Border>
-
-                                    <TextBlock x:Name="txtGelResumo" Margin="0,10,0,0" TextWrapping="Wrap" FontSize="12"
-                                               Foreground="{DynamicResource Dicon.Viavel}" Visibility="Collapsed"/>
-                                </StackPanel>
-                            </Border>
                         </StackPanel>
                     </ScrollViewer>
 
@@ -805,6 +926,12 @@
                                 </Button>
                             </Grid>
 
+                            <Border x:Name="cardMeioAviso" Style="{DynamicResource Faixa}" Margin="0,10,0,0"
+                                    Visibility="Collapsed">
+                                <TextBlock x:Name="txtMeioAviso" TextWrapping="Wrap" FontSize="12"
+                                           Foreground="{DynamicResource Dicon.Ressalva}"/>
+                            </Border>
+
                             <!-- escolha do meio: 3 cartoes lado a lado -->
                             <Grid x:Name="cardFaseLocal" Margin="0,8,0,0" Visibility="Collapsed">
                                 <Grid.ColumnDefinitions>
@@ -820,13 +947,20 @@
                                     <StackPanel>
                                         <Grid>
                                             <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
-                                            <TextBlock Grid.Column="0" Text="LAN" FontFamily="{DynamicResource Dicon.Display}"
+                                            <Border x:Name="numLan" Grid.Column="0" Width="22" Height="22" CornerRadius="11"
+                                                    Margin="0,0,10,0" VerticalAlignment="Center"
+                                                    Background="{DynamicResource Dicon.Text3}">
+                                                <TextBlock Text="1" Foreground="White" FontWeight="Bold" FontSize="12"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                            <TextBlock Grid.Column="1" Text="LAN" FontFamily="{DynamicResource Dicon.Display}"
                                                        FontWeight="Bold" FontSize="19" Margin="0,0,0,2"
                                                        Foreground="{DynamicResource Dicon.Text}"/>
-                                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                                                 <mah:ProgressRing x:Name="ringRelerLan" Width="14" Height="14" Margin="0,0,4,0"
                                                                   IsActive="False" Visibility="Collapsed"
                                                                   Foreground="{DynamicResource Dicon.Accent}"/>
@@ -895,13 +1029,20 @@
                                     <StackPanel>
                                         <Grid>
                                             <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
-                                            <TextBlock Grid.Column="0" Text="WI-FI" FontFamily="{DynamicResource Dicon.Display}"
+                                            <Border x:Name="numWifi" Grid.Column="0" Width="22" Height="22" CornerRadius="11"
+                                                    Margin="0,0,10,0" VerticalAlignment="Center"
+                                                    Background="{DynamicResource Dicon.Text3}">
+                                                <TextBlock Text="2" Foreground="White" FontWeight="Bold" FontSize="12"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                            <TextBlock Grid.Column="1" Text="WI-FI" FontFamily="{DynamicResource Dicon.Display}"
                                                        FontWeight="Bold" FontSize="19" Margin="0,0,0,2"
                                                        Foreground="{DynamicResource Dicon.Text}"/>
-                                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                                                 <mah:ProgressRing x:Name="ringRelerWifi" Width="14" Height="14" Margin="0,0,4,0"
                                                                   IsActive="False" Visibility="Collapsed"
                                                                   Foreground="{DynamicResource Dicon.Accent}"/>
@@ -954,13 +1095,20 @@
                                     <StackPanel>
                                         <Grid>
                                             <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
-                                            <TextBlock Grid.Column="0" Text="CELULAR" FontFamily="{DynamicResource Dicon.Display}"
+                                            <Border x:Name="numCel" Grid.Column="0" Width="22" Height="22" CornerRadius="11"
+                                                    Margin="0,0,10,0" VerticalAlignment="Center"
+                                                    Background="{DynamicResource Dicon.Text3}">
+                                                <TextBlock Text="3" Foreground="White" FontWeight="Bold" FontSize="12"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                            <TextBlock Grid.Column="1" Text="CELULAR" FontFamily="{DynamicResource Dicon.Display}"
                                                        FontWeight="Bold" FontSize="19" Margin="0,0,0,2"
                                                        Foreground="{DynamicResource Dicon.Text}"/>
-                                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                                                 <mah:ProgressRing x:Name="ringRelerCel" Width="14" Height="14" Margin="0,0,4,0"
                                                                   IsActive="False" Visibility="Collapsed"
                                                                   Foreground="{DynamicResource Dicon.Accent}"/>
@@ -1047,6 +1195,9 @@
                                                Text=" no canto superior direito para reler as placas e atualizar o status do Wi-Fi."/></TextBlock>
                                 </StackPanel>
                             </Border>
+
+                            <TextBlock x:Name="txtMeiosPendentes" TextWrapping="Wrap" FontSize="12" Margin="4,14,0,0"
+                                       Foreground="{DynamicResource Dicon.Ressalva}" Visibility="Collapsed"/>
                         </StackPanel>
                     </ScrollViewer>
 
@@ -1131,7 +1282,7 @@
                             <Border x:Name="cardAvaliacaoRl" Style="{DynamicResource Cartao}" Padding="14,12"
                                     Margin="0,0,0,12" Visibility="Collapsed">
                                 <StackPanel>
-                                    <TextBlock Text="REDE LOCAL &#8212; SPEEDTEST DA OOKLA (SEM VPN)"
+                                    <TextBlock Text="SEM VPN CONECTADA &#8212; TESTE DE VELOCIDADE"
                                                FontFamily="Consolas" FontSize="10" FontWeight="Bold"
                                                Foreground="{DynamicResource Dicon.Text2}" Margin="0,0,0,4"/>
                                     <TextBlock x:Name="txtRedeLocalNota" TextWrapping="Wrap" FontSize="11"
@@ -1384,48 +1535,194 @@
                 <TextBlock Grid.Row="0" Text="Administra&#231;&#227;o &#8212; limiares de decis&#227;o"
                            Style="{DynamicResource TituloTela}"/>
                 <TextBlock Grid.Row="1"
-                           Text="Valores que definem vi&#225;vel / ressalva / invi&#225;vel por m&#233;trica. Desmarque &quot;Na bateria&quot; para tirar uma m&#233;trica do teste. Salvos na planilha de configura&#231;&#227;o e usados por todos os computadores."
-                           Style="{DynamicResource SubtituloTela}" Margin="0,6,0,14"/>
+                           Text="Vi&#225;vel / ressalva / invi&#225;vel por MEIO (LAN / Wi-Fi do local / Celular) e por cen&#225;rio (SEM VPN / COM VPN). SEM VPN tem como piso os valores de refer&#234;ncia da ANATEL. COM VPN = SEM VPN + or&#231;amento da VPN. O Wi-Fi do local herda da LAN + folga. &quot;Na bateria&quot; &#233; por meio &#215; cen&#225;rio &#215; m&#233;trica. Salvo na planilha de configura&#231;&#227;o e usado por todos os computadores."
+                           Style="{DynamicResource SubtituloTela}" Margin="0,6,0,12"/>
 
-                <Border Grid.Row="2" Style="{DynamicResource Cartao}" Padding="2">
-                    <DataGrid x:Name="dgLimiares" Style="{DynamicResource GridMetricas}"
-                              BorderThickness="0" RowHeight="42" MaxHeight="300"
-                              CanUserResizeRows="False" HeadersVisibility="Column"
-                              GridLinesVisibility="Horizontal">
-                        <DataGrid.Columns>
-                            <DataGridTemplateColumn Header="Na bateria" Width="90">
-                                <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <CheckBox Margin="8,0,0,0" VerticalAlignment="Center"
-                                                  IsChecked="{Binding Ativo, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellTemplate>
-                            </DataGridTemplateColumn>
-                            <DataGridTextColumn Header="M&#233;trica" Binding="{Binding Rotulo}"
-                                                IsReadOnly="True" Width="150"/>
-                            <DataGridTextColumn Header="Unidade" Binding="{Binding Unidade}"
-                                                IsReadOnly="True" Width="72" FontFamily="Consolas"/>
-                            <DataGridTextColumn Header="Dire&#231;&#227;o" Binding="{Binding DirecaoTexto}"
-                                                IsReadOnly="True" Width="130"/>
-                            <DataGridTemplateColumn Header="Ideal" Width="180">
-                                <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <TextBox Margin="3" VerticalContentAlignment="Center" FontFamily="Consolas"
-                                                 Text="{Binding LimiarViavel, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellTemplate>
-                            </DataGridTemplateColumn>
-                            <DataGridTemplateColumn Header="Limite" Width="*">
-                                <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <TextBox Margin="3" VerticalContentAlignment="Center" FontFamily="Consolas"
-                                                 Text="{Binding LimiarRessalva, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellTemplate>
-                            </DataGridTemplateColumn>
-                        </DataGrid.Columns>
-                    </DataGrid>
-                </Border>
+                <StackPanel Grid.Row="2">
+                    <TabControl x:Name="tabLimiares" MinHeight="230">
+                        <TabItem Header="LAN (rede cabeada)">
+                            <Border Style="{DynamicResource Cartao}" Padding="2">
+                                <DataGrid x:Name="dgLimLan" Style="{DynamicResource GridMetricas}"
+                                          BorderThickness="0" RowHeight="40" MaxHeight="280"
+                                          CanUserResizeRows="False" HeadersVisibility="Column"
+                                          GridLinesVisibility="Horizontal">
+                                    <DataGrid.Columns>
+                                        <DataGridTemplateColumn Header="Bat. SEM VPN" Width="92">
+                                            <DataGridTemplateColumn.CellTemplate><DataTemplate>
+                                                <CheckBox Margin="10,0,0,0" VerticalAlignment="Center"
+                                                          IsEnabled="{Binding SemVpnVisivel}"
+                                                          IsChecked="{Binding SemVpnAtivo, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                            </DataTemplate></DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                        <DataGridTemplateColumn Header="Bat. COM VPN" Width="92">
+                                            <DataGridTemplateColumn.CellTemplate><DataTemplate>
+                                                <CheckBox Margin="10,0,0,0" VerticalAlignment="Center"
+                                                          IsChecked="{Binding ComVpnAtivo, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                            </DataTemplate></DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                        <DataGridTextColumn Header="M&#233;trica" Binding="{Binding Rotulo}" IsReadOnly="True" Width="130"/>
+                                        <DataGridTextColumn Header="Un." Binding="{Binding Unidade}" IsReadOnly="True" Width="52" FontFamily="Consolas"/>
+                                        <DataGridTemplateColumn Header="SEM VPN Ideal" Width="*">
+                                            <DataGridTemplateColumn.CellTemplate><DataTemplate>
+                                                <TextBox Margin="3" VerticalContentAlignment="Center" FontFamily="Consolas"
+                                                         IsEnabled="{Binding SemVpnVisivel}"
+                                                         Text="{Binding SemVpnIdeal, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                            </DataTemplate></DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                        <DataGridTemplateColumn Header="SEM VPN Limite" Width="*">
+                                            <DataGridTemplateColumn.CellTemplate><DataTemplate>
+                                                <TextBox Margin="3" VerticalContentAlignment="Center" FontFamily="Consolas"
+                                                         IsEnabled="{Binding SemVpnVisivel}"
+                                                         Text="{Binding SemVpnLimite, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                            </DataTemplate></DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                        <DataGridTemplateColumn Header="COM VPN Ideal" Width="*">
+                                            <DataGridTemplateColumn.CellTemplate><DataTemplate>
+                                                <TextBox Margin="3" VerticalContentAlignment="Center" FontFamily="Consolas"
+                                                         Text="{Binding ComVpnIdeal, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                            </DataTemplate></DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                        <DataGridTemplateColumn Header="COM VPN Limite" Width="*">
+                                            <DataGridTemplateColumn.CellTemplate><DataTemplate>
+                                                <TextBox Margin="3" VerticalContentAlignment="Center" FontFamily="Consolas"
+                                                         Text="{Binding ComVpnLimite, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                            </DataTemplate></DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </Border>
+                        </TabItem>
+
+                        <TabItem Header="Wi-Fi do local">
+                            <StackPanel>
+                                <TextBlock Text="Herda da LAN + folga (aditiva p/ ms/%/s; percentual p/ banda). Ideal/Limite s&#227;o s&#243; leitura &#8212; edite a Folga e o &quot;Na bateria&quot;."
+                                           FontSize="11" Foreground="{DynamicResource Dicon.Text3}" TextWrapping="Wrap" Margin="4,2,4,6"/>
+                                <Border Style="{DynamicResource Cartao}" Padding="2">
+                                    <DataGrid x:Name="dgLimWifi" Style="{DynamicResource GridMetricas}"
+                                              BorderThickness="0" RowHeight="40" MaxHeight="260"
+                                              CanUserResizeRows="False" HeadersVisibility="Column"
+                                              GridLinesVisibility="Horizontal">
+                                        <DataGrid.Columns>
+                                            <DataGridTemplateColumn Header="Bat. SEM VPN" Width="92">
+                                                <DataGridTemplateColumn.CellTemplate><DataTemplate>
+                                                    <CheckBox Margin="10,0,0,0" VerticalAlignment="Center"
+                                                              IsEnabled="{Binding SemVpnVisivel}"
+                                                              IsChecked="{Binding SemVpnAtivo, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                                </DataTemplate></DataGridTemplateColumn.CellTemplate>
+                                            </DataGridTemplateColumn>
+                                            <DataGridTemplateColumn Header="Bat. COM VPN" Width="92">
+                                                <DataGridTemplateColumn.CellTemplate><DataTemplate>
+                                                    <CheckBox Margin="10,0,0,0" VerticalAlignment="Center"
+                                                              IsChecked="{Binding ComVpnAtivo, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                                </DataTemplate></DataGridTemplateColumn.CellTemplate>
+                                            </DataGridTemplateColumn>
+                                            <DataGridTextColumn Header="M&#233;trica" Binding="{Binding Rotulo}" IsReadOnly="True" Width="130"/>
+                                            <DataGridTextColumn Header="Un." Binding="{Binding Unidade}" IsReadOnly="True" Width="52" FontFamily="Consolas"/>
+                                            <DataGridTemplateColumn Header="Folga" Width="90">
+                                                <DataGridTemplateColumn.CellTemplate><DataTemplate>
+                                                    <TextBox Margin="3" VerticalContentAlignment="Center" FontFamily="Consolas"
+                                                             Text="{Binding Folga, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                                </DataTemplate></DataGridTemplateColumn.CellTemplate>
+                                            </DataGridTemplateColumn>
+                                            <DataGridTextColumn Header="SEM VPN Ideal" IsReadOnly="True" Width="*" FontFamily="Consolas"
+                                                                Binding="{Binding SemVpnIdeal}"/>
+                                            <DataGridTextColumn Header="SEM VPN Limite" IsReadOnly="True" Width="*" FontFamily="Consolas"
+                                                                Binding="{Binding SemVpnLimite}"/>
+                                            <DataGridTextColumn Header="COM VPN Ideal" IsReadOnly="True" Width="*" FontFamily="Consolas"
+                                                                Binding="{Binding ComVpnIdeal}"/>
+                                            <DataGridTextColumn Header="COM VPN Limite" IsReadOnly="True" Width="*" FontFamily="Consolas"
+                                                                Binding="{Binding ComVpnLimite}"/>
+                                        </DataGrid.Columns>
+                                    </DataGrid>
+                                </Border>
+                            </StackPanel>
+                        </TabItem>
+
+                        <TabItem Header="Celular roteado">
+                            <Border Style="{DynamicResource Cartao}" Padding="2">
+                                <DataGrid x:Name="dgLimCel" Style="{DynamicResource GridMetricas}"
+                                          BorderThickness="0" RowHeight="40" MaxHeight="280"
+                                          CanUserResizeRows="False" HeadersVisibility="Column"
+                                          GridLinesVisibility="Horizontal">
+                                    <DataGrid.Columns>
+                                        <DataGridTemplateColumn Header="Bat. SEM VPN" Width="92">
+                                            <DataGridTemplateColumn.CellTemplate><DataTemplate>
+                                                <CheckBox Margin="10,0,0,0" VerticalAlignment="Center"
+                                                          IsEnabled="{Binding SemVpnVisivel}"
+                                                          IsChecked="{Binding SemVpnAtivo, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                            </DataTemplate></DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                        <DataGridTemplateColumn Header="Bat. COM VPN" Width="92">
+                                            <DataGridTemplateColumn.CellTemplate><DataTemplate>
+                                                <CheckBox Margin="10,0,0,0" VerticalAlignment="Center"
+                                                          IsChecked="{Binding ComVpnAtivo, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                            </DataTemplate></DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                        <DataGridTextColumn Header="M&#233;trica" Binding="{Binding Rotulo}" IsReadOnly="True" Width="130"/>
+                                        <DataGridTextColumn Header="Un." Binding="{Binding Unidade}" IsReadOnly="True" Width="52" FontFamily="Consolas"/>
+                                        <DataGridTemplateColumn Header="SEM VPN Ideal" Width="*">
+                                            <DataGridTemplateColumn.CellTemplate><DataTemplate>
+                                                <TextBox Margin="3" VerticalContentAlignment="Center" FontFamily="Consolas"
+                                                         IsEnabled="{Binding SemVpnVisivel}"
+                                                         Text="{Binding SemVpnIdeal, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                            </DataTemplate></DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                        <DataGridTemplateColumn Header="SEM VPN Limite" Width="*">
+                                            <DataGridTemplateColumn.CellTemplate><DataTemplate>
+                                                <TextBox Margin="3" VerticalContentAlignment="Center" FontFamily="Consolas"
+                                                         IsEnabled="{Binding SemVpnVisivel}"
+                                                         Text="{Binding SemVpnLimite, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                            </DataTemplate></DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                        <DataGridTemplateColumn Header="COM VPN Ideal" Width="*">
+                                            <DataGridTemplateColumn.CellTemplate><DataTemplate>
+                                                <TextBox Margin="3" VerticalContentAlignment="Center" FontFamily="Consolas"
+                                                         Text="{Binding ComVpnIdeal, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                            </DataTemplate></DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                        <DataGridTemplateColumn Header="COM VPN Limite" Width="*">
+                                            <DataGridTemplateColumn.CellTemplate><DataTemplate>
+                                                <TextBox Margin="3" VerticalContentAlignment="Center" FontFamily="Consolas"
+                                                         Text="{Binding ComVpnLimite, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                            </DataTemplate></DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </Border>
+                        </TabItem>
+                    </TabControl>
+
+                    <Expander Header="Or&#231;amento da VPN (semeia o COM VPN de LAN e Celular)" Margin="0,10,0,0" IsExpanded="False">
+                        <StackPanel Margin="6,8,0,0">
+                            <TextBlock Text="Custo estimado do t&#250;nel: somado ao SEM VPN em lat&#234;ncia/jitter/perda e aplicado como desconto percentual em download/upload. &quot;Recalcular&quot; reescreve as colunas COM VPN de LAN e Celular (n&#227;o salva sozinho)."
+                                       FontSize="11" Foreground="{DynamicResource Dicon.Text3}" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                            <WrapPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,18,6">
+                                    <TextBlock Text="Lat&#234;ncia +ms" Style="{DynamicResource Rotulo}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                    <TextBox x:Name="txtOrcLat" Width="58" MinHeight="30" FontFamily="Consolas" VerticalContentAlignment="Center"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,18,6">
+                                    <TextBlock Text="Jitter +ms" Style="{DynamicResource Rotulo}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                    <TextBox x:Name="txtOrcJit" Width="58" MinHeight="30" FontFamily="Consolas" VerticalContentAlignment="Center"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,18,6">
+                                    <TextBlock Text="Perda +%" Style="{DynamicResource Rotulo}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                    <TextBox x:Name="txtOrcPerda" Width="58" MinHeight="30" FontFamily="Consolas" VerticalContentAlignment="Center"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,18,6">
+                                    <TextBlock Text="Download %" Style="{DynamicResource Rotulo}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                    <TextBox x:Name="txtOrcDownPct" Width="58" MinHeight="30" FontFamily="Consolas" VerticalContentAlignment="Center"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,18,6">
+                                    <TextBlock Text="Upload %" Style="{DynamicResource Rotulo}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                    <TextBox x:Name="txtOrcUpPct" Width="58" MinHeight="30" FontFamily="Consolas" VerticalContentAlignment="Center"/>
+                                </StackPanel>
+                            </WrapPanel>
+                            <Button x:Name="btnAplicarOrcamento" Content="Recalcular COM VPN (LAN e Celular)"
+                                    Margin="0,8,0,0" HorizontalAlignment="Left" Style="{DynamicResource BotaoSecundario}"/>
+                        </StackPanel>
+                    </Expander>
+                </StackPanel>
 
                 <Grid Grid.Row="3" Margin="0,16,0,0">
                     <Grid.ColumnDefinitions>
@@ -1449,9 +1746,9 @@
                 <StackPanel Grid.Row="4" VerticalAlignment="Top">
                     <Border Style="{DynamicResource Cartao}" Padding="16,14" Margin="0,16,0,0">
                         <StackPanel>
-                            <TextBlock Text="Ambiente de teste (iperf3)" Style="{DynamicResource SecaoTela}"
+                            <TextBlock Text="Ambiente de teste (an&#225;lise de banda pela VPN)" Style="{DynamicResource SecaoTela}"
                                        Margin="0,0,0,4"/>
-                            <TextBlock Text="Endere&#231;o do servidor iperf3 no CPD, alcan&#231;&#225;vel pela VPN. Salvo neste computador (config\ambiente.json)."
+                            <TextBlock Text="Endere&#231;o do servidor de an&#225;lise de banda no CPD, alcan&#231;&#225;vel pela VPN. Salvo neste computador (config\ambiente.json)."
                                        FontSize="11" Foreground="{DynamicResource Dicon.Text3}" TextWrapping="Wrap"
                                        Margin="0,0,0,10"/>
                             <Grid>
@@ -1534,7 +1831,7 @@
                                 <Ellipse x:Name="dotChkS3" Width="10" Height="10" VerticalAlignment="Center"
                                          Margin="0,0,8,0" Fill="{DynamicResource Dicon.Text3}"/>
                                 <TextBlock x:Name="txtChkS3" FontSize="12" Foreground="{DynamicResource Dicon.Text3}"
-                                           Text="3. Sistema de totalizacao (Selenium) - em implementacao"/>
+                                           Text="3. Sistema de totalizacao - em implementacao"/>
                             </StackPanel>
                         </StackPanel>
 
