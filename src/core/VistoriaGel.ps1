@@ -1,4 +1,4 @@
-# Anexo do GEL: le o PDF do "Sistema de Georreferenciamento Eleitoral" e extrai
+﻿# Anexo do GEL: le o PDF do "Sistema de Georreferenciamento Eleitoral" e extrai
 # os poucos campos que o DICON usa no relatorio (coordenadas + link/mapa do
 # Google, suporte ao link local, eletrica). O layout do GEL e fixo -> regex nas
 # perguntas conhecidas. Sempre passa por uma tela de conferencia do tecnico.
@@ -182,7 +182,14 @@ function Read-TextoPdf {
 function ConvertFrom-VistoriaGel {
     param([Parameter(Mandatory)] [string] $Texto)
 
+    # 1 linha + sem diacriticos: o PDF do GEL mistura fontes e as vezes entrega
+    # "eletrica" com o acento decomposto (e + U+0301), o que quebra classes tipo
+    # [ee']. Normalizar aqui deixa todos os regex em ASCII simples.
     $t = ($Texto -replace '\s+', ' ').Trim()
+    try {
+        $t = -join ([char[]] $t.Normalize([Text.NormalizationForm]::FormD) |
+            Where-Object { [Globalization.CharUnicodeInfo]::GetUnicodeCategory($_) -ne [Globalization.UnicodeCategory]::NonSpacingMark })
+    } catch { }
 
     $o = [pscustomobject]@{
         lat = $null; long = $null; precisao_m = $null
@@ -191,26 +198,30 @@ function ConvertFrom-VistoriaGel {
         achou_algo = $false
     }
 
-    # "Coordenadas: -2.4997476o,-43.25344546o. Precisao 6.558"
-    if ($t -match 'Coordenadas\s*:?\s*(-?\d+[.,]\d+)\s*[°ºo]?\s*,\s*(-?\d+[.,]\d+)\s*[°ºo]?\s*\.?\s*Precis[aã]o\s*:?\s*(\d+[.,]?\d*)') {
+    # "-2.4997476o,-43.25344546o. Precisao 6.558" - no PDF do GEL o rotulo
+    # "Coordenadas:" vem DEPOIS do valor, entao nao da pra ancorar nele. O par
+    # numero,numero + Precisao ja e unico o suficiente no documento.
+    if ($t -match '(-?\d+[.,]\d+)\s*[\u00B0\u00BAo]?\s*,\s*(-?\d+[.,]\d+)\s*[\u00B0\u00BAo]?\s*\.?\s*Precisao\s*:?\s*(\d+[.,]?\d*)') {
         $o.lat        = [double] (($Matches[1]) -replace ',', '.')
         $o.long       = [double] (($Matches[2]) -replace ',', '.')
         $o.precisao_m = [double] (($Matches[3]) -replace ',', '.')
     }
 
-    # resposta "R. : <texto>" logo apos uma pergunta (fragmento regex, sem acento exato)
+    # No PDF do GEL a RESPOSTA aparece ENTRE a pergunta e o marcador " R. :"
+    # (o "R. :" e o rotulo do campo, que renderiza depois do valor):
+    #   "<pergunta>? <resposta> R. :"   ou   "<rotulo>: <resposta> R. :"
     $resp = {
         param([string] $rxPergunta)
-        $rx = $rxPergunta + '.{0,80}?\bR\.?\s*:\s*(.{1,120}?)\s*(?=(?:Qual\b|H[aá]\b|Possui\b|Selecione\b|Descreva\b|Observa\w*\b|Localiza\w*\b|Se houver\b|Existe\b|Data \d|$))'
+        $rx = $rxPergunta + '\s*[?:]\s*(.+?)\s*R\s*\.?\s*:'
         $m = [regex]::Match($t, $rx, [Text.RegularExpressions.RegexOptions]::IgnoreCase)
         if ($m.Success) { (($m.Groups[1].Value) -replace '\s+', ' ').Trim() } else { '' }
     }
 
-    $o.suporte_nome      = & $resp 'nome do t.cnico ou empresa respons.vel pelo suporte ao link local'
-    $o.suporte_telefone  = & $resp 'telefone do t.cnico ou empresa respons.vel pelo suporte ao link local'
-    $o.eletrica_tensao   = & $resp 'tens.o da rede el.trica'
+    $o.suporte_nome      = & $resp 'nome do tecnico ou empresa responsavel pelo suporte ao link local'
+    $o.suporte_telefone  = & $resp 'telefone do tecnico ou empresa responsavel pelo suporte ao link local'
+    $o.eletrica_tensao   = & $resp 'tensao da rede eletrica'
     $o.eletrica_tomadas  = & $resp 'quantas tomadas funcionando'
-    $o.eletrica_extensao = & $resp 'necessidade de extens.o el.trica'
+    $o.eletrica_extensao = & $resp 'necessidade de extensao eletrica'
 
     $o.achou_algo = [bool] ($o.lat -or $o.suporte_nome -or $o.suporte_telefone -or $o.eletrica_tensao -or $o.eletrica_tomadas)
     $o

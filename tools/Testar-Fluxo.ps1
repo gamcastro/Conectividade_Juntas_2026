@@ -720,15 +720,20 @@ try {
         Write-Host "[10] ConvertFrom-ListaServidoresSpeedtest le a tabela e o jsonl de servidores"
     } else { Write-Host "    FALHA: parser da lista de servidores (tabela='$($ids1 -join ',')' jsonl='$($ids2 -join ',')')"; $falhas++ }
 
-    # 11. anexo do GEL: extrator + links de mapa + bloco no JSON/relatorio
-    $fixGel = 'Sistema de Georreferenciamento Eleitoral Zona: 24 Municipio: HUMBERTO DE CAMPOS ' +
-        'Local: C. E. MANOEL DIAS DE SOUSA Coordenadas: -2.4997476' + [char]0x00BA + ',-43.25344546' + [char]0x00BA + '. Precisao 6.558 ' +
-        'Localizacao do Quadro de Energia: R. : Externo Ha energia eletrica? R. : Sim ' +
-        'Ha quantas tomadas funcionando? R. : 6 Qual a tensao da rede eletrica? R. : 220 volts ' +
-        'Ha necessidade de extensao eletrica? R. : Sim Qual o numero da unidade consumidora (UC)? R. : 3064-001367-9 ' +
-        'Qual o nome do tecnico ou empresa responsavel pelo suporte ao link local? R. : suporte Tec 98 30421747 ' +
-        'Qual o telefone do tecnico ou empresa responsavel pelo suporte ao link local? R. : OLNY TELECON ' +
-        'Qual o tempo de resposta do ping exaustivo utilizando o comando ping <endereco> -t? R. :'
+    # 11. anexo do GEL: extrator + links de mapa + bloco no JSON/relatorio.
+    # Layout REAL do PDF do GEL: a resposta vem ANTES do marcador " R. :" e o
+    # rotulo "Coordenadas:" vem DEPOIS do valor. Acentos como o PDF entrega
+    # (inclusive "eletrica" com acento precomposto).
+    $fixGel = 'Sistema de Georreferenciamento Eleitoral Zona: 32 Tipo de local: Predio Externo ' +
+        'HUMBERTO DE CAMPOS Municipio: Local: C. E. MANOEL DIAS DE SOUSA ' +
+        '-2.4997476' + [char]0x00BA + ',-43.25344546' + [char]0x00BA + '. Precis' + [char]0x00E3 + 'o 6.558 Coordenadas: ' +
+        'Qual a configuracao de rede? DHCP R. : ' +
+        'Qual o nome do tecnico ou empresa responsavel pelo suporte ao link local? suporte Tec 98 30421747 R. : ' +
+        'Qual o telefone do tecnico ou empresa responsavel pelo suporte ao link local? OLNY TELECON R. : ' +
+        'Instalacoes eletricas Localizacao do Quadro de Energia: Externo R. : Ha energia el' + [char]0x00E9 + 'trica? Sim R. : ' +
+        'Ha quantas tomadas funcionando? 6 R. : Qual a tens' + [char]0x00E3 + 'o da rede el' + [char]0x00E9 + 'trica? 220 volts R. : ' +
+        'Ha necessidade de extens' + [char]0x00E3 + 'o el' + [char]0x00E9 + 'trica? Sim R. : ' +
+        'Qual o numero da unidade consumidora (UC) ou numero do poste ou numero do medidor? 3064-001367-9 R. :'
     $pg = ConvertFrom-VistoriaGel -Texto $fixGel
     if ([math]::Abs($pg.lat - (-2.4997476)) -lt 1e-6 -and [math]::Abs($pg.long - (-43.25344546)) -lt 1e-6 -and
         [math]::Abs([double] $pg.precisao_m - 6.558) -lt 1e-3 -and

@@ -129,8 +129,10 @@ instala um handler `AppDomain.AssemblyResolve` por nome simples para o .NET Fram
 do PS 5.1 não brigar com as versões de `System.Buffers`/`System.Memory` etc.; se
 as DLLs faltarem — instalação que atualizou de uma versão anterior do
 `Atualizar-DICON.ps1` —, `Restore-PdfLib` baixa do GitHub raw do canal no 1º uso;
-só aí degrada com aviso) + `ConvertFrom-VistoriaGel` extraem
-coordenadas / suporte ao link local / elétrica; o técnico confere em `panelGelConf`
+só aí degrada com aviso) + `ConvertFrom-VistoriaGel` extraem coordenadas / suporte
+ao link local / elétrica — o extrator é calibrado ao layout real do PDF do GEL
+(texto normalizado sem acento; a resposta aparece **antes** do marcador `R. :` e
+o rótulo `Coordenadas:` **depois** do valor). O técnico confere em `panelGelConf`
 e `Invoke-GelRegistrar` grava em `data/vistoria-gel/<localid>.json` via
 `Save-VistoriaGel`; `btnGelRemover` → `Invoke-GelRemover`). O anexo pode ser feito
 **a qualquer tempo**, não só no momento do teste — e é carregado do disco em
