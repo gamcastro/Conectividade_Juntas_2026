@@ -263,9 +263,31 @@ O `rede_local` entra no JSON de resultado (`New-ResultadoJson -FaseLocal`) e num
 seção própria do relatório PDF; `medicoes[]` + `conexao_recomendada`
 (`-Medicoes` / `-ConexaoRecomendada` / `-MotivoRecomendacao`) trazem o
 multi-meio, com bloco em destaque + tabela de meios no PDF.
-O relatório (`src/saida/Export-RelatorioPdf.ps1`) monta um HTML no padrão TRE-MA
-e converte com o Edge/Chrome headless (`--print-to-pdf`); sem navegador, salva o
-HTML. Saída em `relatorios/` (gitignored).
+### Relatório PDF (`src/saida/Export-RelatorioPdf.ps1`)
+Monta um HTML **em paisagem** (`@page size: A4 landscape`), nos moldes do "Painel
+da Vistoria" da SEMAP, e converte com o Edge/Chrome headless (`--print-to-pdf`,
+`--no-pdf-header-footer`); sem navegador, salva o HTML. Saída em `relatorios/`
+(gitignored). `New-RelatorioHtml -Resultado <json>` tem 6 seções:
+1. **Cabeçalho** JE / TRE-MA / SEASU-COINF-STIC / DICON.
+2. **Título + subtítulo** — "Relatório de Diagnóstico de Conectividade" + "ZE N —
+   Município (sede: X)".
+3. **Painel de Viabilidade de Conectividade** (`Get-PainelHtml`): faixa navy +
+   Identificação (kv) + Indicadores (KPIs: meios testados / viáveis / com ressalva
+   / inviáveis / não aplicáveis / conectaram a VPN) + Situação por meio (tabela,
+   linha do recomendado em azul, inviável em vermelho) + **Conclusão do
+   diagnóstico** (Recomendação final, Classificação do local, Conexão recomendada,
+   Motivo, Ajuste, Condicionantes/pendências `Get-CondicionantesDiag`, Observações
+   finais `Get-ObservacoesFinaisDiag` — prosa gerada pelo veredito).
+4. **Testes de comunicação por meio** (`Get-MeioBlocoHtml`, ordem LAN / Wi-Fi do
+   local / Celular): por meio, "Rede local — Speedtest da Ookla (sem VPN)"
+   (`rede_local_avaliacao[]`) + "Com a VPN" (o meio recomendado usa `avaliacao[]`
+   com faixa+motivo; os demais, os números crus). Meios "não aplicável" viram uma
+   linha só com o motivo.
+5. **Dados da vistoria do GEL** — as seções do `vistoria_gel` (sem as fotos).
+6. **Registro fotográfico** — `Get-FotosGel`, grade de 3 por linha com legenda
+   "Foto N", teto ~14 MB embutido.
+O `rede_local` / `medicoes[]` / `conexao_recomendada` continuam no JSON de
+resultado (`New-ResultadoJson`).
 
 ## Envio de resultados
 - **Modo `offline-first`** (`config/envio.json`): "Salvar resultado" grava em

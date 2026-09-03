@@ -577,9 +577,11 @@ try {
         if ("$($doc.classificacao.final)" -eq "$($rec.veredito)") { Write-Host "[5d] decisao final do local = veredito do meio recomendado ('$($doc.classificacao.final)')" }
         else { Write-Host "    FALHA: classificacao.final ('$($doc.classificacao.final)') != veredito recomendado ('$($rec.veredito)')"; $falhas++ }
         $htmlRel = New-RelatorioHtml -Resultado $doc
-        if ($htmlRel -match 'Conex&atilde;o recomendada para este local' -and $htmlRel -match 'Meios de conex&atilde;o testados') {
-            Write-Host "[5d] relatorio HTML traz o bloco de conexao recomendada + tabela de meios"
-        } else { Write-Host "    FALHA: relatorio HTML sem os blocos multi-meio"; $falhas++ }
+        if ($htmlRel -match 'Painel de Viabilidade de Conectividade' -and $htmlRel -match 'Situa&ccedil;&atilde;o por meio' -and
+            $htmlRel -match 'Testes de comunica&ccedil;&atilde;o por meio' -and $htmlRel -match 'A4 landscape' -and
+            $htmlRel -match 'Conex&atilde;o recomendada' -and $htmlRel -match 'Conclus&atilde;o do diagn&oacute;stico') {
+            Write-Host "[5d] relatorio HTML: painel de viabilidade (paisagem) + testes por meio + conclusao"
+        } else { Write-Host "    FALHA: relatorio HTML sem o painel/estrutura nova"; $falhas++ }
     }
     $vok = [char]0x2713
     if ($Global:FeitoSalvar -and "$($w.FindName('chkFimSalvar').Text)" -eq $vok -and $w.FindName('btnTransmitirResultado').IsEnabled -and "$($w.FindName('chkFimTransmitir').Text)" -ne $vok) {
@@ -828,9 +830,9 @@ try {
         $jsonGel.vistoria_gel.tipo_local.esfera_administrativa -eq 'Estadual' -and
         $jsonGel.vistoria_gel.infraestrutura.iluminacao -eq 'Sim' -and
         $jsonGel.vistoria_gel.eletrica.quadro_energia -eq 'Externo' -and $jsonGel.vistoria_gel.fotos -eq 1 -and
-        $htmlGel -match 'Vistoria GEL' -and $htmlGel -match '-2.4997476' -and $htmlGel -match 'google.com/maps' -and
+        $htmlGel -match 'Dados da vistoria do GEL' -and $htmlGel -match '-2.4997476' -and $htmlGel -match 'google.com/maps' -and
         $htmlGel -match 'Tipo do local' -and $htmlGel -match 'Infraestrutura' -and $htmlGel -match 'Quadro de energia' -and
-        $htmlGel -match 'Fotos da vistoria' -and $htmlGel -match '<img src="data:image/jpeg;base64,') {
+        $htmlGel -match 'Registro fotogr&aacute;fico' -and $htmlGel -match '<img src="data:image/jpeg;base64,') {
         Write-Host "[11] JSON traz 'vistoria_gel' em secoes + contagem de fotos; relatorio agrupa secoes + embute as fotos"
     } else { Write-Host "    FALHA: JSON/relatorio do GEL (vg=$([bool]$jsonGel.vistoria_gel) fotos=$($jsonGel.vistoria_gel.fotos) html_infra=$($htmlGel -match 'Infraestrutura') html_foto=$($htmlGel -match 'Fotos da vistoria'))"; $falhas++ }
     Remove-VistoriaGel -LocalId 'X'
