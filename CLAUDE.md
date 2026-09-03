@@ -67,7 +67,22 @@ Script), em vez de criar um BI/dashboard separado.
   carregamento do sistema de totalização (app web), testado tanto no Firefox
   customizado usado em produção quanto no Chrome
 - **Motor de decisão** — compara as métricas coletadas com limiares
-  configuráveis e gera uma classificação final
+  configuráveis e gera uma classificação final. Os limiares (v0.6.67+) têm **6
+  perfis**: meio (`lan` / `wifi_local` / `celular`) × cenário (`sem_vpn` /
+  `com_vpn`), resolvidos por `Get-PerfilLimiares` (`src/core/Limiares.ps1`) no
+  shape plano que `Invoke-MotorDecisao` já consome. `perfis.lan`/`perfis.celular`
+  são absolutos; `perfis.wifi_local` **herda da LAN + `folga`** (aditiva p/
+  ms/%/s, *haircut* % p/ banda); o COM VPN de LAN/Celular vem semeado de SEM VPN
+  + `orcamento_vpn` (botão "Recalcular" na tela do admin). "Na bateria" é por
+  (meio × cenário × métrica). `carregamento_web_s` só existe COM VPN. O piso do
+  "Limite" SEM VPN é ancorado nos valores de corte da ANATEL (Res. Interna
+  444/2025 — SCM p/ LAN/Wi-Fi, SMP p/ celular). Formato/estrutura e valores
+  provisórios em `docs/limiares-referencia.md` e `config/limiares.exemplo.json`.
+  `Get-LimiaresConfig` sempre devolve o doc aninhado (`ConvertTo-PerfisLimiares`
+  migra caches no formato plano antigo). O `apps-script/Codigo.gs` já grava o
+  JSON aninhado na célula A2 da aba `Limiares` mas **precisa de redeploy manual
+  (clasp)** — até lá o config local é a fonte da verdade e a tela de
+  Administração salva local (`Save-LimiaresLocal`)
 - Saída em **JSON estruturado**, salva localmente primeiro; depois enviada via
   `Invoke-RestMethod` para o endpoint do Apps Script do Painel de Vistoria
 
@@ -265,7 +280,8 @@ trocam qual medição os grids mostram; `Save-AjustesPasso5` grava classe final 
 justificativa na medição **aberta**. Dois cards, cada um com sua tabela: **"Com a
 VPN"** (`dgAvaliacaoVpn`, linhas da Fase 2) e **"Rede local — Speedtest da Ookla
 (sem VPN)"** (`cardAvaliacaoRl`/`dgAvaliacaoRl`, linhas da Fase 1 —
-`Get-DetalhesRedeLocal` classifica o Speedtest contra os mesmos limiares,
+`Get-DetalhesRedeLocal` classifica o teste de velocidade contra o perfil
+**`sem_vpn` do meio da vez** (`Get-PerfilLimiares`; a Fase 2 usa o `com_vpn`),
 métricas `rl_*`, sem carregamento_web). As duas famílias entram no pior caso
 (`$Global:AvaliacaoRows` = união; `Update-DecisaoRecalculada`). `txtRedeLocalNota`
 (no card RL) explica / mostra o motivo se a rede local não mediu. No JSON:
@@ -335,9 +351,14 @@ resultado (`New-ResultadoJson`).
 - Teste: `tools/Testar-Envio.ps1` (HttpListener local simula o Apps Script).
 
 ## Ainda em aberto
-- Limiares exatos de latência/perda/banda/tempo de carregamento que definem
-  viável vs inviável (depende de validação com o time responsável pelo sistema
-  de totalização)
+- Limiares exatos de latência/perda/banda/tempo de carregamento por meio ×
+  cenário (v0.6.67 trouxe os 6 perfis com base ANATEL para o SEM VPN e um
+  orçamento de VPN provisório para o COM VPN; falta calibrar em campo/homologação
+  contra `10.11.1.38` e com o time da totalização) — ver
+  `docs/limiares-referencia.md`
+- **Reimplantar o `apps-script/Codigo.gs`** (clasp) com o novo formato aninhado
+  de limiares (célula A2). Até lá o sync/save online fica off e o config local
+  manda
 - Coleta real das métricas da Fase 2 (iperf3 + Selenium + ping) validada ponta a
   ponta (a Fase 1 — rede local — já coleta de verdade)
 - Checagem por meio via overlay modal (v0.6.29+, rollback: tag

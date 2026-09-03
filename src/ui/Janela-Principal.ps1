@@ -12,7 +12,9 @@ $Global:AvaliacaoRows     = $null   # ObservableCollection[AvaliacaoRow] do pain
 $Global:DecisaoRecalculada = $null
 $Global:DecisaoFinalTocada = $false # tecnico mexeu no combo da decisao final?
 $Global:AtualizandoDecisao = $false # guarda para nao confundir set programatico com clique
-$Global:LimiarRows         = $null   # ObservableCollection[LimiarRow] da tela de admin
+$Global:LimiarRowsLan      = $null   # ObservableCollection[PerfilLimiarRow] - aba LAN
+$Global:LimiarRowsWifi     = $null   # ... aba Wi-Fi do local
+$Global:LimiarRowsCel      = $null   # ... aba Celular roteado
 $Global:NavegandoPrograma  = $false  # guarda: Show-View mexendo no rail sem disparar handler
 $Global:TemaCarregado      = $false  # MahApps + Application ja inicializados neste processo?
 $Global:MostrarTodasJuntas = $false  # admin: incluir Juntas fora da rota no seletor
@@ -366,6 +368,7 @@ function New-JanelaPrincipal {
     $window.FindName('btnAdminVoltar').Add_Click({ Show-View 'viewHome' })
     $window.FindName('btnSalvarLimiares').Add_Click({ Invoke-SalvarLimiares })
     $window.FindName('btnRecarregarLimiares').Add_Click({ Invoke-RecarregarLimiares })
+    $window.FindName('btnAplicarOrcamento').Add_Click({ Invoke-AplicarOrcamento })
     $window.FindName('btnSalvarAmbiente').Add_Click({ Invoke-SalvarAmbiente })
     $window.FindName('lstGuiaJuntas').AddHandler(
         [Windows.Controls.Button]::ClickEvent,
@@ -2753,7 +2756,8 @@ function Start-DiagnosticoVpn {
     Set-ProgressoDiag $true
     $sel  = $w.FindName('cboLocal').SelectedItem
     $selD = if ($sel) { $sel.Dados } else { $null }
-    Start-DiagnosticoAssincrono -Local $selD -AoConcluir { param($res, $erro) Complete-CheckFase2 $res $erro }
+    $meio = (Get-MeioDoPasso3).meio
+    Start-DiagnosticoAssincrono -Local $selD -Meio $meio -AoConcluir { param($res, $erro) Complete-CheckFase2 $res $erro }
 }
 
 function Complete-CheckFase2 {
@@ -3386,13 +3390,34 @@ function Initialize-Admin {
     $w = $Global:JanelaPrincipal
     if (-not $w) { return }
 
-    $lim = Get-LimiaresConfig
-    $rows = [System.Collections.ObjectModel.ObservableCollection[object]]::new()
-    foreach ($info in $Global:MetricasInfo) {
-        $rows.Add((New-LimiarRow -Info $info -Limiar $lim.($info.metrica)))
+    $doc = Get-LimiaresConfig
+    $folgaWifi = if ($doc.perfis -and $doc.perfis.wifi_local) { $doc.perfis.wifi_local.folga } else { New-FolgaWifiPadrao }
+
+    $mk = {
+        param([string] $Meio, $FolgaBloco)
+        $sem = Get-PerfilLimiares -Meio $Meio -Cenario 'sem_vpn'
+        $com = Get-PerfilLimiares -Meio $Meio -Cenario 'com_vpn'
+        $col = [System.Collections.ObjectModel.ObservableCollection[object]]::new()
+        foreach ($info in $Global:MetricasInfo) {
+            $col.Add((New-PerfilLimiarRow -Info $info -PerfilSem $sem -PerfilCom $com -Folga $FolgaBloco))
+        }
+        $col
     }
-    $Global:LimiarRows = $rows
-    $w.FindName('dgLimiares').ItemsSource = $rows
+    $Global:LimiarRowsLan  = & $mk 'lan'        $null
+    $Global:LimiarRowsWifi = & $mk 'wifi_local' $folgaWifi
+    $Global:LimiarRowsCel  = & $mk 'celular'    $null
+    $w.FindName('dgLimLan').ItemsSource  = $Global:LimiarRowsLan
+    $w.FindName('dgLimWifi').ItemsSource = $Global:LimiarRowsWifi
+    $w.FindName('dgLimCel').ItemsSource  = $Global:LimiarRowsCel
+
+    # orcamento da VPN
+    $orc = if ($doc.PSObject.Properties['orcamento_vpn'] -and $doc.orcamento_vpn) { $doc.orcamento_vpn } else { New-OrcamentoVpnPadrao }
+    $w.FindName('txtOrcLat').Text     = [string] (Get-NumProp $orc 'latencia_ms' 0)
+    $w.FindName('txtOrcJit').Text     = [string] (Get-NumProp $orc 'jitter_ms' 0)
+    $w.FindName('txtOrcPerda').Text   = [string] (Get-NumProp $orc 'perda_percentual' 0)
+    $w.FindName('txtOrcDownPct').Text = [string] (Get-NumProp $orc 'banda_download_pct' 0)
+    $w.FindName('txtOrcUpPct').Text   = [string] (Get-NumProp $orc 'banda_upload_pct' 0)
+
     $w.FindName('txtPinAdmin').Password = ''
     $w.FindName('lblAdminMsg').Text = ''
 
@@ -3438,57 +3463,158 @@ function Invoke-SalvarAmbiente {
     }
 }
 
+# Parser numerico tolerante (aceita virgula). '' -> $null; invalido -> 'ERRO'.
+function Read-NumeroLimiar {
+    param($Texto)
+    $s = ([string] $Texto).Trim()
+    if (-not $s) { return $null }
+    $v = 0.0
+    if ([double]::TryParse(($s -replace ',', '.'), [Globalization.NumberStyles]::Float, [Globalization.CultureInfo]::InvariantCulture, [ref] $v)) { return $v }
+    return 'ERRO'
+}
+
 function Invoke-SalvarLimiares {
     $w = $Global:JanelaPrincipal
     $msg = $w.FindName('lblAdminMsg')
+    $vermelho = [Windows.Media.Brushes]::OrangeRed
 
     $pin = $w.FindName('txtPinAdmin').Password
     if ([string]::IsNullOrWhiteSpace($pin)) {
-        $msg.Foreground = [Windows.Media.Brushes]::OrangeRed
+        $msg.Foreground = $vermelho
         $msg.Text = 'Digite o PIN do administrador para salvar.'
         return
     }
+    if (-not (Test-PinAdmin $pin)) {
+        $msg.Foreground = $vermelho
+        $msg.Text = 'PIN incorreto.'
+        return
+    }
 
-    $limiares = @{}
-    foreach ($r in $Global:LimiarRows) {
-        $v = 0.0; $rr = 0.0
-        $okV = [double]::TryParse(($r.LimiarViavel   -replace ',', '.'), [ref] $v)
-        $okR = [double]::TryParse(($r.LimiarRessalva -replace ',', '.'), [ref] $rr)
-        if (-not $okV -or -not $okR -or $v -le 0 -or $rr -le 0) {
-            $msg.Foreground = [Windows.Media.Brushes]::OrangeRed
-            $msg.Text = "Valores invalidos em '$($r.Rotulo)'. Use numeros maiores que zero."
-            return
+    # monta {metrica:{viavel_*,ressalva_*,ativo}} de uma colecao p/ um cenario.
+    # $Prop = 'SemVpn' | 'ComVpn'.
+    $montaCenario = {
+        param($Colecao, [string] $Cenario, [string] $Prop)
+        $bloco = [ordered]@{}
+        foreach ($r in $Colecao) {
+            $info = $Global:MetricasInfo | Where-Object { $_.metrica -eq $r.Metrica } | Select-Object -First 1
+            if ($info.cenarios -notcontains $Cenario) { continue }
+            $vi = Read-NumeroLimiar $r."${Prop}Ideal"
+            $li = Read-NumeroLimiar $r."${Prop}Limite"
+            $at = [bool] $r."${Prop}Ativo"
+            if ($vi -eq 'ERRO' -or $li -eq 'ERRO' -or $null -eq $vi -or $null -eq $li -or $vi -le 0 -or $li -le 0) {
+                throw "'$($r.Rotulo)' ($Cenario): use numeros maiores que zero."
+            }
+            if ($r.Direcao -eq 'max' -and $vi -gt $li) { throw "'$($r.Rotulo)' ($Cenario): o ideal deve ser menor ou igual ao limite." }
+            if ($r.Direcao -eq 'min' -and $vi -lt $li) { throw "'$($r.Rotulo)' ($Cenario): o ideal deve ser maior ou igual ao limite." }
+            if ($r.Direcao -eq 'min') { $bloco[$r.Metrica] = [pscustomobject]@{ viavel_min = $vi; ressalva_min = $li; ativo = $at } }
+            else                      { $bloco[$r.Metrica] = [pscustomobject]@{ viavel_ate = $vi; ressalva_ate = $li; ativo = $at } }
         }
-        if ($r.Direcao -eq 'max' -and $v -gt $rr) {
-            $msg.Foreground = [Windows.Media.Brushes]::OrangeRed
-            $msg.Text = "'$($r.Rotulo)': o ideal deve ser <= a ressalva."
-            return
+        [pscustomobject] $bloco
+    }
+
+    try {
+        $perfilLan = [pscustomobject]@{
+            sem_vpn = & $montaCenario $Global:LimiarRowsLan 'sem_vpn' 'SemVpn'
+            com_vpn = & $montaCenario $Global:LimiarRowsLan 'com_vpn' 'ComVpn'
         }
-        if ($r.Direcao -eq 'min' -and $v -lt $rr) {
-            $msg.Foreground = [Windows.Media.Brushes]::OrangeRed
-            $msg.Text = "'$($r.Rotulo)': o ideal deve ser >= a ressalva."
-            return
+        $perfilCel = [pscustomobject]@{
+            sem_vpn = & $montaCenario $Global:LimiarRowsCel 'sem_vpn' 'SemVpn'
+            com_vpn = & $montaCenario $Global:LimiarRowsCel 'com_vpn' 'ComVpn'
         }
-        if ($r.Direcao -eq 'max') {
-            $limiares[$r.Metrica] = @{ viavel_ate = $v; ressalva_ate = $rr; ativo = [bool] $r.Ativo }
-        } else {
-            $limiares[$r.Metrica] = @{ viavel_min = $v; ressalva_min = $rr; ativo = [bool] $r.Ativo }
+        $folga = [ordered]@{}; $ativoSem = [ordered]@{}; $ativoCom = [ordered]@{}
+        foreach ($r in $Global:LimiarRowsWifi) {
+            $info  = $Global:MetricasInfo | Where-Object { $_.metrica -eq $r.Metrica } | Select-Object -First 1
+            $chave = if ($r.Direcao -eq 'min' -and $info.pct) { $info.pct } else { $r.Metrica }
+            $fv = Read-NumeroLimiar $r.Folga
+            if ($fv -eq 'ERRO' -or $null -eq $fv) { throw "'$($r.Rotulo)': folga invalida (use numero, pode ser negativo)." }
+            $folga[$chave] = $fv
+            if ($info.cenarios -contains 'sem_vpn') { $ativoSem[$r.Metrica] = [bool] $r.SemVpnAtivo }
+            if ($info.cenarios -contains 'com_vpn') { $ativoCom[$r.Metrica] = [bool] $r.ComVpnAtivo }
         }
+        $perfilWifi = [pscustomobject]@{
+            folga  = [pscustomobject] $folga
+            ativos = [pscustomobject]@{ sem_vpn = [pscustomobject] $ativoSem; com_vpn = [pscustomobject] $ativoCom }
+        }
+        $orc = [ordered]@{}
+        foreach ($p in @(@('txtOrcLat', 'latencia_ms'), @('txtOrcJit', 'jitter_ms'), @('txtOrcPerda', 'perda_percentual'),
+                         @('txtOrcDownPct', 'banda_download_pct'), @('txtOrcUpPct', 'banda_upload_pct'))) {
+            $n = Read-NumeroLimiar $w.FindName($p[0]).Text
+            if ($n -eq 'ERRO' -or $null -eq $n) { throw "Orcamento da VPN: '$($p[1])' invalido." }
+            $orc[$p[1]] = $n
+        }
+        $doc = [pscustomobject]@{
+            _comentario   = 'editado pela tela de Administracao do DICON'
+            orcamento_vpn = [pscustomobject] $orc
+            perfis        = [pscustomobject]@{ lan = $perfilLan; celular = $perfilCel; wifi_local = $perfilWifi }
+        }
+    } catch {
+        $msg.Foreground = $vermelho
+        $msg.Text = "$_"
+        return
     }
 
     $w.FindName('btnSalvarLimiares').IsEnabled = $false
     $msg.Foreground = [Windows.Media.Brushes]::SkyBlue
     $msg.Text = 'Salvando...'
     try {
-        $res = Save-Limiares -Limiares $limiares -Pin $pin
-        switch ($res) {
-            'ok'     { $msg.Foreground = [Windows.Media.Brushes]::LightGreen; $msg.Text = 'Limiares salvos.'; Write-Log 'Limiares salvos pelo admin.' -Nivel Ok }
-            'negado' { $msg.Foreground = [Windows.Media.Brushes]::OrangeRed;  $msg.Text = 'PIN incorreto.' }
-            default  { $msg.Foreground = [Windows.Media.Brushes]::OrangeRed;  $msg.Text = ($res -replace '^erro:', 'Falha: ') }
+        $res = Save-Limiares -Limiares $doc -Pin $pin
+        switch -Regex ($res) {
+            '^ok$'     { $msg.Foreground = [Windows.Media.Brushes]::LightGreen; $msg.Text = 'Limiares salvos (planilha + cache local).'; Write-Log 'Limiares salvos pelo admin.' -Nivel Ok }
+            '^negado$' { $msg.Foreground = $vermelho; $msg.Text = 'PIN incorreto (recusado pelo Web App).' }
+            default {
+                try {
+                    Save-LimiaresLocal -Limiares $doc | Out-Null
+                    $msg.Foreground = [Windows.Media.Brushes]::Yellow
+                    $msg.Text = 'Salvo so neste computador (o Web App esta indisponivel ou ainda no formato antigo - reimplante com clasp). ' + ($res -replace '^erro:', '')
+                    Write-Log ('Limiares salvos so no cache local: {0}' -f $res) -Nivel Aviso
+                } catch {
+                    $msg.Foreground = $vermelho
+                    $msg.Text = ($res -replace '^erro:', 'Falha: ')
+                }
+            }
         }
     } finally {
         $w.FindName('btnSalvarLimiares').IsEnabled = $true
     }
+}
+
+# Botao "Recalcular COM VPN": reescreve as colunas COM VPN de LAN e Celular a
+# partir do SEM VPN + orcamento da VPN (aditivo p/ ms/%, haircut p/ banda). So
+# em memoria - o admin ainda clica "Salvar limiares".
+function Invoke-AplicarOrcamento {
+    $w = $Global:JanelaPrincipal
+    $msg = $w.FindName('lblAdminMsg')
+    $lat = Read-NumeroLimiar $w.FindName('txtOrcLat').Text
+    $jit = Read-NumeroLimiar $w.FindName('txtOrcJit').Text
+    $per = Read-NumeroLimiar $w.FindName('txtOrcPerda').Text
+    $dpc = Read-NumeroLimiar $w.FindName('txtOrcDownPct').Text
+    $upc = Read-NumeroLimiar $w.FindName('txtOrcUpPct').Text
+    foreach ($x in @($lat, $jit, $per, $dpc, $upc)) {
+        if ($x -eq 'ERRO' -or $null -eq $x) {
+            $msg.Foreground = [Windows.Media.Brushes]::OrangeRed
+            $msg.Text = 'Preencha o orcamento da VPN com numeros antes de recalcular.'
+            return
+        }
+    }
+    $add = @{ latencia_ms = $lat; jitter_ms = $jit; perda_percentual = $per }
+    foreach ($col in @($Global:LimiarRowsLan, $Global:LimiarRowsCel)) {
+        foreach ($r in $col) {
+            $vs = Read-NumeroLimiar $r.SemVpnIdeal
+            $ls = Read-NumeroLimiar $r.SemVpnLimite
+            if ($vs -eq 'ERRO' -or $ls -eq 'ERRO' -or $null -eq $vs -or $null -eq $ls) { continue }
+            if ($r.Direcao -eq 'min') {
+                $pct = if ($r.Metrica -eq 'banda_download_mbps') { $dpc } else { $upc }
+                $fac = 1 + ($pct / 100)
+                $r.ComVpnIdeal  = [string] [math]::Round($vs * $fac, 2)
+                $r.ComVpnLimite = [string] [math]::Round($ls * $fac, 2)
+            } elseif ($add.ContainsKey($r.Metrica)) {
+                $r.ComVpnIdeal  = [string] [math]::Round($vs + $add[$r.Metrica], 2)
+                $r.ComVpnLimite = [string] [math]::Round($ls + $add[$r.Metrica], 2)
+            }
+        }
+    }
+    $msg.Foreground = [Windows.Media.Brushes]::SkyBlue
+    $msg.Text = 'COM VPN de LAN e Celular recalculado. Revise e clique em "Salvar limiares".'
 }
 
 function Invoke-RecarregarLimiares {
@@ -3677,7 +3803,8 @@ function Set-DiagnosticoVpnImpossivel {
         LatenciaMediaMs = $null; JitterMs = $null; PerdaPercentual = $null
         BandaDownloadMbps = $null; BandaUploadMbps = $null; CarregamentoWebS = $null
     }
-    $dec = Invoke-MotorDecisao -Metricas $met -Limiares (Get-LimiaresConfig)
+    $meioP3 = $(if ((Get-MeioDoPasso3).meio) { (Get-MeioDoPasso3).meio } else { 'lan' })
+    $dec = Invoke-MotorDecisao -Metricas $met -Limiares (Get-PerfilLimiares -Meio $meioP3 -Cenario 'com_vpn')
     $amb = Get-EstadoAmbiente
     Show-PainelResultado -Payload ([pscustomobject]@{ Ambiente = $amb; Metricas = $met; Decisao = $dec; Local = $sel.Dados })
     Write-Log ("VPN impossivel de conectar - local registrado como INVIAVEL. Motivo: {0}" -f $Motivo) -Nivel Aviso
@@ -3827,7 +3954,8 @@ function Show-PainelResultado {
     $rli = if ($Payload.PSObject.Properties['RedeLocalInternet'] -and $Payload.RedeLocalInternet) { $Payload.RedeLocalInternet }
            elseif ($Global:FaseLocalPayload) { $Global:FaseLocalPayload.Internet }
            else { $null }
-    $d1 = @(Get-DetalhesRedeLocal -Internet $rli -Limiares (Get-LimiaresConfig))
+    $meioP3 = $(if ((Get-MeioDoPasso3).meio) { (Get-MeioDoPasso3).meio } else { 'lan' })
+    $d1 = @(Get-DetalhesRedeLocal -Internet $rli -Limiares (Get-PerfilLimiares -Meio $meioP3 -Cenario 'sem_vpn'))
     foreach ($d in $d1) { & $addRow $d 'Rede local' $rowsRl }
 
     $Global:AvaliacaoRows = $rows
@@ -4060,7 +4188,7 @@ function Invoke-ReenvioPendentes {
 }
 
 function Start-DiagnosticoAssincrono {
-    param($Local, [scriptblock] $AoConcluir)
+    param($Local, [scriptblock] $AoConcluir, [string] $Meio = 'lan')
 
     $rs = [runspacefactory]::CreateRunspace()
     $rs.ApartmentState = 'MTA'
@@ -4075,14 +4203,14 @@ function Start-DiagnosticoAssincrono {
     $ps = [powershell]::Create()
     $ps.Runspace = $rs
     [void] $ps.AddScript({
-        param($local)
+        param($local, $meio)
         Import-Module (Join-Path $RaizApp 'src\Conectividade.psd1') -Force
         try {
-            [pscustomobject]@{ Payload = (Invoke-DiagnosticoCompleto -Local $local); Erro = $null }
+            [pscustomobject]@{ Payload = (Invoke-DiagnosticoCompleto -Local $local -Meio $meio); Erro = $null }
         } catch {
             [pscustomobject]@{ Payload = $null; Erro = "$_" }
         }
-    }).AddArgument($Local)
+    }).AddArgument($Local).AddArgument($(if ($Meio) { $Meio } else { 'lan' }))
 
     $handle = $ps.BeginInvoke()
 

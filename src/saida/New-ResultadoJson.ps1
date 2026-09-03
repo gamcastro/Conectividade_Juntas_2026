@@ -24,8 +24,9 @@ function Get-Prop {
 # Avaliacao da Fase 1 (rede local, sem VPN) para o JSON: classifica o resultado
 # do Speedtest contra os limiares e aplica os ajustes do tecnico (chaves "rl_").
 function Get-AvaliacaoRedeLocalJson {
-    param($Internet, $Overrides)
-    $det = @(Get-DetalhesRedeLocal -Internet $Internet -Limiares (Get-LimiaresConfig))
+    param($Internet, $Overrides, [string] $Meio = 'lan')
+    $mp = if ($Meio -in @('lan', 'wifi_local', 'celular')) { $Meio } else { 'lan' }
+    $det = @(Get-DetalhesRedeLocal -Internet $Internet -Limiares (Get-PerfilLimiares -Meio $mp -Cenario 'sem_vpn'))
     $out = @()
     foreach ($d in $det) {
         $o  = if ($Overrides) { $Overrides[$d.metrica] } else { $null }
@@ -113,6 +114,11 @@ function New-ResultadoJson {
         # placa efetivamente usada: os campos ip/mascara/gateway/dns/mac saem
         # dela (LAN ou Wi-Fi).
         $tipoUsado = [string] (Get-Prop $FaseLocal 'TipoUsado')
+        # perfil de limiares SEM VPN para a avaliacao top-level: meio recomendado,
+        # ou a placa usada na Fase 1 (wifi->wifi_local; senao lan).
+        $limiaresMeioTop = if ($ConexaoRecomendada -and (Get-Prop $ConexaoRecomendada 'meio') -in @('lan', 'wifi_local', 'celular')) {
+            [string] (Get-Prop $ConexaoRecomendada 'meio')
+        } elseif ($tipoUsado -eq 'wifi') { 'wifi_local' } else { 'lan' }
         $ativa = if ($tipoUsado -eq 'wifi') { $wf }
                  elseif ($tipoUsado -eq 'lan') { $lan }
                  elseif ([string] (Get-Prop $lan 'ipv4')) { $lan }
@@ -154,7 +160,7 @@ function New-ResultadoJson {
             internet_download_mbps = (Get-Prop $it 'download_mbps')
             internet_upload_mbps   = (Get-Prop $it 'upload_mbps')
             internet_resultado_url = [string] (Get-Prop $it 'resultado_url')
-            internet_avaliacao     = @(Get-AvaliacaoRedeLocalJson $it $ovr)
+            internet_avaliacao     = @(Get-AvaliacaoRedeLocalJson $it $ovr $limiaresMeioTop)
         }
     }
 
@@ -177,7 +183,8 @@ function New-ResultadoJson {
             rede_local_provedor  = [string] (Get-Prop $mIt 'isp')
             rede_local_falha_tipo  = [string] (Get-Prop $mIt 'speedtest_falha_tipo')
             rede_local_diagnostico = [string] (Get-Prop $mIt 'speedtest_diagnostico')
-            rede_local_avaliacao   = @(Get-AvaliacaoRedeLocalJson $mIt $mOvr)
+            limiares_meio          = [string] (Get-Prop $m 'meio')
+            rede_local_avaliacao   = @(Get-AvaliacaoRedeLocalJson $mIt $mOvr ([string] (Get-Prop $m 'meio')))
             vpn_conectou         = [bool] (Get-Prop $m 'vpn_conectou')
             vpn_motivo           = [string] (Get-Prop $m 'vpn_motivo')
             vpn_download_mbps     = (Get-Prop $mMet 'BandaDownloadMbps')

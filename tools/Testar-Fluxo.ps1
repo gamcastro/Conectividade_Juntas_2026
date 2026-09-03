@@ -760,15 +760,57 @@ try {
     if ($w.FindName('chkTodasJuntas').Visibility -ne 'Collapsed') { Write-Host "    FALHA: checkbox 'incluir Juntas fora da rota' deveria estar oculto"; $falhas++ }
     else { Write-Host "[8] checkbox 'incluir Juntas fora da rota' oculto (desativado por ora)" }
     Show-Admin
-    $nLim = $w.FindName('dgLimiares').Items.Count
-    Write-Host "[8] Admin: $nLim linha(s) de limiar"
-    if ($nLim -ne 6) { Write-Host "    FALHA: deveria ter 6 metricas"; $falhas++ }
-    if ($Global:LimiarRows[0].Ativo -ne $true) { Write-Host "    FALHA: limiar sem 'Na bateria' marcado por padrao"; $falhas++ }
-    else { Write-Host "[8] limiar vem com 'Na bateria' marcado" }
+    $nLan = $w.FindName('dgLimLan').Items.Count
+    $nWifi = $w.FindName('dgLimWifi').Items.Count
+    $nCel = $w.FindName('dgLimCel').Items.Count
+    Write-Host "[8] Admin: 3 abas de limiar (LAN=$nLan / Wi-Fi=$nWifi / Celular=$nCel linhas)"
+    if ($nLan -ne 6 -or $nWifi -ne 6 -or $nCel -ne 6) { Write-Host "    FALHA: cada aba deveria ter 6 metricas"; $falhas++ }
+    if ($Global:LimiarRowsLan[0].SemVpnAtivo -ne $true -or $Global:LimiarRowsLan[0].ComVpnAtivo -ne $true) {
+        Write-Host "    FALHA: limiar LAN sem 'Na bateria' marcado por padrao"; $falhas++
+    } else { Write-Host "[8] limiar vem com 'Na bateria' (SEM e COM VPN) marcado" }
+    # carregamento web (linha 6) so existe COM VPN
+    $rWeb = $Global:LimiarRowsLan[5]
+    if ("$($rWeb.Metrica)" -eq 'carregamento_web_s' -and -not $rWeb.SemVpnVisivel -and $rWeb.SemVpnAtivo -eq $false) {
+        Write-Host "[8] carregamento web fica so na coluna COM VPN"
+    } else { Write-Host "    FALHA: carregamento web deveria ser so COM VPN (vis=$($rWeb.SemVpnVisivel) at=$($rWeb.SemVpnAtivo))"; $falhas++ }
+    # LAN: SEM VPN != COM VPN (custo da VPN)
+    if ("$($Global:LimiarRowsLan[0].SemVpnIdeal)" -ne "$($Global:LimiarRowsLan[0].ComVpnIdeal)") {
+        Write-Host "[8] LAN: COM VPN diferente do SEM VPN (lat ideal $($Global:LimiarRowsLan[0].SemVpnIdeal) -> $($Global:LimiarRowsLan[0].ComVpnIdeal))"
+    } else { Write-Host "    FALHA: LAN COM VPN igual ao SEM VPN"; $falhas++ }
+    # Wi-Fi herda da LAN + folga: read-only + folga visivel + valor = LAN + folga
+    $wLat = $Global:LimiarRowsWifi[0]
+    if ($wLat.FolgaVisivel -and -not $wLat.CamposEditaveis -and "$($wLat.Folga)" -ne '' -and
+        [double]("$($wLat.SemVpnIdeal)" -replace ',', '.') -eq ([double]("$($Global:LimiarRowsLan[0].SemVpnIdeal)" -replace ',', '.') + [double]("$($wLat.Folga)" -replace ',', '.'))) {
+        Write-Host "[8] Wi-Fi do local herda da LAN + folga (lat $($Global:LimiarRowsLan[0].SemVpnIdeal) + $($wLat.Folga) = $($wLat.SemVpnIdeal), so leitura)"
+    } else { Write-Host "    FALHA: Wi-Fi nao herdou da LAN + folga (folgaVis=$($wLat.FolgaVisivel) edit=$($wLat.CamposEditaveis) folga=$($wLat.Folga) ideal=$($wLat.SemVpnIdeal))"; $falhas++ }
+    # Celular tem perfil proprio (SMP != SCM)
+    if ("$($Global:LimiarRowsCel[0].SemVpnLimite)" -ne "$($Global:LimiarRowsLan[0].SemVpnLimite)") {
+        Write-Host "[8] Celular tem perfil proprio (lat limite $($Global:LimiarRowsCel[0].SemVpnLimite) vs LAN $($Global:LimiarRowsLan[0].SemVpnLimite))"
+    } else { Write-Host "    FALHA: Celular igual a LAN"; $falhas++ }
+    # "Recalcular COM VPN" a partir do orcamento
+    $latComAntes = "$($Global:LimiarRowsLan[0].ComVpnIdeal)"
+    $w.FindName('txtOrcLat').Text = '25'
+    Invoke-AplicarOrcamento
+    if ("$($Global:LimiarRowsLan[0].ComVpnIdeal)" -eq '45') {
+        Write-Host "[8] 'Recalcular COM VPN': lat SEM VPN 20 + orcamento 25 = 45"
+    } else { Write-Host "    FALHA: recalcular COM VPN (antes=$latComAntes depois=$($Global:LimiarRowsLan[0].ComVpnIdeal))"; $falhas++ }
+    Show-Admin   # recarrega os valores do exemplo (desfaz o recalculo em memoria)
     $w.FindName('txtPinAdmin').Password = ''
     Invoke-SalvarLimiares
     if ($w.FindName('lblAdminMsg').Text -notmatch 'PIN') { Write-Host "    FALHA: salvou limiares sem PIN"; $falhas++ }
     else { Write-Host "[8] salvar limiares sem PIN bloqueado" }
+
+    # 8-2. Get-PerfilLimiares resolve os 6 perfis (meio x cenario)
+    $pLanSem = Get-PerfilLimiares -Meio lan -Cenario sem_vpn
+    $pLanCom = Get-PerfilLimiares -Meio lan -Cenario com_vpn
+    $pWifiSem = Get-PerfilLimiares -Meio wifi_local -Cenario sem_vpn
+    $pCelCom = Get-PerfilLimiares -Meio celular -Cenario com_vpn
+    if ($pLanSem.latencia_ms.ressalva_ate -eq 80 -and $pLanCom.latencia_ms.ressalva_ate -eq 110 -and
+        $pWifiSem.latencia_ms.viavel_ate -eq ($pLanSem.latencia_ms.viavel_ate + 10) -and
+        $pCelCom.latencia_ms.ressalva_ate -eq 130 -and
+        $pLanSem.carregamento_web_s.ativo -eq $false -and $pLanCom.carregamento_web_s.ativo -eq $true) {
+        Write-Host "[8] Get-PerfilLimiares: LAN sem/com VPN + Wi-Fi=LAN+folga + Celular proprio + web so COM VPN"
+    } else { Write-Host "    FALHA: Get-PerfilLimiares (lanSem=$($pLanSem.latencia_ms.ressalva_ate) lanCom=$($pLanCom.latencia_ms.ressalva_ate) wifi=$($pWifiSem.latencia_ms.viavel_ate) celCom=$($pCelCom.latencia_ms.ressalva_ate))"; $falhas++ }
 
     # 8b. ambiente iperf3: campos carregam da config e "Salvar ambiente" exige PIN
     $srvCfg = "$($w.FindName('txtIperfServidorCfg').Text)"
