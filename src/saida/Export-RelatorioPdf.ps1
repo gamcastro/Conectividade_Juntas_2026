@@ -339,7 +339,7 @@ $($idRows -join "`n")
         <div class="kpis">$kpiHtml</div>
         <div class="ptit" style="margin-top:12px">Situa&ccedil;&atilde;o por meio</div>
         <table>
-          <thead><tr><th>Meio</th><th>Sem VPN conectada</th><th>Com VPN conectada</th><th>Download com VPN</th><th>Lat&ecirc;ncia com VPN</th><th>Veredito</th></tr></thead>
+          <thead><tr><th>Meio</th><th>Download</th><th>VPN</th><th>Download com VPN</th><th>Lat&ecirc;ncia com VPN</th><th>Veredito</th></tr></thead>
           <tbody>
 $($sitRows -join "`n")
           </tbody>
