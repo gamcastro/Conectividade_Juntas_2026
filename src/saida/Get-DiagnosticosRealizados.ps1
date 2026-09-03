@@ -43,6 +43,39 @@ function Get-DiagnosticosRealizados {
     return $map
 }
 
+# Situacao de um local para a tela de detalhe: testado / salvo / transmitido /
+# relatorio exportado / formulario GEL anexado.
+function Get-StatusLocal {
+    param([string] $LocalId)
+    $st = [pscustomobject]@{
+        testado = $false; salvo = $false; transmitido = $false; exportado = $false; gel = $false
+        veredito = ''; quando = $null
+    }
+    if ([string]::IsNullOrWhiteSpace($LocalId)) { return $st }
+
+    $d = (Get-DiagnosticosRealizados)[[string] $LocalId]
+    if ($d) {
+        $st.testado     = $true
+        $st.salvo       = $true
+        $st.transmitido = [bool] $d.Enviado
+        $st.veredito    = [string] $d.ClassificacaoFinal
+        $st.quando      = $d.Quando
+    }
+
+    $idSan  = ([string] $LocalId) -replace '[^\w\-]', '_'
+    $dirRel = Join-Path $Global:RaizApp 'relatorios'
+    if (Test-Path $dirRel) {
+        foreach ($ext in 'pdf', 'html') {
+            if (@(Get-ChildItem -Path $dirRel -Filter ('*_{0}.{1}' -f $idSan, $ext) -ErrorAction SilentlyContinue).Count) {
+                $st.exportado = $true; break
+            }
+        }
+    }
+
+    $st.gel = [bool] (Get-VistoriaGel -LocalId $LocalId)
+    return $st
+}
+
 # Conta quantos dos locais de um roteiro ja foram testados (e o total).
 function Get-ProgressoRoteiro {
     param($Roteiro, [string] $TecnicoNome)

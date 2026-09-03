@@ -112,10 +112,28 @@ locais de vistoria do roteiro do técnico (`Get-LocaisDoTecnico` achata
 `$Global:RoteiroAtual.juntas[].locais[]`), grade `dgLocais` + busca livre
 (`txtBuscaLocais`) + filtros por ZE (`cboFiltroZE`) e município (`cboFiltroMun`)
 em `Update-LocaisFiltrados`; clicar numa linha da grade abre a **tela dedicada**
-`viewLocalDetalhe` (`Invoke-AbrirLocalDetalhe`) com a ficha completa do local
-(tipo, endereço, internet, UC, responsável/função, telefone e `texto_completo`
-do roteiro); `btnLocalDetalheVoltar` → `Invoke-VoltarAosLocais` volta à lista
-com os filtros preservados.
+`viewLocalDetalhe` (`Invoke-AbrirLocalDetalhe`, que grava `$Global:LocalDetalheAtual`)
+com a ficha completa do local (tipo, endereço, internet, UC, responsável/função,
+telefone e `texto_completo` do roteiro); `btnLocalDetalheVoltar` →
+`Invoke-VoltarAosLocais` volta à lista com os filtros preservados.
+Essa tela tem, no topo, um **card STATUS DO LOCAL** com 5 indicadores
+(`dot Ld Testado/Salvo/Transmitido/Exportado/Gel` — `Ellipse` vermelha quando
+não / verde quando sim; `dotLdTestado` usa a cor do veredito) + `txtLdStatusInfo`,
+preenchidos por `Update-StatusLocalDetalhe` a partir de
+`Get-StatusLocal -LocalId` (`src/saida/Get-DiagnosticosRealizados.ps1` — junta
+`Get-DiagnosticosRealizados` + varredura de `relatorios/*_<idSan>.{pdf,html}` +
+`Get-VistoriaGel`). Logo abaixo, o **card do formulário GEL** (`cardGel` /
+`btnAnexarGel` → `Invoke-AnexarGel` abre o PDF da vistoria do GEL, `Read-TextoPdf`
+(PdfPig em `lib/pdfpig/`, degrada se ausente) + `ConvertFrom-VistoriaGel` extraem
+coordenadas / suporte ao link local / elétrica; o técnico confere em `panelGelConf`
+e `Invoke-GelRegistrar` grava em `data/vistoria-gel/<localid>.json` via
+`Save-VistoriaGel`; `btnGelRemover` → `Invoke-GelRemover`). O anexo pode ser feito
+**a qualquer tempo**, não só no momento do teste — e é carregado do disco em
+`$Global:VistoriaGel` quando o Local entra no assistente (passo 2). Vai para o
+JSON `vistoria_gel` + seção "Vistoria GEL" no relatório com link e imagem do
+Google Maps; a chave da **Maps Static API** fica em `config/ambiente.json`
+(`google_maps.static_key`), editável na tela de Administração; a imagem é baixada
+e embutida como `data:` URI, então a chave não vai no HTML/PDF.
 
 ## Assistente de diagnóstico (GUI)
 A tela de Diagnóstico é um **assistente de 6 passos** (`viewDiag` com os painéis
@@ -141,16 +159,8 @@ recomenda o de maior download na Rede Local, marcado **provisório** e Local
 inviável; nada → "nenhuma". O **veredito final do Local = veredito do meio
 recomendado** (salvo override manual do técnico no combo da recomendação final).
 
-1. informação do teste → 2. Junta/Local (com cartão de detalhe **+ anexo do
-formulário GEL**: `cardGel`/`btnAnexarGel` → `Invoke-AnexarGel` abre o PDF da
-vistoria do GEL, `Read-TextoPdf` (PdfPig em `lib/pdfpig/`, degrada se ausente) +
-`ConvertFrom-VistoriaGel` extraem coordenadas / suporte ao link local / elétrica;
-o técnico confere em `panelGelConf` e `Invoke-GelRegistrar` grava em
-`$Global:VistoriaGel` → JSON `vistoria_gel` + seção "Vistoria GEL" no relatório
-com link e imagem do Google Maps. A chave da **Maps Static API** fica em
-`config/ambiente.json` (`google_maps.static_key`), editável na tela de
-Administração; a imagem é baixada e embutida como `data:` URI, então a chave não
-vai no HTML/PDF) →
+1. informação do teste → 2. Junta/Local (só o cartão de detalhe — o **anexo do
+formulário GEL** saiu daqui e vive na tela `viewLocalDetalhe`) →
 3. **meios de conexão** — *painel de 3 cards*: `Invoke-ProbeRedeLocal`
 (`Invoke-FaseLocal -SemInternet`, async) inventaria as placas; cada card
 (`cardLan`/`cardWifiPlaca`/`cardCelular`, clicáveis para selecionar) tem um

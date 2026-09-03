@@ -3,6 +3,36 @@
 # Google, suporte ao link local, eletrica). O layout do GEL e fixo -> regex nas
 # perguntas conhecidas. Sempre passa por uma tela de conferencia do tecnico.
 
+# --------------------------------- persistencia do anexo GEL por local (disco)
+# Fica em data/vistoria-gel/<localid>.json - independente do momento do teste.
+function Get-CaminhoVistoriaGel {
+    param([string] $LocalId)
+    $san = ([string] $LocalId) -replace '[^\w\-]', '_'
+    Join-Path (Get-PastaDados) ('vistoria-gel\{0}.json' -f $san)
+}
+
+function Get-VistoriaGel {
+    param([string] $LocalId)
+    if (-not $LocalId) { return $null }
+    $f = Get-CaminhoVistoriaGel -LocalId $LocalId
+    if (-not (Test-Path $f)) { return $null }
+    try { Get-Content $f -Raw -Encoding UTF8 | ConvertFrom-Json } catch { $null }
+}
+
+function Save-VistoriaGel {
+    param([string] $LocalId, $Dados)
+    if (-not $LocalId) { return $null }
+    $f = Get-CaminhoVistoriaGel -LocalId $LocalId
+    Write-TextoArquivo -Caminho $f -Conteudo ($Dados | ConvertTo-Json -Depth 6)
+    $f
+}
+
+function Remove-VistoriaGel {
+    param([string] $LocalId)
+    if (-not $LocalId) { return }
+    Remove-Item -LiteralPath (Get-CaminhoVistoriaGel -LocalId $LocalId) -Force -ErrorAction SilentlyContinue
+}
+
 # ------------------------------------------------- chave do Google Maps (Static)
 # Salva em config/ambiente.json (bloco "google_maps") pela tela de Administracao.
 function Get-ChaveMapsStatic {

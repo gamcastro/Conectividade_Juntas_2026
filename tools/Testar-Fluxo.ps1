@@ -194,6 +194,45 @@ try {
     if ("$($w.FindName('viewLocalDetalhe').Visibility)" -eq 'Visible' -and "$($w.FindName('txtLDPNome').Text)") {
         Write-Host "[3b] clicar num local abre a ficha completa ($($w.FindName('txtLDPNome').Text))"
     } else { Write-Host "    FALHA: ficha completa do local nao abriu (vis=$($w.FindName('viewLocalDetalhe').Visibility))"; $falhas++ }
+
+    # 3c. tela de detalhe: indicadores de status + card do GEL (movido do passo 2)
+    $dotsLd = @('dotLdTestado','dotLdSalvo','dotLdTransmitido','dotLdExportado','dotLdGel') |
+        ForEach-Object { $w.FindName($_) }
+    if (@($dotsLd | Where-Object { $_ }).Count -eq 5 -and @($dotsLd | Where-Object { $_.Fill }).Count -eq 5) {
+        Write-Host "[3c] 5 indicadores de status pintados na ficha do local"
+    } else { Write-Host "    FALHA: indicadores de status ausentes/sem cor na ficha do local"; $falhas++ }
+    if ("$($w.FindName('cardGel').Visibility)" -eq 'Visible') {
+        Write-Host "[3c] card do formulario GEL vive na ficha do local"
+    } else { Write-Host "    FALHA: cardGel nao visivel na ficha do local (vis=$($w.FindName('cardGel').Visibility))"; $falhas++ }
+    $anc = $w.FindName('cardGel'); $souDetalhe = $false
+    while ($anc) {
+        if ($anc -eq $w.FindName('viewLocalDetalhe')) { $souDetalhe = $true; break }
+        $anc = [Windows.LogicalTreeHelper]::GetParent($anc)
+    }
+    if ($souDetalhe) {
+        Write-Host "[3c] card do GEL vive dentro de viewLocalDetalhe (saiu do passo 2)"
+    } else { Write-Host "    FALHA: cardGel nao esta sob viewLocalDetalhe"; $falhas++ }
+
+    # 3d. persistencia do anexo GEL por local (data/vistoria-gel/<id>.json)
+    $gelId = 'ZE99-TESTE-PRINCIPAL'
+    Remove-VistoriaGel -LocalId $gelId
+    Save-VistoriaGel -LocalId $gelId -Dados ([pscustomobject]@{
+        lat = -2.5; long = -43.25; precisao_m = 6.5
+        suporte_nome = 'ACME'; suporte_telefone = '99 99999-9999'
+        eletrica_tensao = '220V'; eletrica_tomadas = '4'; eletrica_extensao = 'nao'
+    }) | Out-Null
+    $gelBack = Get-VistoriaGel -LocalId $gelId
+    if ($gelBack -and [double] $gelBack.lat -eq -2.5 -and "$($gelBack.suporte_nome)" -eq 'ACME') {
+        Write-Host "[3d] Save-VistoriaGel / Get-VistoriaGel round-trip OK"
+    } else { Write-Host "    FALHA: round-trip do anexo GEL"; $falhas++ }
+    if ((Get-StatusLocal -LocalId $gelId).gel) {
+        Write-Host "[3d] Get-StatusLocal reflete o anexo GEL"
+    } else { Write-Host "    FALHA: Get-StatusLocal nao viu o anexo GEL"; $falhas++ }
+    Remove-VistoriaGel -LocalId $gelId
+    if (-not (Get-StatusLocal -LocalId $gelId).gel) {
+        Write-Host "[3d] Remove-VistoriaGel limpa o anexo"
+    } else { Write-Host "    FALHA: Remove-VistoriaGel nao apagou o anexo"; $falhas++ }
+
     Invoke-VoltarAosLocais
     Invoke-Pump
     if ("$($w.FindName('viewLocais').Visibility)" -eq 'Visible' -and $w.FindName('dgLocais').SelectedIndex -lt 0) {

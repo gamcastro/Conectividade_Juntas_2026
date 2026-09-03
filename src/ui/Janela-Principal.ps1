@@ -40,7 +40,8 @@ $Global:AtualizandoRecomendacao = $false  # guarda: set programatico do combo de
 $Global:MedicoesPasso5     = @()     # [{idx;med}] das medicoes testaveis no seletor do passo 5
 $Global:MedicaoPasso5Idx   = -1      # indice em $Global:Medicoes da medicao aberta no passo 5 (-1 = ultima)
 $Global:AtualizandoMedicaoP5 = $false # guarda: set programatico do combo de medicoes do passo 5
-$Global:VistoriaGel        = $null   # anexo do GEL (coordenadas/suporte/eletrica) do local atual
+$Global:VistoriaGel        = $null   # anexo do GEL do local aberto no assistente (carregado do disco)
+$Global:LocalDetalheAtual  = $null   # objeto do local aberto na tela viewLocalDetalhe
 
 $Global:FeitoSalvar        = $false  # checklist do passo 7
 $Global:FeitoTransmitir    = $false
@@ -294,6 +295,7 @@ function New-JanelaPrincipal {
     $window.FindName('btnAnexarGel').Add_Click({ Invoke-AnexarGel })
     $window.FindName('btnGelRegistrar').Add_Click({ Invoke-GelRegistrar })
     $window.FindName('btnGelCancelar').Add_Click({ Invoke-GelCancelar })
+    $window.FindName('btnGelRemover').Add_Click({ Invoke-GelRemover })
     $window.FindName('btnRelerPlacas').Add_Click({ Invoke-RelerPlacas })
     $window.FindName('btnRelerLan').Add_Click({ Invoke-RelerAdaptador 'lan' })
     $window.FindName('btnRelerWifi').Add_Click({ Invoke-RelerAdaptador 'wifi' })
@@ -958,6 +960,10 @@ function Invoke-AbrirLocalDetalhe {
     $card = $w.FindName('cardLDPCompleto')
     if ($comp) { $tc.Text = $comp; $card.Visibility = 'Visible' } else { $card.Visibility = 'Collapsed' }
 
+    $Global:LocalDetalheAtual = $d
+    Update-StatusLocalDetalhe
+    Update-CardGel
+
     Show-View 'viewLocalDetalhe'
 }
 
@@ -1130,7 +1136,6 @@ function Update-DetalheLocal {
     }
     if (-not $sel) {
         $card.Visibility = 'Collapsed'
-        $cg = $w.FindName('cardGel'); if ($cg) { $cg.Visibility = 'Collapsed' }
         if ($Global:WizardStep -eq 2) {
             $w.FindName('btnWizProximo').Visibility   = 'Visible'
             $w.FindName('btnRefazerTeste').Visibility = 'Collapsed'
@@ -1138,12 +1143,13 @@ function Update-DetalheLocal {
         return
     }
 
-    # trocou de Local -> as medicoes acumuladas eram do local anterior
+    # trocou de Local -> as medicoes acumuladas eram do local anterior; o anexo
+    # GEL do novo Local vem do disco (data/vistoria-gel/<id>.json).
     $idSel = [string] $sel.Dados.id
     if ($idSel -and $idSel -ne $Global:LocalMedicoesId) {
         if (@($Global:Medicoes).Count) { Write-Log 'Local trocado - medicoes anteriores descartadas.' -Nivel Aviso }
         Reset-Medicoes
-        $Global:VistoriaGel = $null
+        $Global:VistoriaGel = Get-VistoriaGel -LocalId $idSel
         $Global:LocalMedicoesId = $idSel
     }
 
@@ -1174,7 +1180,6 @@ function Update-DetalheLocal {
         $lbl.Foreground = $cinza
     }
     $card.Visibility = 'Visible'
-    Update-CardGel
 
     # Passo 2: local ja testado (e nao ha diagnostico em andamento) -> some o
     # "Proximo" do rodape e aparece "Refazer o teste" no proprio cartao.
@@ -1186,28 +1191,84 @@ function Update-DetalheLocal {
 }
 
 # ----------------------------------------------------- ANEXO DO FORMULARIO GEL
-# Mostra o card do GEL no passo 2 e reflete o que ja foi registrado.
+# Vive na tela de detalhe do Local (viewLocalDetalhe) - o tecnico/admin anexa a
+# qualquer tempo. Persistido em data/vistoria-gel/<localid>.json.
+
+# Pincel verde/vermelho para os "dots" de status.
+function Get-PincelStatus {
+    param([bool] $Ok)
+    $hex = if ($Ok) { '#4FC177' } else { '#E8695C' }
+    $b = [Windows.Media.SolidColorBrush]::new([Windows.Media.ColorConverter]::ConvertFromString($hex))
+    $b.Freeze(); $b
+}
+
+# Preenche os 5 indicadores de status na tela de detalhe do Local.
+function Update-StatusLocalDetalhe {
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    $d = $Global:LocalDetalheAtual
+    $id = if ($d) { [string] $d.id } else { '' }
+    $s = Get-StatusLocal -LocalId $id
+
+    $verdVer = if ($s.veredito) { Get-PincelVeredito $s.veredito } else { Get-PincelStatus $false }
+    $dt = $w.FindName('dotLdTestado');     if ($dt) { $dt.Fill = $verdVer }
+    $ds = $w.FindName('dotLdSalvo');       if ($ds) { $ds.Fill = Get-PincelStatus $s.salvo }
+    $dx = $w.FindName('dotLdTransmitido'); if ($dx) { $dx.Fill = Get-PincelStatus $s.transmitido }
+    $de = $w.FindName('dotLdExportado');   if ($de) { $de.Fill = Get-PincelStatus $s.exportado }
+    $dg = $w.FindName('dotLdGel');         if ($dg) { $dg.Fill = Get-PincelStatus $s.gel }
+
+    $info = $w.FindName('txtLdStatusInfo')
+    if ($info) {
+        if ($s.testado) {
+            $info.Text = 'Testado em {0:dd/MM/yyyy HH:mm} - {1}{2}' -f `
+                $s.quando, (Get-RotuloVeredito $s.veredito), $(if ($s.transmitido) { '' } else { ' (nao transmitido)' })
+        } else {
+            $info.Text = 'Ainda nao diagnosticado neste roteiro.'
+        }
+    }
+}
+
+# Reflete no card do GEL (tela de detalhe) o que ja esta anexado ao Local.
 function Update-CardGel {
     $w = $Global:JanelaPrincipal
     if (-not $w) { return }
     $card = $w.FindName('cardGel'); if (-not $card) { return }
-    $card.Visibility = 'Visible'
     $w.FindName('panelGelConf').Visibility = 'Collapsed'
-    $g = $Global:VistoriaGel
+
+    $d  = $Global:LocalDetalheAtual
+    $g  = if ($d) { Get-VistoriaGel -LocalId ([string] $d.id) } else { $null }
     $res = $w.FindName('txtGelResumo')
-    $st  = $w.FindName('txtGelStatus')
+    $stx = $w.FindName('txtGelStatus')
+    $btnR = $w.FindName('btnGelRemover')
+    $btnA = $w.FindName('btnAnexarGel')
+
     if ($g) {
         $partes = @()
         if ($null -ne $g.lat -and $null -ne $g.long) { $partes += ('coordenadas {0}, {1}' -f $g.lat, $g.long) }
         if ($g.suporte_nome -or $g.suporte_telefone) { $partes += 'suporte do link' }
-        if ($g.eletrica_tensao -or $g.eletrica_tomadas) { $partes += 'dados eletricos' }
-        $res.Text = 'Formulario GEL anexado: ' + (($partes -join ' - '))
+        if ($g.eletrica_tensao -or $g.eletrica_tomadas -or $g.eletrica_extensao) { $partes += 'dados eletricos' }
+        $res.Text = 'Formulario GEL anexado: ' + ($partes -join ' - ')
         $res.Visibility = 'Visible'
-        $st.Text = 'anexado - use "Anexar" de novo para substituir.'
+        $stx.Text = ''
+        if ($btnA) { $btnA.Content = 'Substituir formulario GEL (PDF)' }
+        if ($btnR) { $btnR.Visibility = 'Visible' }
     } else {
         $res.Visibility = 'Collapsed'
-        $st.Text = ''
+        $stx.Text = ''
+        if ($btnA) { $btnA.Content = 'Anexar formulario GEL (PDF)' }
+        if ($btnR) { $btnR.Visibility = 'Collapsed' }
     }
+}
+
+# Botao "Remover anexo": apaga o GEL do Local.
+function Invoke-GelRemover {
+    $d = $Global:LocalDetalheAtual
+    if (-not $d) { return }
+    Remove-VistoriaGel -LocalId ([string] $d.id)
+    if ([string] $d.id -eq [string] $Global:LocalMedicoesId) { $Global:VistoriaGel = $null }
+    Write-Log 'Anexo GEL removido do local.' -Nivel Aviso
+    Update-CardGel
+    Update-StatusLocalDetalhe
 }
 
 # Botao "Anexar formulario GEL (PDF)": abre o seletor, le o PDF e preenche a
@@ -1252,10 +1313,12 @@ function Invoke-GelCancelar {
     Update-CardGel
 }
 
-# "Registrar": grava o que estiver na tela de conferencia em $Global:VistoriaGel.
+# "Registrar": grava o que esta na tela de conferencia no Local (disco).
 function Invoke-GelRegistrar {
     $w = $Global:JanelaPrincipal
     $st = $w.FindName('txtGelStatus')
+    $d  = $Global:LocalDetalheAtual
+    if (-not $d) { return }
 
     $latTxt  = (([string] $w.FindName('txtGelLat').Text)  -replace ',', '.').Trim()
     $longTxt = (([string] $w.FindName('txtGelLong').Text) -replace ',', '.').Trim()
@@ -1272,7 +1335,7 @@ function Invoke-GelRegistrar {
         return
     }
 
-    $Global:VistoriaGel = [pscustomobject]@{
+    $obj = [pscustomobject]@{
         lat               = $lat
         long              = $long
         precisao_m        = $prec
@@ -1284,8 +1347,11 @@ function Invoke-GelRegistrar {
         mapa_link         = if ($null -ne $lat -and $null -ne $long) { Get-LinkGoogleMaps -Lat $lat -Long $long } else { '' }
         anexado_em        = (Get-Date).ToString('o')
     }
-    Write-Log 'Formulario GEL anexado ao local.' -Nivel Ok
+    Save-VistoriaGel -LocalId ([string] $d.id) -Dados $obj | Out-Null
+    if ([string] $d.id -eq [string] $Global:LocalMedicoesId) { $Global:VistoriaGel = $obj }
+    Write-Log ('Formulario GEL anexado ao local {0}.' -f $d.nome) -Nivel Ok
     Update-CardGel
+    Update-StatusLocalDetalhe
 }
 
 # ------------------------------------------------------------- PASSO 3: REDE LOCAL
