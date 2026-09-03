@@ -87,11 +87,45 @@ function Get-MapaEstaticoDataUri {
 }
 
 # --------------------------------------------------------------- leitura do PDF
-# PdfPig (Apache-2.0) em lib\pdfpig\. Sem ele, o upload avisa e nao le.
+# PdfPig (Apache-2.0) em lib\pdfpig\. As DLLs vao versionadas no repo, mas uma
+# instalacao que atualizou de uma versao ANTIGA do Atualizar-DICON.ps1 (antes de
+# 'lib\pdfpig' entrar na lista de espelhamento) pode nao te-las - por isso o
+# Restore-PdfLib abaixo baixa direto do GitHub quando faltarem e ha internet.
 function Get-CaminhoPdfLib {
     $dll = Join-Path $Global:RaizApp 'lib\pdfpig\UglyToad.PdfPig.dll'
     if (Test-Path $dll) { return $dll }
     return $null
+}
+
+$script:PdfLibArquivos = @(
+    'UglyToad.PdfPig.dll', 'UglyToad.PdfPig.Core.dll', 'UglyToad.PdfPig.Fonts.dll'
+    'UglyToad.PdfPig.Tokenization.dll', 'UglyToad.PdfPig.Tokens.dll'
+    'System.Memory.dll', 'System.Buffers.dll', 'System.Numerics.Vectors.dll'
+    'System.Runtime.CompilerServices.Unsafe.dll', 'Microsoft.Bcl.HashCode.dll'
+)
+
+# Baixa as DLLs do PdfPig do canal desta instalacao para lib\pdfpig\. Best-effort:
+# devolve $true se ao final a pasta tem a DLL principal. Nao lanca.
+function Restore-PdfLib {
+    try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 } catch { }
+    $canal = try { Get-CanalInstalacao } catch { 'main' }
+    $pasta = Join-Path $Global:RaizApp 'lib\pdfpig'
+    if (-not (Test-Path $pasta)) { New-Item -ItemType Directory -Path $pasta -Force | Out-Null }
+    $base = "https://raw.githubusercontent.com/gamcastro/Conectividade_Juntas_2026/$canal/lib/pdfpig"
+    Write-Log 'Biblioteca de PDF ausente - tentando baixar do GitHub...' -Nivel Aviso
+    foreach ($nome in $script:PdfLibArquivos) {
+        $alvo = Join-Path $pasta $nome
+        if (Test-Path $alvo) { continue }
+        try {
+            (New-Object Net.WebClient).DownloadFile("$base/$nome", $alvo)
+        } catch {
+            Write-Log ("  falhou {0}: {1}" -f $nome, $_.Exception.Message) -Nivel Aviso
+            Remove-Item $alvo -Force -ErrorAction SilentlyContinue
+        }
+    }
+    $ok = Test-Path (Join-Path $pasta 'UglyToad.PdfPig.dll')
+    if ($ok) { Write-Log 'Biblioteca de PDF baixada.' -Nivel Ok }
+    $ok
 }
 
 # Carrega os .dll de lib\pdfpig e instala (uma vez) um resolvedor de assembly por
@@ -125,7 +159,10 @@ function Read-TextoPdf {
     if (-not (Test-Path $Caminho)) { throw "PDF nao encontrado: $Caminho" }
     $dll = Get-CaminhoPdfLib
     if (-not $dll) {
-        throw 'biblioteca de leitura de PDF ausente - copie os arquivos do PdfPig para lib\pdfpig\ (veja lib\pdfpig\LEIA-ME.txt).'
+        if (Restore-PdfLib) { $dll = Get-CaminhoPdfLib }
+    }
+    if (-not $dll) {
+        throw 'biblioteca de leitura de PDF ausente e nao consegui baixar - rode setup\Atualizar-DICON.ps1 -Force com internet (veja lib\pdfpig\LEIA-ME.txt).'
     }
     Register-ResolucaoPdfLib -Pasta (Split-Path $dll -Parent)
     $sb  = [Text.StringBuilder]::new()

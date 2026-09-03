@@ -126,8 +126,10 @@ preenchidos por `Update-StatusLocalDetalhe` a partir de
 `btnAnexarGel` → `Invoke-AnexarGel` abre o PDF da vistoria do GEL, `Read-TextoPdf`
 (PdfPig — 10 DLLs **versionadas** em `lib/pdfpig/`, como o iperf3; `Register-ResolucaoPdfLib`
 instala um handler `AppDomain.AssemblyResolve` por nome simples para o .NET Framework
-do PS 5.1 não brigar com as versões de `System.Buffers`/`System.Memory` etc.;
-degrada com aviso se as DLLs sumirem) + `ConvertFrom-VistoriaGel` extraem
+do PS 5.1 não brigar com as versões de `System.Buffers`/`System.Memory` etc.; se
+as DLLs faltarem — instalação que atualizou de uma versão anterior do
+`Atualizar-DICON.ps1` —, `Restore-PdfLib` baixa do GitHub raw do canal no 1º uso;
+só aí degrada com aviso) + `ConvertFrom-VistoriaGel` extraem
 coordenadas / suporte ao link local / elétrica; o técnico confere em `panelGelConf`
 e `Invoke-GelRegistrar` grava em `data/vistoria-gel/<localid>.json` via
 `Save-VistoriaGel`; `btnGelRemover` → `Invoke-GelRemover`). O anexo pode ser feito
