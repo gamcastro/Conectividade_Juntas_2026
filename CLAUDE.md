@@ -51,7 +51,12 @@ Script), em vez de criar um BI/dashboard separado.
   da Ookla — link fraco/instável; `bloqueio` = proxy/DNS barrando *.speedtest.net;
   `sem_binario`; `desconhecido`) e monta `speedtest_diagnostico`, uma frase que
   entra no JSON e no relatório PDF (box âmbar "Rede local fraca / instável") como
-  **dado do laudo**, não só erro de ferramenta.
+  **dado do laudo**, não só erro de ferramenta. Se a falha for `desconhecido`
+  (ex.: `Latency test failed` / `[0] Unknown error` — o servidor padrão/auto
+  está ruim), tenta **outros servidores** da região: `Get-ServidoresSpeedtestProximos`
+  (`speedtest.exe --servers` → `ConvertFrom-ListaServidoresSpeedtest`) e refaz
+  contra até 3 IDs; se um funcionar, `servidor_fallback=$true` e o log sugere
+  fixar aquele `speedtest_server_id` em `config/rede-local.json`.
   Se não houver rede no local, o técnico pode marcar **"testei pelo roteamento
   do celular"** e informar a **operadora** (vai no `rede_local` e no relatório).
   A **Fase 2 (com a VPN do TRE)** é a bateria de sempre (ping/iperf3/Selenium).

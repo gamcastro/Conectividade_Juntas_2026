@@ -669,6 +669,18 @@ try {
         Write-Host "[10] falha de DNS -> 'bloqueio'; mensagem generica -> 'desconhecido' sem laudo"
     } else { Write-Host "    FALHA: classificacao bloqueio/desconhecido (b='$($fBlock.tipo)' u='$($fUnk.tipo)')"; $falhas++ }
 
+    # 10b. fallback de servidor: parser da lista "speedtest --servers" (tabela + jsonl)
+    $tabela = "  ID  Name                     Location          Country`n" +
+        "====================================================================`n" +
+        " 63579  PROFISSIONAL TELECOM     Mirassol d'Oeste  Brazil`n" +
+        " 14924  DATALIG TELECOM          Sao Luis          Brazil`n" +
+        " 72111  Mundonet Banda Larga     Sao Luis          Brazil`n"
+    $ids1 = ConvertFrom-ListaServidoresSpeedtest -Texto $tabela
+    $ids2 = ConvertFrom-ListaServidoresSpeedtest -Texto '{"type":"servers","servers":[{"id":111,"name":"A"},{"id":222},{"id":111}]}'
+    if ("$($ids1 -join ',')" -eq '63579,14924,72111' -and "$($ids2 -join ',')" -eq '111,222') {
+        Write-Host "[10] ConvertFrom-ListaServidoresSpeedtest le a tabela e o jsonl de servidores"
+    } else { Write-Host "    FALHA: parser da lista de servidores (tabela='$($ids1 -join ',')' jsonl='$($ids2 -join ',')')"; $falhas++ }
+
     # 11. anexo do GEL: extrator + links de mapa + bloco no JSON/relatorio
     $fixGel = 'Sistema de Georreferenciamento Eleitoral Zona: 24 Municipio: HUMBERTO DE CAMPOS ' +
         'Local: C. E. MANOEL DIAS DE SOUSA Coordenadas: -2.4997476' + [char]0x00BA + ',-43.25344546' + [char]0x00BA + '. Precisao 6.558 ' +

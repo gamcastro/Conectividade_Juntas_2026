@@ -96,6 +96,38 @@ function Invoke-SpeedtestStreaming {
     [pscustomobject]@{ Eventos = $eventos; Erro = ($errBuf -join "`n") }
 }
 
+# Extrai os IDs de servidor da saida de "speedtest.exe --servers" (tabela ou
+# jsonl). Puro (recebe texto) para ser testavel sem o binario.
+function ConvertFrom-ListaServidoresSpeedtest {
+    param([string] $Texto)
+    $ids = New-Object System.Collections.Generic.List[string]
+    foreach ($ln in ($Texto -split "`r?`n")) {
+        $t = $ln.Trim()
+        if ($t -match '^(\d{3,7})\s+\S') { $ids.Add($Matches[1]); continue }
+        if ($t -and $t[0] -eq '{') {
+            try {
+                $o = $t | ConvertFrom-Json
+                if ($o -and $o.PSObject.Properties['servers']) {
+                    foreach ($s in @($o.servers)) { if ($s.id) { $ids.Add("$($s.id)") } }
+                }
+            } catch { }
+        }
+    }
+    @($ids | Select-Object -Unique)
+}
+
+# Lista os servidores Speedtest mais proximos (IDs). Usado no fallback quando o
+# servidor padrao/auto falha o teste de latencia.
+function Get-ServidoresSpeedtestProximos {
+    param([string] $Caminho, [int] $Max = 6)
+    $linhas = New-Object System.Collections.Generic.List[string]
+    try {
+        & $Caminho '--servers' '--accept-license' '--accept-gdpr' 2>&1 |
+            ForEach-Object { $linhas.Add([string] $_) }
+    } catch { }
+    @(ConvertFrom-ListaServidoresSpeedtest -Texto ($linhas -join "`n") | Select-Object -First $Max)
+}
+
 # --------------------------------------------------------------- placa LAN
 function ConvertTo-MascaraIpv4 {
     param([int] $Prefixo)
@@ -356,6 +388,7 @@ function Test-InternetLocal {
         speedtest_erro        = ''
         speedtest_falha_tipo  = ''   # ''|handshake|bloqueio|sem_binario|desconhecido
         speedtest_diagnostico = ''   # frase p/ o laudo quando a falha e "de rede", nao da ferramenta
+        servidor_fallback     = $false   # true = o servidor padrao/auto falhou e usamos outro da regiao
         isp             = ''
         ip_externo      = ''
         servidor_nome   = ''
@@ -432,8 +465,37 @@ function Test-InternetLocal {
             -SinalPct (& { if ($Wireless) { $Wireless.sinal_pct } })
         $r.speedtest_falha_tipo  = $cls.tipo
         $r.speedtest_diagnostico = $cls.laudo
-        if ($cls.laudo) { Write-Log ("Rede local (laudo): {0}" -f $cls.laudo) -Nivel Aviso }
-        return [pscustomobject] $r
+
+        # Falha "de servidor" (ex.: "Latency test failed" / "[0] Unknown error"):
+        # o servidor padrao/auto esta ruim, mas outro da regiao pode funcionar.
+        # (handshake/bloqueio/sem_binario dependem da config da Ookla ou do
+        # proxy -> trocar de servidor nao ajuda.)
+        if ($cls.tipo -eq 'desconhecido') {
+            $jaTentado = [string] $cfg.speedtest_server_id
+            $cands = @(Get-ServidoresSpeedtestProximos -Caminho $exe |
+                Where-Object { "$_" -and "$_" -ne $jaTentado } | Select-Object -First 3)
+            foreach ($sid in $cands) {
+                Write-Log ("Speedtest: o servidor padrao falhou - tentando o servidor {0}..." -f $sid) -Nivel Aviso
+                $argv2 = '--format=jsonl --accept-license --accept-gdpr --server-id={0}' -f $sid
+                if ($cfg.speedtest_extra_args) { $argv2 += ' ' + [string] $cfg.speedtest_extra_args }
+                $saida = Invoke-SpeedtestStreaming -Caminho $exe -Argumentos $argv2 -TimeoutS 120
+                $res = @($saida.Eventos | Where-Object { $_.type -eq 'result' }) | Select-Object -Last 1
+                if ($res) {
+                    $r.servidor_fallback = $true
+                    Write-Log ("Speedtest funcionou no servidor {0}. Considere fixar speedtest_server_id={0} em config\rede-local.json." -f $sid) -Nivel Ok
+                    break
+                }
+            }
+        }
+
+        if (-not $res) {
+            if ($cls.laudo) { Write-Log ("Rede local (laudo): {0}" -f $cls.laudo) -Nivel Aviso }
+            return [pscustomobject] $r
+        }
+        # um servidor alternativo respondeu -> limpa os campos de falha
+        $r.speedtest_erro = ''
+        $r.speedtest_falha_tipo = ''
+        $r.speedtest_diagnostico = ''
     }
 
     $r.speedtest_ok    = $true
