@@ -113,7 +113,7 @@ function New-RelatorioHtml {
     $vpnObj = if ($r.PSObject.Properties['vpn']) { $r.vpn } else { $null }
     if ($vpnObj -and $vpnObj.impossivel) {
         $vpnBanner = '<p style="border:1px solid #BC352A;color:#BC352A;padding:6px 12px;border-radius:4px;font-weight:700">' +
-            'N&atilde;o foi poss&iacute;vel conectar a VPN da Justi&ccedil;a Eleitoral neste local &mdash; a bateria com VPN n&atilde;o foi medida.' +
+            'N&atilde;o foi poss&iacute;vel conectar a VPN da Justi&ccedil;a Eleitoral neste local.' +
             $(if ($vpnObj.motivo) { '<br><span style="font-weight:400">Motivo: ' + (ConvertTo-HtmlSafe ([string] $vpnObj.motivo)) + '</span>' } else { '' }) +
             '</p>'
     }
