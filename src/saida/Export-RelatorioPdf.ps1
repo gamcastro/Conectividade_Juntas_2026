@@ -448,7 +448,7 @@ function New-RelatorioHtml {
         ))
         $secoes = @($secoes | Where-Object { $_ })
         if ($secoes.Count) {
-            $blocoGel = "  <div class=""bar"">Dados da vistoria do GEL</div>`n  <div class=""gel"">`n$imgMapa`n" + ($secoes -join "`n") + "`n  </div>`n"
+            $blocoGel = "  <div class=""bar"">Dados da vistoria (importado do GEL)</div>`n  <div class=""gel"">`n$imgMapa`n" + ($secoes -join "`n") + "`n  </div>`n"
         }
     }
 

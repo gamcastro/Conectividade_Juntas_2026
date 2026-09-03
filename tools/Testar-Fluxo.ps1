@@ -830,7 +830,7 @@ try {
         $jsonGel.vistoria_gel.tipo_local.esfera_administrativa -eq 'Estadual' -and
         $jsonGel.vistoria_gel.infraestrutura.iluminacao -eq 'Sim' -and
         $jsonGel.vistoria_gel.eletrica.quadro_energia -eq 'Externo' -and $jsonGel.vistoria_gel.fotos -eq 1 -and
-        $htmlGel -match 'Dados da vistoria do GEL' -and $htmlGel -match '-2.4997476' -and $htmlGel -match 'google.com/maps' -and
+        $htmlGel -match 'Dados da vistoria \(importado do GEL\)' -and $htmlGel -match '-2.4997476' -and $htmlGel -match 'google.com/maps' -and
         $htmlGel -match 'Tipo do local' -and $htmlGel -match 'Infraestrutura' -and $htmlGel -match 'Quadro de energia' -and
         $htmlGel -match 'Registro fotogr&aacute;fico' -and $htmlGel -match '<img src="data:image/jpeg;base64,') {
         Write-Host "[11] JSON traz 'vistoria_gel' em secoes + contagem de fotos; relatorio agrupa secoes + embute as fotos"
