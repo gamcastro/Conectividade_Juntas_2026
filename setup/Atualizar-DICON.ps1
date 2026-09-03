@@ -1,7 +1,7 @@
 ﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
-    Atualiza o codigo do DICON (src\, lib\mahapps\, assets\, bin\iperf3\,
+    Atualiza o codigo do DICON (src\, lib\mahapps\, lib\pdfpig\, assets\, bin\iperf3\,
     tools\*.ps1, Iniciar-Diagnostico.*) SEM tocar em config\, data\,
     bin\geckodriver\, bin\chromedriver\, lib\Selenium\, resultados\ e relatorios\.
 
@@ -98,7 +98,7 @@ if ($temGit) {
     if (-not $novo) { throw 'ZIP da branch nao extraiu como esperado.' }
 
     # pastas de codigo (+ iperf3, que agora vai no repo): espelha (remove sumidos)
-    foreach ($d in 'src', 'lib\mahapps', 'assets', 'apps-script', 'docs', 'setup', 'bin\iperf3') {
+    foreach ($d in 'src', 'lib\mahapps', 'lib\pdfpig', 'assets', 'apps-script', 'docs', 'setup', 'bin\iperf3') {
         $orig = Join-Path $novo.FullName $d
         $dest = Join-Path $RaizApp $d
         if (-not (Test-Path $orig)) { continue }

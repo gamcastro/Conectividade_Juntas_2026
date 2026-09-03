@@ -94,6 +94,32 @@ function Get-CaminhoPdfLib {
     return $null
 }
 
+# Carrega os .dll de lib\pdfpig e instala (uma vez) um resolvedor de assembly por
+# nome simples. O .NET Framework do PowerShell 5.1 nao unifica versoes sozinho: o
+# PdfPig pede System.Buffers 4.0.2.0 / System.Runtime.CompilerServices.Unsafe etc.
+# e nos temos outras builds na pasta - sem o handler abaixo da "Nao foi possivel
+# carregar arquivo ou assembly".
+$script:PdfLibMapa = $null
+
+function Register-ResolucaoPdfLib {
+    param([Parameter(Mandatory)] [string] $Pasta)
+    if ($null -eq $script:PdfLibMapa) {
+        $script:PdfLibMapa = @{}
+        [AppDomain]::CurrentDomain.add_AssemblyResolve({
+            param($fonte, $ev)
+            $simples = ($ev.Name -split ',')[0].Trim()
+            if ($script:PdfLibMapa.ContainsKey($simples)) { return $script:PdfLibMapa[$simples] }
+            return $null
+        })
+    }
+    foreach ($d in @(Get-ChildItem -Path $Pasta -Filter *.dll -File -ErrorAction SilentlyContinue)) {
+        try {
+            $asm = [Reflection.Assembly]::LoadFrom($d.FullName)
+            $script:PdfLibMapa[$asm.GetName().Name] = $asm
+        } catch { }
+    }
+}
+
 function Read-TextoPdf {
     param([Parameter(Mandatory)] [string] $Caminho)
     if (-not (Test-Path $Caminho)) { throw "PDF nao encontrado: $Caminho" }
@@ -101,10 +127,7 @@ function Read-TextoPdf {
     if (-not $dll) {
         throw 'biblioteca de leitura de PDF ausente - copie os arquivos do PdfPig para lib\pdfpig\ (veja lib\pdfpig\LEIA-ME.txt).'
     }
-    $pasta = Split-Path $dll -Parent
-    foreach ($d in @(Get-ChildItem -Path $pasta -Filter *.dll -File -ErrorAction SilentlyContinue)) {
-        try { [Reflection.Assembly]::LoadFrom($d.FullName) | Out-Null } catch { }
-    }
+    Register-ResolucaoPdfLib -Pasta (Split-Path $dll -Parent)
     $sb  = [Text.StringBuilder]::new()
     $doc = [UglyToad.PdfPig.PdfDocument]::Open($Caminho)
     try {

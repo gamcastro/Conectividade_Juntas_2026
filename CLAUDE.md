@@ -124,7 +124,10 @@ preenchidos por `Update-StatusLocalDetalhe` a partir de
 `Get-DiagnosticosRealizados` + varredura de `relatorios/*_<idSan>.{pdf,html}` +
 `Get-VistoriaGel`). Logo abaixo, o **card do formulário GEL** (`cardGel` /
 `btnAnexarGel` → `Invoke-AnexarGel` abre o PDF da vistoria do GEL, `Read-TextoPdf`
-(PdfPig em `lib/pdfpig/`, degrada se ausente) + `ConvertFrom-VistoriaGel` extraem
+(PdfPig — 10 DLLs **versionadas** em `lib/pdfpig/`, como o iperf3; `Register-ResolucaoPdfLib`
+instala um handler `AppDomain.AssemblyResolve` por nome simples para o .NET Framework
+do PS 5.1 não brigar com as versões de `System.Buffers`/`System.Memory` etc.;
+degrada com aviso se as DLLs sumirem) + `ConvertFrom-VistoriaGel` extraem
 coordenadas / suporte ao link local / elétrica; o técnico confere em `panelGelConf`
 e `Invoke-GelRegistrar` grava em `data/vistoria-gel/<localid>.json` via
 `Save-VistoriaGel`; `btnGelRemover` → `Invoke-GelRemover`). O anexo pode ser feito

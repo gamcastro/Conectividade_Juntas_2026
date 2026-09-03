@@ -760,8 +760,32 @@ try {
         Write-Host "[11] JSON traz 'vistoria_gel' e o relatorio traz a secao do GEL + link do mapa"
     } else { Write-Host "    FALHA: JSON/relatorio do GEL (vg=$([bool]$jsonGel.vistoria_gel) html_sec=$($htmlGel -match 'Vistoria GEL'))"; $falhas++ }
 
-    try { Read-TextoPdf -Caminho $PSCommandPath; Write-Host "    FALHA: Read-TextoPdf devia falhar sem a lib / com nao-PDF"; $falhas++ }
-    catch { Write-Host "[11] Read-TextoPdf sem a biblioteca do PdfPig -> erro claro ($($_.Exception.Message.Substring(0,[Math]::Min(40,$_.Exception.Message.Length)))...)" }
+    # arquivo que nao e PDF -> erro (nao trava a GUI)
+    try { Read-TextoPdf -Caminho $PSCommandPath; Write-Host "    FALHA: Read-TextoPdf devia falhar com nao-PDF"; $falhas++ }
+    catch { Write-Host "[11] Read-TextoPdf com arquivo nao-PDF -> erro claro" }
+
+    # round-trip real: se as DLLs do PdfPig estao no repo, constroi um PDF com o
+    # proprio PdfPig, le de volta e confirma que ConvertFrom-VistoriaGel extrai.
+    if (Get-CaminhoPdfLib) {
+        try {
+            Register-ResolucaoPdfLib -Pasta (Join-Path $Global:RaizApp 'lib\pdfpig')
+            $pdfOut = Join-Path $env:TEMP ('dicon-teste-{0}.pdf' -f (Get-Random))
+            $bld = New-Object UglyToad.PdfPig.Writer.PdfDocumentBuilder
+            $pgB = $bld.AddPage([UglyToad.PdfPig.Content.PageSize]::A4)
+            $fnt = $bld.AddTrueTypeFont([IO.File]::ReadAllBytes("$env:WINDIR\Fonts\arial.ttf"))
+            [void] $pgB.AddText('Coordenadas: -2.4997476o,-43.25344546o. Precisao 6.558', 11,
+                (New-Object UglyToad.PdfPig.Core.PdfPoint(50, 700)), $fnt)
+            [IO.File]::WriteAllBytes($pdfOut, $bld.Build())
+            $lido = Read-TextoPdf -Caminho $pdfOut
+            Remove-Item $pdfOut -Force -ErrorAction SilentlyContinue
+            $vgL = ConvertFrom-VistoriaGel -Texto $lido
+            if ([math]::Abs($vgL.lat - (-2.4997476)) -lt 1e-6 -and [math]::Abs($vgL.long - (-43.25344546)) -lt 1e-6) {
+                Write-Host "[11] PdfPig no repo: build -> Read-TextoPdf -> extrai coordenadas OK"
+            } else { Write-Host "    FALHA: round-trip PdfPig (lat=$($vgL.lat) long=$($vgL.long))"; $falhas++ }
+        } catch { Write-Host "    FALHA: PdfPig nao carregou sob o PS 5.1 -> $_"; $falhas++ }
+    } else {
+        Write-Host "[11] PdfPig ausente de lib\pdfpig\ - round-trip pulado (anexo do GEL avisa e degrada)"
+    }
 }
 finally {
     $Global:PastaDadosOverride = $null
