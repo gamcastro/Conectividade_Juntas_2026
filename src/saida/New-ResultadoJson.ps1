@@ -233,8 +233,29 @@ function New-ResultadoJson {
                 longitude         = (Get-Prop $VistoriaGel 'long')
                 precisao_m        = (Get-Prop $VistoriaGel 'precisao_m')
                 mapa_link         = [string] (Get-Prop $VistoriaGel 'mapa_link')
+                tipo_local        = [pscustomobject]@{
+                    esfera_administrativa = [string] (Get-Prop $VistoriaGel 'esfera_administrativa')
+                    localizacao           = [string] (Get-Prop $VistoriaGel 'localizacao')
+                    tipo                  = [string] (Get-Prop $VistoriaGel 'tipo_local')
+                }
+                infraestrutura    = [pscustomobject]@{
+                    salas_necessarias = [string] (Get-Prop $VistoriaGel 'salas_necessarias')
+                    agua              = [string] (Get-Prop $VistoriaGel 'agua')
+                    climatizacao      = [string] (Get-Prop $VistoriaGel 'climatizacao')
+                    iluminacao        = [string] (Get-Prop $VistoriaGel 'iluminacao')
+                    agua_potavel      = [string] (Get-Prop $VistoriaGel 'agua_potavel')
+                    predio_reforma    = [string] (Get-Prop $VistoriaGel 'predio_reforma')
+                }
+                eletrica          = [pscustomobject]@{
+                    quadro_energia    = [string] (Get-Prop $VistoriaGel 'quadro_energia')
+                    energia_eletrica  = [string] (Get-Prop $VistoriaGel 'energia_eletrica')
+                    tomadas           = [string] (Get-Prop $VistoriaGel 'eletrica_tomadas')
+                    tensao            = [string] (Get-Prop $VistoriaGel 'eletrica_tensao')
+                    extensao          = [string] (Get-Prop $VistoriaGel 'eletrica_extensao')
+                }
                 suporte_nome      = [string] (Get-Prop $VistoriaGel 'suporte_nome')
                 suporte_telefone  = [string] (Get-Prop $VistoriaGel 'suporte_telefone')
+                # compat: campos planos anteriores
                 eletrica_tensao   = [string] (Get-Prop $VistoriaGel 'eletrica_tensao')
                 eletrica_tomadas  = [string] (Get-Prop $VistoriaGel 'eletrica_tomadas')
                 eletrica_extensao = [string] (Get-Prop $VistoriaGel 'eletrica_extensao')

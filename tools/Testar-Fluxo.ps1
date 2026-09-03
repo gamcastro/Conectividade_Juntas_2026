@@ -727,6 +727,13 @@ try {
     $fixGel = 'Sistema de Georreferenciamento Eleitoral Zona: 32 Tipo de local: Predio Externo ' +
         'HUMBERTO DE CAMPOS Municipio: Local: C. E. MANOEL DIAS DE SOUSA ' +
         '-2.4997476' + [char]0x00BA + ',-43.25344546' + [char]0x00BA + '. Precis' + [char]0x00E3 + 'o 6.558 Coordenadas: ' +
+        'Selecione a esfera administrativa do local vistoriado Estadual R. : ' +
+        'Localizacao Urbano R. : Tipo de local Escola R. : Observacoes: R. : ' +
+        'Infraestrutura Quantidade de salas necessarias para funcionar como secao eleitoral? 1 R. : ' +
+        'Ha abastecimento de agua? Sim R. : A climatizacao ou ventilacao e feita por: Ar condicionado R. : ' +
+        'Ha ilumina' + [char]0x00E7 + [char]0x00E3 + 'o? Sim R. : ' +
+        'Ha agua potavel disponivel para mesarias(os) e eleitoras(es)? Sim R. : ' +
+        'O predio esta em reforma? Nao R. : ' +
         'Qual a configuracao de rede? DHCP R. : ' +
         'Qual o nome do tecnico ou empresa responsavel pelo suporte ao link local? suporte Tec 98 30421747 R. : ' +
         'Qual o telefone do tecnico ou empresa responsavel pelo suporte ao link local? OLNY TELECON R. : ' +
@@ -741,6 +748,12 @@ try {
         $pg.suporte_nome -match 'suporte Tec' -and $pg.suporte_telefone -match 'OLNY') {
         Write-Host "[11] ConvertFrom-VistoriaGel extrai coordenadas + eletrica + suporte do texto do GEL"
     } else { Write-Host "    FALHA: extrator do GEL (lat=$($pg.lat) long=$($pg.long) prec=$($pg.precisao_m) tensao='$($pg.eletrica_tensao)' tomadas='$($pg.eletrica_tomadas)' ext='$($pg.eletrica_extensao)' sup='$($pg.suporte_nome)'/'$($pg.suporte_telefone)')"; $falhas++ }
+    if ($pg.esfera_administrativa -eq 'Estadual' -and $pg.localizacao -eq 'Urbano' -and $pg.tipo_local -eq 'Escola' -and
+        $pg.salas_necessarias -eq '1' -and $pg.agua -eq 'Sim' -and $pg.climatizacao -match 'Ar cond' -and
+        $pg.iluminacao -eq 'Sim' -and $pg.agua_potavel -eq 'Sim' -and $pg.predio_reforma -eq 'Nao' -and
+        $pg.quadro_energia -eq 'Externo' -and $pg.energia_eletrica -eq 'Sim') {
+        Write-Host "[11] ConvertFrom-VistoriaGel extrai tipo do local + infraestrutura + quadro de energia"
+    } else { Write-Host "    FALHA: novas secoes do GEL (esfera='$($pg.esfera_administrativa)' loc='$($pg.localizacao)' tipo='$($pg.tipo_local)' salas='$($pg.salas_necessarias)' agua='$($pg.agua)' clima='$($pg.climatizacao)' ilum='$($pg.iluminacao)' potavel='$($pg.agua_potavel)' reforma='$($pg.predio_reforma)' quadro='$($pg.quadro_energia)' energia='$($pg.energia_eletrica)')"; $falhas++ }
 
     $lnkG = Get-LinkGoogleMaps -Lat -2.5 -Long -43.25
     $urlM = Get-UrlMapaEstatico -Lat -2.5 -Long -43.25 -Chave 'FAKE123'
@@ -752,6 +765,10 @@ try {
 
     $g = [pscustomobject]@{
         lat = -2.4997476; long = -43.25344546; precisao_m = 6.558
+        esfera_administrativa = 'Estadual'; localizacao = 'Urbano'; tipo_local = 'Escola'
+        salas_necessarias = '1'; agua = 'Sim'; climatizacao = 'Ar condicionado'
+        iluminacao = 'Sim'; agua_potavel = 'Sim'; predio_reforma = 'Nao'
+        quadro_energia = 'Externo'; energia_eletrica = 'Sim'
         suporte_nome = 'OLNY TELECON'; suporte_telefone = '(98) 3042-1747'
         eletrica_tensao = '220 volts'; eletrica_tomadas = '6'; eletrica_extensao = 'Sim'
         mapa_link = (Get-LinkGoogleMaps -Lat -2.4997476 -Long -43.25344546)
@@ -761,9 +778,13 @@ try {
     $htmlGel = New-RelatorioHtml -Resultado $jsonGel
     if ($jsonGel.vistoria_gel -and [double] $jsonGel.vistoria_gel.latitude -eq -2.4997476 -and
         $jsonGel.vistoria_gel.suporte_nome -eq 'OLNY TELECON' -and $jsonGel.vistoria_gel.eletrica_tomadas -eq '6' -and
-        $htmlGel -match 'Vistoria GEL' -and $htmlGel -match '-2.4997476' -and $htmlGel -match 'google.com/maps') {
-        Write-Host "[11] JSON traz 'vistoria_gel' e o relatorio traz a secao do GEL + link do mapa"
-    } else { Write-Host "    FALHA: JSON/relatorio do GEL (vg=$([bool]$jsonGel.vistoria_gel) html_sec=$($htmlGel -match 'Vistoria GEL'))"; $falhas++ }
+        $jsonGel.vistoria_gel.tipo_local.esfera_administrativa -eq 'Estadual' -and
+        $jsonGel.vistoria_gel.infraestrutura.iluminacao -eq 'Sim' -and
+        $jsonGel.vistoria_gel.eletrica.quadro_energia -eq 'Externo' -and
+        $htmlGel -match 'Vistoria GEL' -and $htmlGel -match '-2.4997476' -and $htmlGel -match 'google.com/maps' -and
+        $htmlGel -match 'Tipo do local' -and $htmlGel -match 'Infraestrutura' -and $htmlGel -match 'Quadro de energia') {
+        Write-Host "[11] JSON traz 'vistoria_gel' em secoes e o relatorio agrupa Tipo do local / Infraestrutura / Eletricas"
+    } else { Write-Host "    FALHA: JSON/relatorio do GEL (vg=$([bool]$jsonGel.vistoria_gel) sec_tl=$($jsonGel.vistoria_gel.tipo_local.esfera_administrativa) html_infra=$($htmlGel -match 'Infraestrutura'))"; $falhas++ }
 
     # arquivo que nao e PDF -> erro (nao trava a GUI)
     try { Read-TextoPdf -Caminho $PSCommandPath; Write-Host "    FALHA: Read-TextoPdf devia falhar com nao-PDF"; $falhas++ }

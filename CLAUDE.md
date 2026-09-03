@@ -129,15 +129,21 @@ instala um handler `AppDomain.AssemblyResolve` por nome simples para o .NET Fram
 do PS 5.1 não brigar com as versões de `System.Buffers`/`System.Memory` etc.; se
 as DLLs faltarem — instalação que atualizou de uma versão anterior do
 `Atualizar-DICON.ps1` —, `Restore-PdfLib` baixa do GitHub raw do canal no 1º uso;
-só aí degrada com aviso) + `ConvertFrom-VistoriaGel` extraem coordenadas / suporte
-ao link local / elétrica — o extrator é calibrado ao layout real do PDF do GEL
-(texto normalizado sem acento; a resposta aparece **antes** do marcador `R. :` e
-o rótulo `Coordenadas:` **depois** do valor). O técnico confere em `panelGelConf`
-e `Invoke-GelRegistrar` grava em `data/vistoria-gel/<localid>.json` via
-`Save-VistoriaGel`; `btnGelRemover` → `Invoke-GelRemover`). O anexo pode ser feito
-**a qualquer tempo**, não só no momento do teste — e é carregado do disco em
+só aí degrada com aviso) + `ConvertFrom-VistoriaGel` extraem, **agrupados pelas
+seções do GEL**: Coordenadas (lat/long/precisão); Tipo do local (esfera
+administrativa, localização, tipo); Infraestrutura (salas, água, climatização,
+iluminação, água potável, prédio em reforma); Instalações elétricas (quadro de
+energia, energia, tomadas, tensão, extensão); Suporte ao link local (empresa,
+telefone). O extrator é calibrado ao layout real do PDF do GEL (texto normalizado
+sem acento; a resposta aparece **antes** do marcador `R. :` e o rótulo
+`Coordenadas:` **depois** do valor; captura para no primeiro `?` para não invadir
+a próxima pergunta). O técnico confere em `panelGelConf` (as mesmas 5 seções, uma
+por sub-cabeçalho) e `Invoke-GelRegistrar` grava em `data/vistoria-gel/<localid>.json`
+via `Save-VistoriaGel`; `btnGelRemover` → `Invoke-GelRemover`). O anexo pode ser
+feito **a qualquer tempo**, não só no momento do teste — e é carregado do disco em
 `$Global:VistoriaGel` quando o Local entra no assistente (passo 2). Vai para o
-JSON `vistoria_gel` + seção "Vistoria GEL" no relatório com link e imagem do
+JSON `vistoria_gel` (com sub-objetos `tipo_local` / `infraestrutura` / `eletrica`)
++ seção "Vistoria GEL" no relatório (uma tabela por seção) com link e imagem do
 Google Maps; a chave da **Maps Static API** fica em `config/ambiente.json`
 (`google_maps.static_key`), editável na tela de Administração; a imagem é baixada
 e embutida como `data:` URI, então a chave não vai no HTML/PDF.

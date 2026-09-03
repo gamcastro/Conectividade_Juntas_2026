@@ -193,8 +193,16 @@ function ConvertFrom-VistoriaGel {
 
     $o = [pscustomobject]@{
         lat = $null; long = $null; precisao_m = $null
+        # secao "Tipo do local"
+        esfera_administrativa = ''; localizacao = ''; tipo_local = ''
+        # secao "Infraestrutura"
+        salas_necessarias = ''; agua = ''; climatizacao = ''
+        iluminacao = ''; agua_potavel = ''; predio_reforma = ''
+        # secao "Instalacoes eletricas"
+        quadro_energia = ''; energia_eletrica = ''
+        eletrica_tomadas = ''; eletrica_tensao = ''; eletrica_extensao = ''
+        # secao "Junta Especial" (suporte ao link local)
         suporte_nome = ''; suporte_telefone = ''
-        eletrica_tensao = ''; eletrica_tomadas = ''; eletrica_extensao = ''
         achou_algo = $false
     }
 
@@ -209,20 +217,43 @@ function ConvertFrom-VistoriaGel {
 
     # No PDF do GEL a RESPOSTA aparece ENTRE a pergunta e o marcador " R. :"
     # (o "R. :" e o rotulo do campo, que renderiza depois do valor):
-    #   "<pergunta>? <resposta> R. :"   ou   "<rotulo>: <resposta> R. :"
+    #   "<pergunta>? <resposta> R. :"  /  "<rotulo>: <resposta> R. :"  /
+    #   "<rotulo sem pontuacao> <resposta> R. :"
+    # A captura para no primeiro "?" para nao invadir a proxima pergunta quando a
+    # resposta esta vazia.
     $resp = {
         param([string] $rxPergunta)
-        $rx = $rxPergunta + '\s*[?:]\s*(.+?)\s*R\s*\.?\s*:'
+        $rx = $rxPergunta + '\s*[?:]?\s*([^?]{1,80}?)\s*R\s*\.?\s*:'
         $m = [regex]::Match($t, $rx, [Text.RegularExpressions.RegexOptions]::IgnoreCase)
         if ($m.Success) { (($m.Groups[1].Value) -replace '\s+', ' ').Trim() } else { '' }
     }
 
-    $o.suporte_nome      = & $resp 'nome do tecnico ou empresa responsavel pelo suporte ao link local'
-    $o.suporte_telefone  = & $resp 'telefone do tecnico ou empresa responsavel pelo suporte ao link local'
-    $o.eletrica_tensao   = & $resp 'tensao da rede eletrica'
+    # --- Tipo do local
+    $o.esfera_administrativa = & $resp 'esfera administrativa do local vistoriado'
+    if ($t -match '\bLocalizacao\s+(Urbano|Rural|Semi[ -]?urbano|Semiurbano)\b') { $o.localizacao = $Matches[1] }
+    $m = [regex]::Match($t, 'Tipo de local\s+(?!que\b)([^?:]{1,38}?)\s*R\s*\.?\s*:', [Text.RegularExpressions.RegexOptions]::IgnoreCase)
+    if ($m.Success) { $o.tipo_local = ($m.Groups[1].Value -replace '\s+', ' ').Trim() }
+
+    # --- Infraestrutura
+    $o.salas_necessarias = & $resp 'Quantidade de salas necessarias para funcionar como secao eleitoral'
+    $o.agua              = & $resp 'Ha abastecimento de agua'
+    $o.climatizacao      = & $resp 'A climatizacao ou ventilacao e feita por'
+    $o.iluminacao        = & $resp 'Ha iluminacao'
+    $o.agua_potavel      = & $resp 'Ha agua potavel disponivel para mesarias\S* e eleitoras\S*'
+    $o.predio_reforma    = & $resp 'O predio esta em reforma'
+
+    # --- Instalacoes eletricas
+    $o.quadro_energia    = & $resp 'Localizacao do Quadro de Energia'
+    $o.energia_eletrica  = & $resp 'Ha energia eletrica'
     $o.eletrica_tomadas  = & $resp 'quantas tomadas funcionando'
+    $o.eletrica_tensao   = & $resp 'tensao da rede eletrica'
     $o.eletrica_extensao = & $resp 'necessidade de extensao eletrica'
 
-    $o.achou_algo = [bool] ($o.lat -or $o.suporte_nome -or $o.suporte_telefone -or $o.eletrica_tensao -or $o.eletrica_tomadas)
+    # --- Suporte ao link local (secao "Junta Especial")
+    $o.suporte_nome      = & $resp 'nome do tecnico ou empresa responsavel pelo suporte ao link local'
+    $o.suporte_telefone  = & $resp 'telefone do tecnico ou empresa responsavel pelo suporte ao link local'
+
+    $o.achou_algo = [bool] ($o.lat -or $o.esfera_administrativa -or $o.tipo_local -or $o.agua -or
+        $o.eletrica_tensao -or $o.eletrica_tomadas -or $o.suporte_nome -or $o.suporte_telefone)
     $o
 }

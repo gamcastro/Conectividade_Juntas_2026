@@ -1245,8 +1245,10 @@ function Update-CardGel {
     if ($g) {
         $partes = @()
         if ($null -ne $g.lat -and $null -ne $g.long) { $partes += ('coordenadas {0}, {1}' -f $g.lat, $g.long) }
+        if ($g.esfera_administrativa -or $g.localizacao -or $g.tipo_local) { $partes += 'tipo do local' }
+        if ($g.agua -or $g.iluminacao -or $g.salas_necessarias -or $g.predio_reforma) { $partes += 'infraestrutura' }
+        if ($g.eletrica_tensao -or $g.eletrica_tomadas -or $g.eletrica_extensao -or $g.quadro_energia) { $partes += 'dados eletricos' }
         if ($g.suporte_nome -or $g.suporte_telefone) { $partes += 'suporte do link' }
-        if ($g.eletrica_tensao -or $g.eletrica_tomadas -or $g.eletrica_extensao) { $partes += 'dados eletricos' }
         $res.Text = 'Formulario GEL anexado: ' + ($partes -join ' - ')
         $res.Visibility = 'Visible'
         $stx.Text = ''
@@ -1295,14 +1297,25 @@ function Invoke-AnexarGel {
     } else {
         $st.Text = 'Campos extraidos - confira e ajuste.'
     }
-    $w.FindName('txtGelLat').Text      = if ($null -ne $p.lat)  { "$($p.lat)"  } else { '' }
-    $w.FindName('txtGelLong').Text     = if ($null -ne $p.long) { "$($p.long)" } else { '' }
-    $w.FindName('txtGelPrec').Text     = if ($null -ne $p.precisao_m) { "$($p.precisao_m)" } else { '' }
-    $w.FindName('txtGelTensao').Text   = [string] $p.eletrica_tensao
-    $w.FindName('txtGelTomadas').Text  = [string] $p.eletrica_tomadas
-    $w.FindName('txtGelExtensao').Text = [string] $p.eletrica_extensao
-    $w.FindName('txtGelSupNome').Text  = [string] $p.suporte_nome
-    $w.FindName('txtGelSupTel').Text   = [string] $p.suporte_telefone
+    $w.FindName('txtGelLat').Text         = if ($null -ne $p.lat)  { "$($p.lat)"  } else { '' }
+    $w.FindName('txtGelLong').Text        = if ($null -ne $p.long) { "$($p.long)" } else { '' }
+    $w.FindName('txtGelPrec').Text        = if ($null -ne $p.precisao_m) { "$($p.precisao_m)" } else { '' }
+    $w.FindName('txtGelEsfera').Text      = [string] $p.esfera_administrativa
+    $w.FindName('txtGelLocalizacao').Text = [string] $p.localizacao
+    $w.FindName('txtGelTipoLocal').Text   = [string] $p.tipo_local
+    $w.FindName('txtGelSalas').Text       = [string] $p.salas_necessarias
+    $w.FindName('txtGelAgua').Text        = [string] $p.agua
+    $w.FindName('txtGelClima').Text       = [string] $p.climatizacao
+    $w.FindName('txtGelIluminacao').Text  = [string] $p.iluminacao
+    $w.FindName('txtGelAguaPot').Text     = [string] $p.agua_potavel
+    $w.FindName('txtGelReforma').Text     = [string] $p.predio_reforma
+    $w.FindName('txtGelQuadro').Text      = [string] $p.quadro_energia
+    $w.FindName('txtGelEnergia').Text     = [string] $p.energia_eletrica
+    $w.FindName('txtGelTensao').Text      = [string] $p.eletrica_tensao
+    $w.FindName('txtGelTomadas').Text     = [string] $p.eletrica_tomadas
+    $w.FindName('txtGelExtensao').Text    = [string] $p.eletrica_extensao
+    $w.FindName('txtGelSupNome').Text     = [string] $p.suporte_nome
+    $w.FindName('txtGelSupTel').Text      = [string] $p.suporte_telefone
     $w.FindName('panelGelConf').Visibility = 'Visible'
     $w.FindName('txtGelResumo').Visibility = 'Collapsed'
 }
@@ -1335,17 +1348,29 @@ function Invoke-GelRegistrar {
         return
     }
 
+    $tb = { param($n) ([string] $w.FindName($n).Text).Trim() }
     $obj = [pscustomobject]@{
-        lat               = $lat
-        long              = $long
-        precisao_m        = $prec
-        suporte_nome      = ([string] $w.FindName('txtGelSupNome').Text).Trim()
-        suporte_telefone  = ([string] $w.FindName('txtGelSupTel').Text).Trim()
-        eletrica_tensao   = ([string] $w.FindName('txtGelTensao').Text).Trim()
-        eletrica_tomadas  = ([string] $w.FindName('txtGelTomadas').Text).Trim()
-        eletrica_extensao = ([string] $w.FindName('txtGelExtensao').Text).Trim()
-        mapa_link         = if ($null -ne $lat -and $null -ne $long) { Get-LinkGoogleMaps -Lat $lat -Long $long } else { '' }
-        anexado_em        = (Get-Date).ToString('o')
+        lat                   = $lat
+        long                  = $long
+        precisao_m            = $prec
+        esfera_administrativa = & $tb 'txtGelEsfera'
+        localizacao           = & $tb 'txtGelLocalizacao'
+        tipo_local            = & $tb 'txtGelTipoLocal'
+        salas_necessarias     = & $tb 'txtGelSalas'
+        agua                  = & $tb 'txtGelAgua'
+        climatizacao          = & $tb 'txtGelClima'
+        iluminacao            = & $tb 'txtGelIluminacao'
+        agua_potavel          = & $tb 'txtGelAguaPot'
+        predio_reforma        = & $tb 'txtGelReforma'
+        quadro_energia        = & $tb 'txtGelQuadro'
+        energia_eletrica      = & $tb 'txtGelEnergia'
+        eletrica_tensao       = & $tb 'txtGelTensao'
+        eletrica_tomadas      = & $tb 'txtGelTomadas'
+        eletrica_extensao     = & $tb 'txtGelExtensao'
+        suporte_nome          = & $tb 'txtGelSupNome'
+        suporte_telefone      = & $tb 'txtGelSupTel'
+        mapa_link             = if ($null -ne $lat -and $null -ne $long) { Get-LinkGoogleMaps -Lat $lat -Long $long } else { '' }
+        anexado_em            = (Get-Date).ToString('o')
     }
     Save-VistoriaGel -LocalId ([string] $d.id) -Dados $obj | Out-Null
     if ([string] $d.id -eq [string] $Global:LocalMedicoesId) { $Global:VistoriaGel = $obj }

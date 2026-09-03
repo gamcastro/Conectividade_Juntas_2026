@@ -214,35 +214,74 @@ $($trs -join "`n")
     $blocoGel = ''
     $vg = if ($r.PSObject.Properties['vistoria_gel']) { $r.vistoria_gel } else { $null }
     if ($vg) {
-        $gc = @()
+        # linha "<rotulo>: <valor>" so quando ha valor
+        $li = {
+            param([string] $rotulo, $valor)
+            $v = ("$valor").Trim()
+            if (-not $v) { return $null }
+            '<div><b>{0}:</b> {1}</div>' -f $rotulo, (ConvertTo-HtmlSafe $v)
+        }
+        # devolve o HTML de uma secao (subtitulo + grid2) ou '' se nenhuma linha
+        $mkSecao = {
+            param([string] $titulo, [string[]] $linhas)
+            $ok = @($linhas | Where-Object { $_ })
+            if (-not $ok.Count) { return '' }
+            ('  <h3 style="margin:12px 0 4px;font-size:12px;color:#555">{0}</h3>' -f $titulo) +
+            "`n  <div class=""grid2"">`n    " + ($ok -join "`n    ") + "`n  </div>"
+        }
+        $secoes = @()
+
+        $vgTL = if ($vg.PSObject.Properties['tipo_local']) { $vg.tipo_local } else { $null }
+        $vgIN = if ($vg.PSObject.Properties['infraestrutura']) { $vg.infraestrutura } else { $null }
+        $vgEL = if ($vg.PSObject.Properties['eletrica']) { $vg.eletrica } else { $null }
+
+        # Coordenadas + mapa
+        $coord = @()
+        $imgMapa = ''
         if ($null -ne $vg.latitude -and $null -ne $vg.longitude) {
             $latS  = ("$($vg.latitude)")  -replace ',', '.'
             $longS = ("$($vg.longitude)") -replace ',', '.'
             $precS = (("$($vg.precisao_m)") -replace ',', '.').Trim()
             $prec = if ($precS -and $precS -ne '0') { (' &middot; precis&atilde;o ~{0} m' -f $precS) } else { '' }
-            $gc += '<div style="grid-column:1/3"><b>Coordenadas:</b> {0}, {1}{2}</div>' -f $latS, $longS, $prec
-            $lnk = if ($vg.mapa_link) { [string] $vg.mapa_link }
-                   else { 'https://www.google.com/maps?q={0},{1}' -f $latS, $longS }
-            $gc += '<div style="grid-column:1/3"><b>Mapa:</b> <a href="{0}">{0}</a></div>' -f (ConvertTo-HtmlSafe $lnk)
-        }
-        if ($vg.suporte_nome)      { $gc += '<div style="grid-column:1/3"><b>Suporte ao link local:</b> {0}</div>' -f (ConvertTo-HtmlSafe ([string] $vg.suporte_nome)) }
-        if ($vg.suporte_telefone)  { $gc += '<div style="grid-column:1/3"><b>Telefone do suporte:</b> {0}</div>' -f (ConvertTo-HtmlSafe ([string] $vg.suporte_telefone)) }
-        $ele = @()
-        if ($vg.eletrica_tensao)   { $ele += ('tens&atilde;o {0}' -f (ConvertTo-HtmlSafe ([string] $vg.eletrica_tensao))) }
-        if ($vg.eletrica_tomadas)  { $ele += ('{0} tomada(s)' -f (ConvertTo-HtmlSafe ([string] $vg.eletrica_tomadas))) }
-        if ($vg.eletrica_extensao) { $ele += ('extens&atilde;o el&eacute;trica: {0}' -f (ConvertTo-HtmlSafe ([string] $vg.eletrica_extensao))) }
-        if ($ele.Count)            { $gc += '<div style="grid-column:1/3"><b>El&eacute;trica:</b> {0}</div>' -f ($ele -join ' &middot; ') }
-
-        if ($gc.Count) {
-            $imgMapa = ''
-            if ($null -ne $vg.latitude -and $null -ne $vg.longitude) {
-                $chave = Get-ChaveMapsStatic
-                if ($chave) {
-                    $du = Get-MapaEstaticoDataUri -Lat $vg.latitude -Long $vg.longitude -Chave $chave
-                    if ($du) { $imgMapa = '<div style="margin:6px 0 12px"><img src="{0}" alt="mapa" style="max-width:520px;border:1px solid #d6dae2;border-radius:4px"></div>' -f $du }
-                }
+            $coord += '<div style="grid-column:1/3"><b>Coordenadas:</b> {0}, {1}{2}</div>' -f $latS, $longS, $prec
+            $lnk = if ($vg.mapa_link) { [string] $vg.mapa_link } else { 'https://www.google.com/maps?q={0},{1}' -f $latS, $longS }
+            $coord += '<div style="grid-column:1/3"><b>Mapa:</b> <a href="{0}">{0}</a></div>' -f (ConvertTo-HtmlSafe $lnk)
+            $chave = Get-ChaveMapsStatic
+            if ($chave) {
+                $du = Get-MapaEstaticoDataUri -Lat $vg.latitude -Long $vg.longitude -Chave $chave
+                if ($du) { $imgMapa = '<div style="margin:6px 0 12px"><img src="{0}" alt="mapa" style="max-width:520px;border:1px solid #d6dae2;border-radius:4px"></div>' -f $du }
             }
-            $blocoGel = "  <h2>Vistoria GEL (formul&aacute;rio anexado)</h2>`n$imgMapa`n  <div class=""grid2"">`n    " + ($gc -join "`n    ") + "`n  </div>`n"
+        }
+        $secoes += (& $mkSecao 'Coordenadas' $coord)
+
+        $secoes += (& $mkSecao 'Tipo do local' @(
+            (& $li 'Esfera administrativa' ($(if ($vgTL) { $vgTL.esfera_administrativa } else { '' })))
+            (& $li 'Localiza&ccedil;&atilde;o'        ($(if ($vgTL) { $vgTL.localizacao } else { '' })))
+            (& $li 'Tipo de local'         ($(if ($vgTL) { $vgTL.tipo } else { '' })))
+        ))
+        $secoes += (& $mkSecao 'Infraestrutura' @(
+            (& $li 'Salas necess&aacute;rias'  ($(if ($vgIN) { $vgIN.salas_necessarias } else { '' })))
+            (& $li 'Abastecimento de &aacute;gua' ($(if ($vgIN) { $vgIN.agua } else { '' })))
+            (& $li 'Climatiza&ccedil;&atilde;o / ventila&ccedil;&atilde;o' ($(if ($vgIN) { $vgIN.climatizacao } else { '' })))
+            (& $li 'Ilumina&ccedil;&atilde;o'   ($(if ($vgIN) { $vgIN.iluminacao } else { '' })))
+            (& $li '&Aacute;gua pot&aacute;vel' ($(if ($vgIN) { $vgIN.agua_potavel } else { '' })))
+            (& $li 'Pr&eacute;dio em reforma'  ($(if ($vgIN) { $vgIN.predio_reforma } else { '' })))
+        ))
+        $secoes += (& $mkSecao 'Instala&ccedil;&otilde;es el&eacute;tricas' @(
+            (& $li 'Quadro de energia' ($(if ($vgEL) { $vgEL.quadro_energia } else { '' })))
+            (& $li 'Energia el&eacute;trica' ($(if ($vgEL) { $vgEL.energia_eletrica } else { $vg.energia_eletrica })))
+            (& $li 'Tomadas funcionando' ($(if ($vgEL) { $vgEL.tomadas } else { $vg.eletrica_tomadas })))
+            (& $li 'Tens&atilde;o da rede' ($(if ($vgEL) { $vgEL.tensao } else { $vg.eletrica_tensao })))
+            (& $li 'Necessita extens&atilde;o el&eacute;trica' ($(if ($vgEL) { $vgEL.extensao } else { $vg.eletrica_extensao })))
+        ))
+        $secoes += (& $mkSecao 'Suporte ao link local' @(
+            (& $li 'Empresa / t&eacute;cnico' $vg.suporte_nome)
+            (& $li 'Telefone' $vg.suporte_telefone)
+        ))
+        $secoes = @($secoes | Where-Object { $_ })
+
+        if ($secoes.Count) {
+            $blocoGel = "  <h2>Vistoria GEL (formul&aacute;rio anexado)</h2>`n$imgMapa`n" + ($secoes -join "`n") + "`n"
         }
     }
 
