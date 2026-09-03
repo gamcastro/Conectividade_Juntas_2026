@@ -118,8 +118,14 @@ telefone e `texto_completo` do roteiro); `btnLocalDetalheVoltar` →
 `Invoke-VoltarAosLocais` volta à lista com os filtros preservados.
 Essa tela tem, no topo, um **card STATUS DO LOCAL** com 5 indicadores
 (`dot Ld Testado/Salvo/Transmitido/Exportado/Gel` — `Ellipse` vermelha quando
-não / verde quando sim; `dotLdTestado` usa a cor do veredito) + `txtLdStatusInfo`,
-preenchidos por `Update-StatusLocalDetalhe` a partir de
+não / verde quando sim; `dotLdTestado` usa a cor do veredito) + `txtLdStatusInfo`
++ botão **`btnLdRelatorio`** ("Abrir relatório completo (PDF)" →
+`Invoke-AbrirRelatorioLocal`: pega o último resultado salvo do Local em
+`resultados/{pendentes,enviados}/`, **re-injeta o `vistoria_gel` atual**
+(`New-BlocoVistoriaGel`, em `VistoriaGel.ps1` — usado também por `New-ResultadoJson`)
+com o formulário GEL e as fotos que podem ter sido anexados **depois** do teste,
+regenera o PDF via `Export-RelatorioPdf` e abre; só habilita se o Local já foi
+testado). Tudo preenchido por `Update-StatusLocalDetalhe` a partir de
 `Get-StatusLocal -LocalId` (`src/saida/Get-DiagnosticosRealizados.ps1` — junta
 `Get-DiagnosticosRealizados` + varredura de `relatorios/*_<idSan>.{pdf,html}` +
 `Get-VistoriaGel`). Logo abaixo, o **card do formulário GEL** (`cardGel` /

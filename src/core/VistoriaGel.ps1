@@ -132,6 +132,49 @@ function Get-FotoGelDataUri {
     } catch { '' }
 }
 
+# Monta o bloco "vistoria_gel" do JSON de resultado (secoes + contagem de fotos).
+# Usado por New-ResultadoJson e por "abrir relatorio" na tela do Local. Devolve
+# $null so quando nao ha nada anexado (nem formulario nem fotos).
+function New-BlocoVistoriaGel {
+    param($VistoriaGel, [string] $LocalId)
+    $nFotos = @(Get-FotosGel -LocalId $LocalId).Count
+    if (-not $VistoriaGel -and -not $nFotos) { return $null }
+    $g = { param([string] $n) $p = if ($VistoriaGel) { $VistoriaGel.PSObject.Properties[$n] } else { $null }; if ($p) { $p.Value } else { $null } }
+    [pscustomobject]@{
+        latitude          = (& $g 'lat')
+        longitude         = (& $g 'long')
+        precisao_m        = (& $g 'precisao_m')
+        mapa_link         = [string] (& $g 'mapa_link')
+        tipo_local        = [pscustomobject]@{
+            esfera_administrativa = [string] (& $g 'esfera_administrativa')
+            localizacao           = [string] (& $g 'localizacao')
+            tipo                  = [string] (& $g 'tipo_local')
+        }
+        infraestrutura    = [pscustomobject]@{
+            salas_necessarias = [string] (& $g 'salas_necessarias')
+            agua              = [string] (& $g 'agua')
+            climatizacao      = [string] (& $g 'climatizacao')
+            iluminacao        = [string] (& $g 'iluminacao')
+            agua_potavel      = [string] (& $g 'agua_potavel')
+            predio_reforma    = [string] (& $g 'predio_reforma')
+        }
+        eletrica          = [pscustomobject]@{
+            quadro_energia    = [string] (& $g 'quadro_energia')
+            energia_eletrica  = [string] (& $g 'energia_eletrica')
+            tomadas           = [string] (& $g 'eletrica_tomadas')
+            tensao            = [string] (& $g 'eletrica_tensao')
+            extensao          = [string] (& $g 'eletrica_extensao')
+        }
+        suporte_nome      = [string] (& $g 'suporte_nome')
+        suporte_telefone  = [string] (& $g 'suporte_telefone')
+        fotos             = $nFotos
+        # compat: campos planos anteriores
+        eletrica_tensao   = [string] (& $g 'eletrica_tensao')
+        eletrica_tomadas  = [string] (& $g 'eletrica_tomadas')
+        eletrica_extensao = [string] (& $g 'eletrica_extensao')
+    }
+}
+
 # ------------------------------------------------- chave do Google Maps (Static)
 # Salva em config/ambiente.json (bloco "google_maps") pela tela de Administracao.
 function Get-ChaveMapsStatic {

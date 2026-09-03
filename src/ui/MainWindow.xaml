@@ -556,6 +556,13 @@
                                 </WrapPanel>
                                 <TextBlock x:Name="txtLdStatusInfo" Margin="0,4,0,0" FontFamily="Consolas" FontSize="11"
                                            TextWrapping="Wrap" Foreground="{DynamicResource Dicon.Text3}"/>
+                                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                                    <Button x:Name="btnLdRelatorio" Content="Abrir relat&#243;rio completo (PDF)"
+                                            Style="{DynamicResource BotaoSecundario}"/>
+                                    <TextBlock x:Name="txtLdRelatStatus" Margin="12,0,0,0" VerticalAlignment="Center"
+                                               FontSize="12" TextWrapping="Wrap"
+                                               Foreground="{DynamicResource Dicon.Text3}"/>
+                                </StackPanel>
                             </StackPanel>
                         </Border>
 

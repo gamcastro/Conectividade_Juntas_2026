@@ -618,6 +618,35 @@ try {
     if ($prog.Testados -eq 1 -and $prog.Total -eq 2) { Write-Host "[5e] progresso do roteiro: $($prog.Testados)/$($prog.Total)" }
     else { Write-Host "    FALHA: progresso $($prog.Testados)/$($prog.Total) (esperado 1/2)"; $falhas++ }
 
+    # 5f. "abrir relatorio completo" na tela do Local: anexa GEL + foto DEPOIS do
+    # teste e regenera o PDF a partir do resultado salvo (via Invoke-AbrirRelatorioLocal)
+    $Global:LocalDetalheAtual = [pscustomobject]@{ id = 'ZE99-TESTE-PRINCIPAL'; nome = 'LOCAL PRINCIPAL DE TESTE' }
+    Save-VistoriaGel -LocalId 'ZE99-TESTE-PRINCIPAL' -Dados ([pscustomobject]@{
+        lat = -2.5; long = -43.25; precisao_m = 5; esfera_administrativa = 'Estadual'
+        suporte_nome = 'ACME'; eletrica_tensao = '220 volts'; eletrica_tomadas = '4'
+    }) | Out-Null
+    Add-Type -AssemblyName PresentationCore
+    $pngF = Join-Path $env:TEMP ('ld-{0}.png' -f (Get-Random))
+    $wbF = New-Object Windows.Media.Imaging.WriteableBitmap 20, 20, 96, 96, ([Windows.Media.PixelFormats]::Bgr32), $null
+    $encF = New-Object Windows.Media.Imaging.PngBitmapEncoder
+    $encF.Frames.Add([Windows.Media.Imaging.BitmapFrame]::Create($wbF))
+    $fsF = [IO.File]::Create($pngF); try { $encF.Save($fsF) } finally { $fsF.Dispose() }
+    Add-FotoGel -LocalId 'ZE99-TESTE-PRINCIPAL' -Caminho $pngF | Out-Null
+    Remove-Item $pngF -Force -ErrorAction SilentlyContinue
+
+    Update-StatusLocalDetalhe
+    $btnRel = $w.FindName('btnLdRelatorio')
+    if ($btnRel -and $btnRel.IsEnabled) { Write-Host "[5f] 'Abrir relatorio' habilitado (local ja testado)" }
+    else { Write-Host "    FALHA: botao 'Abrir relatorio' deveria estar habilitado"; $falhas++ }
+    Invoke-AbrirRelatorioLocal
+    Invoke-Pump
+    $relTxt = [string] $w.FindName('txtLdRelatStatus').Text
+    if ($relTxt -match 'Relatorio:' -and (Test-Path ($relTxt -replace '^Relatorio:\s*', ''))) {
+        Write-Host "[5f] relatorio do local gerado a partir do resultado salvo ($(Split-Path ($relTxt -replace '^Relatorio:\s*','') -Leaf))"
+    } else { Write-Host "    FALHA: 'Abrir relatorio do local' (status='$relTxt')"; $falhas++ }
+    Remove-VistoriaGel -LocalId 'ZE99-TESTE-PRINCIPAL'
+    $Global:LocalDetalheAtual = $null
+
     # 6. menu Inicio -> assistente abre limpo no passo 1
     Open-DiagnosticoLimpo
     $selLimpo    = $w.FindName('cboLocal').SelectedItem

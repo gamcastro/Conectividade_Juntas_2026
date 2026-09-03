@@ -298,6 +298,7 @@ function New-JanelaPrincipal {
     $window.FindName('btnGelRemover').Add_Click({ Invoke-GelRemover })
     $window.FindName('btnGelAddFotos').Add_Click({ Invoke-GelAddFotos })
     $window.FindName('btnGelFotoRemover').Add_Click({ Invoke-GelFotoRemover })
+    $window.FindName('btnLdRelatorio').Add_Click({ Invoke-AbrirRelatorioLocal })
     $window.FindName('btnRelerPlacas').Add_Click({ Invoke-RelerPlacas })
     $window.FindName('btnRelerLan').Add_Click({ Invoke-RelerAdaptador 'lan' })
     $window.FindName('btnRelerWifi').Add_Click({ Invoke-RelerAdaptador 'wifi' })
@@ -1229,6 +1230,70 @@ function Update-StatusLocalDetalhe {
             $info.Text = 'Ainda nao diagnosticado neste roteiro.'
         }
     }
+
+    $btnR = $w.FindName('btnLdRelatorio')
+    if ($btnR) {
+        $btnR.IsEnabled = [bool] $s.testado
+        $btnR.ToolTip = if ($s.testado) {
+            'Gera o relatorio do ultimo diagnostico com o formulario do GEL e as fotos atuais.'
+        } else { 'Rode o diagnostico deste local antes de gerar o relatorio.' }
+    }
+    $rs = $w.FindName('txtLdRelatStatus'); if ($rs) { $rs.Text = '' }
+}
+
+# "Abrir relatorio completo": pega o ultimo resultado salvo do Local, re-injeta o
+# formulario do GEL + as fotos atuais (podem ter sido anexados depois do teste),
+# regenera o PDF e abre.
+function Invoke-AbrirRelatorioLocal {
+    $d = $Global:LocalDetalheAtual
+    if (-not $d) { return }
+    $w = $Global:JanelaPrincipal
+    $st = $w.FindName('txtLdRelatStatus')
+
+    $info = (Get-DiagnosticosRealizados)[[string] $d.id]
+    if (-not $info) {
+        if ($st) { $st.Text = 'Rode o diagnostico deste local antes de gerar o relatorio.' }
+        return
+    }
+    $sub = if ($info.Enviado) { 'resultados\enviados' } else { 'resultados\pendentes' }
+    $arq = Join-Path (Join-Path $Global:RaizApp $sub) $info.Arquivo
+    $res = $null
+    try { $res = Get-Content $arq -Raw -Encoding UTF8 | ConvertFrom-Json } catch { }
+    if (-not $res) {
+        if ($st) { $st.Text = 'Nao consegui ler o resultado salvo deste local.' }
+        Write-Log "Relatorio do local: falha ao ler $arq" -Nivel Erro
+        return
+    }
+
+    $gAtual = Get-VistoriaGel -LocalId ([string] $d.id)
+    $res | Add-Member -NotePropertyName 'vistoria_gel' `
+        -NotePropertyValue (New-BlocoVistoriaGel -VistoriaGel $gAtual -LocalId ([string] $d.id)) -Force
+
+    if ($st) { $st.Text = 'Gerando relatorio (PDF)...' }
+    $w.FindName('btnLdRelatorio').IsEnabled = $false
+
+    if ($Global:ModoTeste) {
+        try { $out = Export-RelatorioPdf -Resultado $res } catch { Complete-AbrirRelatorioLocal $null "$_"; return }
+        Complete-AbrirRelatorioLocal $out $null
+        return
+    }
+    Start-TarefaRede -Script 'Export-RelatorioPdf -Resultado $Res' -Vars @{ Res = $res } `
+        -AoConcluir { param($out, $erro) Complete-AbrirRelatorioLocal $out $erro }
+}
+
+function Complete-AbrirRelatorioLocal {
+    param($Saida, $Erro)
+    $w = $Global:JanelaPrincipal
+    $st = $w.FindName('txtLdRelatStatus')
+    $b = $w.FindName('btnLdRelatorio'); if ($b) { $b.IsEnabled = $true }
+    if ($Erro) {
+        if ($st) { $st.Text = "Falha ao gerar o relatorio: $Erro" }
+        Write-Log "Relatorio do local falhou: $Erro" -Nivel Erro
+        return
+    }
+    if ($st) { $st.Text = "Relatorio: $Saida" }
+    Write-Log "Relatorio do local gerado: $Saida" -Nivel Ok
+    if (-not $Global:ModoTeste -and $Saida) { try { Start-Process -FilePath $Saida } catch { } }
 }
 
 # Reflete no card do GEL (tela de detalhe) o que ja esta anexado ao Local.
