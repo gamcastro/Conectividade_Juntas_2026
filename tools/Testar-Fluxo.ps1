@@ -763,6 +763,24 @@ try {
     if ((Get-UrlMapaEstatico -Lat -2.5 -Long -43.25 -Chave '') -eq '') { Write-Host "[11] sem chave -> Get-UrlMapaEstatico vazio" }
     else { Write-Host "    FALHA: Get-UrlMapaEstatico deveria voltar vazio sem chave"; $falhas++ }
 
+    # fotos do GEL: gera um PNG minimo, anexa via Add-FotoGel, confere round-trip
+    Add-Type -AssemblyName PresentationCore
+    $pngT = Join-Path $env:TEMP ('gelfoto-{0}.png' -f (Get-Random))
+    $wbT = New-Object Windows.Media.Imaging.WriteableBitmap 24, 24, 96, 96, ([Windows.Media.PixelFormats]::Bgr32), $null
+    $encT = New-Object Windows.Media.Imaging.PngBitmapEncoder
+    $encT.Frames.Add([Windows.Media.Imaging.BitmapFrame]::Create($wbT))
+    $fspT = [IO.File]::Create($pngT); try { $encT.Save($fspT) } finally { $fspT.Dispose() }
+    Add-FotoGel -LocalId 'X' -Caminho $pngT | Out-Null
+    Add-FotoGel -LocalId 'X' -Caminho $pngT | Out-Null
+    Remove-Item $pngT -Force -ErrorAction SilentlyContinue
+    $fx = @(Get-FotosGel -LocalId 'X')
+    if ($fx.Count -eq 2 -and (Split-Path $fx[0] -Leaf) -eq 'foto-01.jpg' -and (Split-Path $fx[1] -Leaf) -eq 'foto-02.jpg') {
+        Write-Host "[11] Add-FotoGel/Get-FotosGel: 2 fotos numeradas (reduzidas p/ jpg)"
+    } else { Write-Host "    FALHA: fotos do GEL ($($fx.Count): $(($fx | ForEach-Object { Split-Path $_ -Leaf }) -join ','))"; $falhas++ }
+    Remove-FotoGel -LocalId 'X' -Nome 'foto-01.jpg'
+    if (@(Get-FotosGel -LocalId 'X').Count -eq 1) { Write-Host "[11] Remove-FotoGel tira so a selecionada" }
+    else { Write-Host "    FALHA: Remove-FotoGel"; $falhas++ }
+
     $g = [pscustomobject]@{
         lat = -2.4997476; long = -43.25344546; precisao_m = 6.558
         esfera_administrativa = 'Estadual'; localizacao = 'Urbano'; tipo_local = 'Escola'
@@ -780,11 +798,13 @@ try {
         $jsonGel.vistoria_gel.suporte_nome -eq 'OLNY TELECON' -and $jsonGel.vistoria_gel.eletrica_tomadas -eq '6' -and
         $jsonGel.vistoria_gel.tipo_local.esfera_administrativa -eq 'Estadual' -and
         $jsonGel.vistoria_gel.infraestrutura.iluminacao -eq 'Sim' -and
-        $jsonGel.vistoria_gel.eletrica.quadro_energia -eq 'Externo' -and
+        $jsonGel.vistoria_gel.eletrica.quadro_energia -eq 'Externo' -and $jsonGel.vistoria_gel.fotos -eq 1 -and
         $htmlGel -match 'Vistoria GEL' -and $htmlGel -match '-2.4997476' -and $htmlGel -match 'google.com/maps' -and
-        $htmlGel -match 'Tipo do local' -and $htmlGel -match 'Infraestrutura' -and $htmlGel -match 'Quadro de energia') {
-        Write-Host "[11] JSON traz 'vistoria_gel' em secoes e o relatorio agrupa Tipo do local / Infraestrutura / Eletricas"
-    } else { Write-Host "    FALHA: JSON/relatorio do GEL (vg=$([bool]$jsonGel.vistoria_gel) sec_tl=$($jsonGel.vistoria_gel.tipo_local.esfera_administrativa) html_infra=$($htmlGel -match 'Infraestrutura'))"; $falhas++ }
+        $htmlGel -match 'Tipo do local' -and $htmlGel -match 'Infraestrutura' -and $htmlGel -match 'Quadro de energia' -and
+        $htmlGel -match 'Fotos da vistoria' -and $htmlGel -match '<img src="data:image/jpeg;base64,') {
+        Write-Host "[11] JSON traz 'vistoria_gel' em secoes + contagem de fotos; relatorio agrupa secoes + embute as fotos"
+    } else { Write-Host "    FALHA: JSON/relatorio do GEL (vg=$([bool]$jsonGel.vistoria_gel) fotos=$($jsonGel.vistoria_gel.fotos) html_infra=$($htmlGel -match 'Infraestrutura') html_foto=$($htmlGel -match 'Fotos da vistoria'))"; $falhas++ }
+    Remove-VistoriaGel -LocalId 'X'
 
     # arquivo que nao e PDF -> erro (nao trava a GUI)
     try { Read-TextoPdf -Caminho $PSCommandPath; Write-Host "    FALHA: Read-TextoPdf devia falhar com nao-PDF"; $falhas++ }

@@ -255,6 +255,7 @@ function New-ResultadoJson {
                 }
                 suporte_nome      = [string] (Get-Prop $VistoriaGel 'suporte_nome')
                 suporte_telefone  = [string] (Get-Prop $VistoriaGel 'suporte_telefone')
+                fotos             = @(Get-FotosGel -LocalId ([string] (Get-Prop $Local 'id'))).Count
                 # compat: campos planos anteriores
                 eletrica_tensao   = [string] (Get-Prop $VistoriaGel 'eletrica_tensao')
                 eletrica_tomadas  = [string] (Get-Prop $VistoriaGel 'eletrica_tomadas')

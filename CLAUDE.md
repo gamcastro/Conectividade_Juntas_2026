@@ -139,12 +139,20 @@ sem acento; a resposta aparece **antes** do marcador `R. :` e o rótulo
 `Coordenadas:` **depois** do valor; captura para no primeiro `?` para não invadir
 a próxima pergunta). O técnico confere em `panelGelConf` (as mesmas 5 seções, uma
 por sub-cabeçalho) e `Invoke-GelRegistrar` grava em `data/vistoria-gel/<localid>.json`
-via `Save-VistoriaGel`; `btnGelRemover` → `Invoke-GelRemover`). O anexo pode ser
-feito **a qualquer tempo**, não só no momento do teste — e é carregado do disco em
+via `Save-VistoriaGel`; `btnGelRemover` → `Invoke-GelRemover`). **Fotos da vistoria**
+(o app do GEL tira fotos que só ficam no GEL web): `btnGelAddFotos` →
+`Invoke-GelAddFotos` aceita várias imagens de uma vez, `Resize-ImagemParaJpeg`
+(WPF, respeita orientação EXIF) reduz cada uma p/ 1600 px / q80 e grava em
+`data/vistoria-gel/<localid>/foto-NN.jpg`; `lstGelFotos` + `btnGelFotoRemover`
+gerenciam a lista (`Get-FotosGel` / `Add-FotoGel` / `Remove-FotoGel`). As fotos
+entram na seção "Fotos da vistoria" do relatório PDF (`Get-FotoGelDataUri`, grade
+2-por-linha, teto ~12 MB) e **não** vão no JSON transmitido (só a contagem). O
+anexo pode ser feito **a qualquer tempo**, não só no momento do teste — e é carregado do disco em
 `$Global:VistoriaGel` quando o Local entra no assistente (passo 2). Vai para o
-JSON `vistoria_gel` (com sub-objetos `tipo_local` / `infraestrutura` / `eletrica`)
-+ seção "Vistoria GEL" no relatório (uma tabela por seção) com link e imagem do
-Google Maps; a chave da **Maps Static API** fica em `config/ambiente.json`
+JSON `vistoria_gel` (com sub-objetos `tipo_local` / `infraestrutura` / `eletrica`
++ `fotos` = contagem) + seção "Vistoria GEL" no relatório (uma tabela por seção)
+com link e imagem do Google Maps; a chave da **Maps Static API** fica em
+`config/ambiente.json`
 (`google_maps.static_key`), editável na tela de Administração; a imagem é baixada
 e embutida como `data:` URI, então a chave não vai no HTML/PDF.
 

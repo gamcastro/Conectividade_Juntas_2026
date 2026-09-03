@@ -696,6 +696,24 @@
 
                                 <TextBlock x:Name="txtGelResumo" Margin="0,10,0,0" TextWrapping="Wrap" FontSize="12"
                                            Foreground="{DynamicResource Dicon.Viavel}" Visibility="Collapsed"/>
+
+                                <!-- fotos da vistoria (baixadas do GEL web) -->
+                                <TextBlock Text="FOTOS DA VISTORIA" FontFamily="Consolas" FontSize="9"
+                                           Foreground="{DynamicResource Dicon.Text3}" Margin="0,16,0,4"/>
+                                <TextBlock TextWrapping="Wrap" FontSize="11" Margin="0,0,0,8"
+                                           Foreground="{DynamicResource Dicon.Text3}"
+                                           Text="As fotos tiradas no app do GEL ficam s&#243; no GEL web. Baixe-as l&#225; e adicione aqui (JPG/PNG) &#8212; elas entram numa se&#231;&#227;o do relat&#243;rio do DICON (reduzidas)."/>
+                                <StackPanel Orientation="Horizontal">
+                                    <Button x:Name="btnGelAddFotos" Content="Adicionar fotos"
+                                            Style="{DynamicResource BotaoSecundario}"/>
+                                    <Button x:Name="btnGelFotoRemover" Content="Remover selecionada"
+                                            Style="{DynamicResource BotaoFantasma}" Margin="8,0,0,0"/>
+                                    <TextBlock x:Name="txtGelFotosResumo" Margin="12,0,0,0" VerticalAlignment="Center"
+                                               FontSize="12" Foreground="{DynamicResource Dicon.Text3}"/>
+                                </StackPanel>
+                                <ListBox x:Name="lstGelFotos" Margin="0,8,0,0" MaxHeight="140"
+                                         FontFamily="Consolas" FontSize="12"
+                                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"/>
                             </StackPanel>
                         </Border>
 

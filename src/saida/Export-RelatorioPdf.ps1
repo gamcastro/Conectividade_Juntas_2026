@@ -280,8 +280,32 @@ $($trs -join "`n")
         ))
         $secoes = @($secoes | Where-Object { $_ })
 
-        if ($secoes.Count) {
-            $blocoGel = "  <h2>Vistoria GEL (formul&aacute;rio anexado)</h2>`n$imgMapa`n" + ($secoes -join "`n") + "`n"
+        # Fotos da vistoria (baixadas do GEL web e anexadas no DICON). Ficam so no
+        # disco (data/vistoria-gel/<id>/) - o JSON leva so a contagem.
+        $fotosHtml = ''
+        $lid = if ($r.PSObject.Properties['local'] -and $r.local) { [string] $r.local.id } else { '' }
+        if ($lid) {
+            $fotos = @(Get-FotosGel -LocalId $lid)
+            if ($fotos.Count) {
+                $cells = @(); $acum = 0; $usadas = 0
+                foreach ($f in $fotos) {
+                    $du = Get-FotoGelDataUri -Caminho $f
+                    if (-not $du) { continue }
+                    if ($acum + $du.Length -gt 12MB) { break }
+                    $acum += $du.Length; $usadas++
+                    $cells += ('<div style="width:48%;margin:0 0 10px;page-break-inside:avoid">' +
+                               '<img src="{0}" style="width:100%;border:1px solid #d6dae2;border-radius:4px"></div>') -f $du
+                }
+                if ($cells.Count) {
+                    $nota = if ($usadas -lt $fotos.Count) { ' <span style="color:#8a6d3b">(as demais foram omitidas por limite de tamanho)</span>' } else { '' }
+                    $fotosHtml = "  <h3 style=""margin:12px 0 4px;font-size:12px;color:#555"">Fotos da vistoria ({0} de {1}){2}</h3>`n" -f $usadas, $fotos.Count, $nota
+                    $fotosHtml += "  <div style=""display:flex;flex-wrap:wrap;justify-content:space-between"">`n    " + ($cells -join "`n    ") + "`n  </div>"
+                }
+            }
+        }
+
+        if ($secoes.Count -or $fotosHtml) {
+            $blocoGel = "  <h2>Vistoria GEL (formul&aacute;rio anexado)</h2>`n$imgMapa`n" + ($secoes -join "`n") + "`n" + $fotosHtml + "`n"
         }
     }
 

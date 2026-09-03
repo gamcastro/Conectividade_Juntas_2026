@@ -72,7 +72,7 @@ function Get-StatusLocal {
         }
     }
 
-    $st.gel = [bool] (Get-VistoriaGel -LocalId $LocalId)
+    $st.gel = [bool] ((Get-VistoriaGel -LocalId $LocalId) -or @(Get-FotosGel -LocalId $LocalId).Count)
     return $st
 }
 

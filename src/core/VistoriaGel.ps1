@@ -31,6 +31,105 @@ function Remove-VistoriaGel {
     param([string] $LocalId)
     if (-not $LocalId) { return }
     Remove-Item -LiteralPath (Get-CaminhoVistoriaGel -LocalId $LocalId) -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath (Get-PastaFotosGel -LocalId $LocalId -SemCriar) -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+# ------------------------------------------- fotos da vistoria do GEL (por local)
+# O tecnico baixa as fotos no GEL web e adiciona no DICON. Ficam reduzidas em
+# data/vistoria-gel/<localid>/foto-NN.jpg e entram numa secao do relatorio PDF.
+function Get-PastaFotosGel {
+    param([string] $LocalId, [switch] $SemCriar)
+    $san = ([string] $LocalId) -replace '[^\w\-]', '_'
+    $p = Join-Path (Get-PastaDados) ('vistoria-gel\{0}' -f $san)
+    if (-not $SemCriar -and -not (Test-Path $p)) { New-Item -ItemType Directory -Path $p -Force | Out-Null }
+    $p
+}
+
+function Get-FotosGel {
+    param([string] $LocalId)
+    if (-not $LocalId) { return @() }
+    $p = Get-PastaFotosGel -LocalId $LocalId -SemCriar
+    if (-not (Test-Path $p)) { return @() }
+    @(Get-ChildItem -Path $p -Filter 'foto-*.jpg' -File -ErrorAction SilentlyContinue | Sort-Object Name | ForEach-Object { $_.FullName })
+}
+
+# Le uma imagem (jpg/jpeg/png), aplica a orientacao EXIF, reduz para MaxLado no
+# maior lado e regrava como JPEG. WPF (PresentationCore) - roda na thread de UI.
+function Resize-ImagemParaJpeg {
+    param(
+        [Parameter(Mandatory)] [string] $Origem,
+        [Parameter(Mandatory)] [string] $Destino,
+        [int] $MaxLado = 1600,
+        [int] $Qualidade = 80
+    )
+    Add-Type -AssemblyName PresentationCore -ErrorAction SilentlyContinue
+    $fs = [IO.File]::OpenRead($Origem)
+    try {
+        $dec = [Windows.Media.Imaging.BitmapDecoder]::Create(
+            $fs, [Windows.Media.Imaging.BitmapCreateOptions]::PreservePixelFormat,
+            [Windows.Media.Imaging.BitmapCacheOption]::OnLoad)
+        $frame = $dec.Frames[0]
+        [Windows.Media.Imaging.BitmapSource] $img = $frame
+
+        # orientacao EXIF (tag 274): 3=180  6=90  8=270
+        $graus = 0
+        try {
+            $md = $frame.Metadata
+            if ($md -and $md.ContainsQuery('/app1/ifd/{ushort=274}')) {
+                switch ([int] $md.GetQuery('/app1/ifd/{ushort=274}')) {
+                    3 { $graus = 180 } ; 6 { $graus = 90 } ; 8 { $graus = 270 }
+                }
+            }
+        } catch { }
+        if ($graus -ne 0) {
+            $img = New-Object Windows.Media.Imaging.TransformedBitmap $img, (New-Object Windows.Media.RotateTransform $graus)
+        }
+
+        $maior = [Math]::Max($img.PixelWidth, $img.PixelHeight)
+        if ($maior -gt $MaxLado) {
+            $e = [double] $MaxLado / $maior
+            $img = New-Object Windows.Media.Imaging.TransformedBitmap $img, (New-Object Windows.Media.ScaleTransform $e, $e)
+        }
+
+        $enc = New-Object Windows.Media.Imaging.JpegBitmapEncoder
+        $enc.QualityLevel = [Math]::Max(1, [Math]::Min(100, $Qualidade))
+        $enc.Frames.Add([Windows.Media.Imaging.BitmapFrame]::Create($img))
+        $out = [IO.File]::Create($Destino)
+        try { $enc.Save($out) } finally { $out.Dispose() }
+    } finally { $fs.Dispose() }
+}
+
+# Adiciona uma foto ao local: reduz e grava como o proximo foto-NN.jpg. Devolve
+# o caminho gravado (ou lanca se a imagem nao abrir).
+function Add-FotoGel {
+    param([Parameter(Mandatory)] [string] $LocalId, [Parameter(Mandatory)] [string] $Caminho)
+    if (-not (Test-Path $Caminho)) { throw "imagem nao encontrada: $Caminho" }
+    $pasta = Get-PastaFotosGel -LocalId $LocalId
+    $nums = @(Get-ChildItem -Path $pasta -Filter 'foto-*.jpg' -File -ErrorAction SilentlyContinue |
+        ForEach-Object { if ($_.BaseName -match 'foto-(\d+)') { [int] $Matches[1] } })
+    [int] $prox = 1
+    if ($nums.Count) { $prox = [int] (($nums | Measure-Object -Maximum).Maximum) + 1 }
+    $dest = Join-Path $pasta ('foto-{0:D2}.jpg' -f $prox)
+    Resize-ImagemParaJpeg -Origem $Caminho -Destino $dest
+    $dest
+}
+
+function Remove-FotoGel {
+    param([string] $LocalId, [string] $Nome)
+    if (-not $LocalId -or -not $Nome) { return }
+    $alvo = Join-Path (Get-PastaFotosGel -LocalId $LocalId -SemCriar) (Split-Path $Nome -Leaf)
+    Remove-Item -LiteralPath $alvo -Force -ErrorAction SilentlyContinue
+}
+
+# data: URI de uma foto ja reduzida (so le + base64). '' se sumiu / muito grande.
+function Get-FotoGelDataUri {
+    param([Parameter(Mandatory)] [string] $Caminho)
+    try {
+        if (-not (Test-Path $Caminho)) { return '' }
+        $b = [IO.File]::ReadAllBytes($Caminho)
+        if (-not $b -or $b.Length -lt 100 -or $b.Length -gt 4MB) { return '' }
+        'data:image/jpeg;base64,' + [Convert]::ToBase64String($b)
+    } catch { '' }
 }
 
 # ------------------------------------------------- chave do Google Maps (Static)

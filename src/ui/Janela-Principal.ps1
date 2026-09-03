@@ -296,6 +296,8 @@ function New-JanelaPrincipal {
     $window.FindName('btnGelRegistrar').Add_Click({ Invoke-GelRegistrar })
     $window.FindName('btnGelCancelar').Add_Click({ Invoke-GelCancelar })
     $window.FindName('btnGelRemover').Add_Click({ Invoke-GelRemover })
+    $window.FindName('btnGelAddFotos').Add_Click({ Invoke-GelAddFotos })
+    $window.FindName('btnGelFotoRemover').Add_Click({ Invoke-GelFotoRemover })
     $window.FindName('btnRelerPlacas').Add_Click({ Invoke-RelerPlacas })
     $window.FindName('btnRelerLan').Add_Click({ Invoke-RelerAdaptador 'lan' })
     $window.FindName('btnRelerWifi').Add_Click({ Invoke-RelerAdaptador 'wifi' })
@@ -963,6 +965,7 @@ function Invoke-AbrirLocalDetalhe {
     $Global:LocalDetalheAtual = $d
     Update-StatusLocalDetalhe
     Update-CardGel
+    Update-FotosGel
 
     Show-View 'viewLocalDetalhe'
 }
@@ -1249,6 +1252,8 @@ function Update-CardGel {
         if ($g.agua -or $g.iluminacao -or $g.salas_necessarias -or $g.predio_reforma) { $partes += 'infraestrutura' }
         if ($g.eletrica_tensao -or $g.eletrica_tomadas -or $g.eletrica_extensao -or $g.quadro_energia) { $partes += 'dados eletricos' }
         if ($g.suporte_nome -or $g.suporte_telefone) { $partes += 'suporte do link' }
+        $nf = @(Get-FotosGel -LocalId ([string] $d.id)).Count
+        if ($nf) { $partes += ('{0} foto(s)' -f $nf) }
         $res.Text = 'Formulario GEL anexado: ' + ($partes -join ' - ')
         $res.Visibility = 'Visible'
         $stx.Text = ''
@@ -1262,13 +1267,65 @@ function Update-CardGel {
     }
 }
 
-# Botao "Remover anexo": apaga o GEL do Local.
+# Botao "Remover anexo": apaga o GEL do Local (PDF + fotos).
 function Invoke-GelRemover {
     $d = $Global:LocalDetalheAtual
     if (-not $d) { return }
     Remove-VistoriaGel -LocalId ([string] $d.id)
     if ([string] $d.id -eq [string] $Global:LocalMedicoesId) { $Global:VistoriaGel = $null }
     Write-Log 'Anexo GEL removido do local.' -Nivel Aviso
+    Update-CardGel
+    Update-FotosGel
+    Update-StatusLocalDetalhe
+}
+
+# Lista as fotos ja anexadas ao Local na tela de detalhe.
+function Update-FotosGel {
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    $lst = $w.FindName('lstGelFotos'); if (-not $lst) { return }
+    $lst.Items.Clear()
+    $d = $Global:LocalDetalheAtual
+    $fotos = if ($d) { @(Get-FotosGel -LocalId ([string] $d.id)) } else { @() }
+    foreach ($f in $fotos) { [void] $lst.Items.Add((Split-Path $f -Leaf)) }
+    $rs = $w.FindName('txtGelFotosResumo')
+    if ($rs) { $rs.Text = if ($fotos.Count) { '{0} foto(s) anexada(s)' -f $fotos.Count } else { 'nenhuma foto anexada' } }
+}
+
+# Botao "Adicionar fotos": seletor multiplo, reduz e grava cada uma no Local.
+function Invoke-GelAddFotos {
+    $d = $Global:LocalDetalheAtual
+    if (-not $d) { return }
+    $w = $Global:JanelaPrincipal
+    $st = $w.FindName('txtGelStatus')
+    $dlg = New-Object Microsoft.Win32.OpenFileDialog
+    $dlg.Filter = 'Imagens (*.jpg;*.jpeg;*.png)|*.jpg;*.jpeg;*.png'
+    $dlg.Title  = 'Selecione as fotos baixadas do GEL web'
+    $dlg.Multiselect = $true
+    if (-not $dlg.ShowDialog()) { return }
+
+    $ok = 0; $erro = 0
+    foreach ($arq in $dlg.FileNames) {
+        try { Add-FotoGel -LocalId ([string] $d.id) -Caminho $arq | Out-Null; $ok++ }
+        catch { $erro++; Write-Log ("Foto GEL '{0}' nao entrou: {1}" -f (Split-Path $arq -Leaf), $_) -Nivel Aviso }
+    }
+    if ($st) { $st.Text = "Fotos adicionadas: $ok" + $(if ($erro) { " ($erro falharam)" } else { '' }) }
+    Write-Log ("Fotos do GEL: {0} adicionada(s) ao local {1}." -f $ok, $d.nome) -Nivel Ok
+    Update-FotosGel
+    Update-CardGel
+    Update-StatusLocalDetalhe
+}
+
+# Botao "Remover selecionada": tira a foto marcada na lista.
+function Invoke-GelFotoRemover {
+    $d = $Global:LocalDetalheAtual
+    if (-not $d) { return }
+    $w = $Global:JanelaPrincipal
+    $sel = [string] $w.FindName('lstGelFotos').SelectedItem
+    if (-not $sel) { Write-Log 'Selecione uma foto na lista para remover.' -Nivel Aviso; return }
+    Remove-FotoGel -LocalId ([string] $d.id) -Nome $sel
+    Write-Log ("Foto '{0}' removida do local." -f $sel) -Nivel Aviso
+    Update-FotosGel
     Update-CardGel
     Update-StatusLocalDetalhe
 }
