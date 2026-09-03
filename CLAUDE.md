@@ -171,12 +171,14 @@ justificativa):
 **Multi-meio (hub-and-spoke):** um Local pode ser medido por até 3 **meios** de
 conexão — `lan` (rede cabeada), `wifi_local` (Wi-Fi do próprio local),
 `celular` (Wi-Fi roteada de celular). Como a placa Wi-Fi só fica numa rede por
-vez, o técnico **clica no card** do meio que vai testar (LAN / WI-FI / CELULAR)
-— `Select-MeioParaChecar` grava `$Global:MeioSelecionado`, o card ganha **borda
-azul** e só o seu `btnCheck*` fica habilitado; clicar em WI-FI declara que a
-rede conectada é a do local, clicar em CELULAR declara que é o roteamento do
-celular (aí a operadora é obrigatória). Se só a LAN estiver conectada, ela já
-vem selecionada. Cada meio gera uma
+vez, os meios são testados em **sequência rígida** (LAN → Wi-Fi → Celular, ver
+"Ordem fixa" adiante): só o **meio da vez** (`Get-MeioAtualPasso3` = 1º pendente
+na ordem) fica ativo/clicável — os demais aparecem esmaecidos (`Opacity 0.45`),
+mostrando as informações mas sem interação. O meio da vez já vem selecionado
+(`$Global:MeioSelecionado` acompanha `Get-MeioAtualPasso3`); ao chegar a vez do
+WI-FI a rede Wi-Fi conectada é tratada como a do local, ao chegar a do CELULAR
+como roteamento do celular (aí a operadora, `cboOperadoraCel`, é obrigatória e só
+editável nessa etapa). Cada meio gera uma
 **medição** (Fase 1 Ookla + Fase 2 VPN) em `$Global:Medicoes`; meios que não
 servem ao Local são marcados **"não aplicável" + motivo** (`$Global:MeiosNaoAplicaveis`).
 Ao fim, o motor `Get-ConexaoRecomendada` (`src/decisao/Invoke-MotorDecisao.ps1`)
@@ -190,23 +192,33 @@ recomendado** (salvo override manual do técnico no combo da recomendação fina
 formulário GEL** saiu daqui e vive na tela `viewLocalDetalhe`) →
 3. **meios de conexão** — *painel de 3 cards*: `Invoke-ProbeRedeLocal`
 (`Invoke-FaseLocal -SemInternet`, async) inventaria as placas; cada card
-(`cardLan`/`cardWifiPlaca`/`cardCelular`, clicáveis para selecionar) tem um
+(`cardLan`/`cardWifiPlaca`/`cardCelular`) tem o círculo numerado
+(`numLan`/`numWifi`/`numCel`), um
 `badge*` (NÃO TESTADO / TESTANDO… / TESTADO: <veredito> na cor do veredito /
 NÃO SE APLICA - INVIÁVEL), um botão **`btnCheck{Lan,Wifi,Celular}`**
-("Rodar checagem"), e o checkbox
+("Rodar checagem" / "Refazer checagem"), e o checkbox
 "não se aplica a este local" — marcá-lo abre o card **`cardNaJustif`** abaixo da
 grade (`Open-CardNaJustif`: `txtNaJustif` + `btnNaRegistrar`/`btnNaCancelar`,
 `$Global:NaMeioPendente`); "Registrar" (`Invoke-NaRegistrar` → `Set-MeioNaoAplicavel`)
 fecha o card e carimba a justificativa em vermelho no card do meio
 (`txtNaMotivoCard*`), que fica inviável; desmarcar o checkbox remove o NA.
-**Ordem fixa** (`$Global:OrdemMeios` = `lan`/`wifi_local`/`celular`): o botão de um
-meio só habilita quando **todos os anteriores** já foram testados ou marcados
-"não se aplica" (`Test-MeioLiberadoNaOrdem`, `Get-EstadoMeioPasso3`). A LAN, se
-conectada e ainda pendente, já vem selecionada. Ao terminar a checagem da **LAN**
-(`Complete-CheckMeio` seta `$Global:AvisarRetirarCaboLan`), `Close-OverlayCheck`
-mostra uma `MessageBox` lembrando o técnico de **tirar o cabo de rede** antes do
-Wi-Fi. O **`btnWizProximo` só fica visível** quando os 3 meios estão testados ou NA
-(qualquer combinação); `txtMeiosPendentes` explica quando está escondido.
+**Ordem fixa** (`$Global:OrdemMeios` = `lan`/`wifi_local`/`celular`): cada card traz
+um **número num círculo** no canto superior esquerdo (`numLan`/`numWifi`/`numCel`
+= 1/2/3 — cinza pendente, azul o meio da vez, verde resolvido). Só o **meio da vez**
+(`Get-MeioAtualPasso3`) é interativo: `btnCheck*` e o checkbox "não se aplica" só
+respondem nesse card (`Get-EstadoMeioPasso3` = `testado`/`na`/`pendente`;
+`Test-MeioLiberadoNaOrdem` ainda existe como auxiliar). `Select-MeioParaChecar`
+ignora clique em card fora da vez (loga a ordem). **Isolamento de rede por etapa**
+(`cardMeioAviso`/`txtMeioAviso` na tela + `MessageBox` de `Invoke-CheckMeio` no
+momento do "Rodar checagem", puladas em `$Global:ModoTeste`): na etapa da **LAN**
+só o cabo pode estar conectado — se o Wi-Fi estiver num SSID, avisa para
+desconectá-lo; se a LAN estiver sem link, avisa para **verificar o cabo e reler
+só a placa LAN** (↻ do card LAN). Nas etapas **Wi-Fi/Celular** (mesma placa
+sem-fio) a placa Wi-Fi tem de estar conectada e o **cabo de rede fora**. Ao
+terminar a checagem da **LAN** (`Complete-CheckMeio` seta `$Global:AvisarRetirarCaboLan`),
+`Close-OverlayCheck` mostra uma `MessageBox` lembrando de **tirar o cabo de rede**
+antes do Wi-Fi. O **`btnWizProximo` só fica visível** quando os 3 meios estão
+testados ou NA (qualquer combinação); `txtMeiosPendentes` explica quando está escondido.
 **Congelamento**: assim que um meio é testado, `New-MedicaoAtual` guarda um
 `snapshot_adaptador` (cópia dos dados da placa — IP/gateway/MAC…) na medição;
 `Update-PainelMeios` (via `Get-MedicaoMeio`) passa a renderizar esse card **do

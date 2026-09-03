@@ -317,36 +317,40 @@ try {
     if ($Global:WizardStep -eq 3) { Write-Host "[4c] passo 3 bloqueia 'Proximo' sem meio testado" }
     else { Write-Host "    FALHA: avancou sem testar meio (step=$($Global:WizardStep))"; $falhas++ }
 
-    # 4c-2. ordem fixa LAN -> Wi-Fi -> Celular + "Proximo" so quando todos resolvidos
-    $Global:FaseLocalPayload.Wireless.conectado = $true
+    # 4c-2. ordem fixa LAN -> Wi-Fi -> Celular + isolamento de rede + "Proximo"
+    $Global:FaseLocalPayload.Lan.conectado = $true
+    $Global:FaseLocalPayload.Wireless.conectado = $true       # cabo E Wi-Fi ligados
     $w.FindName('cboOperadoraCel').Text = 'Vivo'
-    Select-MeioParaChecar 'wifi'    ; Update-PainelMeios
-    $wifi0 = -not $w.FindName('btnCheckWifi').IsEnabled
-    Select-MeioParaChecar 'celular' ; Update-PainelMeios
-    $cel0  = -not $w.FindName('btnCheckCelular').IsEnabled
+    Update-PainelMeios
+    # a vez e da LAN, mas o Wi-Fi esta conectado -> botao travado + aviso na tela
+    $lanTravadaPorWifi = -not $w.FindName('btnCheckLan').IsEnabled
+    $avisoIsolamento   = "$($w.FindName('cardMeioAviso').Visibility)" -eq 'Visible'
+    $wifi0 = -not $w.FindName('btnCheckWifi').IsEnabled       # 2o da ordem: travado
+    $cel0  = -not $w.FindName('btnCheckCelular').IsEnabled    # 3o da ordem: travado
     $prox0 = "$($w.FindName('btnWizProximo').Visibility)" -eq 'Collapsed'
-    # LAN "nao se aplica" -> Wi-Fi (2o da ordem) libera; Celular (3o) ainda nao
+    # LAN "nao se aplica" -> a vez passa ao Wi-Fi; com o cabo fora o botao libera
     $w.FindName('chkNaLan').IsChecked = $true ; Update-NaoAplicavelMeio
     $w.FindName('txtNaJustif').Text = 'sem ponto de rede' ; Invoke-NaRegistrar ; Invoke-Pump
-    Select-MeioParaChecar 'wifi'    ; Update-PainelMeios
+    $Global:FaseLocalPayload.Lan.conectado = $false          # cabo retirado p/ a etapa Wi-Fi
+    Update-PainelMeios
     $wifi1 = $w.FindName('btnCheckWifi').IsEnabled
-    Select-MeioParaChecar 'celular' ; Update-PainelMeios
-    $cel1  = -not $w.FindName('btnCheckCelular').IsEnabled
+    $cel1  = -not $w.FindName('btnCheckCelular').IsEnabled    # Celular (3o) ainda travado
     # Wi-Fi e Celular tambem NA -> todos resolvidos -> "Proximo" aparece
     $w.FindName('chkNaWifi').IsChecked = $true ; Update-NaoAplicavelMeio
     $w.FindName('txtNaJustif').Text = 'x' ; Invoke-NaRegistrar ; Invoke-Pump
     $w.FindName('chkNaCelular').IsChecked = $true ; Update-NaoAplicavelMeio
     $w.FindName('txtNaJustif').Text = 'x' ; Invoke-NaRegistrar ; Invoke-Pump
     $proxAll = "$($w.FindName('btnWizProximo').Visibility)" -eq 'Visible'
-    if ($wifi0 -and $cel0 -and $prox0 -and $wifi1 -and $cel1 -and $proxAll) {
-        Write-Host "[4c] ordem LAN->Wi-Fi->Celular + 'Proximo' so com todos os meios resolvidos"
-    } else { Write-Host "    FALHA: ordem/Proximo (w0=$wifi0 c0=$cel0 p0=$prox0 w1=$wifi1 c1=$cel1 pAll=$proxAll)"; $falhas++ }
+    if ($lanTravadaPorWifi -and $avisoIsolamento -and $wifi0 -and $cel0 -and $prox0 -and $wifi1 -and $cel1 -and $proxAll) {
+        Write-Host "[4c] ordem LAN->Wi-Fi->Celular + isolamento de rede + 'Proximo' so com tudo resolvido"
+    } else { Write-Host "    FALHA: ordem/isolamento/Proximo (lanTrava=$lanTravadaPorWifi aviso=$avisoIsolamento w0=$wifi0 c0=$cel0 p0=$prox0 w1=$wifi1 c1=$cel1 pAll=$proxAll)"; $falhas++ }
     # restaura: nenhum meio NA (nem no hashtable nem em Medicoes), sem selecao
     foreach ($mk in 'lan', 'wifi_local', 'celular') { $Global:MeiosNaoAplicaveis.Remove($mk) }
     $Global:Medicoes = @(@($Global:Medicoes) | Where-Object { $_ -and -not $_.nao_aplicavel })
     $Global:NaMeioPendente = ''
     $w.FindName('chkNaLan').IsChecked = $false ; $w.FindName('chkNaWifi').IsChecked = $false ; $w.FindName('chkNaCelular').IsChecked = $false
     $w.FindName('cardNaJustif').Visibility = 'Collapsed'
+    $Global:FaseLocalPayload.Lan.conectado = $true
     $Global:MeioSelecionado = ''
     Update-PainelMeios
 
@@ -368,22 +372,30 @@ try {
     $Global:FaseLocalPayload.Lan.ipv4 = $ipLanReal
     Update-PainelMeios
 
-    # 4d. checagem de um meio (celular) pelo overlay: Fase 1 (Ookla) + Fase 2 (VPN)
+    # 4d. checagem de um meio (celular) pelo overlay: Fase 1 + Fase 2 (VPN).
+    # A ordem e rigida: LAN e Wi-Fi precisam estar resolvidos p/ a vez chegar ao Celular.
     $Global:VpnSimulada = $true
-    $Global:FaseLocalPayload.Wireless.conectado = $true      # rede Wi-Fi conectada
+    $Global:FaseLocalPayload.Lan.conectado = $false          # cabo fora (etapa Wi-Fi/Celular)
+    $Global:FaseLocalPayload.Wireless.conectado = $true       # placa Wi-Fi conectada
     $w.FindName('cboOperadoraCel').Text = 'Vivo'
     $Global:MeioSelecionado = '' ; Update-PainelMeios
     if (-not $w.FindName('btnCheckWifi').IsEnabled -and -not $w.FindName('btnCheckCelular').IsEnabled) {
-        Write-Host "[4d] sem card selecionado -> nenhum 'Rodar checagem' habilitado"
-    } else { Write-Host "    FALHA: botao habilitado sem selecao (wifi.en=$($w.FindName('btnCheckWifi').IsEnabled) cel.en=$($w.FindName('btnCheckCelular').IsEnabled))"; $falhas++ }
-    Select-MeioParaChecar 'wifi'
-    if ($Global:MeioSelecionado -eq 'wifi') {
-        Write-Host "[4d] clicar no card WI-FI seleciona-o"
-    } else { Write-Host "    FALHA: selecao do card Wi-Fi (sel='$($Global:MeioSelecionado)')"; $falhas++ }
-    Select-MeioParaChecar 'celular'
-    if ($Global:MeioSelecionado -eq 'celular' -and "$($w.FindName('txtWifiSelDica').Visibility)" -eq 'Visible') {
-        Write-Host "[4d] clicar no card CELULAR troca a selecao"
-    } else { Write-Host "    FALHA: troca de selecao p/ Celular (sel='$($Global:MeioSelecionado)' dica=$($w.FindName('txtWifiSelDica').Visibility))"; $falhas++ }
+        Write-Host "[4d] so a vez (LAN) e clicavel -> Wi-Fi e Celular travados"
+    } else { Write-Host "    FALHA: card fora da vez habilitado (wifi.en=$($w.FindName('btnCheckWifi').IsEnabled) cel.en=$($w.FindName('btnCheckCelular').IsEnabled))"; $falhas++ }
+    Select-MeioParaChecar 'celular'   # fora da ordem -> ignorado
+    if ($Global:MeioSelecionado -ne 'celular') {
+        Write-Host "[4d] clicar num card fora da ordem e ignorado (a vez ainda e da LAN)"
+    } else { Write-Host "    FALHA: selecao pulou a ordem (sel='$($Global:MeioSelecionado)')"; $falhas++ }
+    # LAN e Wi-Fi "nao se aplica" -> a vez passa ao Celular
+    foreach ($nap in @(@('chkNaLan', 'sem ponto de rede cabeada'), @('chkNaWifi', 'sem Wi-Fi proprio no local'))) {
+        $w.FindName($nap[0]).IsChecked = $true ; Update-NaoAplicavelMeio
+        $w.FindName('txtNaJustif').Text = $nap[1] ; Invoke-NaRegistrar ; Invoke-Pump
+    }
+    Update-PainelMeios
+    if ($Global:MeioSelecionado -eq 'celular' -and $w.FindName('btnCheckCelular').IsEnabled -and
+        -not $w.FindName('btnCheckLan').IsEnabled -and -not $w.FindName('btnCheckWifi').IsEnabled) {
+        Write-Host "[4d] a vez passa ao Celular: selecionado e 'Rodar checagem' liberado"
+    } else { Write-Host "    FALHA: a vez nao chegou ao Celular (sel='$($Global:MeioSelecionado)' cel.en=$($w.FindName('btnCheckCelular').IsEnabled))"; $falhas++ }
     Invoke-CheckMeio 'celular'
     Invoke-Pump
     if ("$($w.FindName('overlayCheck').Visibility)" -eq 'Visible' -and $Global:CheckMeioAtivo -and
@@ -431,6 +443,10 @@ try {
     } else { Write-Host "    FALHA: banner de recomendacao (vis=$($w.FindName('cardRecMeios').Visibility) txt='$($w.FindName('txtRecMeios').Text)')"; $falhas++ }
 
     # 4f. "nao se aplica" -> abre o card de justificativa; "Registrar" desabilita o card do meio
+    #    (a LAN esta NA desde o 4d; primeiro desmarca, depois refaz o ciclo)
+    $w.FindName('chkNaLan').IsChecked = $false ; Update-NaoAplicavelMeio ; Invoke-Pump
+    if (-not $Global:MeiosNaoAplicaveis.ContainsKey('lan')) { Write-Host "[4f] desmarcar o checkbox remove o 'nao aplicavel'" }
+    else { Write-Host "    FALHA: desmarcar nao removeu o NA"; $falhas++ }
     $w.FindName('chkNaLan').IsChecked = $true
     Update-NaoAplicavelMeio
     Invoke-Pump
@@ -449,13 +465,13 @@ try {
         "$($w.FindName('txtNaMotivoCardLan').Text)" -match 'sem ponto de rede') {
         Write-Host "[4f] 'Registrar' fecha o card e o motivo aparece no card LAN (inviavel)"
     } else { Write-Host "    FALHA: registrar NA (chave=$($Global:MeiosNaoAplicaveis.ContainsKey('lan')) card=$($w.FindName('cardNaJustif').Visibility) motivo='$($w.FindName('txtNaMotivoCardLan').Text)')"; $falhas++ }
-    $w.FindName('chkNaLan').IsChecked = $false ; Update-NaoAplicavelMeio ; Invoke-Pump
-    if (-not $Global:MeiosNaoAplicaveis.ContainsKey('lan')) { Write-Host "[4f] desmarcar o checkbox remove o 'nao aplicavel'" }
-    else { Write-Host "    FALHA: desmarcar nao removeu o NA"; $falhas++ }
 
     # 4g. Fase 2 sem VPN: a saida "nao consegui conectar a VPN" + motivo registra o meio; depois limpa
+    #    (LAN NA + Celular testado -> a vez agora e do Wi-Fi, apos desmarca-lo)
     $Global:VpnSimulada = $false
-    Select-MeioParaChecar 'wifi'   # rede atual = Wi-Fi do local
+    $w.FindName('chkNaWifi').IsChecked = $false ; Update-NaoAplicavelMeio ; Invoke-Pump
+    Select-MeioParaChecar 'wifi'   # a vez e do Wi-Fi (rede atual = Wi-Fi do local)
+    if ($Global:MeioSelecionado -ne 'wifi') { Write-Host "    FALHA: a vez nao chegou ao Wi-Fi (sel='$($Global:MeioSelecionado)')"; $falhas++ }
     Invoke-CheckMeio 'wifi'
     Invoke-Pump
     Invoke-ChkAvancar   # Iniciar -> Fase 1
@@ -484,9 +500,13 @@ try {
     Close-OverlayCheck
     $w.FindName('chkVpnImpossivel').IsChecked = $false ; Update-VpnImpossivel
     $Global:VpnSimulada = $true
-    $Global:Medicoes = @(@($Global:Medicoes) | Where-Object { $_.meio -ne 'wifi_local' })   # volta ao meio unico (celular)
-    $idxCel = [array]::IndexOf(@($Global:Medicoes), (@($Global:Medicoes | Where-Object { $_.meio -eq 'celular' })[0]))
-    Show-MedicaoNoPasso5 -Par ([pscustomobject]@{ idx = $idxCel; med = @($Global:Medicoes | Where-Object { $_.meio -eq 'celular' })[0] })
+    # volta ao meio unico (celular) p/ o restante do teste seguir igual: solta os NA
+    # de LAN/Wi-Fi (marcados no 4d/4f) e descarta as medicoes que nao sao do celular
+    $Global:MeiosNaoAplicaveis.Remove('lan')
+    $Global:MeiosNaoAplicaveis.Remove('wifi_local')
+    $Global:Medicoes = @(@($Global:Medicoes) | Where-Object { $_.meio -eq 'celular' -and -not $_.nao_aplicavel })
+    $Global:MeioSelecionado = ''
+    Show-MedicaoNoPasso5 -Par ([pscustomobject]@{ idx = 0; med = @($Global:Medicoes)[0] })
     Invoke-Pump
 
     # 4h. passo 3 -> 4 (resultado por metrica)

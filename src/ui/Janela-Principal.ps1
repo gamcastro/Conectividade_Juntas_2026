@@ -1718,6 +1718,12 @@ function Get-MedicaoMeio {
         Select-Object -First 1
 }
 
+# "Meio da vez": o 1o da ordem que ainda esta pendente (''= todos resolvidos).
+function Get-MeioAtualPasso3 {
+    foreach ($m in $Global:OrdemMeios) { if ((Get-EstadoMeioPasso3 $m) -eq 'pendente') { return $m } }
+    ''
+}
+
 function Update-PainelMeios {
     $w = $Global:JanelaPrincipal
     if (-not $w) { return }
@@ -1834,18 +1840,12 @@ function Update-PainelMeios {
     # A placa Wi-Fi so fica numa rede por vez: o tecnico escolhe, clicando no card,
     # se essa rede e o Wi-Fi do local (card WI-FI) ou o roteamento do celular (card
     # CELULAR). O card selecionado ganha borda azul e libera o "Rodar checagem".
-    $sel = [string] $Global:MeioSelecionado
-    if ($sel) {
-        $selNaKey = if ($sel -eq 'wifi') { 'wifi_local' } else { $sel }
-        if ($Global:MeiosNaoAplicaveis.ContainsKey($selNaKey) -or $Global:NaMeioPendente -eq $selNaKey) {
-            $Global:MeioSelecionado = ''; $sel = ''
-        }
-    }
-    # LAN e o 1o meio da ordem: se esta conectada e ainda nao foi testada nem
-    # marcada como nao aplicavel, ja vem selecionada.
-    if (-not $sel -and $lanLive -and (Get-EstadoMeioPasso3 'lan') -eq 'pendente' -and -not $Global:MeiosNaoAplicaveis.ContainsKey('lan')) {
-        $Global:MeioSelecionado = 'lan'; $sel = 'lan'
-    }
+    # A sequencia e rigida: so o "meio da vez" (1o pendente na ordem LAN -> Wi-Fi
+    # -> Celular) fica ativo. Ele ja vem selecionado; os outros so mostram info.
+    $meioAtual = Get-MeioAtualPasso3
+    $selAtual  = if ($meioAtual -eq 'wifi_local') { 'wifi' } elseif ($meioAtual) { $meioAtual } else { '' }
+    if ($Global:MeioSelecionado -ne $selAtual) { $Global:MeioSelecionado = $selAtual }
+    $sel = $selAtual
     $tws = $w.FindName('txtWifiSelDica')
     if ($tws) { $tws.Visibility = if ($wifiLive -and $sel -ne 'wifi') { 'Visible' } else { 'Collapsed' } }
     $tcd = $w.FindName('txtCelDica')
@@ -1881,39 +1881,73 @@ function Update-PainelMeios {
         $azulSel.Freeze()
     }
 
-    # (card, badge, meio, botao, selKey, conectado, extraOK)
-    # Wi-Fi do local x Celular: a mesma conexao Wi-Fi; o que decide qual meio roda
-    # e o card selecionado (borda azul). Celular ainda exige a operadora.
+    $verdeBrush = Get-PincelVeredito 'viavel'
+
+    # (card, badge, meio, botao, num, extraOK)
     $defs = @(
-        @('cardLan',       'badgeLan',      'lan',        'btnCheckLan',      'lan',      $lanLive,   $true),
-        @('cardWifiPlaca', 'badgeWifi',     'wifi_local', 'btnCheckWifi',     'wifi',     $wifiLive,  $true),
-        @('cardCelular',   'badgeCelular',  'celular',    'btnCheckCelular',  'celular',  $wifiLive,  [bool] $operCel)
+        @('cardLan',       'badgeLan',      'lan',        'btnCheckLan',      'numLan',   $true),
+        @('cardWifiPlaca', 'badgeWifi',     'wifi_local', 'btnCheckWifi',     'numWifi',  $true),
+        @('cardCelular',   'badgeCelular',  'celular',    'btnCheckCelular',  'numCel',   [bool] $operCel)
     )
     foreach ($d in $defs) {
         $cd    = $w.FindName($d[0])
         $badge = $w.FindName($d[1])
         $meio  = $d[2]
         $btn   = $w.FindName($d[3])
-        $selKey    = $d[4]
-        $conectado = [bool] $d[5]
-        $extraOK   = [bool] $d[6]
-        $naMeio = $Global:MeiosNaoAplicaveis.ContainsKey($meio)
-        $selecionado = ($sel -eq $selKey) -and -not $naMeio
+        $num   = $w.FindName($d[4])
+        $extraOK = [bool] $d[5]
+
+        $naMeio    = $Global:MeiosNaoAplicaveis.ContainsKey($meio)
+        $estado    = Get-EstadoMeioPasso3 $meio
+        $resolvido = ($estado -ne 'pendente')
+        $ativo     = ($meio -eq $meioAtual)
+        # isolamento de rede exigido por etapa:
+        #   LAN  -> so o cabo conectado (Wi-Fi desligado)
+        #   Wi-Fi/Celular -> so a placa Wi-Fi conectada (cabo fora)
+        $isolamentoOK = if ($meio -eq 'lan') { $lanLive -and -not $wifiLive } else { $wifiLive -and -not $lanLive }
 
         $e = & $estadoMeio $meio
         if ($badge) { $badge.Text = $e.txt; $badge.Foreground = $e.cor }
-        if ($cd) {
-            $cd.BorderBrush     = if ($selecionado) { $azulSel } else { $e.borda }
-            $cd.BorderThickness = [Windows.Thickness]::new($(if ($selecionado) { 2.5 } else { 2 }))
-            $cd.Opacity         = if ($naMeio) { 0.6 } else { 1.0 }
+        if ($num) {
+            $num.Background = if ($resolvido) { $verdeBrush } elseif ($ativo) { $azulSel } else { $cinza }
         }
+        if ($cd) {
+            $cd.BorderBrush     = if ($ativo -and -not $naMeio) { $azulSel } else { $e.borda }
+            $cd.BorderThickness = [Windows.Thickness]::new($(if ($ativo -and -not $naMeio) { 2.5 } else { 2 }))
+            $cd.Opacity         = if ($ativo -or $resolvido) { 1.0 } else { 0.45 }
+        }
+        # checkbox "nao se aplica": so o meio da vez pode marcar; um meio ja NA
+        # pode ser desmarcado.
+        $chk = $w.FindName('chkNa' + $(if ($meio -eq 'wifi_local') { 'Wifi' } elseif ($meio -eq 'celular') { 'Celular' } else { 'Lan' }))
+        if ($chk) { $chk.IsEnabled = $ativo -or $naMeio }
         if ($btn) {
-            $btn.IsEnabled = $selecionado -and $conectado -and $extraOK -and -not $naMeio -and $livre -and (Test-MeioLiberadoNaOrdem $meio)
-            $btn.Content   = if (@($Global:Medicoes | Where-Object { $_.meio -eq $meio -and -not $_.nao_aplicavel }).Count) {
-                'Refazer checagem'
-            } else { 'Rodar checagem' }
+            $btn.IsEnabled = ($ativo -or $resolvido) -and $isolamentoOK -and $extraOK -and -not $naMeio -and $livre
+            $btn.Content   = if ($resolvido -and -not $naMeio) { 'Refazer checagem' } else { 'Rodar checagem' }
         }
     }
+    # a operadora do celular so e editavel na etapa do celular
+    $cbo = $w.FindName('cboOperadoraCel'); if ($cbo) { $cbo.IsEnabled = ($meioAtual -eq 'celular') }
+
+    # aviso de isolamento de rede / cabo, conforme a etapa
+    $seta = [char]0x21BB
+    $aviso = ''
+    if ($meioAtual -eq 'lan') {
+        if ($wifiLive) {
+            $aviso = "Para testar a LAN, desconecte a rede Wi-Fi pela bandeja do Windows - so o cabo de rede deve estar conectado. Depois clique no $seta do card LAN."
+        } elseif (-not $lanLive) {
+            $aviso = "Sem conexao na LAN. Verifique o cabo de rede e clique no $seta do card LAN para reler so a placa cabeada."
+        }
+    } elseif ($meioAtual -eq 'wifi_local' -or $meioAtual -eq 'celular') {
+        $qual = if ($meioAtual -eq 'celular') { 'o roteamento do celular' } else { 'o Wi-Fi do local' }
+        if ($lanLive) {
+            $aviso = "Para testar $qual, retire o cabo de rede - so a placa Wi-Fi deve estar conectada. Depois clique no $seta do card LAN para atualiza-la."
+        } elseif (-not $wifiLive) {
+            $aviso = "Conecte a placa Wi-Fi a rede que vai testar (bandeja do Windows) e clique no $seta do card Wi-Fi."
+        }
+    }
+    $cma = $w.FindName('cardMeioAviso'); $tma = $w.FindName('txtMeioAviso')
+    if ($tma) { $tma.Text = $aviso }
+    if ($cma) { $cma.Visibility = if ($aviso) { 'Visible' } else { 'Collapsed' } }
 
     # sincroniza os checkboxes "nao aplicavel" e mostra o motivo registrado no card
     foreach ($par in @(
@@ -2529,7 +2563,15 @@ function Select-MeioParaChecar {
     if ($Global:CheckMeioAtivo) { return }
     if (-not $Global:FaseLocalPayload) { return }
     $naKey = if ($Meio -eq 'wifi') { 'wifi_local' } else { $Meio }
-    if ($Global:MeiosNaoAplicaveis.ContainsKey($naKey) -or $Global:NaMeioPendente -eq $naKey) { return }
+    # sequencia rigida: so o "meio da vez" e clicavel
+    $atual = Get-MeioAtualPasso3
+    if ($naKey -ne $atual) {
+        if ($atual) {
+            $rot = switch ($atual) { 'lan' { 'a LAN' } 'wifi_local' { 'o Wi-Fi' } default { 'o Celular' } }
+            Write-Log ("Termine {0} antes de ir para o proximo meio (a ordem e LAN, Wi-Fi, Celular)." -f $rot) -Nivel Aviso
+        }
+        return
+    }
     if ($Global:MeioSelecionado -eq $Meio) { return }
     $Global:MeioSelecionado = $Meio
     Update-PainelMeios
@@ -2549,10 +2591,40 @@ function Invoke-CheckMeio {
         return
     }
     $p = $Global:FaseLocalPayload
-    $conectado = if ($Meio -eq 'lan') { [bool] ($p -and $p.Lan.conectado) } else { [bool] ($p -and $p.Wireless.conectado) }
-    if (-not $conectado) {
-        Write-Log 'Conecte este meio e use o botao de reler placas antes de rodar a checagem.' -Nivel Aviso
-        return
+    $lanOn  = [bool] ($p -and $p.Lan.conectado)
+    $wifiOn = [bool] ($p -and $p.Wireless.conectado)
+
+    # Isolamento de rede exigido no momento do teste:
+    #   LAN            -> so o cabo conectado (Wi-Fi desligado)
+    #   Wi-Fi/Celular  -> so a placa Wi-Fi conectada (cabo de rede fora)
+    if ($Meio -eq 'lan') {
+        if (-not $lanOn) {
+            $m = 'A placa cabeada (LAN) nao esta conectada.' + [Environment]::NewLine + [Environment]::NewLine +
+                 'Verifique o cabo de rede (no notebook e no ponto de rede/switch) e clique no botao de reler do card LAN (o simbolo de atualizar no canto) para atualizar apenas a placa LAN.'
+            Write-Log 'LAN sem conexao - verifique o cabo de rede e releia apenas a placa LAN.' -Nivel Aviso
+            if (-not $Global:ModoTeste -and $w) { try { [System.Windows.MessageBox]::Show($w, $m, 'Rede cabeada (LAN) sem conexao', [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Warning) | Out-Null } catch { } }
+            return
+        }
+        if ($wifiOn) {
+            $m = 'A rede Wi-Fi esta conectada a um SSID.' + [Environment]::NewLine + [Environment]::NewLine +
+                 'Para testar a LAN, so o cabo de rede pode estar conectado. Desconecte a rede Wi-Fi pela bandeja do Windows e releia as placas.'
+            Write-Log 'Desconecte a rede Wi-Fi antes de testar a LAN (so o cabo pode estar conectado).' -Nivel Aviso
+            if (-not $Global:ModoTeste -and $w) { try { [System.Windows.MessageBox]::Show($w, $m, 'Desconecte o Wi-Fi para testar a LAN', [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Warning) | Out-Null } catch { } }
+            return
+        }
+    } else {
+        if (-not $wifiOn) {
+            Write-Log 'Conecte a placa Wi-Fi a rede que vai testar e releia as placas antes de rodar a checagem.' -Nivel Aviso
+            return
+        }
+        if ($lanOn) {
+            $qual = if ($Meio -eq 'celular') { 'o roteamento do celular' } else { 'o Wi-Fi do local' }
+            $m = 'O cabo de rede (LAN) ainda esta conectado.' + [Environment]::NewLine + [Environment]::NewLine +
+                 ('Para testar {0}, retire o cabo de rede do notebook - so a placa Wi-Fi pode estar conectada - e releia as placas.' -f $qual)
+            Write-Log 'Retire o cabo de rede antes de testar o Wi-Fi/Celular (so a placa Wi-Fi pode estar conectada).' -Nivel Aviso
+            if (-not $Global:ModoTeste -and $w) { try { [System.Windows.MessageBox]::Show($w, $m, 'Retire o cabo de rede', [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Warning) | Out-Null } catch { } }
+            return
+        }
     }
     if ($Meio -eq 'celular' -and -not ([string] $w.FindName('cboOperadoraCel').Text).Trim()) {
         Write-Log 'Informe a operadora do celular antes de rodar a checagem.' -Nivel Aviso
