@@ -44,7 +44,10 @@ Script), em vez de criar um BI/dashboard separado.
   velocímetro ao vivo; resultado com provedor/servidor/IP/ping/jitter/perda/
   down/up + link Ookla). O `speedtest.exe` (Ookla CLI, proprietário) é colocado
   **manualmente em `tools/`** e **não vai ao repositório** (`.gitignore`); sem
-  ele o teste mostra erro. Config em `config/rede-local.json`
+  ele o teste mostra erro. O `Instalar-DICON.ps1` roda o binário uma vez com
+  `--accept-license --accept-gdpr` (aceita a licença da Ookla na máquina; se não
+  rodar, o DICON aceita no 1º uso mesmo assim — sempre passa as flags). Config em
+  `config/rede-local.json`
   (`speedtest_server_id`, `speedtest_extra_args`). Até **3 tentativas** (espera
   0s/3s/6s). Se falhar, `Resolve-FalhaSpeedtest` classifica em
   `speedtest_falha_tipo` (`handshake` = nem baixou a config/lista de servidores

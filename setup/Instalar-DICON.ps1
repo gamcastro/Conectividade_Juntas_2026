@@ -249,6 +249,32 @@ if ($SoConfig -or $PularDeps) {
     }
 }
 
+# --------------------------------------------- aceite da licenca do Speedtest
+# Roda o speedtest.exe uma vez com --accept-license --accept-gdpr: grava a
+# aceitacao em %LOCALAPPDATA%\Ookla\... e confirma que o binario executa. Sem
+# isso o DICON ainda funciona (ele sempre passa as flags), mas a 1a Fase 1 fica
+# mais lenta/verbosa. So roda se o exe estiver presente.
+$spExe = Join-Path $RaizApp 'tools\speedtest.exe'
+if ((Test-Path $spExe) -and -not $SoConfig) {
+    Titulo 'Aceite da licenca do Speedtest (Ookla)'
+    try {
+        $tp = [IO.Path]::GetTempPath()
+        $so = Join-Path $tp ('dicon-sp-{0}.out' -f [guid]::NewGuid().ToString('N'))
+        $se = Join-Path $tp ('dicon-sp-{0}.err' -f [guid]::NewGuid().ToString('N'))
+        $p = Start-Process -FilePath $spExe -ArgumentList '--accept-license', '--accept-gdpr' `
+            -NoNewWindow -PassThru -RedirectStandardOutput $so -RedirectStandardError $se
+        if ($p.WaitForExit(40000)) {
+            OK 'licenca aceita/registrada nesta maquina'
+        } else {
+            try { $p.Kill() } catch { }
+            Aviso 'speedtest.exe demorou (rede?) - a licenca sera aceita no 1o uso do DICON'
+        }
+        Remove-Item $so, $se -Force -ErrorAction SilentlyContinue
+    } catch {
+        Aviso "nao consegui rodar o speedtest.exe agora: $_"
+    }
+}
+
 Remove-Item $Tmp -Recurse -Force -ErrorAction SilentlyContinue
 
 # ---------------------------------------------------------------- atalho
