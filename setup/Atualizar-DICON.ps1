@@ -114,6 +114,12 @@ if ($temGit) {
     Get-ChildItem (Join-Path $novo.FullName 'tools') -Filter '*.ps1' -ErrorAction SilentlyContinue |
         ForEach-Object { Copy-Item $_.FullName (Join-Path $RaizApp ('tools\' + $_.Name)) -Force }
 
+    # config\*.exemplo.json (referencia: limiares/rede-local/... com defaults novos).
+    # Copia aditiva - NUNCA toca nos .json reais (endpoint, PIN, canal, limiares salvos).
+    if (-not (Test-Path (Join-Path $RaizApp 'config'))) { New-Item -ItemType Directory -Path (Join-Path $RaizApp 'config') -Force | Out-Null }
+    Get-ChildItem (Join-Path $novo.FullName 'config') -Filter '*.exemplo.json' -ErrorAction SilentlyContinue |
+        ForEach-Object { Copy-Item $_.FullName (Join-Path $RaizApp ('config\' + $_.Name)) -Force }
+
     Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
     Write-Host "codigo atualizado a partir do ZIP." -ForegroundColor Green
 }

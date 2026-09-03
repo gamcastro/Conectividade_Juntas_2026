@@ -24,12 +24,28 @@ $script:LimiarMetricas = @(
 
 function Get-LimiarMetricas { $script:LimiarMetricas }
 
+# $true se o doc ja esta no formato NESTED (por meio x cenario).
+function Test-LimiaresNested {
+    param($Doc)
+    [bool] ($Doc -and $Doc.PSObject.Properties['perfis'] -and $Doc.perfis)
+}
+
 function Sync-Limiares {
     Write-Log 'Baixando limiares...' -Nivel Info
     $resp = Invoke-RecursoWebApp -Recurso 'limiares'
     if (-not $resp.limiares) { throw "Resposta de 'limiares' sem dados." }
-    Write-CacheJson -Nome 'limiares.json' -Campo 'limiares' -Itens $resp.limiares -Origem "recurso=limiares ($($resp.origem))"
-    return $resp.limiares
+    $novo = @($resp.limiares) | Select-Object -First 1
+
+    # Web App ainda no formato antigo (plano): NAO deixa sobrescrever limiares
+    # locais que ja estao no formato novo (por meio x cenario) - vindos de um
+    # "Salvar limiares" do admin ou do config/limiares.exemplo.json novo.
+    if (-not (Test-LimiaresNested $novo) -and (Test-LimiaresNested (Get-LimiaresConfig))) {
+        Write-Log 'Web App ainda no formato antigo de limiares - mantendo os limiares locais (por meio x cenario).' -Nivel Aviso
+        return (Get-LimiaresConfig)
+    }
+
+    Write-CacheJson -Nome 'limiares.json' -Campo 'limiares' -Itens $novo -Origem "recurso=limiares ($($resp.origem))"
+    return $novo
 }
 
 # Bloco 'folga' padrao do wifi_local (usado na migracao do formato antigo).
@@ -79,22 +95,32 @@ function ConvertTo-PerfisLimiares {
     }
 }
 
-# Doc NESTED (sempre). Cache de data/limiares.json tem prioridade; senao o local.
-# O Write-CacheJson embrulha o payload num array ($Campo = @($Itens)), entao
-# desembrulhamos aqui.
+# Doc NESTED (sempre). Prioridade:
+#   1) cache data/limiares.json SE ja estiver no formato novo (Web App novo ou
+#      "Salvar limiares" do admin) - assim as edicoes centrais valem;
+#   2) config/limiares.json|.exemplo.json SE ja for o formato novo - assim um
+#      cache antigo (Web App v1) nao rebaixa os pisos ANATEL do pacote;
+#   3) migra o que houver (cache tem preferencia sobre o exemplo).
+# O Write-CacheJson embrulha o payload num array; desembrulhamos aqui.
 function Get-LimiaresConfig {
     $arq = Join-Path (Get-PastaDados) 'limiares.json'
-    $raw = $null
+    $cache = $null
     if (Test-Path $arq) {
         try {
             $doc = Get-Content -Path $arq -Raw -Encoding UTF8 | ConvertFrom-Json
-            if ($null -ne $doc.limiares) { $raw = @($doc.limiares) | Select-Object -First 1 }
+            if ($null -ne $doc.limiares) { $cache = @($doc.limiares) | Select-Object -First 1 }
         } catch {
             Write-Log "Cache de limiares corrompido, usando o local: $_" -Nivel Aviso
         }
     }
-    if ($null -eq $raw) { $raw = Get-Config 'limiares' }
-    return ConvertTo-PerfisLimiares $raw
+    if (Test-LimiaresNested $cache) { return $cache }
+
+    $local = $null
+    try { $local = Get-Config 'limiares' } catch { }
+    if (Test-LimiaresNested $local) { return $local }
+
+    if ($null -ne $cache) { return ConvertTo-PerfisLimiares $cache }
+    return ConvertTo-PerfisLimiares $local
 }
 
 # Le uma flag booleana de um objeto, com default (StrictMode-safe).

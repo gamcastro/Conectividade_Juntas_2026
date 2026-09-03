@@ -812,6 +812,22 @@ try {
         Write-Host "[8] Get-PerfilLimiares: LAN sem/com VPN + Wi-Fi=LAN+folga + Celular proprio + web so COM VPN"
     } else { Write-Host "    FALHA: Get-PerfilLimiares (lanSem=$($pLanSem.latencia_ms.ressalva_ate) lanCom=$($pLanCom.latencia_ms.ressalva_ate) wifi=$($pWifiSem.latencia_ms.viavel_ate) celCom=$($pCelCom.latencia_ms.ressalva_ate))"; $falhas++ }
 
+    # 8-3. cache no formato ANTIGO (Web App v1) NAO rebaixa os pisos nested do pacote
+    $flatV1 = [pscustomobject]@{
+        latencia_ms         = [pscustomobject]@{ viavel_ate = 60; ressalva_ate = 120; ativo = $true }
+        jitter_ms           = [pscustomobject]@{ viavel_ate = 10; ressalva_ate = 30;  ativo = $true }
+        perda_percentual    = [pscustomobject]@{ viavel_ate = 1;  ressalva_ate = 5;   ativo = $true }
+        banda_download_mbps = [pscustomobject]@{ viavel_min = 20; ressalva_min = 8;   ativo = $true }
+        banda_upload_mbps   = [pscustomobject]@{ viavel_min = 10; ressalva_min = 4;   ativo = $true }
+        carregamento_web_s  = [pscustomobject]@{ viavel_ate = 5;  ressalva_ate = 12;  ativo = $true }
+    }
+    Write-CacheJson -Nome 'limiares.json' -Campo 'limiares' -Itens $flatV1 -Origem 'teste v1 antigo'
+    $pLanSem2 = Get-PerfilLimiares -Meio lan -Cenario sem_vpn
+    if ((Test-LimiaresNested (Get-LimiaresConfig)) -and $pLanSem2.latencia_ms.viavel_ate -eq 20 -and $pLanSem2.latencia_ms.ressalva_ate -eq 80) {
+        Write-Host "[8] cache no formato antigo e ignorado - vale o config nested (LAN sem VPN lat 20/80, nao 60/120)"
+    } else { Write-Host "    FALHA: cache antigo rebaixou os limiares (lat $($pLanSem2.latencia_ms.viavel_ate)/$($pLanSem2.latencia_ms.ressalva_ate))"; $falhas++ }
+    Remove-Item (Join-Path $Global:RaizApp 'data\limiares.json') -Force -ErrorAction SilentlyContinue
+
     # 8b. ambiente iperf3: campos carregam da config e "Salvar ambiente" exige PIN
     $srvCfg = "$($w.FindName('txtIperfServidorCfg').Text)"
     if ($srvCfg -and "$($w.FindName('txtIperfPortaCfg').Text)" -match '\d') {

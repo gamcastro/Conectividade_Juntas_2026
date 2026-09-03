@@ -48,18 +48,22 @@ Script), em vez de criar um BI/dashboard separado.
   `--accept-license --accept-gdpr` (aceita a licença da Ookla na máquina; se não
   rodar, o DICON aceita no 1º uso mesmo assim — sempre passa as flags). Config em
   `config/rede-local.json`
-  (`speedtest_server_id`, `speedtest_extra_args`). Até **3 tentativas** (espera
-  0s/3s/6s). Se falhar, `Resolve-FalhaSpeedtest` classifica em
+  (`speedtest_server_id` — fixe o id de um servidor bom da região p/ pular as
+  falhas do default; `speedtest_extra_args`; `speedtest_tentativas`, default 3;
+  `speedtest_esperas_s`, default `[0,5,12]` s antes de cada tentativa no mesmo
+  servidor). Se falhar, `Resolve-FalhaSpeedtest` classifica em
   `speedtest_falha_tipo` (`handshake` = nem baixou a config/lista de servidores
-  da Ookla — link fraco/instável; `bloqueio` = proxy/DNS barrando *.speedtest.net;
-  `sem_binario`; `desconhecido`) e monta `speedtest_diagnostico`, uma frase que
-  entra no JSON e no relatório PDF (box âmbar "Rede local fraca / instável") como
-  **dado do laudo**, não só erro de ferramenta. Se a falha for `desconhecido`
-  (ex.: `Latency test failed` / `[0] Unknown error` — o servidor padrão/auto
-  está ruim), tenta **outros servidores** da região: `Get-ServidoresSpeedtestProximos`
-  (`speedtest.exe --servers` → `ConvertFrom-ListaServidoresSpeedtest`) e refaz
-  contra até 3 IDs; se um funcionar, `servidor_fallback=$true` e o log sugere
-  fixar aquele `speedtest_server_id` em `config/rede-local.json`.
+  da Ookla — link fraco/instável **ou servidor default sobrecarregado**;
+  `bloqueio` = proxy/DNS barrando *.speedtest.net; `sem_binario`; `desconhecido`)
+  e monta `speedtest_diagnostico`, uma frase que entra no JSON e no relatório PDF
+  (box âmbar "Rede local fraca / instável") como **dado do laudo**, não só erro de
+  ferramenta. Se a falha for `desconhecido` (ex.: `Latency test failed` /
+  `[0] Unknown error`) **ou `handshake`** (o `Configuration - Timeout` costuma ser
+  servidor default ruim, não a rede do local), tenta **outros servidores** da
+  região: `Get-ServidoresSpeedtestProximos` (`speedtest.exe --servers` →
+  `ConvertFrom-ListaServidoresSpeedtest`) e refaz contra até 3 IDs; se um
+  funcionar, `servidor_fallback=$true` e o log sugere fixar aquele
+  `speedtest_server_id` em `config/rede-local.json`.
   Se não houver rede no local, o técnico pode marcar **"testei pelo roteamento
   do celular"** e informar a **operadora** (vai no `rede_local` e no relatório).
   A **Fase 2 (com a VPN do TRE)** é a bateria de sempre (ping/iperf3/Selenium).
@@ -78,11 +82,17 @@ Script), em vez de criar um BI/dashboard separado.
   "Limite" SEM VPN é ancorado nos valores de corte da ANATEL (Res. Interna
   444/2025 — SCM p/ LAN/Wi-Fi, SMP p/ celular). Formato/estrutura e valores
   provisórios em `docs/limiares-referencia.md` e `config/limiares.exemplo.json`.
-  `Get-LimiaresConfig` sempre devolve o doc aninhado (`ConvertTo-PerfisLimiares`
-  migra caches no formato plano antigo). O `apps-script/Codigo.gs` já grava o
-  JSON aninhado na célula A2 da aba `Limiares` mas **precisa de redeploy manual
-  (clasp)** — até lá o config local é a fonte da verdade e a tela de
-  Administração salva local (`Save-LimiaresLocal`)
+  `Get-LimiaresConfig` sempre devolve o doc aninhado, com prioridade (v0.6.68):
+  (1) cache `data/limiares.json` **se já for aninhado** (Web App novo ou "Salvar
+  limiares" do admin); (2) `config/limiares.json|.exemplo.json` **se for aninhado**
+  — assim um cache do Web App v1 (plano) não rebaixa os pisos ANATEL do pacote;
+  (3) migra o que houver (`ConvertTo-PerfisLimiares`, cache antes do exemplo).
+  `Sync-Limiares` não deixa uma resposta no formato plano sobrescrever um limiar
+  aninhado local. `Atualizar-DICON.ps1` (v0.6.68) copia `config/*.exemplo.json`
+  do pacote (aditivo — nunca toca nos `.json` reais). O `apps-script/Codigo.gs`
+  já grava o JSON aninhado na célula A2 da aba `Limiares` mas **precisa de
+  redeploy manual (clasp)** — até lá o config local é a fonte da verdade e a
+  tela de Administração salva local (`Save-LimiaresLocal`)
 - Saída em **JSON estruturado**, salva localmente primeiro; depois enviada via
   `Invoke-RestMethod` para o endpoint do Apps Script do Painel de Vistoria
 
