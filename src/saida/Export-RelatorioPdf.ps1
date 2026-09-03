@@ -140,11 +140,11 @@ function Get-MeioBlocoHtml {
     $prov = if ($M.rede_local_provedor) { '<div class="small"><b>Provedor:</b> ' + (ConvertTo-HtmlSafe ([string] $M.rede_local_provedor)) + '</div>' } else { '' }
     $diagBox = ''
     if ($M.rede_local_diagnostico -and (@('handshake', 'bloqueio') -contains [string] $M.rede_local_falha_tipo)) {
-        $rot = if ([string] $M.rede_local_falha_tipo -eq 'handshake') { 'Rede local fraca / inst&aacute;vel' } else { 'Speedtest bloqueado no local' }
+        $rot = if ([string] $M.rede_local_falha_tipo -eq 'handshake') { 'Rede local fraca / inst&aacute;vel' } else { 'Teste de velocidade bloqueado no local' }
         $diagBox = '<div class="warn"><b>' + $rot + ':</b> ' + (ConvertTo-HtmlSafe ([string] $M.rede_local_diagnostico)) + '</div>'
     }
     $f1 = Get-TabelaAvaliacaoHtml -Linhas $M.rede_local_avaliacao
-    if (-not $f1) { $f1 = '<div class="small">O Speedtest da Ookla n&atilde;o mediu neste meio.</div>' }
+    if (-not $f1) { $f1 = '<div class="small">O teste de velocidade n&atilde;o mediu neste meio.</div>' }
 
     if ($M.vpn_conectou) {
         $f2 = if ($Recomendado) { Get-TabelaAvaliacaoHtml -Linhas $R.avaliacao -ComMotivo } else { Get-TabelaVpnNumerosHtml $M }
@@ -159,13 +159,13 @@ function Get-MeioBlocoHtml {
     <div class="meiotit"><span>$tit</span><span class="badge" style="color:$cor;border-color:$cor">$ver</span>$flag</div>
     <div class="cols">
       <div>
-        <div class="subt">Rede local &mdash; Speedtest da Ookla (sem VPN)</div>
+        <div class="subt">Sem VPN conectada &mdash; teste de velocidade</div>
         $prov
         $diagBox
         $f1
       </div>
       <div>
-        <div class="subt">Com a VPN da Justi&ccedil;a Eleitoral</div>
+        <div class="subt">Com VPN conectada &mdash; diagn&oacute;stico pela VPN da Justi&ccedil;a Eleitoral</div>
         $f2
       </div>
     </div>
@@ -275,7 +275,7 @@ function Get-PainelHtml {
         @{ n = $nRessalva;   l = 'Com ressalva' }
         @{ n = $nInviavel;   l = 'Invi&aacute;veis' }
         @{ n = $na.Count;    l = 'N&atilde;o aplic&aacute;veis' }
-        @{ n = ('{0}/{1}' -f $nVpn, $aplic.Count); l = 'Conectaram a VPN' }
+        @{ n = ('{0}/{1}' -f $nVpn, $aplic.Count); l = 'Conectou &agrave; VPN' }
     )
     $kpiHtml = ($kpis | ForEach-Object { '<div class="kpi"><div class="n">{0}</div><div class="l">{1}</div></div>' -f $_.n, $_.l }) -join ''
 
@@ -339,7 +339,7 @@ $($idRows -join "`n")
         <div class="kpis">$kpiHtml</div>
         <div class="ptit" style="margin-top:12px">Situa&ccedil;&atilde;o por meio</div>
         <table>
-          <thead><tr><th>Meio</th><th>Rede local (Ookla)</th><th>VPN</th><th>Download VPN</th><th>Lat&ecirc;ncia VPN</th><th>Veredito</th></tr></thead>
+          <thead><tr><th>Meio</th><th>Sem VPN conectada</th><th>Com VPN conectada</th><th>Download com VPN</th><th>Lat&ecirc;ncia com VPN</th><th>Veredito</th></tr></thead>
           <tbody>
 $($sitRows -join "`n")
           </tbody>
@@ -522,10 +522,10 @@ function New-RelatorioHtml {
 
   .pnl { border: 1px solid #BFC9DA; border-top: none; padding: 10px 12px 4px; }
   .pcols { display: grid; grid-template-columns: 40% 60%; gap: 0 20px; }
-  .kpis { display: flex; gap: 6px; }
-  .kpi { flex: 1; border: 1px solid #BFC9DA; text-align: center; padding: 7px 4px; background: #F4F7FB; }
-  .kpi .n { font-size: 18px; font-weight: 700; color: #1F4E79; }
-  .kpi .l { font-size: 9px; color: #555; text-transform: uppercase; letter-spacing: .03em; margin-top: 2px; }
+  .kpis { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; }
+  .kpi { min-width: 0; border: 1px solid #BFC9DA; text-align: center; padding: 6px 3px; background: #F4F7FB; }
+  .kpi .n { font-size: 17px; font-weight: 700; color: #1F4E79; }
+  .kpi .l { font-size: 8px; color: #555; text-transform: uppercase; letter-spacing: .02em; margin-top: 2px; line-height: 1.25; word-wrap: break-word; }
   .pnl ul { margin: 2px 0 2px 16px; padding: 0; }
   .pnl li { margin: 1px 0; }
 

@@ -273,16 +273,21 @@ da Vistoria" da SEMAP, e converte com o Edge/Chrome headless (`--print-to-pdf`,
    Município (sede: X)".
 3. **Painel de Viabilidade de Conectividade** (`Get-PainelHtml`): faixa navy +
    Identificação (kv) + Indicadores (KPIs: meios testados / viáveis / com ressalva
-   / inviáveis / não aplicáveis / conectaram a VPN) + Situação por meio (tabela,
-   linha do recomendado em azul, inviável em vermelho) + **Conclusão do
+   / inviáveis / não aplicáveis / conectou à VPN) + Situação por meio (tabela com
+   colunas "Sem VPN conectada" / "Com VPN conectada" / Download com VPN / Latência
+   com VPN, linha do recomendado em azul, inviável em vermelho) + **Conclusão do
    diagnóstico** (Recomendação final, Classificação do local, Conexão recomendada,
    Motivo, Ajuste, Condicionantes/pendências `Get-CondicionantesDiag`, Observações
    finais `Get-ObservacoesFinaisDiag` — prosa gerada pelo veredito).
 4. **Testes de comunicação por meio** (`Get-MeioBlocoHtml`, ordem LAN / Wi-Fi do
-   local / Celular): por meio, "Rede local — Speedtest da Ookla (sem VPN)"
-   (`rede_local_avaliacao[]`) + "Com a VPN" (o meio recomendado usa `avaliacao[]`
-   com faixa+motivo; os demais, os números crus). Meios "não aplicável" viram uma
-   linha só com o motivo.
+   local / Celular): por meio, "Sem VPN conectada — teste de velocidade"
+   (`rede_local_avaliacao[]`) + "Com VPN conectada — diagnóstico pela VPN da JE"
+   (o meio recomendado usa `avaliacao[]` com faixa+motivo; os demais, os números
+   crus). Meios "não aplicável" viram uma linha só com o motivo.
+   **Nomes de produto** (speedtest/Ookla/iperf3/Selenium) não aparecem em texto
+   visível — só "teste de velocidade", "banda pela VPN", "análise de banda",
+   "sistema de totalização"; chaves de config (`speedtest_server_id`), nomes de
+   função e o binário `speedtest.exe` seguem como estão.
 5. **Dados da vistoria do GEL** — as seções do `vistoria_gel` (sem as fotos).
 6. **Registro fotográfico** — `Get-FotosGel`, grade de 3 por linha com legenda
    "Foto N", teto ~14 MB embutido.

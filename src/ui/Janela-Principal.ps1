@@ -2310,7 +2310,7 @@ function Update-IperfGauge {
     }
 
     if ($Evento.estado -eq 'inicio') {
-        if ($Evento.servidor) { $w.FindName('txtIperfInfo').Text = 'Servidor iperf3: ' + [string] $Evento.servidor }
+        if ($Evento.servidor) { $w.FindName('txtIperfInfo').Text = 'Servidor de banda: ' + [string] $Evento.servidor }
         if ($Evento.dur) { $Global:IperfDur = [double] $Evento.dur }
         $w.FindName('txtVeloFaseVpn').Text = if ($fase -eq 'upload') { 'Upload...' } else { 'Download...' }
         return
@@ -2351,7 +2351,7 @@ function Update-IperfPainel {
     if ($null -ne $rd) { $rt += "{0} down" -f $rd }
     if ($null -ne $ru) { $rt += "{0} up" -f $ru }
     $w.FindName('runIperfRetrans').Text = if ($rt.Count) { $rt -join ' / ' } else { '--' }
-    if ($srv) { $w.FindName('txtIperfServidor').Text = 'Servidor iperf3: ' + $srv }
+    if ($srv) { $w.FindName('txtIperfServidor').Text = 'Servidor de banda: ' + $srv }
 
     # latencia / jitter / perda vem do ping (Test-Latencia), no payload final
     $m = if ($Global:DiagPayload) { $Global:DiagPayload.Metricas } else { $null }
@@ -2431,7 +2431,7 @@ function Set-ChkStep {
     }
     $b = [Windows.Media.SolidColorBrush]::new([Windows.Media.ColorConverter]::ConvertFromString($cor)); $b.Freeze()
     $dot.Fill = $b
-    $base = @('1. Rede local (sem VPN)', '2. Diagnostico com a VPN', '3. Sistema de totalizacao (Selenium)')[$N - 1]
+    $base = @('1. Rede local (sem VPN)', '2. Diagnostico com a VPN', '3. Sistema de totalizacao')[$N - 1]
     $lbl.Text = if ($Texto) { "$base - $Texto" } else { "$base - $palavra" }
 }
 
@@ -2532,7 +2532,7 @@ function Start-CheckFase1 {
     $w.FindName('txtChkResultadoVazio').Visibility = 'Visible'
     Reset-Velocimetro
     $w.FindName('txtVeloFase').Text = 'iniciando...'
-    Write-Log 'Fase 1: teste de velocidade (Ookla), sem a VPN...' -Nivel Info
+    Write-Log 'Fase 1: teste de velocidade da rede local (sem a VPN)...' -Nivel Info
     if ($Global:FaseLocalSimulada) { Complete-CheckFase1 $Global:FaseLocalSimulada $null; return }
     Set-FaseLocalOcupado $true
     Start-TarefaRede -Script 'Invoke-FaseLocal' -AoConcluir { param($res, $erro) Complete-CheckFase1 $res $erro }
@@ -2614,7 +2614,7 @@ function Start-DiagnosticoVpn {
     Reset-Velocimetro -Suf 'Vpn'
     $w.FindName('txtVeloFaseVpn').Text = 'iniciando...'
     $rd = $w.FindName('ringDiag'); if ($rd) { $rd.IsActive = $true; $rd.Visibility = 'Visible' }
-    Write-Log 'Fase 2: diagnostico com a VPN (ping + iperf3)...' -Nivel Info
+    Write-Log 'Fase 2: diagnostico com a VPN (ping + banda + totalizacao)...' -Nivel Info
     Set-ChkStep 2 'rodando'
     Set-ProgressoDiag $true
     $sel  = $w.FindName('cboLocal').SelectedItem
@@ -3257,7 +3257,7 @@ function Invoke-SalvarAmbiente {
     $porta = 0; $dur = 0
     $okP = [int]::TryParse(([string] $w.FindName('txtIperfPortaCfg').Text).Trim(), [ref] $porta)
     $okD = [int]::TryParse(([string] $w.FindName('txtIperfDuracaoCfg').Text).Trim(), [ref] $dur)
-    if (-not $srv) { $msg.Foreground = $vermelho; $msg.Text = 'Informe o IP ou host do servidor iperf3.'; return }
+    if (-not $srv) { $msg.Foreground = $vermelho; $msg.Text = 'Informe o IP ou host do servidor de banda.'; return }
     if (-not $okP -or $porta -lt 1 -or $porta -gt 65535) { $msg.Foreground = $vermelho; $msg.Text = 'Porta invalida (1-65535).'; return }
     if (-not $okD -or $dur -lt 3 -or $dur -gt 60) { $msg.Foreground = $vermelho; $msg.Text = 'Duracao invalida (3-60 s).'; return }
 
@@ -3268,7 +3268,7 @@ function Invoke-SalvarAmbiente {
         $msg.Foreground = [Windows.Media.Brushes]::LightGreen
         $extra = if ($mapsKey) { ' + chave do Google Maps' } else { '' }
         $msg.Text = "Ambiente salvo neste computador ($srv`:$porta$extra)."
-        Write-Log "Ambiente salvo pelo admin: iperf3 $srv`:$porta / ${dur}s ; maps_key=$(if ($mapsKey) { 'definida' } else { 'vazia' }) -> $arq" -Nivel Ok
+        Write-Log "Ambiente salvo pelo admin: servidor de banda $srv`:$porta / ${dur}s ; maps_key=$(if ($mapsKey) { 'definida' } else { 'vazia' }) -> $arq" -Nivel Ok
     } catch {
         $msg.Foreground = $vermelho
         $msg.Text = "Falha ao salvar: $_"
@@ -3617,7 +3617,7 @@ function Set-NotaRedeLocal {
     $t = $w.FindName('txtRedeLocalNota')
     if (-not $t) { return }
     if ($TemLinhas) {
-        $t.Text = 'As linhas "Rede local" vem do Speedtest da Ookla (sem a VPN) e entram no pior caso junto com as da VPN.'
+        $t.Text = 'As linhas "Rede local" vem do teste de velocidade (sem a VPN) e entram no pior caso junto com as da VPN.'
         $t.Visibility = 'Visible'
     } elseif ($Internet) {
         $diag = if ($Internet.PSObject.Properties['speedtest_diagnostico']) { [string] $Internet.speedtest_diagnostico } else { '' }

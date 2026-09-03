@@ -366,14 +366,14 @@ function Resolve-FalhaSpeedtest {
         $vezes = if ($Tentativas -gt 1) { "$Tentativas tentativas" } else { 'a tentativa' }
         return @{
             tipo  = 'handshake'
-            laudo = ('Nao completou nem o handshake inicial do Speedtest: a fase de configuracao da ' +
-                     'Ookla (baixar a lista de servidores) expirou em ' + $vezes + '. O local TEM internet, ' +
+            laudo = ('Nao completou nem a etapa inicial do teste de velocidade: a fase de configuracao ' +
+                     '(baixar a lista de servidores de medicao) expirou em ' + $vezes + '. O local TEM internet, ' +
                      'mas a rede local nao sustentou uma conexao estavel o bastante para medir - indicio de ' +
                      'sinal Wi-Fi fraco, perda de pacote ou micro-quedas do link.' + $ctx)
         }
     }
     if ($m -match 'resolve|refused|denied|blocked|forbidden|proxy|\b407\b|SSL|TLS|certificate') {
-        return @{ tipo = 'bloqueio'; laudo = 'O Speedtest nao alcancou os servidores da Ookla - possivel bloqueio de rede/proxy a *.speedtest.net neste local.' }
+        return @{ tipo = 'bloqueio'; laudo = 'O teste de velocidade nao alcancou os servidores de medicao - possivel bloqueio de rede/proxy neste local.' }
     }
     return @{ tipo = 'desconhecido'; laudo = '' }
 }
@@ -437,10 +437,10 @@ function Test-InternetLocal {
     for ($tent = 1; $tent -le 3 -and -not $res; $tent++) {
         if ($tent -gt 1) {
             $espera = 3 * ($tent - 1)
-            Write-Log ("Speedtest nao respondeu - tentativa {0}/3 em {1}s..." -f $tent, $espera) -Nivel Aviso
+            Write-Log ("Teste de velocidade nao respondeu - tentativa {0}/3 em {1}s..." -f $tent, $espera) -Nivel Aviso
             Start-Sleep -Seconds $espera
         }
-        Write-Log ("Speedtest (Ookla): {0} {1}" -f $exe, $argv) -Nivel Destaque
+        Write-Log ("Teste de velocidade: {0} {1}" -f $exe, $argv) -Nivel Destaque
         $saida = Invoke-SpeedtestStreaming -Caminho $exe -Argumentos $argv -TimeoutS 120
         $res = @($saida.Eventos | Where-Object { $_.type -eq 'result' }) | Select-Object -Last 1
         $err = @($saida.Eventos | Where-Object { $_.type -eq 'error' }) | Select-Object -Last 1
@@ -458,7 +458,7 @@ function Test-InternetLocal {
                             elseif ($linhaReal) { [string] $linhaReal }
                             elseif ($linhasErro.Count) { [string] ($linhasErro | Select-Object -Last 1) }
                             else { 'o speedtest nao concluiu (sem internet no local? provedor/proxy bloqueando *.speedtest.net?).' }
-        Write-Log ("Speedtest falhou: {0}" -f $r.speedtest_erro) -Nivel Erro
+        Write-Log ("Teste de velocidade falhou: {0}" -f $r.speedtest_erro) -Nivel Erro
 
         $cls = Resolve-FalhaSpeedtest -Mensagem $r.speedtest_erro -Tentativas ($tent - 1) `
             -SsidWifi ([string] (& { if ($Wireless) { $Wireless.ssid } })) `
@@ -475,14 +475,14 @@ function Test-InternetLocal {
             $cands = @(Get-ServidoresSpeedtestProximos -Caminho $exe |
                 Where-Object { "$_" -and "$_" -ne $jaTentado } | Select-Object -First 3)
             foreach ($sid in $cands) {
-                Write-Log ("Speedtest: o servidor padrao falhou - tentando o servidor {0}..." -f $sid) -Nivel Aviso
+                Write-Log ("Teste de velocidade: o servidor padrao falhou - tentando o servidor {0}..." -f $sid) -Nivel Aviso
                 $argv2 = '--format=jsonl --accept-license --accept-gdpr --server-id={0}' -f $sid
                 if ($cfg.speedtest_extra_args) { $argv2 += ' ' + [string] $cfg.speedtest_extra_args }
                 $saida = Invoke-SpeedtestStreaming -Caminho $exe -Argumentos $argv2 -TimeoutS 120
                 $res = @($saida.Eventos | Where-Object { $_.type -eq 'result' }) | Select-Object -Last 1
                 if ($res) {
                     $r.servidor_fallback = $true
-                    Write-Log ("Speedtest funcionou no servidor {0}. Considere fixar speedtest_server_id={0} em config\rede-local.json." -f $sid) -Nivel Ok
+                    Write-Log ("Teste de velocidade funcionou no servidor {0}. Considere fixar speedtest_server_id={0} em config\rede-local.json." -f $sid) -Nivel Ok
                     break
                 }
             }
@@ -532,7 +532,7 @@ function Test-InternetLocal {
         $r.resultado_url = [string] $res.result.url
         $r.resultado_id  = [string] $res.result.id
     }
-    Write-Log ("Speedtest OK: down {0} Mbps / up {1} Mbps / ping {2} ms ({3})" -f $r.download_mbps, $r.upload_mbps, $r.ping_ms, $r.isp) -Nivel Ok
+    Write-Log ("Teste de velocidade OK: down {0} Mbps / up {1} Mbps / ping {2} ms ({3})" -f $r.download_mbps, $r.upload_mbps, $r.ping_ms, $r.isp) -Nivel Ok
     [pscustomobject] $r
 }
 
