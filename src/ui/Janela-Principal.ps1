@@ -500,8 +500,16 @@ function Show-View {
 # Show-View (fica sem view "ativa" associada, só o radio marcado ate o proximo
 # clique no rail).
 function Invoke-AbrirAjuda {
-    $url = 'https://claude.ai/code/artifact/22dfe003-67af-46fd-a427-ee5a3d3ad7c8'
-    try { Start-Process $url } catch { Write-Log "Nao consegui abrir o Guia de Campo: $_" -Nivel Erro }
+    # Local (docs\guia-campo.html, vem com o codigo) em vez de um link online --
+    # o tecnico pode precisar do guia justamente onde a internet do local e' o
+    # problema sendo diagnosticado. Atualizar-DICON.ps1 espelha docs\ a cada
+    # atualizacao, entao o guia acompanha a versao instalada.
+    $arq = Join-Path $Global:RaizApp 'docs\guia-campo.html'
+    if (-not (Test-Path $arq)) {
+        Write-Log "Guia de Campo nao encontrado ($arq). Atualize o DICON para obte-lo." -Nivel Erro
+        return
+    }
+    try { Start-Process $arq } catch { Write-Log "Nao consegui abrir o Guia de Campo: $_" -Nivel Erro }
 }
 
 # Recolhe (so icones, ~56px) ou expande (214px) o menu lateral.

@@ -1,0 +1,459 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guia de Campo DICON</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --je:#123FA8; --je-hi:#0E2F80; --deep:#0A1E4D; --ambiente:#E7ECF8;
+    --ink:#14181F; --steel:#5C6472; --steel-2:#8891A0; --paper:#F4F5F8; --card:#FFFFFF; --line:#D6DBE6;
+    --viavel:#1B7F3B; --ressalva:#B77F00; --inviavel:#BC352A;
+    --amarelo:#F2C200; --verde:#009C3B;
+    --code-bg:#0E2244; --code-ink:#DCE6FF; --code-line:#25407A;
+    --shadow: 0 1px 2px rgba(15,23,42,.06), 0 8px 24px -12px rgba(15,23,42,.18);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --je:#6E9BFF; --je-hi:#8BB0FF; --deep:#0A1428; --ambiente:#16223C;
+      --ink:#E6EAF2; --steel:#AEB6C4; --steel-2:#7D8698; --paper:#0F1319; --card:#151A22; --line:#262D39;
+      --viavel:#4FC177; --ressalva:#E8B93E; --inviavel:#E8695C;
+      --code-bg:#0C1626; --code-ink:#D9E4FF; --code-line:#233252;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 28px -14px rgba(0,0,0,.6);
+    }
+  }
+  :root[data-theme="dark"]{
+    --je:#6E9BFF; --je-hi:#8BB0FF; --deep:#0A1428; --ambiente:#16223C;
+    --ink:#E6EAF2; --steel:#AEB6C4; --steel-2:#7D8698; --paper:#0F1319; --card:#151A22; --line:#262D39;
+    --viavel:#4FC177; --ressalva:#E8B93E; --inviavel:#E8695C;
+    --code-bg:#0C1626; --code-ink:#D9E4FF; --code-line:#233252;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 28px -14px rgba(0,0,0,.6);
+  }
+
+  *{box-sizing:border-box;}
+  html{color-scheme:light dark;}
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:"Archivo", ui-sans-serif, system-ui, sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  ::selection{ background:var(--ambiente); color:var(--ink); }
+
+  a{ color:var(--je); }
+
+  .band{
+    background:
+      radial-gradient(120% 260% at 8% 0%, rgba(255,255,255,.06), transparent 55%),
+      linear-gradient(135deg, var(--deep), var(--je-hi) 130%);
+    color:#EFF3FF;
+    padding:38px 24px 34px;
+  }
+  .band-inner{ max-width:760px; margin:0 auto; }
+  .brand{ display:flex; align-items:center; gap:14px; }
+  .brand svg{ width:40px; height:40px; flex:none; }
+  .brand-text{ display:flex; flex-direction:column; gap:2px; }
+  .wordmark{
+    font-family:"Archivo", sans-serif; font-weight:900; font-size:1.5rem;
+    letter-spacing:-0.01em; line-height:1; color:#fff;
+  }
+  .kicker{
+    font-size:.72rem; font-weight:600; letter-spacing:.12em; text-transform:uppercase;
+    color:#B9C7F2;
+  }
+  .band h1{
+    font-family:"Archivo", sans-serif; font-weight:800; font-size:clamp(1.7rem,4vw,2.35rem);
+    line-height:1.12; letter-spacing:-0.01em; text-wrap:balance;
+    margin:22px 0 10px;
+  }
+  .band p.lead{
+    margin:0; max-width:52ch; color:#D7DFF7; font-size:1.02rem; line-height:1.55;
+  }
+  .band .meta{
+    margin-top:20px; display:flex; flex-wrap:wrap; gap:10px 22px;
+    font-family:"IBM Plex Mono", ui-monospace, monospace; font-size:.78rem; color:#B9C7F2;
+  }
+  .band .meta span b{ color:#fff; font-weight:600; }
+
+  main{ max-width:760px; margin:0 auto; padding:38px 24px 64px; }
+
+  .toc{
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:1px;
+    background:var(--line); border:1px solid var(--line); border-radius:12px; overflow:hidden;
+    margin:-56px 0 40px; position:relative; box-shadow:var(--shadow);
+  }
+  .toc a{
+    background:var(--card); color:var(--ink); text-decoration:none;
+    padding:13px 14px; font-size:.83rem; font-weight:600; display:flex; align-items:center; gap:9px;
+  }
+  .toc a .n{
+    font-family:"IBM Plex Mono",monospace; font-weight:600; font-size:.72rem; color:var(--je);
+    width:18px; height:18px; border-radius:50%; border:1.4px solid var(--je);
+    display:grid; place-items:center; flex:none;
+  }
+  .toc a:hover{ background:var(--ambiente); }
+
+  section.step{ margin:0 0 40px; scroll-margin-top:18px; }
+  .step-head{ display:flex; align-items:baseline; gap:13px; margin-bottom:12px; }
+  .step-num{
+    font-family:"IBM Plex Mono",monospace; font-weight:600; font-size:.95rem;
+    width:34px; height:34px; border-radius:50%; background:var(--ambiente); color:var(--je);
+    display:grid; place-items:center; flex:none; border:1.4px solid var(--line);
+  }
+  .step h2{
+    font-family:"Archivo",sans-serif; font-weight:800; font-size:1.28rem; letter-spacing:-0.005em;
+    margin:0; text-wrap:balance;
+  }
+  .step .body{ padding-left:47px; }
+  .step p{ line-height:1.6; color:var(--ink); max-width:64ch; }
+  .step p.sub{ color:var(--steel); font-size:.94rem; margin-top:-4px; }
+
+  ol.sub-steps{ list-style:none; margin:14px 0 0; padding:0; display:flex; flex-direction:column; gap:10px; }
+  ol.sub-steps li{
+    display:flex; gap:12px; align-items:flex-start; font-size:.95rem; line-height:1.55;
+  }
+  ol.sub-steps li::before{
+    content:counter(s); counter-increment:s;
+    font-family:"IBM Plex Mono",monospace; font-size:.72rem; font-weight:600; color:var(--steel-2);
+    width:20px; height:20px; border-radius:5px; background:var(--card); border:1px solid var(--line);
+    display:grid; place-items:center; flex:none; margin-top:1px;
+  }
+  ol.sub-steps{ counter-reset:s; }
+
+  .cmd{
+    position:relative; margin:16px 0 4px; border-radius:10px; overflow:hidden;
+    border:1px solid var(--code-line); box-shadow:var(--shadow);
+  }
+  .cmd .tag{
+    background:var(--code-line); color:#AFC3F5; font-family:"IBM Plex Mono",monospace;
+    font-size:.68rem; font-weight:600; letter-spacing:.08em; text-transform:uppercase;
+    padding:6px 14px;
+  }
+  .cmd pre{
+    margin:0; background:var(--code-bg); color:var(--code-ink);
+    font-family:"IBM Plex Mono",monospace; font-size:.82rem; line-height:1.6;
+    padding:14px 46px 14px 14px; overflow-x:auto; white-space:pre-wrap; word-break:break-all;
+  }
+  .cmd button{
+    position:absolute; top:8px; right:8px; z-index:2;
+    background:rgba(255,255,255,.08); color:#DCE6FF; border:1px solid rgba(255,255,255,.18);
+    border-radius:6px; font-family:"Archivo",sans-serif; font-size:.72rem; font-weight:600;
+    padding:5px 9px; cursor:pointer;
+  }
+  .cmd button:hover{ background:rgba(255,255,255,.16); }
+  .cmd button:focus-visible, a:focus-visible, .toc a:focus-visible{ outline:2px solid var(--je); outline-offset:2px; }
+
+  .note{
+    display:flex; gap:11px; margin:16px 0; padding:13px 15px; border-radius:10px;
+    border:1px solid var(--line); background:var(--card); font-size:.9rem; line-height:1.55;
+  }
+  .note .dot{ width:8px; height:8px; border-radius:50%; margin-top:6px; flex:none; }
+  .note.info .dot{ background:var(--je); }
+  .note.warn .dot{ background:var(--ressalva); }
+  .note b{ font-weight:700; }
+
+  .grid3{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:16px; }
+  .mini{
+    border:1px solid var(--line); background:var(--card); border-radius:10px; padding:12px 13px;
+  }
+  .mini .lbl{ font-size:.68rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--steel-2); }
+  .mini .val{ font-family:"IBM Plex Mono",monospace; font-size:.85rem; margin-top:5px; color:var(--ink); }
+
+  .flow{
+    display:flex; flex-wrap:wrap; gap:8px; margin-top:16px; align-items:center;
+  }
+  .flow .pill{
+    border:1px solid var(--line); background:var(--card); border-radius:999px;
+    padding:7px 13px; font-size:.82rem; font-weight:600; display:flex; align-items:center; gap:7px;
+  }
+  .flow .pill .c{ width:16px; height:16px; border-radius:50%; color:#fff; font-size:.62rem; font-weight:700;
+    display:grid; place-items:center; font-family:"IBM Plex Mono",monospace; }
+  .flow .arrow{ color:var(--line); font-size:1.1rem; }
+  .flow .pill.lan .c{ background:var(--je); } .flow .pill.wifi .c{ background:var(--je); } .flow .pill.cel .c{ background:var(--je); }
+
+  table.report{ width:100%; border-collapse:collapse; margin-top:14px; font-size:.88rem; }
+  table.report th{ text-align:left; font-size:.68rem; letter-spacing:.08em; text-transform:uppercase;
+    color:var(--steel-2); font-weight:700; padding:0 0 8px; border-bottom:1px solid var(--line); }
+  table.report td{ padding:9px 0; border-bottom:1px solid var(--line); vertical-align:top; }
+  table.report td:first-child{ font-weight:600; white-space:nowrap; padding-right:16px; }
+  table.report tr:last-child td{ border-bottom:none; }
+
+  .actions{ display:flex; gap:10px; flex-wrap:wrap; margin-top:16px; }
+  .btn{
+    font-family:"Archivo",sans-serif; font-weight:700; font-size:.86rem; border-radius:8px;
+    padding:9px 16px; border:1.4px solid transparent; display:inline-flex; align-items:center; gap:8px;
+  }
+  .btn.save{ background:var(--viavel); color:#fff; }
+  .btn.send{ background:var(--je); color:#fff; }
+  .btn.pdf{ background:transparent; color:var(--ink); border-color:var(--line); }
+
+  .faq{ display:flex; flex-direction:column; gap:12px; margin-top:14px; }
+  .faq details{
+    border:1px solid var(--line); border-radius:10px; background:var(--card); padding:2px 15px;
+  }
+  .faq summary{
+    cursor:pointer; padding:12px 0; font-weight:700; font-size:.94rem; list-style:none;
+    display:flex; justify-content:space-between; align-items:center; gap:12px;
+  }
+  .faq summary::-webkit-details-marker{ display:none; }
+  .faq summary::after{ content:"+"; color:var(--je); font-weight:800; font-size:1.1rem; flex:none; }
+  .faq details[open] summary::after{ content:"–"; }
+  .faq .a{ padding:0 0 14px; color:var(--steel); font-size:.9rem; line-height:1.6; max-width:62ch; }
+
+  footer{
+    max-width:760px; margin:20px auto 0; padding:22px 24px 40px;
+    border-top:3px solid var(--amarelo); position:relative;
+  }
+  footer::before{
+    content:""; position:absolute; top:-3px; left:0; width:64px; height:3px; background:var(--verde);
+  }
+  footer .row{ display:flex; justify-content:space-between; flex-wrap:wrap; gap:14px 28px; align-items:flex-start; }
+  footer .who b{ display:block; font-size:.92rem; }
+  footer .who span{ color:var(--steel); font-size:.83rem; }
+  footer .ver{ font-family:"IBM Plex Mono",monospace; color:var(--steel-2); font-size:.78rem; text-align:right; }
+
+  @media (max-width:640px){
+    .toc{ margin-top:22px; }
+    .grid3{ grid-template-columns:1fr; }
+    .step .body{ padding-left:0; margin-top:2px; }
+    .step-head{ align-items:flex-start; }
+  }
+</style>
+</head>
+<body>
+
+<div class="band">
+  <div class="band-inner">
+    <div class="brand">
+      <svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
+        <circle cx="24" cy="24" r="22" fill="rgba(255,255,255,.08)" stroke="rgba(255,255,255,.5)" stroke-width="1.4"/>
+        <path d="M24 34c5-4 8-8.5 8-14a8 8 0 1 0-16 0c0 5.5 3 10 8 14Z" fill="none" stroke="#fff" stroke-width="2.2" stroke-linejoin="round"/>
+        <circle cx="20" cy="15.5" r="1.7" fill="#4FC177"/>
+        <circle cx="24" cy="14" r="1.7" fill="#E8B93E"/>
+        <circle cx="28" cy="15.5" r="1.7" fill="#E8695C"/>
+      </svg>
+      <div class="brand-text">
+        <span class="wordmark">DICON</span>
+        <span class="kicker">Diagnóstico de Conectividade &middot; TRE&#8209;MA</span>
+      </div>
+    </div>
+    <h1>Guia de campo: instalar, testar e enviar um diagnóstico</h1>
+    <p class="lead">Para o técnico de vistoria das Juntas Eleitorais Especiais 2026 — do primeiro comando no
+      notebook até o relatório em PDF, sem precisar de ninguém por perto.</p>
+    <div class="meta">
+      <span>Canal: <b>produção</b></span>
+      <span>Pasta: <b>C:\Aplic\DICON</b></span>
+      <span>Instala como: <b>usuário comum</b></span>
+    </div>
+  </div>
+</div>
+
+<main>
+  <nav class="toc" aria-label="Sumário">
+    <a href="#instalar"><span class="n">1</span>Instalar</a>
+    <a href="#entrar"><span class="n">2</span>Entrar</a>
+    <a href="#diagnostico"><span class="n">3</span>Diagnóstico</a>
+    <a href="#enviar"><span class="n">4</span>Salvar &amp; enviar</a>
+    <a href="#manter"><span class="n">5</span>Manter em dia</a>
+    <a href="#duvidas"><span class="n">6</span>Dúvidas comuns</a>
+  </nav>
+
+  <section class="step" id="instalar">
+    <div class="step-head"><span class="step-num">1</span><h2>Instalar o DICON</h2></div>
+    <div class="body">
+      <p>Uma vez por notebook. Não precisa de administrador — só de uma conta comum do Windows.</p>
+      <ol class="sub-steps">
+        <li>Abra o <b>PowerShell</b> (menu Iniciar → digite "PowerShell" → Enter).</li>
+        <li>Cole o comando abaixo e pressione Enter.</li>
+        <li>Aguarde — ele baixa, instala e cria um atalho <b>DICON</b> na área de trabalho sozinho.</li>
+      </ol>
+      <div class="cmd">
+        <span class="tag">PowerShell &middot; instalar / atualizar</span>
+        <pre id="cmdInstalar">iex (irm 'https://raw.githubusercontent.com/gamcastro/Conectividade_Juntas_2026/main/setup/Baixar-e-Instalar.ps1')</pre>
+        <button type="button" data-copy="cmdInstalar">Copiar</button>
+      </div>
+      <p class="sub"><b>O que esse comando faz:</b> baixa a versão mais recente do DICON direto do nosso repositório
+        e instala tudo sozinho — pasta, atalho na área de trabalho, dependências. O mesmo comando também atualiza
+        uma instalação já existente (ele percebe sozinho) — pode rodar de novo sempre que precisar, sem apagar
+        nada seu.</p>
+      <div class="note info">
+        <span class="dot"></span>
+        <div><b>Erro "Acesso negado" ao instalar?</b> Em raros casos (raiz do C: travada por política, ou notebook
+          com várias contas) a máquina precisa de um preparo único, feito <b>uma vez</b> por quem tiver conta de
+          administrador nela. Não precisa ser o coordenador — o suporte local de TI, ou você mesmo, se tiver acesso
+          de administrador: abra o PowerShell como <b>Administrador</b> e rode:</div>
+      </div>
+      <div class="cmd">
+        <span class="tag">PowerShell (Administrador) &middot; preparar a máquina</span>
+        <pre id="cmdPreparar">iex (irm 'https://raw.githubusercontent.com/gamcastro/Conectividade_Juntas_2026/main/setup/Preparar-Maquina.ps1')</pre>
+        <button type="button" data-copy="cmdPreparar">Copiar</button>
+      </div>
+      <p class="sub">Isso cria a pasta <span style="font-family:'IBM Plex Mono',monospace; font-size:.86em;">C:\Aplic</span> e libera a escrita pra qualquer usuário comum da
+        máquina. Depois disso, rode o comando de instalar do passo 1 normalmente — sem precisar de administrador
+        de novo. Se mesmo assim continuar dando erro, aí sim fale com o coordenador.</p>
+    </div>
+  </section>
+
+  <section class="step" id="entrar">
+    <div class="step-head"><span class="step-num">2</span><h2>Abrir e entrar</h2></div>
+    <div class="body">
+      <ol class="sub-steps">
+        <li>Clique duas vezes no atalho <b>DICON</b> na área de trabalho.</li>
+        <li>Selecione o seu nome na lista.</li>
+        <li>Clique em <b>Entrar</b>.</li>
+      </ol>
+      <div class="note warn">
+        <span class="dot"></span>
+        <div><b>Lista vazia?</b> Clique em <b>Baixar lista</b> com o notebook conectado à internet. Na primeira vez,
+          o navegador pode pedir pra você confirmar a conta do Google do TRE — é só permitir.</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="step" id="diagnostico">
+    <div class="step-head"><span class="step-num">3</span><h2>Rodar um diagnóstico</h2></div>
+    <div class="body">
+      <p class="sub">O assistente tem 5 telas. Ele guia o resto sozinho — o que importa saber de antemão é a
+        ordem dos meios de conexão no passo 3.</p>
+      <ol class="sub-steps">
+        <li>Confira os dados do teste (data, técnico).</li>
+        <li>Escolha a <b>Junta</b> e o <b>Local</b> na lista do seu roteiro.</li>
+        <li>Teste os meios de conexão que existirem no local, <b>um de cada vez, nesta ordem</b>:</li>
+      </ol>
+      <div class="flow" aria-label="Ordem de teste dos meios">
+        <span class="pill lan"><span class="c">1</span>Rede cabeada (LAN)</span>
+        <span class="arrow">→</span>
+        <span class="pill wifi"><span class="c">2</span>Wi&#8209;Fi do local</span>
+        <span class="arrow">→</span>
+        <span class="pill cel"><span class="c">3</span>Roteamento do celular</span>
+      </div>
+      <p style="margin-top:14px">O card do meio da vez fica destacado; os outros ficam apagados até chegar a hora
+        deles. Antes de cada um, o DICON avisa o que plugar ou desconectar (ex.: tirar o cabo de rede antes do
+        Wi&#8209;Fi). Se um meio não existir no local, marque <b>"não se aplica"</b> e diga o motivo. Um meio já
+        testado pode ser reaberto e refeito a qualquer momento — clique de novo no card dele.</p>
+      <ol class="sub-steps">
+        <li>Confira os valores medidos de cada meio testado.</li>
+        <li><b>Salve</b>, <b>transmita</b> e <b>exporte o PDF</b> pra fechar o atendimento.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="step" id="enviar">
+    <div class="step-head"><span class="step-num">4</span><h2>Salvar, transmitir e exportar</h2></div>
+    <div class="body">
+      <p>Os três botões da última tela — pode fazer nessa ordem, sempre:</p>
+      <div class="actions">
+        <span class="btn save">Salvar resultado</span>
+        <span class="btn send">Transmitir resultado</span>
+        <span class="btn pdf">Exportar relatório (PDF)</span>
+      </div>
+      <table class="report">
+        <thead><tr><th>Botão</th><th>O que faz</th></tr></thead>
+        <tbody>
+          <tr><td>Salvar</td><td>Grava o resultado no próprio notebook — sempre funciona, mesmo sem internet.</td></tr>
+          <tr><td>Transmitir</td><td>Envia pro painel agora, se houver internet. Sem sinal, o resultado <b>fica pendente</b>
+            e é enviado sozinho na próxima vez que o DICON encontrar conexão (ex.: em "Atualizar dados").</td></tr>
+          <tr><td>Exportar PDF</td><td>Gera o relatório completo do local pra guardar ou entregar impresso.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="step" id="manter">
+    <div class="step-head"><span class="step-num">5</span><h2>Manter o DICON em dia</h2></div>
+    <div class="body">
+      <p>Quando sair uma versão nova, um aviso <b>"Atualizar app"</b> aparece sozinho no rodapé do menu lateral.
+        Clique, confirme, e espere a janela nova terminar — ela reabre o DICON no fim.</p>
+      <div class="grid3">
+        <div class="mini"><div class="lbl">Onde fica</div><div class="val">Rodapé do rail</div></div>
+        <div class="mini"><div class="lbl">Precisa de</div><div class="val">internet + 1 min</div></div>
+        <div class="mini"><div class="lbl">Perde algo?</div><div class="val">Não — preserva tudo</div></div>
+      </div>
+
+      <p class="sub" style="margin-top:22px"><b>Instalação muito antiga ou travada?</b> Em vez de forçar uma
+        atualização, desinstale e instale de novo do zero — é mais confiável. O desinstalador nunca apaga um
+        diagnóstico salvo que ainda não foi transmitido.</p>
+      <div class="cmd">
+        <span class="tag">PowerShell &middot; desinstalar</span>
+        <pre id="cmdDesinstalar">iex (irm 'https://raw.githubusercontent.com/gamcastro/Conectividade_Juntas_2026/main/setup/Desinstalar-DICON.ps1')</pre>
+        <button type="button" data-copy="cmdDesinstalar">Copiar</button>
+      </div>
+      <p class="sub">Rode <b>fora</b> da pasta do DICON (ex.: abra o PowerShell direto pelo menu Iniciar, não pelo
+        atalho na pasta) e confirme digitando <b>SIM</b> quando pedir. Depois, rode o comando de instalar do
+        passo 1 de novo.</p>
+    </div>
+  </section>
+
+  <section class="step" id="duvidas">
+    <div class="step-head"><span class="step-num">6</span><h2>Dúvidas comuns</h2></div>
+    <div class="body">
+      <div class="faq">
+        <details>
+          <summary>O teste de velocidade falhou uma vez, é problema?</summary>
+          <div class="a">Normalmente não. Em rede fraca ou instável, o DICON tenta de novo sozinho, inclusive em
+            outro servidor próximo, antes de reportar erro de verdade. Se falhar de forma persistente no mesmo
+            local, isso já vira um dado do relatório — não precisa refazer na mão.</div>
+        </details>
+        <details>
+          <summary>Preciso reinstalar do zero pra trocar de versão?</summary>
+          <div class="a">Quase nunca — o comando de instalar (acima) também atualiza. Reinstalar do zero só é
+            indicado quando o coordenador pedir especificamente.</div>
+        </details>
+        <details>
+          <summary>O que acontece se eu marcar um meio como "não se aplica"?</summary>
+          <div class="a">Ele entra no relatório como não aplicável, com o motivo que você escreveu — não trava o
+            andamento do diagnóstico nem conta como erro.</div>
+        </details>
+        <details>
+          <summary>Posso anexar fotos e o formulário do GEL depois do teste?</summary>
+          <div class="a">Sim, a qualquer momento — na ficha do Local (tela "Locais"), não precisa ser no mesmo
+            momento da vistoria.</div>
+        </details>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="row">
+    <div class="who">
+      <b>Suporte</b>
+      <span>George André Melo Castro &middot; coordenador DICON, TRE&#8209;MA</span>
+    </div>
+    <div class="ver">Eleições 2026 &middot; Juntas Eleitorais Especiais</div>
+  </div>
+</footer>
+
+<script>
+  (function(){
+    document.querySelectorAll('.cmd button[data-copy]').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var pre = document.getElementById(btn.getAttribute('data-copy'));
+        var text = pre.textContent;
+        var done = function(){
+          var old = btn.textContent;
+          btn.textContent = 'Copiado!';
+          setTimeout(function(){ btn.textContent = old; }, 1600);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(done, function(){ fallbackCopy(text, done); });
+        } else {
+          fallbackCopy(text, done);
+        }
+      });
+    });
+    function fallbackCopy(text, done){
+      try {
+        var ta = document.createElement('textarea');
+        ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.focus(); ta.select();
+        document.execCommand('copy'); document.body.removeChild(ta);
+        done();
+      } catch (e) {}
+    }
+  })();
+</script>
+</body>
+</html>
