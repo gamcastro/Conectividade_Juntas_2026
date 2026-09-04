@@ -39,7 +39,7 @@ $Global:FaseLocalSimulada = [pscustomobject]@{
     }
     Wireless = [pscustomobject]@{
         presente = $true; nome = 'Wi-Fi'; status = 'Disconnected'; conectado = $false
-        ssid = ''; sinal_pct = $null; redes_disponiveis = @('JE-CAMPO', 'VIVO-2G')
+        ssid = 'JE-CAMPO'; sinal_pct = 78; banda_ghz = '5 GHz'; redes_disponiveis = @('JE-CAMPO', 'VIVO-2G')
         ipv4 = '192.168.15.42'; prefixo = 24; mascara = '255.255.255.0'; gateway = '192.168.15.1'
         dns = @('192.168.15.1'); ip_origem = 'DHCP'; mac = '11-22-33-44-55-66'; velocidade_mbps = 300
     }

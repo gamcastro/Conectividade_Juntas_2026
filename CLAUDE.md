@@ -38,7 +38,9 @@ Script), em vez de criar um BI/dashboard separado.
 - **Fase 1 — rede local (ANTES da VPN do TRE)** (`src/core/RedeLocal.ps1`,
   `Invoke-FaseLocal`): inventário da placa cabeada (LAN conectada? **IP local**,
   máscara, gateway, DNS, MAC, velocidade — o IP vai no relatório), detecção da
-  placa Wi-Fi + redes por perto (`netsh wlan`), e **teste de velocidade Ookla**
+  placa Wi-Fi + redes por perto (`netsh wlan`, incluindo SSID/sinal %/banda
+  2,4|5 GHz — banda inferida do canal, sem distinguir 6 GHz Wi-Fi 6E), e
+  **teste de velocidade Ookla**
   (`Test-InternetLocal` roda `speedtest.exe --format=jsonl`; `Invoke-SpeedtestStreaming`
   lê cada evento JSONL e `Write-EventoSpeedtest` → `Update-Speedtest` move o
   velocímetro ao vivo; resultado com provedor/servidor/IP/ping/jitter/perda/
@@ -361,7 +363,12 @@ veredito do título fora do `completo`.
    local / Celular): por meio, "Sem VPN conectada — teste de velocidade"
    (`rede_local_avaliacao[]`) + "Com VPN conectada — diagnóstico pela VPN da JE"
    (o meio recomendado usa `avaliacao[]` com faixa+motivo; os demais, os números
-   crus). Meios "não aplicável" viram uma linha só com o motivo.
+   crus). Meios "não aplicável" viram uma linha só com o motivo. Logo abaixo do
+   provedor, uma linha com os dados da placa usada no teste (congelados no
+   `snapshot_adaptador` da medição, ver "Congelamento" no passo 3): **LAN** só
+   velocidade do link; **Wi-Fi do local** velocidade + SSID + banda (2,4/5 GHz)
+   + sinal; **Celular** nenhum desses (a rede de interesse ali é a do celular,
+   não a placa Wi-Fi que a recebe).
    **Nomes de produto** (speedtest/Ookla/iperf3/Selenium) não aparecem em texto
    visível — só "teste de velocidade", "banda pela VPN", "análise de banda",
    "sistema de totalização"; chaves de config (`speedtest_server_id`), nomes de

@@ -168,12 +168,26 @@ function New-ResultadoJson {
     $medicoesJson = @()
     foreach ($m in @($Medicoes)) {
         if (-not $m) { continue }
-        $mIt  = Get-Prop (Get-Prop $m 'fase_local') 'Internet'
-        $mMet = Get-Prop $m 'metricas'
+        $mIt   = Get-Prop (Get-Prop $m 'fase_local') 'Internet'
+        $mMet  = Get-Prop $m 'metricas'
+        $mMeio = [string] (Get-Prop $m 'meio')
         $mOvr = @{}
         foreach ($a in @(Get-Prop $m 'avaliacoes')) { if ($a -and $a.metrica) { $mOvr[[string] $a.metrica] = $a } }
+        # Dados da placa usada neste meio, do snapshot congelado no momento do
+        # teste (nao do inventario ao vivo, que pode ter mudado depois com
+        # outro meio ja testado ou um probe geral). Velocidade do link entra
+        # para LAN e Wi-Fi do local; banda/sinal/SSID so' para Wi-Fi do local
+        # (no roteamento de celular nao faz sentido informar isso).
+        $mSnap = Get-Prop $m 'snapshot_adaptador'
+        $mVelocidadeLink = if ($mMeio -in @('lan', 'wifi_local')) { Get-Prop $mSnap 'velocidade_mbps' } else { $null }
+        $mWifiBanda = ''; $mWifiSinal = $null; $mWifiSsid = ''
+        if ($mMeio -eq 'wifi_local') {
+            $mWifiBanda = [string] (Get-Prop $mSnap 'banda_ghz')
+            $mWifiSinal = Get-Prop $mSnap 'sinal_pct'
+            $mWifiSsid  = [string] (Get-Prop $mSnap 'ssid')
+        }
         $medicoesJson += [pscustomobject]@{
-            meio                 = [string] (Get-Prop $m 'meio')
+            meio                 = $mMeio
             operadora            = [string] (Get-Prop $m 'operadora')
             rotulo               = [string] (Get-Prop $m 'rotulo')
             nao_aplicavel        = [bool] (Get-Prop $m 'nao_aplicavel')
@@ -183,8 +197,12 @@ function New-ResultadoJson {
             rede_local_provedor  = [string] (Get-Prop $mIt 'isp')
             rede_local_falha_tipo  = [string] (Get-Prop $mIt 'speedtest_falha_tipo')
             rede_local_diagnostico = [string] (Get-Prop $mIt 'speedtest_diagnostico')
-            limiares_meio          = [string] (Get-Prop $m 'meio')
-            rede_local_avaliacao   = @(Get-AvaliacaoRedeLocalJson $mIt $mOvr ([string] (Get-Prop $m 'meio')))
+            rede_local_velocidade_link_mbps = $mVelocidadeLink
+            rede_local_wifi_banda           = $mWifiBanda
+            rede_local_wifi_sinal_pct       = $mWifiSinal
+            rede_local_wifi_ssid            = $mWifiSsid
+            limiares_meio          = $mMeio
+            rede_local_avaliacao   = @(Get-AvaliacaoRedeLocalJson $mIt $mOvr $mMeio)
             vpn_conectou         = [bool] (Get-Prop $m 'vpn_conectou')
             vpn_motivo           = [string] (Get-Prop $m 'vpn_motivo')
             vpn_download_mbps     = (Get-Prop $mMet 'BandaDownloadMbps')

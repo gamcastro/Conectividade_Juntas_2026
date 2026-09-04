@@ -256,7 +256,7 @@ function Test-TemPlacaWireless {
 function Get-AdaptadorWireless {
     $o = [pscustomobject]@{
         presente = $false; nome = ''; status = ''; conectado = $false
-        ssid = ''; sinal_pct = $null; redes_disponiveis = @()
+        ssid = ''; sinal_pct = $null; banda_ghz = ''; redes_disponiveis = @()
         ipv4 = ''; prefixo = $null; mascara = ''; gateway = ''; dns = @()
         ip_origem = ''; mac = ''; velocidade_mbps = $null
     }
@@ -279,15 +279,26 @@ function Get-AdaptadorWireless {
         if ($prof -and $prof.Name) { $o.ssid = [string] $prof.Name }
     } catch { }
 
-    # 2) netsh so refina (sinal %, estado textual, e a lista de redes por perto).
+    # 2) netsh so refina (sinal %, estado textual, canal/banda, e a lista de
+    #    redes por perto).
+    $canalWifi = $null
     try {
         $txt = Invoke-Netsh -Argumentos @('wlan', 'show', 'interfaces')
         foreach ($ln in ($txt -split "`r?`n")) {
             if     ($ln -match '^\s*SSID\s*:\s*(.+?)\s*$')            { $o.ssid = $Matches[1] }
             elseif ($ln -match '^\s*(Estado|State)\s*:\s*(.+?)\s*$')  { $o.status = $Matches[2] }
             elseif ($ln -match '^\s*(Sinal|Signal)\s*:\s*(\d+)\s*%')  { $o.sinal_pct = [int] $Matches[2] }
+            elseif ($ln -match '^\s*(Canal|Channel)\s*:\s*(\d+)')     { $canalWifi = [int] $Matches[2] }
         }
     } catch { }
+    # Banda (2,4/5/6 GHz) pelo numero do canal -- o Windows nem sempre informa a
+    # banda explicitamente, mas o canal sempre vem. 2,4 GHz e 5 GHz nao tem
+    # ambiguidade (faixas de canal distintas); 6 GHz (Wi-Fi 6E) reusa numeros de
+    # canal que colidem com 5 GHz em alguns valores -- caso raro em campo, fica
+    # classificado como 5 GHz (mesma faixa "alta") em vez de tentar adivinhar.
+    if ($null -ne $canalWifi) {
+        $o.banda_ghz = if ($canalWifi -le 14) { '2,4 GHz' } elseif ($canalWifi -ge 32) { '5 GHz' } else { '' }
+    }
     # 'conectado': placa Up com um SSID (abrir a ferramenta ja conectado conta),
     # ou o estado textual do netsh dizendo conectado.
     $o.conectado = ($o.ssid -ne '') -and (($wa.Status -eq 'Up') -or ($o.status -match 'conect|connected'))

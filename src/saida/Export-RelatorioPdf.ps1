@@ -161,6 +161,28 @@ function Get-MeioBlocoHtml {
     $flag = if ($Recomendado) { ' <span class="tag">meio recomendado</span>' } else { '' }
 
     $prov = if ($M.rede_local_provedor) { '<div class="small"><b>Provedor:</b> ' + (ConvertTo-HtmlSafe ([string] $M.rede_local_provedor)) + '</div>' } else { '' }
+
+    # Dados da placa usada no teste (congelados no momento da checagem, ver
+    # New-ResultadoJson): velocidade do link em LAN/Wi-Fi do local; banda,
+    # sinal e SSID so' em Wi-Fi do local (no roteamento de celular nao
+    # informamos isso, a rede de interesse ali e' a do celular, nao a placa).
+    $infoPlaca = @()
+    if ($M.PSObject.Properties['rede_local_velocidade_link_mbps'] -and $M.rede_local_velocidade_link_mbps) {
+        $infoPlaca += '<b>Velocidade do link:</b> ' + $M.rede_local_velocidade_link_mbps + ' Mbps'
+    }
+    if ([string] $M.meio -eq 'wifi_local') {
+        if ($M.PSObject.Properties['rede_local_wifi_ssid'] -and $M.rede_local_wifi_ssid) {
+            $infoPlaca += '<b>Rede (SSID):</b> ' + (ConvertTo-HtmlSafe ([string] $M.rede_local_wifi_ssid))
+        }
+        if ($M.PSObject.Properties['rede_local_wifi_banda'] -and $M.rede_local_wifi_banda) {
+            $infoPlaca += '<b>Banda:</b> ' + (ConvertTo-HtmlSafe ([string] $M.rede_local_wifi_banda))
+        }
+        if ($M.PSObject.Properties['rede_local_wifi_sinal_pct'] -and $null -ne $M.rede_local_wifi_sinal_pct -and "$($M.rede_local_wifi_sinal_pct)" -ne '') {
+            $infoPlaca += '<b>N&iacute;vel do sinal:</b> ' + $M.rede_local_wifi_sinal_pct + ' %'
+        }
+    }
+    $infoPlacaHtml = if ($infoPlaca.Count) { '<div class="small">' + ($infoPlaca -join ' &middot; ') + '</div>' } else { '' }
+
     $diagBox = ''
     if ($M.rede_local_diagnostico -and (@('handshake', 'bloqueio') -contains [string] $M.rede_local_falha_tipo)) {
         $rot = if ([string] $M.rede_local_falha_tipo -eq 'handshake') { 'Rede local fraca / inst&aacute;vel' } else { 'Teste de velocidade bloqueado no local' }
@@ -186,6 +208,7 @@ function Get-MeioBlocoHtml {
       <div>
         <div class="subt">$subSem</div>
         $prov
+        $infoPlacaHtml
         $diagBox
         $f1
       </div>
