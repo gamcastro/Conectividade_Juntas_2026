@@ -15,11 +15,17 @@ e auditável (coluna `enviado_por` na planilha de Resultados).
 
 ## Estado atual
 
-- Código pronto (v0.6.69), **desligado por padrão**: `config/ambiente.exemplo.json`
-  → bloco `google_oauth` com `enabled: false`, `client_id`/`client_secret` vazios.
-  Enquanto `enabled=false`, **nada muda** no comportamento atual.
-- `apps-script/appsscript.json` já está com `"access": "DOMAIN"` — mas o
-  `clasp redeploy` real ainda não foi feito.
+- **Homologação: ligado (v0.6.71).** `config/ambiente.exemplo.json` → `google_oauth`
+  com `enabled: true` e a credencial Desktop do projeto GCP **`dicon-oauth`**
+  (org `tre-ma.jus.br`, consentimento **Interno**, escopos `openid` +
+  `userinfo.email`). Web App de homologação **reimplantado** (`clasp`,
+  deployment `AKfycbxHMpU…@4`, `access: DOMAIN`) — a URL não muda, e uma chamada
+  anônima agora cai na tela de login do Google (esperado).
+- **Produção: pendente.** `main` ainda em `enabled: false` e Web App anônimo. Na
+  próxima promoção `homologacao → main`, repetir o `clasp` de produção
+  (deployment `AKfycbyrPcog…`).
+- O `client_id`/`client_secret` de app Desktop **não são confidenciais**
+  (RFC 8252) e estão liberados no *secret scanning* do GitHub ("used in tests").
 
 ## Setup no Google Cloud (uma vez)
 
