@@ -3473,6 +3473,27 @@ function Open-DiagnosticoLimpo {
     $w = $Global:JanelaPrincipal
     if (-not $w) { return }
 
+    # Nao interrompe uma checagem em andamento (overlay aberto / tarefa rodando).
+    if ($Global:CheckMeioAtivo -or $Global:TarefaRedeState -or $Global:DiagRunState) {
+        Write-Log 'Ha uma checagem em andamento. Conclua-a (ou cancele) antes de abrir um novo diagnostico.' -Nivel Aviso
+        return
+    }
+
+    # Ja havia meio(s) testado(s)/marcado(s) para este Local? Confirma antes de
+    # descartar -- antes o clique em "Diagnostico" no rail resetava tudo em
+    # silencio (sem aviso nenhum, ao contrario de trocar de Local no passo 2,
+    # que ao menos loga "medicoes anteriores descartadas"). Foi assim que um
+    # tecnico perdeu a checagem da LAN ja feita so por clicar de novo no rail.
+    if (@($Global:Medicoes).Count -and -not $Global:ModoTeste) {
+        $qtd = @($Global:Medicoes).Count
+        $msg = "Ha $qtd medicao(oes) deste Local ainda nao salva(s)/transmitida(s)." +
+               [Environment]::NewLine + [Environment]::NewLine +
+               'Abrir um novo diagnostico agora descarta esse progresso. Continuar?'
+        $r = [System.Windows.MessageBox]::Show($w, $msg, 'Descartar diagnostico em andamento?',
+            [System.Windows.MessageBoxButton]::YesNo, [System.Windows.MessageBoxImage]::Warning)
+        if ($r -ne [System.Windows.MessageBoxResult]::Yes) { return }
+    }
+
     $Global:LogEntries.Clear()
     $w.FindName('cboJunta').SelectedIndex = -1   # dispara Update-ComboLocais -> limpa cboLocal
     $w.FindName('cboLocal').ItemsSource = @()
