@@ -1900,10 +1900,25 @@ function Update-PainelMeios {
     $hostNb = if ($p.PSObject.Properties['Host']) { [string] $p.Host } else { '' }
     Set-LinhaDetalhe $w.FindName('txtLocHost') 'Computador' $hostNb
 
+    # Meio marcado "nao se aplica": esconde a info de conexao ao vivo do card
+    # -- sem isso, LAN/Wi-Fi/Celular continuavam mostrando IP/SSID/sinal etc.
+    # mesmo depois de registrado NA. No caso de Wi-Fi/Celular isso e' mais que
+    # redundante: como as duas usam a MESMA placa, um tecnico que marca "Wi-Fi
+    # do local" como NA (por nao existir) e segue pro roteamento do celular
+    # via a mesma rede via Wi-Fi, o card do Wi-Fi continuava exibindo a
+    # conexao do CELULAR como se fosse do local -- informacao de outro meio,
+    # no card errado.
+    $naLan  = $Global:MeiosNaoAplicaveis.ContainsKey('lan')
+    $naWifi = $Global:MeiosNaoAplicaveis.ContainsKey('wifi_local')
+    $naCel  = $Global:MeiosNaoAplicaveis.ContainsKey('celular')
+
     $lanUp = [bool] $lan.conectado
     $notaLan = if ($medLan) { ' (dados do teste)' } else { '' }
     $tl = $w.FindName('txtLocLan'); $dl = $w.FindName('dotLan')
-    if ($lanUp) {
+    if ($naLan) {
+        $tl.Text = 'Nao se aplica a este local'
+        $tl.Foreground = $cinza ; $dl.Fill = $cinza
+    } elseif ($lanUp) {
         $tl.Text = 'Conectada' + $(if ($lan.nome) { " - $($lan.nome)" } else { '' }) + $notaLan
         $tl.Foreground = $verde ; $dl.Fill = $verde
     } elseif ($lan.presente) {
@@ -1914,25 +1929,28 @@ function Update-PainelMeios {
         $tl.Foreground = $cinza ; $dl.Fill = $cinza
     }
 
-    Set-LinhaDetalhe $w.FindName('txtLocIp')      'IP na rede local' ([string] $lan.ipv4)
-    Set-LinhaDetalhe $w.FindName('txtLocGateway') 'Gateway'          ([string] $lan.gateway)
-    Set-LinhaDetalhe $w.FindName('txtLocMascara') 'Mascara'          ([string] $lan.mascara)
-    Set-LinhaDetalhe $w.FindName('txtLocDns')     'DNS'              ((@($lan.dns)) -join ', ')
-    Set-LinhaDetalhe $w.FindName('txtLocMac')     'MAC'              ([string] $lan.mac)
-    Set-LinhaDetalhe $w.FindName('txtLocVel')     'Enlace'          $(if ($lan.velocidade_mbps) { "$($lan.velocidade_mbps) Mbps" } else { '' })
-    Set-LinhaDetalhe $w.FindName('txtLocOrigem')  'Obtencao do IP'   ([string] $lan.ip_origem)
+    Set-LinhaDetalhe $w.FindName('txtLocIp')      'IP na rede local' $(if (-not $naLan) { [string] $lan.ipv4 } else { '' })
+    Set-LinhaDetalhe $w.FindName('txtLocGateway') 'Gateway'          $(if (-not $naLan) { [string] $lan.gateway } else { '' })
+    Set-LinhaDetalhe $w.FindName('txtLocMascara') 'Mascara'          $(if (-not $naLan) { [string] $lan.mascara } else { '' })
+    Set-LinhaDetalhe $w.FindName('txtLocDns')     'DNS'              $(if (-not $naLan) { (@($lan.dns)) -join ', ' } else { '' })
+    Set-LinhaDetalhe $w.FindName('txtLocMac')     'MAC'              $(if (-not $naLan) { [string] $lan.mac } else { '' })
+    Set-LinhaDetalhe $w.FindName('txtLocVel')     'Enlace'          $(if (-not $naLan -and $lan.velocidade_mbps) { "$($lan.velocidade_mbps) Mbps" } else { '' })
+    Set-LinhaDetalhe $w.FindName('txtLocOrigem')  'Obtencao do IP'   $(if (-not $naLan) { [string] $lan.ip_origem } else { '' })
 
     # IP 10.11.* / 10.198.* na placa cabeada = notebook plugado na rede da JE.
     $je = $w.FindName('cardLocJE')
     if ($je) {
-        $ehJE = $lanUp -and (Test-RedeJusticaEleitoral ([string] $lan.ipv4))
+        $ehJE = (-not $naLan) -and $lanUp -and (Test-RedeJusticaEleitoral ([string] $lan.ipv4))
         $je.Visibility = if ($ehJE) { 'Visible' } else { 'Collapsed' }
     }
 
     $wifiUp = [bool] $wf.conectado
     $notaWifi = if ($medWifi) { ' (dados do teste)' } else { '' }
     $tw = $w.FindName('txtLocWifi'); $dw = $w.FindName('dotWifi')
-    if ($wifiUp) {
+    if ($naWifi) {
+        $tw.Text = 'Nao se aplica a este local'
+        $tw.Foreground = $cinza ; $dw.Fill = $cinza
+    } elseif ($wifiUp) {
         $tw.Text = ('Conectada a "{0}" ({1}%)' -f $wf.ssid, $wf.sinal_pct) + $notaWifi
         $tw.Foreground = $verde ; $dw.Fill = $verde
     } elseif ($wf.presente) {
@@ -1944,16 +1962,17 @@ function Update-PainelMeios {
         $tw.Text = 'Sem placa Wi-Fi neste computador'
         $tw.Foreground = $cinza ; $dw.Fill = $cinza
     }
-    Set-LinhaDetalhe $w.FindName('txtLocWifiIp')   'IP na rede local' $(if ($wifiUp) { [string] $wf.ipv4 } else { '' })
-    Set-LinhaDetalhe $w.FindName('txtLocWifiGw')   'Gateway'          $(if ($wifiUp) { [string] $wf.gateway } else { '' })
-    Set-LinhaDetalhe $w.FindName('txtLocWifiMask') 'Mascara'          $(if ($wifiUp) { [string] $wf.mascara } else { '' })
-    Set-LinhaDetalhe $w.FindName('txtLocWifiMac')  'MAC'              $(if ($wifiUp) { [string] $wf.mac } else { '' })
-    Set-LinhaDetalhe $w.FindName('txtLocWifiVel')   'Velocidade do link' $(if ($wifiUp -and $wf.velocidade_mbps) { "$($wf.velocidade_mbps) Mbps" } else { '' })
-    Set-LinhaDetalhe $w.FindName('txtLocWifiBanda') 'Banda'              $(if ($wifiUp) { [string] $wf.banda_ghz } else { '' })
-    Set-LinhaDetalhe $w.FindName('txtLocWifiOrigem') 'Obtencao do IP' $(if ($wifiUp) { [string] $wf.ip_origem } else { '' })
+    $wifiUpDisp = $wifiUp -and -not $naWifi
+    Set-LinhaDetalhe $w.FindName('txtLocWifiIp')   'IP na rede local' $(if ($wifiUpDisp) { [string] $wf.ipv4 } else { '' })
+    Set-LinhaDetalhe $w.FindName('txtLocWifiGw')   'Gateway'          $(if ($wifiUpDisp) { [string] $wf.gateway } else { '' })
+    Set-LinhaDetalhe $w.FindName('txtLocWifiMask') 'Mascara'          $(if ($wifiUpDisp) { [string] $wf.mascara } else { '' })
+    Set-LinhaDetalhe $w.FindName('txtLocWifiMac')  'MAC'              $(if ($wifiUpDisp) { [string] $wf.mac } else { '' })
+    Set-LinhaDetalhe $w.FindName('txtLocWifiVel')   'Velocidade do link' $(if ($wifiUpDisp -and $wf.velocidade_mbps) { "$($wf.velocidade_mbps) Mbps" } else { '' })
+    Set-LinhaDetalhe $w.FindName('txtLocWifiBanda') 'Banda'              $(if ($wifiUpDisp) { [string] $wf.banda_ghz } else { '' })
+    Set-LinhaDetalhe $w.FindName('txtLocWifiOrigem') 'Obtencao do IP' $(if ($wifiUpDisp) { [string] $wf.ip_origem } else { '' })
     $twd = $w.FindName('txtLocWifiDet')
     if ($twd) {
-        $twd.Text = if ($wifiUp) {
+        $twd.Text = if ($wifiUpDisp) {
             $nn = (@($wf.redes_disponiveis)).Count
             if ($nn) { "$nn outra(s) rede(s) por perto" } else { '' }
         } else { '' }
@@ -1964,10 +1983,11 @@ function Update-PainelMeios {
     $notaCel = if ($medCel) { ' (dados do teste)' } else { '' }
     $tcel = $w.FindName('txtLocCel')
     if ($tcel) {
-        $tcel.Text = if ($wifiUpCel) { ('Conectado a "{0}" ({1}%)' -f $wfCel.ssid, $wfCel.sinal_pct) + $notaCel }
+        $tcel.Text = if ($naCel) { 'Nao se aplica a este local' }
+                     elseif ($wifiUpCel) { ('Conectado a "{0}" ({1}%)' -f $wfCel.ssid, $wfCel.sinal_pct) + $notaCel }
                      elseif ($wfCel.presente) { 'Placa Wi-Fi ativa, nao conectada. Conecte a rede do celular.' }
                      else { 'Sem placa Wi-Fi neste computador.' }
-        $tcel.Foreground = if ($wifiUpCel) { $verde } else { $cinza }
+        $tcel.Foreground = if ($naCel) { $cinza } elseif ($wifiUpCel) { $verde } else { $cinza }
     }
 
     # A placa Wi-Fi so fica numa rede por vez: o tecnico escolhe, clicando no card,
@@ -1988,10 +2008,12 @@ function Update-PainelMeios {
     # dos cards e no aviso de isolamento mais abaixo.
     $selCanon = if ($sel -eq 'wifi') { 'wifi_local' } else { $sel }
     $tws = $w.FindName('txtWifiSelDica')
-    if ($tws) { $tws.Visibility = if ($wifiLive -and $sel -ne 'wifi') { 'Visible' } else { 'Collapsed' } }
+    if ($tws) { $tws.Visibility = if ($wifiLive -and $sel -ne 'wifi' -and -not $naWifi) { 'Visible' } else { 'Collapsed' } }
     $tcd = $w.FindName('txtCelDica')
     if ($tcd) {
-        $tcd.Text = if (-not $wifiLive) {
+        $tcd.Text = if ($naCel) {
+            'Marcado como nao se aplica a este local.'
+        } elseif (-not $wifiLive) {
             'Ligue o roteamento no celular, conecte a rede dele pela bandeja do Windows, clique neste card e informe a operadora.'
         } elseif ($sel -eq 'celular') {
             'Rede "{0}" sera testada como roteamento de celular. Informe a operadora e rode a checagem.' -f $p.Wireless.ssid

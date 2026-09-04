@@ -348,6 +348,14 @@ try {
     # Wi-Fi e Celular tambem NA -> todos resolvidos -> "Proximo" aparece
     $w.FindName('chkNaWifi').IsChecked = $true ; Update-NaoAplicavelMeio
     $w.FindName('txtNaJustif').Text = 'x' ; Invoke-NaRegistrar ; Invoke-Pump
+    # 4c-3. Wi-Fi marcado NA some a info de conexao ao vivo do card (a placa
+    # continua conectada -- $FaseLocalPayload.Wireless.conectado ainda e' true
+    # aqui -- mas o card nao pode mais mostrar isso como se fosse a rede do
+    # local; ficaria mostrando a rede que vai virar o roteamento do celular).
+    $naWifiTexto = $w.FindName('txtLocWifi').Text -eq 'Nao se aplica a este local'
+    $naWifiSemIp = "$($w.FindName('txtLocWifiIp').Visibility)" -eq 'Collapsed'
+    if ($naWifiTexto -and $naWifiSemIp) { Write-Host "[4c] Wi-Fi NA esconde a conexao ao vivo do card (nao mostra a rede que virou celular)" }
+    else { Write-Host "    FALHA: Wi-Fi NA ainda mostra conexao (texto='$($w.FindName('txtLocWifi').Text)' ipVis=$($w.FindName('txtLocWifiIp').Visibility))"; $falhas++ }
     $w.FindName('chkNaCelular').IsChecked = $true ; Update-NaoAplicavelMeio
     $w.FindName('txtNaJustif').Text = 'x' ; Invoke-NaRegistrar ; Invoke-Pump
     $proxAll = "$($w.FindName('btnWizProximo').Visibility)" -eq 'Visible'
