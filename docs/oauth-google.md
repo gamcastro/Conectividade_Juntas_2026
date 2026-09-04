@@ -42,14 +42,20 @@ George", não importa qual técnico chamou.
 
 ## Estado atual
 
-- **Homologação: em migração para a Execution API (v0.6.73).** Credencial
+- **Homologação e produção: migradas (v0.6.73/v0.7.6, 2026-09-04).** Credencial
   Desktop do projeto GCP `dicon-oauth` (org `tre-ma.jus.br`, consentimento
-  **Interno**). Escopos: `openid` + `userinfo.email` + **`spreadsheets`** +
-  **`script.external_request`** (os que o `Codigo.gs` de fato usa —
-  `SpreadsheetApp` + `UrlFetchApp` — a Execution API exige token com **todos**
-  os escopos do script, não só os da função chamada).
-- **Produção: pendente.** `main` segue no Web App anônimo (funcionando). Na
-  próxima promoção `homologacao → main`, repete o setup de GCP + redeploy.
+  **Interno**), compartilhado pelos dois ambientes. Escopos: `openid` +
+  `userinfo.email` + **`spreadsheets`** + **`script.external_request`** (os que
+  o `Codigo.gs` de fato usa — `SpreadsheetApp` + `UrlFetchApp` — a Execution API
+  exige token com **todos** os escopos do script, não só os da função chamada).
+  Token de serviço (`setupServiceAuth`) configurado nos dois projetos.
+- **Produção tem DOIS deployments** (a política do Workspace bloqueia
+  reimplantar algo que já tem acesso anônimo, mesmo só pra acrescentar a
+  Execution API — ver `apps-script/CLASP.md` "Tentativa que não funcionou"):
+  a implantação **antiga** (`/exec` anônimo) fica **congelada pra sempre**,
+  servindo quem ainda não atualizou o DICON; uma implantação **nova**
+  (`webapp: DOMAIN` + `executionApi: DOMAIN`) é a que `v0.7.6+` usa. Nenhum
+  técnico em campo foi afetado — o `/exec` antigo segue idêntico.
 
 ## Setup no Google Cloud (uma vez por ambiente)
 

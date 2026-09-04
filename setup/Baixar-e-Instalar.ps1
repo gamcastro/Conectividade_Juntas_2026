@@ -29,12 +29,14 @@ try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::S
 $ProgressPreference = 'SilentlyContinue'
 
 # Canal + deploymentId do Apps Script desta copia (chamado pela Execution API,
-# script.googleapis.com/v1/scripts/{deploymentId}:run -- ver docs/oauth-google.md;
-# o mesmo deploymentId da URL /exec antiga). Na branch 'main' estes dois
-# valores sao 'main' e o deploymentId de PRODUCAO (o merge homologacao->main
-# resolve o conflito mantendo os valores de 'main').
+# script.googleapis.com/v1/scripts/{deploymentId}:run -- ver docs/oauth-google.md).
+# Na branch 'main' estes dois valores sao 'main' e o deploymentId de PRODUCAO
+# (o merge homologacao->main resolve o conflito mantendo os valores de 'main').
+# NAO e' o deploymentId da URL /exec antiga (essa ficou congelada, anonima, pra
+# clientes que ainda nao atualizaram -- ver apps-script/CLASP.md "dois
+# deployments em producao").
 $CanalPadrao        = 'main'
-$DeploymentIdPadrao = 'AKfycbyrPcogTNL_VZUwtgY-gj_J1nx6rXnhsU5l08da7jJ6KTfsIU-3tlHW8ABzVtgKQnvuig'
+$DeploymentIdPadrao = 'AKfycbya1hdu7dgLzXd8U2Totm8cffCtiAnIjJptppe7AuxfvbuHhkNGOAXlCa90QCE_-HOApQ'
 
 function Save-ZipRemoto {
     param([string] $Url, [string] $OutFile, [int] $Tentativas = 3)

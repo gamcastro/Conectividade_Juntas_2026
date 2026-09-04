@@ -9,12 +9,17 @@ Cada projeto escolhe a planilha de Resultados pela Script Property
 `PLANILHA_RESULTADOS_ID_PADRAO` = a de producao). Juntas/roteiros/limiares sao
 os mesmos (planilhas compartilhadas) nos dois.
 
-### PRODUCAO (branch `main`)
+### PRODUCAO (branch `main`) -- DOIS deployments (v0.7.6+, ver secao abaixo)
 - scriptId:      `1WWMSPY7fRFOO4IPvj0sHHyrIozwNIaegMWzu_s3a3xfkj4YMpjOCa30W`
-- deploymentId:  `AKfycbyrPcogTNL_VZUwtgY-gj_J1nx6rXnhsU5l08da7jJ6KTfsIU-3tlHW8ABzVtgKQnvuig`
-- URL:           `https://script.google.com/macros/s/AKfycbyrPcogTNL_VZUwtgY-gj_J1nx6rXnhsU5l08da7jJ6KTfsIU-3tlHW8ABzVtgKQnvuig/exec`
+- deploymentId **legado** (`/exec` anonimo, CONGELADO -- nunca mais tocar):
+  `AKfycbyrPcogTNL_VZUwtgY-gj_J1nx6rXnhsU5l08da7jJ6KTfsIU-3tlHW8ABzVtgKQnvuig`
+  (`.../exec` -- clientes v0.7.5 e anteriores, sem OAuth)
+- deploymentId **novo** (Execution API + Web App DOMAIN, v0.7.6+ -- este e' o
+  usado por `setup/Baixar-e-Instalar.ps1` `$DeploymentIdPadrao` da branch `main`):
+  `AKfycbya1hdu7dgLzXd8U2Totm8cffCtiAnIjJptppe7AuxfvbuHhkNGOAXlCa90QCE_-HOApQ`
 - Planilha Resultados: `1FnuGm-4sZHXamsK6WtHBKOIUlIsFobhrq6rhpBTrswk` (aba `Resultados`).
-- clasp: `.clasp.prod.json` (raiz, gitignored).
+- clasp: `.clasp.prod.json` (raiz, gitignored); pasta limpa `~/dicon-clasp-prod`
+  (mesmo esquema do homolog, ver abaixo -- evita o bug do symlink no `D:\`).
 
 ### HOMOLOGACAO (branch `homologacao`)
 - scriptId:      `17BLQ6IOZ6BVf4KUyfNJtQa7klssUOputNqIwen_GwQ1ZK5S-f14g1ehh`
@@ -54,17 +59,24 @@ Workspace so barra o anonimo). MAS: testado ao vivo que um Web App `DOMAIN` na
 URL `/exec` **ignora** um `Authorization: Bearer` (so aceita sessao de
 navegador) -- por isso o cliente DICON nao usa mais esse caminho.
 
-**Diverge por branch, de proposito (v0.6.73/v0.7.6):** em `homologacao`,
-`webapp.access` = `DOMAIN` (nao tinha jeito de reimplantar anonimo, ver acima).
-Em `main` (producao), **mantido `ANYONE_ANONYMOUS`** no merge -- ha tecnicos em
-campo rodando codigo antigo (sem OAuth) que ainda dependem do `/exec` anonimo;
-trocar pra `DOMAIN` quebraria a sincronizacao deles ate atualizarem. So faz
-sentido trocar producao pra `DOMAIN` tambem depois que **todo** o parque de
-maquinas de campo tiver migrado pro cliente com OAuth (`enabled: true`) --
-decisao futura, nao automatica. Ate la, ao mesclar `homologacao -> main`,
-resolver o conflito de `appsscript.json` **mantendo** `ANYONE_ANONYMOUS` em
-`webapp.access` (o `executionApi.access: DOMAIN` pode ir junto sem problema --
-e' so um caminho a mais, nao afeta quem usa o `/exec` anonimo).
+**Tentativa que NAO funcionou (registrado pra nao repetir):** a ideia original
+era manter `webapp.access: ANYONE_ANONYMOUS` no `appsscript.json` de producao
+(pra nao quebrar tecnicos de campo com codigo antigo) e so ACRESCENTAR o
+`executionApi` na MESMA implantacao. Isso falha: a politica do Workspace
+bloqueia **qualquer** `create-deployment`/`redeploy` (nova versao OU
+atualizacao) sempre que o manifesto tem acesso anonimo -- mesmo reafirmando o
+mesmo valor de antes, mesmo so pra acrescentar outro campo. Ou seja, uma vez
+que uma implantacao anonima existe, **nunca mais da' pra reimplanta-la** (nem
+pra trocar so o codigo). A solucao real, aplicada em producao (2026-09-04):
+- **Implantacao antiga fica CONGELADA** (`AKfycbyrPcogTNL_...`, `/exec`
+  anonimo) -- nunca mais e' tocada (nem `redeploy`, nem `create-deployment -i`
+  nela). Continua servindo os clientes que nao atualizaram, pra sempre, ate
+  George decidir aposentar.
+- **Implantacao NOVA** (sem `-i`, ID/URL diferente), com `webapp.access:
+  DOMAIN` + `executionApi.access: DOMAIN` -- essa sim pode ser reimplantada
+  livremente (redeploy normal) pra sempre, porque nunca teve acesso anonimo.
+  `main` e `homologacao` agora tem o MESMO `appsscript.json` (`webapp: DOMAIN`
+  + `executionApi: DOMAIN`) -- so o deploymentId/scriptId diverge por branch.
 
 ## Transporte real: Execution API + Executavel de API (v0.6.73+)
 
@@ -92,10 +104,13 @@ O Web App valida o PIN contra a Script Property `ADMIN_PIN_SHA256`. Configure 1x
    **Propriedades do script** > **Adicionar propriedade do script**:
    `ADMIN_PIN_SHA256` = `<hash impresso>`. (Nao precisa reimplantar.)
 
-Redeploy mantendo a mesma URL:
+Redeploy mantendo a mesma URL (producao: **so** o deploymentId NOVO,
+`AKfycbya1hdu7dgLzXd8U2Totm8cffCtiAnIjJptppe7AuxfvbuHhkNGOAXlCa90QCE_-HOApQ` --
+**nunca** o antigo `AKfycbyrPcogTNL_...`, que fica congelado pra sempre, ver
+"Tentativa que nao funcionou" acima):
 
     clasp push -f
-    clasp redeploy AKfycbyrPcogTNL_VZUwtgY-gj_J1nx6rXnhsU5l08da7jJ6KTfsIU-3tlHW8ABzVtgKQnvuig -d "vN"
+    clasp redeploy AKfycbya1hdu7dgLzXd8U2Totm8cffCtiAnIjJptppe7AuxfvbuHhkNGOAXlCa90QCE_-HOApQ -d "vN"
 
 ## Divisao de tarefas
 
