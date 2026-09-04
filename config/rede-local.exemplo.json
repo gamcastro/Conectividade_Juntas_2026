@@ -1,6 +1,6 @@
 {
-  "_comentario": "Fase 1 do diagnostico (rede local, ANTES da VPN do TRE). O teste de velocidade usa o Ookla Speedtest CLI: coloque o speedtest.exe em tools\\ (NAO vai ao repositorio). speedtest_server_id vazio = servidor mais proximo (auto) - fixe o id de um servidor bom da regiao para pular as falhas do servidor default; speedtest_extra_args passa flags adicionais ao binario. speedtest_tentativas = quantas vezes tentar no mesmo servidor (1..8, default 3); speedtest_esperas_s = espera (s) antes de cada tentativa, por indice (default [0,5,12]; a ultima repete se houver mais tentativas).",
-  "speedtest_server_id": "",
+  "_comentario": "Fase 1 do diagnostico (rede local, ANTES da VPN do TRE). O teste de velocidade usa o Ookla Speedtest CLI: coloque o speedtest.exe em tools\\ (NAO vai ao repositorio). speedtest_server_id vazio = servidor mais proximo (auto) - fixe o id de um servidor bom da regiao para pular as falhas do servidor default; speedtest_extra_args passa flags adicionais ao binario. speedtest_tentativas = quantas vezes tentar no mesmo servidor (1..8, default 3); speedtest_esperas_s = espera (s) antes de cada tentativa, por indice (default [0,5,12]; a ultima repete se houver mais tentativas). Se o servidor fixo falhar mesmo assim, Resolve-FalhaSpeedtest ja tenta outros da regiao sozinho (servidor_fallback) -- nao precisa de logica nova.",
+  "speedtest_server_id": "74577",
   "speedtest_extra_args": "",
   "speedtest_tentativas": 3,
   "speedtest_esperas_s": [0, 5, 12]
