@@ -22,9 +22,9 @@
   },
   "google_oauth": {
     "_nota": "Autenticacao no Web App quando ele e publicado como 'Qualquer pessoa do dominio' (access: DOMAIN) em vez de anonimo. enabled=false -> nada muda. client_id/client_secret: credencial OAuth tipo 'App para computador' (Desktop) do projeto GCP; para app instalado o secret NAO e confidencial (seguranca vem do PKCE + loopback). Ver docs/oauth-google.md.",
-    "enabled": false,
-    "client_id": "",
-    "client_secret": "",
+    "enabled": true,
+    "client_id": "421295429657-ifb5evif7qk41lrgebk9vmmscaqk0j8s.apps.googleusercontent.com",
+    "client_secret": "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",
     "scopes": "openid https://www.googleapis.com/auth/userinfo.email"
   }
 }

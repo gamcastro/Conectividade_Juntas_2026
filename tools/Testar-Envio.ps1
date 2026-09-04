@@ -17,6 +17,10 @@ $Global:ArquivoLog = $null
 
 Import-Module (Join-Path $Global:RaizApp 'src\Conectividade.psd1') -Force
 
+# este teste nao exercita o OAuth do Web App; forca o modo sem autenticacao
+# (o ambiente.exemplo.json do pacote pode vir com google_oauth.enabled = true)
+$Global:OAuthConfigOverride = @{ enabled = $false }
+
 $pendDir = Join-Path $Global:RaizApp 'resultados\pendentes'
 $envDir  = Join-Path $Global:RaizApp 'resultados\enviados'
 foreach ($d in $pendDir, $envDir) { if (-not (Test-Path $d)) { New-Item -ItemType Directory -Path $d -Force | Out-Null } }
