@@ -369,6 +369,23 @@ function New-JanelaPrincipal {
             $Global:MotivoRecomendacao = [string] $Global:JanelaPrincipal.FindName('txtMotivoRec').Text
         })
 
+    # "Detalhes da execucao" (lstLog) rola sozinho pro final a cada evento novo.
+    # CollectionChanged dispara SINCRONO, na mesma chamada de .Add() que
+    # Write-Log ja faz na thread de UI (dispatcher.Invoke ou direto) -- por
+    # isso NAO precisa (e nao deve) de outro Dispatcher.Invoke aninhado aqui,
+    # que reintroduziria o bug de reentrancia ja visto neste projeto ("o fluxo
+    # nao era legivel"). So' rola em 'Add'; 'Reset' (Clear()) nao tem item pra
+    # rolar ate.
+    $Global:LogEntries.add_CollectionChanged({
+        param($s, $e)
+        if ($e.Action -eq [System.Collections.Specialized.NotifyCollectionChangedAction]::Add) {
+            $lb = $Global:JanelaPrincipal.FindName('lstLog')
+            if ($lb -and $lb.Items.Count -gt 0) {
+                try { $lb.ScrollIntoView($lb.Items[$lb.Items.Count - 1]) } catch { }
+            }
+        }
+    })
+
     # login
     $window.FindName('cboTecnico').Add_SelectionChanged({ Update-VisibilidadePin })
     $window.FindName('btnEntrar').Add_Click({ Enter-Sessao })
