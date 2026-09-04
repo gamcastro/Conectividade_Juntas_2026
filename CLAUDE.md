@@ -379,12 +379,12 @@ resultado (`New-ResultadoJson`).
   `{status:'ok'}`; `erro`/`ignorado` mantêm o arquivo em `pendentes/`.
 - Teste: `tools/Testar-Envio.ps1` (HttpListener local simula o Apps Script).
 - **Transporte: Apps Script Execution API (v0.6.73, `src/core/AppsScriptApi.ps1`)**:
-  o DICON chama `POST script.googleapis.com/v1/scripts/{script_id}/run`
+  o DICON chama `POST script.googleapis.com/v1/scripts/{deployment_id}:run`
   (`function:'executar'`, `apps-script/Codigo.gs`) em vez da URL `/exec` do Web
   App — testado ao vivo que um Web App `access: DOMAIN` **ignora** um
   `Authorization: Bearer` (só aceita sessão de navegador). `Invoke-FuncaoAppsScript`
   é a única chamada (usada por `Sync-Juntas`/`Sync-Tecnicos`/`Sync-Roteiros`/
-  `Sync-Limiares`, `Save-Limiares`, `Send-Resultado`); `script_id` vem de
+  `Sync-Limiares`, `Save-Limiares`, `Send-Resultado`); `deployment_id` vem de
   `config/juntas.json`. A função `executar` roda **como quem chamou** — por
   isso juntas/técnicos/roteiros/limiares (não sensíveis) usam `SpreadsheetApp`
   normal, mas a gravação de Resultados (sensível: IP/nome/telefone) usa a API
@@ -417,7 +417,7 @@ resultado (`New-ResultadoJson`).
   ativar a Apps Script API nele, `clasp push` + redeploy (implanta
   `executionApi` junto do `webapp`), reconectar a Conta Google (escopos
   novos), rodar `setupServiceAuth` (via `tools/Extrair-TokenServico.ps1`) e
-  atualizar `config/juntas.json > script_id` nas máquinas já instaladas. Até
+  atualizar `config/juntas.json > deployment_id` nas máquinas já instaladas. Até
   lá o config/cache local manda. Ver `docs/oauth-google.md`.
 - Coleta real das métricas da Fase 2 (iperf3 + Selenium + ping) validada ponta a
   ponta (a Fase 1 — rede local — já coleta de verdade)

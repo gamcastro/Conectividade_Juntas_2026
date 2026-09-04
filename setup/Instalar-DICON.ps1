@@ -7,10 +7,10 @@
 
 .EXAMPLE
     .\setup\Instalar-DICON.ps1
-        Modo interativo (pergunta scriptId do Apps Script, PIN e servidor iperf3).
+        Modo interativo (pergunta deploymentId do Apps Script, PIN e servidor iperf3).
 
 .EXAMPLE
-    .\setup\Instalar-DICON.ps1 -ScriptId "17BLQ6IOZ6BVf4KUyfNJtQa7klssUOputNqIwen_GwQ1ZK5S-f14g1ehh" -Pin 1234 -IperfServidor 10.11.9.20
+    .\setup\Instalar-DICON.ps1 -DeploymentId "AKfycbxHMpUwQuDH1SwRiLersK1Qbk3x90Xpu76zxnPl12Upthotd3UiaTd_eOPQ01FF2PBk" -Pin 1234 -IperfServidor 10.11.9.20
 
 .EXAMPLE
     .\setup\Instalar-DICON.ps1 -SoConfig
@@ -22,7 +22,7 @@
 #>
 [CmdletBinding()]
 param(
-    [string] $ScriptId,
+    [string] $DeploymentId,
     [string] $Pin,
     [string] $IperfServidor,
     [string] $DepsZip,
@@ -105,17 +105,17 @@ function Set-JsonCampo {
     Save-TextoResiliente $Arquivo ($doc | ConvertTo-Json -Depth 10)
 }
 
-if (-not $ScriptId) {
+if (-not $DeploymentId) {
     $atual = ''
-    try { $atual = (Get-Content (Join-Path $Cfg 'juntas.json') -Raw -Encoding UTF8 | ConvertFrom-Json).script_id } catch { }
+    try { $atual = (Get-Content (Join-Path $Cfg 'juntas.json') -Raw -Encoding UTF8 | ConvertFrom-Json).deployment_id } catch { }
     Write-Host ''
-    $ScriptId = Read-Host "  scriptId do Apps Script (Enter para manter '$atual')"
+    $DeploymentId = Read-Host "  deploymentId do Apps Script (Enter para manter '$atual')"
 }
-if ($ScriptId -and $ScriptId -notlike '*COLOQUE_O_SCRIPT_ID*') {
-    Set-JsonCampo (Join-Path $Cfg 'juntas.json') 'script_id' $ScriptId
-    OK "script_id do Apps Script gravado"
+if ($DeploymentId -and $DeploymentId -notlike '*COLOQUE_O_DEPLOYMENT_ID*') {
+    Set-JsonCampo (Join-Path $Cfg 'juntas.json') 'deployment_id' $DeploymentId
+    OK "deployment_id do Apps Script gravado"
 } else {
-    Aviso "script_id nao configurado - ajuste config\juntas.json depois"
+    Aviso "deployment_id nao configurado - ajuste config\juntas.json depois"
 }
 
 if (-not $IperfServidor) {

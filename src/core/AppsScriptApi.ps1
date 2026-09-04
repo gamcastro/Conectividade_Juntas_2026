@@ -17,16 +17,19 @@ function Invoke-FuncaoAppsScript {
     )
 
     # hook de teste: aponta para um host de mock em vez de script.googleapis.com
-    # (dispensa config/juntas.json > script_id -- so pra testes)
+    # (dispensa config/juntas.json > deployment_id -- so pra testes)
     $ovr = Get-Variable -Name AppsScriptEndpointOverride -Scope Global -ValueOnly -ErrorAction SilentlyContinue
     $uri =
         if ($ovr) { [string] $ovr }
         else {
-            $scriptId = (Get-Config 'juntas').script_id
-            if ([string]::IsNullOrWhiteSpace($scriptId) -or $scriptId -like '*COLOQUE_O_SCRIPT_ID*') {
-                throw "script_id do Apps Script nao configurado (config/juntas.json > script_id)."
+            # a Execution API usa o ID da implantacao "Executavel de API"
+            # (Implantar > Gerenciar implantacoes no editor -- o mesmo
+            # deploymentId da URL /exec), NAO o scriptId do projeto.
+            $deploymentId = (Get-Config 'juntas').deployment_id
+            if ([string]::IsNullOrWhiteSpace($deploymentId) -or $deploymentId -like '*COLOQUE_O_DEPLOYMENT_ID*') {
+                throw "deployment_id do Apps Script nao configurado (config/juntas.json > deployment_id)."
             }
-            "https://script.googleapis.com/v1/scripts/$scriptId/run"
+            "https://script.googleapis.com/v1/scripts/${deploymentId}:run"
         }
 
     $param0 =

@@ -16,7 +16,7 @@ nunca tem isso.
 
 A forma correta do Google para chamar uma função de um script com um token
 OAuth de verdade é a **Execution API** —
-`POST https://script.googleapis.com/v1/scripts/{scriptId}/run`,
+`POST https://script.googleapis.com/v1/scripts/{deployment_id}:run`,
 `{"function":"executar","parameters":[{...}]}` — documentada em
 [Execute functions with the Apps Script API](https://developers.google.com/apps-script/api/how-tos/execute)
 e [Method: scripts.run](https://developers.google.com/apps-script/api/reference/rest/v1/scripts/run).
@@ -116,7 +116,7 @@ George", não importa qual técnico chamou.
 |---|---|
 | `Apps Script (<acao>): ...` com mensagem de "not authorized"/"permission" | O técnico não tem acesso Leitor à planilha de referência que a função abre (Juntas/Roteiros/Config) — compartilhe a planilha com o grupo de técnicos ou com `@tre-ma.jus.br`. |
 | `Token de servico nao configurado` no resultado de um `resultado` | `setupServiceAuth` ainda não foi rodado nesse projeto (ver seção acima). |
-| `scripts.run` volta 404/"script not found" | O `script_id` em `config/juntas.json` está errado, ou o projeto do Apps Script ainda não foi associado a um projeto GCP padrão. |
+| `scripts.run` volta 404/"script not found" | O `deployment_id` em `config/juntas.json` está errado, ou o projeto do Apps Script ainda não foi associado a um projeto GCP padrão. |
 | `scripts.run` volta erro de escopo insuficiente | O token do técnico não tem todos os escopos do manifesto — confira `config/ambiente.exemplo.json 
 > google_oauth.scopes` e peça pra reconectar (Desconectar → Conectar). |
 | "Não conectou" logo após consentir; ou reconecta sempre | App Externo em **"Testing"** (refresh token de 7 dias) — mova para **"Interno"** ou **"Em produção"**. |

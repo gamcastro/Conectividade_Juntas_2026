@@ -11,15 +11,16 @@
 #  Cria C:\Aplic se nao existir (usuario comum consegue criar na raiz do C:).
 #  Se nao der, cai em %LOCALAPPDATA%\DICON[-HOMOLOG]. Sobrescreve com $env:DICON_DEST.
 #
-#  O scriptId do Apps Script ja vem embutido por canal ($ScriptIdPadrao); so
-#  precisa de $env:DICON_SCRIPT_ID para apontar para outro projeto.
+#  O deploymentId do Apps Script (implantacao "Executavel de API") ja vem
+#  embutido por canal ($DeploymentIdPadrao); so precisa de
+#  $env:DICON_DEPLOYMENT_ID para apontar para outro projeto.
 #
 #  Outras opcoes (definir ANTES do comando, todas opcionais):
-#      $env:DICON_BRANCH     = 'main'         # forca o canal
-#      $env:DICON_SCRIPT_ID  = '...'          # outro scriptId do Apps Script
-#      $env:DICON_PIN        = '1234'         # PIN do admin
-#      $env:DICON_IPERF      = '10.11.9.20'   # servidor iperf3
-#      $env:DICON_DEPSZIP    = 'D:\pen\DICON-deps.zip'
+#      $env:DICON_BRANCH        = 'main'    # forca o canal
+#      $env:DICON_DEPLOYMENT_ID = '...'     # outro deploymentId do Apps Script
+#      $env:DICON_PIN           = '1234'    # PIN do admin
+#      $env:DICON_IPERF         = '10.11.9.20'   # servidor iperf3
+#      $env:DICON_DEPSZIP       = 'D:\pen\DICON-deps.zip'
 #
 #  NAO usa param()/[CmdletBinding()] de proposito: isso quebra o `iex (irm ...)`.
 # =============================================================================
@@ -27,12 +28,13 @@ $ErrorActionPreference = 'Stop'
 try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 } catch { }
 $ProgressPreference = 'SilentlyContinue'
 
-# Canal + scriptId do Apps Script desta copia (chamado pela Execution API,
-# script.googleapis.com -- ver docs/oauth-google.md). Na branch 'main' estes
-# dois valores sao 'main' e o scriptId de PRODUCAO (o merge homologacao->main
+# Canal + deploymentId do Apps Script desta copia (chamado pela Execution API,
+# script.googleapis.com/v1/scripts/{deploymentId}:run -- ver docs/oauth-google.md;
+# o mesmo deploymentId da URL /exec antiga). Na branch 'main' estes dois
+# valores sao 'main' e o deploymentId de PRODUCAO (o merge homologacao->main
 # resolve o conflito mantendo os valores de 'main').
-$CanalPadrao    = 'homologacao'
-$ScriptIdPadrao = '17BLQ6IOZ6BVf4KUyfNJtQa7klssUOputNqIwen_GwQ1ZK5S-f14g1ehh'
+$CanalPadrao        = 'homologacao'
+$DeploymentIdPadrao = 'AKfycbxHMpUwQuDH1SwRiLersK1Qbk3x90Xpu76zxnPl12Upthotd3UiaTd_eOPQ01FF2PBk'
 
 function Save-ZipRemoto {
     param([string] $Url, [string] $OutFile, [int] $Tentativas = 3)
@@ -77,10 +79,10 @@ function Test-PathSeguro {
     try { return [bool] (Test-Path -LiteralPath $Caminho) } catch { return $null }
 }
 
-$Branch   = if ($env:DICON_BRANCH) { $env:DICON_BRANCH } else { $CanalPadrao }
-$Dest     = if ($env:DICON_DEST)   { $env:DICON_DEST }   else { Get-DestPadrao $Branch }
-$ScriptId = if ($env:DICON_SCRIPT_ID) { $env:DICON_SCRIPT_ID } else { $ScriptIdPadrao }
-$Pin      = [string] $env:DICON_PIN
+$Branch       = if ($env:DICON_BRANCH) { $env:DICON_BRANCH } else { $CanalPadrao }
+$Dest         = if ($env:DICON_DEST)   { $env:DICON_DEST }   else { Get-DestPadrao $Branch }
+$DeploymentId = if ($env:DICON_DEPLOYMENT_ID) { $env:DICON_DEPLOYMENT_ID } else { $DeploymentIdPadrao }
+$Pin          = [string] $env:DICON_PIN
 $Iperf    = [string] $env:DICON_IPERF
 $DepsZip  = [string] $env:DICON_DEPSZIP
 $Repo     = 'https://github.com/gamcastro/Conectividade_Juntas_2026'
@@ -167,8 +169,8 @@ if (Test-Path (Join-Path $Dest 'config\admin.json')) {
     Write-Host "Abrir: cd '$Dest'; .\Iniciar-Diagnostico.bat" -ForegroundColor White
 } else {
     $psArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $Dest 'setup\Instalar-DICON.ps1'))
-    if ($ScriptId) { $psArgs += @('-ScriptId', $ScriptId) }
-    if ($Pin)      { $psArgs += @('-Pin', $Pin) }
+    if ($DeploymentId) { $psArgs += @('-DeploymentId', $DeploymentId) }
+    if ($Pin)          { $psArgs += @('-Pin', $Pin) }
     if ($Iperf)    { $psArgs += @('-IperfServidor', $Iperf) }
     if ($DepsZip)  { $psArgs += @('-DepsZip', $DepsZip) }
     Write-Host ''
