@@ -70,6 +70,10 @@ function Save-ConfigAmbiente {
         else { $base | Add-Member -NotePropertyName google_maps -NotePropertyValue $gm -Force }
     }
 
+    # nao persiste google_oauth em ambiente.json: e camada do exemplo/pacote (a
+    # credencial vem de la). Se veio do fallback Get-Config, tira antes de gravar.
+    if ($base.PSObject.Properties['google_oauth']) { $base.PSObject.Properties.Remove('google_oauth') }
+
     Write-TextoArquivo -Caminho $alvo -Conteudo ($base | ConvertTo-Json -Depth 8)
     $alvo
 }

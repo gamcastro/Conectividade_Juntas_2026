@@ -34,6 +34,12 @@ function Get-ConfigOAuth {
     }
     $real = & $le 'ambiente.json'
     $ex   = & $le 'ambiente.exemplo.json'
+    # bloco google_oauth "resquicio" no ambiente.json (versoes antigas do
+    # Save-ConfigAmbiente gravavam junto): sem client_id, ignora e usa o exemplo.
+    if ($real) {
+        $cidReal = if ($real.PSObject.Properties['client_id']) { [string] $real.client_id } else { '' }
+        if (-not $cidReal.Trim()) { $real = $null }
+    }
     if (-not $real -and -not $ex) { return $null }
     $pick = {
         param($k, $default)

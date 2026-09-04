@@ -15,12 +15,13 @@ e auditável (coluna `enviado_por` na planilha de Resultados).
 
 ## Estado atual
 
-- **Homologação: ligado (v0.6.71).** `config/ambiente.exemplo.json` → `google_oauth`
+- **Homologação: ligado (v0.6.72).** `config/ambiente.exemplo.json` → `google_oauth`
   com `enabled: true` e a credencial Desktop do projeto GCP **`dicon-oauth`**
   (org `tre-ma.jus.br`, consentimento **Interno**, escopos `openid` +
-  `userinfo.email`). Web App de homologação **reimplantado** (`clasp`,
-  deployment `AKfycbxHMpU…@4`, `access: DOMAIN`) — a URL não muda, e uma chamada
-  anônima agora cai na tela de login do Google (esperado).
+  `userinfo.email` + **`drive.readonly`** — sem o Drive o `/exec` devolve 401).
+  Web App de homologação **reimplantado** (`clasp`, deployment `AKfycbxHMpU…@4`,
+  `access: DOMAIN`) — a URL não muda, e uma chamada anônima agora cai na tela de
+  login do Google (esperado).
 - **Produção: pendente.** `main` ainda em `enabled: false` e Web App anônimo. Na
   próxima promoção `homologacao → main`, repetir o `clasp` de produção
   (deployment `AKfycbyrPcog…`).
@@ -38,7 +39,12 @@ e auditável (coluna `enviado_por` na planilha de Resultados).
      (com escopos **não sensíveis** — ver abaixo — não há revisão). App Externo em
      "Testing" emite refresh token que **expira em 7 dias**; tem que estar "Em
      produção".
-   - Escopos: `openid` e `.../auth/userinfo.email`.
+   - Escopos: `openid`, `.../auth/userinfo.email` **e
+     `.../auth/drive.readonly`**. O `/exec` do Apps Script recusa (**401**) um
+     token que só tenha `openid`/`email` — precisa de um escopo de API real;
+     `drive.readonly` resolve. Em app **Interno** esse escopo sensível **não
+     passa pela verificação** do Google. (App Externo: teria de ser verificado —
+     outra razão pra preferir Interno.)
 3. **Credencial** (APIs e serviços → Credenciais → Criar credenciais → ID do
    cliente OAuth): tipo **"App para computador" (Desktop app)**. Copie o
    **`client_id`** e o **`client_secret`**.
@@ -55,7 +61,7 @@ e auditável (coluna `enviado_por` na planilha de Resultados).
      "enabled": true,
      "client_id": "XXXX.apps.googleusercontent.com",
      "client_secret": "YYYY",
-     "scopes": "openid https://www.googleapis.com/auth/userinfo.email"
+     "scopes": "openid https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/drive.readonly"
    }
    ```
    Commit + push. O `Atualizar-DICON.ps1` (v0.6.68+) copia `config/*.exemplo.json`
@@ -78,7 +84,8 @@ e auditável (coluna `enviado_por` na planilha de Resultados).
 
 | Sintoma | Causa / ação |
 |---|---|
-| Chamadas voltam com HTML de login mesmo conectado | O escopo `openid email` não bastou para o `/exec`. Acrescente `https://www.googleapis.com/auth/drive.readonly` em `scopes` e reconecte (Desconectar → Conectar). |
+| Chamadas voltam **401 Não Autorizado** (ou HTML de login) mesmo conectado | O token só tem `openid`/`email`. Confira que `scopes` (em `ambiente.exemplo.json`) e a Tela de consentimento têm **`https://www.googleapis.com/auth/drive.readonly`**, e reconecte (Desconectar → Conectar) pra o token novo carregar o escopo. Se ainda 401, suba pra `https://www.googleapis.com/auth/drive`. |
+| `ambiente.exemplo.json` sem o bloco `google_oauth` depois de atualizar | Máquina com `Atualizar-DICON.ps1` anterior à v0.6.68 (não copiava `config/*.exemplo.json`). Rode o atualizador **mais uma vez** (agora o novo já está no disco) ou reinstale pelo `iex`. |
 | "Não conectou" logo após consentir; ou reconecta sempre | App Externo em **"Testing"** (refresh token de 7 dias). Mova para **"Em produção"**. |
 | `clasp redeploy` ainda dá "ANYONE access disabled" | O `appsscript.json` não está com `DOMAIN`, ou o deployment antigo está fixado numa versão anônima — edite a implantação existente no editor apontando para a nova versão. |
 | Device‑code não aparece na tela | Ele só é usado quando o navegador local (loopback) falha; o código também sai no log. |
