@@ -1091,6 +1091,10 @@
                                                    FontSize="11" Foreground="{DynamicResource Dicon.Text3}" Visibility="Collapsed"/>
                                         <TextBlock x:Name="txtLocWifiMac" Margin="18,2,0,0" FontFamily="Consolas"
                                                    FontSize="11" Foreground="{DynamicResource Dicon.Text3}" Visibility="Collapsed"/>
+                                        <TextBlock x:Name="txtLocWifiVel" Margin="18,2,0,0" FontFamily="Consolas"
+                                                   FontSize="11" Foreground="{DynamicResource Dicon.Text3}" Visibility="Collapsed"/>
+                                        <TextBlock x:Name="txtLocWifiBanda" Margin="18,2,0,0" FontFamily="Consolas"
+                                                   FontSize="11" Foreground="{DynamicResource Dicon.Text3}" Visibility="Collapsed"/>
                                         <TextBlock x:Name="txtLocWifiOrigem" Margin="18,2,0,0" FontFamily="Consolas"
                                                    FontSize="11" Foreground="{DynamicResource Dicon.Text3}" Visibility="Collapsed"/>
                                         <TextBlock x:Name="txtLocWifiDet" Margin="18,4,0,0" FontFamily="Consolas"

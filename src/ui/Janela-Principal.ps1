@@ -1899,6 +1899,8 @@ function Update-PainelMeios {
     Set-LinhaDetalhe $w.FindName('txtLocWifiGw')   'Gateway'          $(if ($wifiUp) { [string] $wf.gateway } else { '' })
     Set-LinhaDetalhe $w.FindName('txtLocWifiMask') 'Mascara'          $(if ($wifiUp) { [string] $wf.mascara } else { '' })
     Set-LinhaDetalhe $w.FindName('txtLocWifiMac')  'MAC'              $(if ($wifiUp) { [string] $wf.mac } else { '' })
+    Set-LinhaDetalhe $w.FindName('txtLocWifiVel')   'Velocidade do link' $(if ($wifiUp -and $wf.velocidade_mbps) { "$($wf.velocidade_mbps) Mbps" } else { '' })
+    Set-LinhaDetalhe $w.FindName('txtLocWifiBanda') 'Banda'              $(if ($wifiUp) { [string] $wf.banda_ghz } else { '' })
     Set-LinhaDetalhe $w.FindName('txtLocWifiOrigem') 'Obtencao do IP' $(if ($wifiUp) { [string] $wf.ip_origem } else { '' })
     $twd = $w.FindName('txtLocWifiDet')
     if ($twd) {
