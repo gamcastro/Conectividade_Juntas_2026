@@ -1918,8 +1918,16 @@ function Update-PainelMeios {
     # -> Celular) fica ativo. Ele ja vem selecionado; os outros so mostram info.
     $meioAtual = Get-MeioAtualPasso3
     $selAtual  = if ($meioAtual -eq 'wifi_local') { 'wifi' } elseif ($meioAtual) { $meioAtual } else { '' }
-    if ($Global:MeioSelecionado -ne $selAtual) { $Global:MeioSelecionado = $selAtual }
-    $sel = $selAtual
+    # So forca a selecao de volta pro "meio da vez" se a selecao atual nao for
+    # mais valida -- preserva a reabertura manual de um meio ja testado
+    # (Select-MeioParaChecar), que senao seria desfeita a cada re-render.
+    $selMeioKey   = if ($Global:MeioSelecionado -eq 'wifi') { 'wifi_local' } else { $Global:MeioSelecionado }
+    $selEhTestado = $Global:MeioSelecionado -and ((Get-EstadoMeioPasso3 $selMeioKey) -eq 'testado')
+    if ($Global:MeioSelecionado -ne $selAtual -and -not $selEhTestado) { $Global:MeioSelecionado = $selAtual }
+    $sel      = $Global:MeioSelecionado
+    # chave canonica ('wifi_local', nao 'wifi') p/ comparar com $meio no laco
+    # dos cards e no aviso de isolamento mais abaixo.
+    $selCanon = if ($sel -eq 'wifi') { 'wifi_local' } else { $sel }
     $tws = $w.FindName('txtWifiSelDica')
     if ($tws) { $tws.Visibility = if ($wifiLive -and $sel -ne 'wifi') { 'Visible' } else { 'Collapsed' } }
     $tcd = $w.FindName('txtCelDica')
@@ -1982,6 +1990,11 @@ function Update-PainelMeios {
         $estado    = Get-EstadoMeioPasso3 $meio
         $resolvido = ($estado -ne 'pendente')
         $ativo     = ($meio -eq $meioAtual)
+        # $selecionado = o card "aberto" na tela agora (o meio da vez, OU um
+        # meio ja testado que o tecnico reabriu para refazer -- ver
+        # Select-MeioParaChecar). $ativo continua so para o gate do checkbox
+        # "nao se aplica", que fica restrito ao meio da vez de verdade.
+        $selecionado = ($meio -eq $selCanon)
         # isolamento de rede exigido por etapa:
         #   LAN  -> so o cabo conectado (Wi-Fi desligado)
         #   Wi-Fi/Celular -> so a placa Wi-Fi conectada (cabo fora)
@@ -1990,36 +2003,39 @@ function Update-PainelMeios {
         $e = & $estadoMeio $meio
         if ($badge) { $badge.Text = $e.txt; $badge.Foreground = $e.cor }
         if ($num) {
-            $num.Background = if ($resolvido) { $verdeBrush } elseif ($ativo) { $azulSel } else { $cinza }
+            $num.Background = if ($resolvido) { $verdeBrush } elseif ($selecionado) { $azulSel } else { $cinza }
         }
         if ($cd) {
-            $cd.BorderBrush     = if ($ativo -and -not $naMeio) { $azulSel } else { $e.borda }
-            $cd.BorderThickness = [Windows.Thickness]::new($(if ($ativo -and -not $naMeio) { 2.5 } else { 2 }))
-            $cd.Opacity         = if ($ativo -or $resolvido) { 1.0 } else { 0.45 }
+            $cd.BorderBrush     = if ($selecionado -and -not $naMeio) { $azulSel } else { $e.borda }
+            $cd.BorderThickness = [Windows.Thickness]::new($(if ($selecionado -and -not $naMeio) { 2.5 } else { 2 }))
+            $cd.Opacity         = if ($selecionado -or $resolvido) { 1.0 } else { 0.45 }
         }
         # checkbox "nao se aplica": so o meio da vez pode marcar; um meio ja NA
         # pode ser desmarcado.
         $chk = $w.FindName('chkNa' + $(if ($meio -eq 'wifi_local') { 'Wifi' } elseif ($meio -eq 'celular') { 'Celular' } else { 'Lan' }))
         if ($chk) { $chk.IsEnabled = $ativo -or $naMeio }
         if ($btn) {
-            $btn.IsEnabled = ($ativo -or $resolvido) -and $isolamentoOK -and $extraOK -and -not $naMeio -and $livre
+            $btn.IsEnabled = ($selecionado -or $resolvido) -and $isolamentoOK -and $extraOK -and -not $naMeio -and $livre
             $btn.Content   = if ($resolvido -and -not $naMeio) { 'Refazer checagem' } else { 'Rodar checagem' }
         }
     }
-    # a operadora do celular so e editavel na etapa do celular
-    $cbo = $w.FindName('cboOperadoraCel'); if ($cbo) { $cbo.IsEnabled = ($meioAtual -eq 'celular') }
+    # a operadora do celular so e editavel com o card do celular selecionado
+    # (o meio da vez, ou reaberto para refazer)
+    $cbo = $w.FindName('cboOperadoraCel'); if ($cbo) { $cbo.IsEnabled = ($sel -eq 'celular') }
 
-    # aviso de isolamento de rede / cabo, conforme a etapa
-    $seta = [char]0x21BB
-    $aviso = ''
-    if ($meioAtual -eq 'lan') {
+    # aviso de isolamento de rede / cabo, conforme a etapa selecionada agora
+    # (o meio da vez, ou um meio ja testado reaberto para refazer).
+    $seta   = [char]0x21BB
+    $aviso  = ''
+    $selKey = $selCanon
+    if ($selKey -eq 'lan') {
         if ($wifiLive) {
             $aviso = "Para testar a LAN, desconecte a rede Wi-Fi pela bandeja do Windows - so o cabo de rede deve estar conectado. Depois clique no $seta do card LAN."
         } elseif (-not $lanLive) {
             $aviso = "Sem conexao na LAN. Verifique o cabo de rede e clique no $seta do card LAN para reler so a placa cabeada."
         }
-    } elseif ($meioAtual -eq 'wifi_local' -or $meioAtual -eq 'celular') {
-        $qual = if ($meioAtual -eq 'celular') { 'o roteamento do celular' } else { 'o Wi-Fi do local' }
+    } elseif ($selKey -eq 'wifi_local' -or $selKey -eq 'celular') {
+        $qual = if ($selKey -eq 'celular') { 'o roteamento do celular' } else { 'o Wi-Fi do local' }
         if ($lanLive) {
             $aviso = "Para testar $qual, retire o cabo de rede - so a placa Wi-Fi deve estar conectada. Depois clique no $seta do card LAN para atualiza-la."
         } elseif (-not $wifiLive) {
@@ -2657,14 +2673,19 @@ function Reset-OverlayCheck {
 
 # Passo 3: clicar num card seleciona aquele meio para a checagem (borda azul +
 # libera o "Rodar checagem"). So um card fica selecionado por vez.
+# Sequencia rigida (LAN -> Wi-Fi -> Celular) so vale para um meio que AINDA
+# NUNCA foi testado (nao da pra pular na frente); um meio ja testado pode ser
+# reaberto/refeito a qualquer momento, sem perder a medicao dos outros --
+# necessario pq um teste pode falhar por causa externa (ex.: servidor iperf3
+# travado) e o tecnico so percebe/consegue corrigir depois de ja ter avancado.
 function Select-MeioParaChecar {
     param([string] $Meio)   # 'lan' | 'wifi' | 'celular'
     if ($Global:CheckMeioAtivo) { return }
     if (-not $Global:FaseLocalPayload) { return }
-    $naKey = if ($Meio -eq 'wifi') { 'wifi_local' } else { $Meio }
-    # sequencia rigida: so o "meio da vez" e clicavel
-    $atual = Get-MeioAtualPasso3
-    if ($naKey -ne $atual) {
+    $naKey  = if ($Meio -eq 'wifi') { 'wifi_local' } else { $Meio }
+    $atual  = Get-MeioAtualPasso3
+    $estado = Get-EstadoMeioPasso3 $naKey
+    if ($naKey -ne $atual -and $estado -ne 'testado') {
         if ($atual) {
             $rot = switch ($atual) { 'lan' { 'a LAN' } 'wifi_local' { 'o Wi-Fi' } default { 'o Celular' } }
             Write-Log ("Termine {0} antes de ir para o proximo meio (a ordem e LAN, Wi-Fi, Celular)." -f $rot) -Nivel Aviso
@@ -2673,6 +2694,9 @@ function Select-MeioParaChecar {
     }
     if ($Global:MeioSelecionado -eq $Meio) { return }
     $Global:MeioSelecionado = $Meio
+    if ($naKey -ne $atual) {
+        Write-Log ("Reabrindo {0} para refazer a checagem (a medicao atual desse meio sera substituida)." -f (Get-RotuloMeio $naKey '')) -Nivel Info
+    }
     Update-PainelMeios
 }
 
