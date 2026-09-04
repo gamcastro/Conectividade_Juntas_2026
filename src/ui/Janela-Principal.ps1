@@ -2566,10 +2566,11 @@ function Set-ChkBotao {
     if (-not $w) { return }
     $b = $w.FindName('btnChkIniciar')
     if (-not $b) { return }
+    $jeDir = Test-RedeJeDireta
     switch ($Global:ChkFase) {
         'f1-pronto'  { $b.Content = 'Iniciar checagem da rede local';   $b.Visibility = 'Visible'; $b.IsEnabled = $true }
-        'f2-pronto'  { $b.Content = 'Testar a VPN (Fase 2)';            $b.Visibility = 'Visible'; $b.IsEnabled = $true }
-        'f2-vpn-ok'  { $b.Content = 'Iniciar diagnostico com a VPN';    $b.Visibility = 'Visible'; $b.IsEnabled = $true }
+        'f2-pronto'  { $b.Content = if ($jeDir) { 'Checar rede interna' } else { 'Testar a VPN (Fase 2)' }; $b.Visibility = 'Visible'; $b.IsEnabled = $true }
+        'f2-vpn-ok'  { $b.Content = if ($jeDir) { 'Iniciar checagem da rede interna' } else { 'Iniciar diagnostico com a VPN' }; $b.Visibility = 'Visible'; $b.IsEnabled = $true }
         default      { $b.Visibility = 'Collapsed' }
     }
     $r = $w.FindName('ringChk')
@@ -2593,9 +2594,11 @@ function Set-ChkFaseView {
     }
 }
 
-# dot + texto de um passo do stepper do overlay.
+# dot + texto de um passo do stepper do overlay. -Base troca o rotulo padrao do
+# passo (ex.: "2. Diagnostico com a VPN" -> "2. Rede interna (JE)" quando o
+# local ja fala com a JE direto pela LAN, sem VPN -- ver Test-RedeJeDireta).
 function Set-ChkStep {
-    param([int] $N, [string] $Estado, [string] $Texto = '')
+    param([int] $N, [string] $Estado, [string] $Texto = '', [string] $Base = '')
     $w = $Global:JanelaPrincipal
     if (-not $w) { return }
     $dot = $w.FindName("dotChkS$N"); $lbl = $w.FindName("txtChkS$N")
@@ -2611,8 +2614,9 @@ function Set-ChkStep {
     }
     $b = [Windows.Media.SolidColorBrush]::new([Windows.Media.ColorConverter]::ConvertFromString($cor)); $b.Freeze()
     $dot.Fill = $b
-    $base = @('1. Rede local (sem VPN)', '2. Diagnostico com a VPN', '3. Sistema de totalizacao')[$N - 1]
-    $lbl.Text = if ($Texto) { "$base - $Texto" } else { "$base - $palavra" }
+    $baseDef = @('1. Rede local (sem VPN)', '2. Diagnostico com a VPN', '3. Sistema de totalizacao')[$N - 1]
+    $baseUsar = if ($Base) { $Base } else { $baseDef }
+    $lbl.Text = if ($Texto) { "$baseUsar - $Texto" } else { "$baseUsar - $palavra" }
 }
 
 function Reset-OverlayCheck {
@@ -2787,7 +2791,11 @@ function Complete-CheckFase1 {
     }
     $Global:ChkFase = 'f2-pronto'
     Set-ChkBotao
-    Write-Log 'Clique em "Testar a VPN (Fase 2)" quando estiver com a VPN do TRE conectada.' -Nivel Info
+    if (Test-RedeJeDireta) {
+        Write-Log 'Local ja na rede interna da Justica Eleitoral (LAN). Clique em "Checar rede interna" para continuar (sem VPN).' -Nivel Info
+    } else {
+        Write-Log 'Clique em "Testar a VPN (Fase 2)" quando estiver com a VPN do TRE conectada.' -Nivel Info
+    }
 }
 
 # Verdadeiro se ja da pra falar com a rede da JE sem precisar de VPN: o meio da
@@ -2808,7 +2816,8 @@ function Test-RedeJeDireta {
 # o diagnostico - o tecnico confere o IP da VPN e clica em "Iniciar diagnostico".
 function Start-CheckFase2 {
     $w = $Global:JanelaPrincipal
-    Set-ChkStep 2 'rodando' 'verificando a VPN'
+    $jeDir = Test-RedeJeDireta
+    Set-ChkStep 2 'rodando' $(if ($jeDir) { 'verificando a rede interna' } else { 'verificando a VPN' }) -Base $(if ($jeDir) { '2. Rede interna (JE)' } else { '' })
     Set-ChkFaseView 'f2'
     # limpa a 3a coluna: some o resultado da Fase 1 e o do iperf de uma rodada anterior
     foreach ($n in 'painelSpeedResultado', 'painelIperfResultado') {
@@ -2822,12 +2831,12 @@ function Start-CheckFase2 {
         Set-ChkStep 2 'rodando' 'VPN conectada - clique em Iniciar'
         Set-ChkBotao
         Write-Log 'VPN da JE conectada. Confira o IP e clique em "Iniciar diagnostico com a VPN".' -Nivel Ok
-    } elseif (Test-RedeJeDireta) {
+    } elseif ($jeDir) {
         $Global:ChkFase = 'f2-vpn-ok'
         $w.FindName('panelChkVpnGate').Visibility = 'Visible'
-        Set-ChkStep 2 'rodando' 'rede interna da JE - clique em Iniciar'
+        Set-ChkStep 2 'rodando' 'clique em "Iniciar checagem da rede interna"' -Base '2. Rede interna (JE)'
         Set-ChkBotao
-        Write-Log 'Local ja na rede interna da Justica Eleitoral (LAN) - sem VPN necessaria. Clique em "Iniciar diagnostico".' -Nivel Ok
+        Write-Log 'Local ja na rede interna da Justica Eleitoral (LAN) - sem VPN necessaria. Clique em "Iniciar checagem da rede interna".' -Nivel Ok
     } else {
         $Global:ChkFase = 'f2-pronto'
         Set-ChkBotao
@@ -2852,8 +2861,9 @@ function Start-DiagnosticoVpn {
     Reset-Velocimetro -Suf 'Vpn'
     $w.FindName('txtVeloFaseVpn').Text = 'iniciando...'
     $rd = $w.FindName('ringDiag'); if ($rd) { $rd.IsActive = $true; $rd.Visibility = 'Visible' }
-    Write-Log 'Fase 2: diagnostico com a VPN (ping + banda + totalizacao)...' -Nivel Info
-    Set-ChkStep 2 'rodando'
+    $jeDir = Test-RedeJeDireta
+    Write-Log $(if ($jeDir) { 'Fase 2: checagem da rede interna (ping + banda + totalizacao)...' } else { 'Fase 2: diagnostico com a VPN (ping + banda + totalizacao)...' }) -Nivel Info
+    Set-ChkStep 2 'rodando' '' $(if ($jeDir) { '2. Rede interna (JE)' } else { '' })
     Set-ProgressoDiag $true
     $sel  = $w.FindName('cboLocal').SelectedItem
     $selD = if ($sel) { $sel.Dados } else { $null }
@@ -2868,14 +2878,14 @@ function Complete-CheckFase2 {
     $rd = $w.FindName('ringDiag'); if ($rd) { $rd.IsActive = $false; $rd.Visibility = 'Collapsed' }
     if ($Erro) {
         Write-Log "Fase 2 falhou: $Erro" -Nivel Erro
-        Set-ChkStep 2 'erro'
+        Set-ChkStep 2 'erro' '' $(if (Test-RedeJeDireta) { '2. Rede interna (JE)' } else { '' })
     } else {
         Show-PainelResultado -Payload $Payload
         if ($Payload -and $Payload.PSObject.Properties['Iperf'] -and $Payload.Iperf) { Update-IperfPainel -Iperf $Payload.Iperf }
         $w.FindName('txtChkResultadoVazio').Visibility = 'Collapsed'
         Write-Log 'Fase 2 concluida.' -Nivel Ok
         $ver = if ($Payload -and $Payload.Decisao) { [string] $Payload.Decisao.Classificacao } else { 'inviavel' }
-        Set-ChkStep 2 $(if ($ver -eq 'inviavel') { 'erro' } else { 'ok' })
+        Set-ChkStep 2 $(if ($ver -eq 'inviavel') { 'erro' } else { 'ok' }) '' $(if (Test-RedeJeDireta) { '2. Rede interna (JE)' } else { '' })
     }
     Complete-CheckMeio
 }
