@@ -188,11 +188,19 @@ com link e imagem do Google Maps; a chave da **Maps Static API** fica em
 e embutida como `data:` URI, então a chave não vai no HTML/PDF.
 
 ## Assistente de diagnóstico (GUI)
-A tela de Diagnóstico é um **assistente de 6 passos** (`viewDiag` com os painéis
-`stepInfo/stepJunta/stepLocal/stepResultado/stepDecisao/stepFim` alternados por
-`Visibility`; `$Global:WizardPassos`/`$Global:WizardNPassos`; navegação por
-`Show-WizardPasso` / `Invoke-WizardProximo` / `Invoke-WizardVoltar`, com gates de
-justificativa):
+A tela de Diagnóstico é um **assistente de 5 ou 6 passos** (`viewDiag` com os
+painéis `stepInfo/stepJunta/stepLocal/stepResultado/stepDecisao/stepFim` alternados
+por `Visibility`; `$Global:WizardPassos`/`$Global:WizardNPassos` — montados por
+`Set-ModoAssistente` ao abrir o assistente conforme o **modo de avaliação**;
+navegação por `Show-WizardPasso` / `Invoke-WizardProximo` / `Invoke-WizardVoltar`,
+que operam por **nome de painel**, com gates de justificativa só no modo completo).
+**Modo de avaliação** (`modo_avaliacao` no doc de limiares, radio no topo da tela
+de Administração; padrão **`medicao`** — ver `docs/modo-avaliacao.md`): `medicao` e
+`referencia` = **5 passos** (pula `stepDecisao`), sem juízo de viabilidade (badges
+"MEDIDO" neutros, passo 4 só com os valores — `referencia` acrescenta a faixa —,
+recomendação vira **sugestão informativa** pelo maior download, relatório =
+"Painel de Medições"); `completo` = **6 passos**, comportamento clássico (classifica,
+recomenda o meio, "Painel de Viabilidade").
 **Multi-meio (hub-and-spoke):** um Local pode ser medido por até 3 **meios** de
 conexão — `lan` (rede cabeada), `wifi_local` (Wi-Fi do próprio local),
 `celular` (Wi-Fi roteada de celular). Como a placa Wi-Fi só fica numa rede por
@@ -206,12 +214,15 @@ como roteamento do celular (aí a operadora, `cboOperadoraCel`, é obrigatória 
 editável nessa etapa). Cada meio gera uma
 **medição** (Fase 1 Ookla + Fase 2 VPN) em `$Global:Medicoes`; meios que não
 servem ao Local são marcados **"não aplicável" + motivo** (`$Global:MeiosNaoAplicaveis`).
-Ao fim, o motor `Get-ConexaoRecomendada` (`src/decisao/Invoke-MotorDecisao.ps1`)
-**recomenda o meio**: candidato = fechou Rede Local + VPN + Fase 2, escolhido por
-melhor veredito e, no empate, maior download pela VPN; se ninguém fechou a VPN,
-recomenda o de maior download na Rede Local, marcado **provisório** e Local
-inviável; nada → "nenhuma". O **veredito final do Local = veredito do meio
-recomendado** (salvo override manual do técnico no combo da recomendação final).
+Ao fim, o motor `Get-ConexaoRecomendada -Modo` (`src/decisao/Invoke-MotorDecisao.ps1`)
+**recomenda o meio**. No modo `completo`: candidato = fechou Rede Local + VPN +
+Fase 2, escolhido por melhor veredito e, no empate, maior download pela VPN; se
+ninguém fechou a VPN, recomenda o de maior download na Rede Local, marcado
+**provisório** e Local inviável; nada → "nenhuma"; o **veredito final do Local =
+veredito do meio recomendado** (salvo override manual). Nos modos `medicao`/
+`referencia`: **sugestão informativa** pelo maior download (VPN se houver, senão
+rede local), `informativo=$true`, `veredito='medido'` — sem juízo, e o assistente
+não tem o passo de decisão.
 
 1. informação do teste → 2. Junta/Local (só o cartão de detalhe — o **anexo do
 formulário GEL** saiu daqui e vive na tela `viewLocalDetalhe`) →
@@ -317,11 +328,17 @@ multi-meio, com bloco em destaque + tabela de meios no PDF.
 Monta um HTML **em paisagem** (`@page size: A4 landscape`), nos moldes do "Painel
 da Vistoria" da SEMAP, e converte com o Edge/Chrome headless (`--print-to-pdf`,
 `--no-pdf-header-footer`); sem navegador, salva o HTML. Saída em `relatorios/`
-(gitignored). `New-RelatorioHtml -Resultado <json>` tem 6 seções:
+(gitignored). `New-RelatorioHtml -Resultado <json>` tem 6 seções. A **seção 3**
+depende do `modo_avaliacao` do JSON: `medicao`/`referencia` → **`Get-PainelMedicoesHtml`**
+("Painel de Medições": Identificação + Resumo + tabela "Medições por meio" com os
+valores, sem KPIs de viáveis/inviáveis nem "Conclusão do diagnóstico"; `referencia`
+mostra também a faixa nas tabelas por meio via `Get-TabelaAvaliacaoHtml -Modo`).
+`completo` → `Get-PainelHtml` (abaixo). `Get-MeioBlocoHtml -Modo` tira o badge de
+veredito do título fora do `completo`.
 1. **Cabeçalho** JE / TRE-MA / SEASU-COINF-STIC / DICON.
 2. **Título + subtítulo** — "Relatório de Diagnóstico de Conectividade" + "ZE N —
    Município (sede: X)".
-3. **Painel de Viabilidade de Conectividade** (`Get-PainelHtml`): faixa navy +
+3. **Painel de Viabilidade de Conectividade** (`Get-PainelHtml`, modo `completo`): faixa navy +
    Identificação (kv) + Indicadores (KPIs: meios testados / viáveis / com ressalva
    / inviáveis / não aplicáveis / conectou à VPN) + Situação por meio (tabela com
    colunas "Sem VPN conectada" / "Com VPN conectada" / Download com VPN / Latência

@@ -76,6 +76,23 @@ $r = Get-ConexaoRecomendada @(
 )
 Checar 'cenario 6: unico com Rede Local -> Wi-Fi provisorio' ($r.meio -eq 'wifi_local' -and $r.provisoria) $r.meio
 
+# 7) modo 'medicao': sugestao informativa pelo maior download (VPN), sem veredito
+$r = Get-ConexaoRecomendada -Modo 'medicao' @(
+    (M 'lan'        -veredito 'medido' -rlOk $true -rlDown 120 -vpnOk $true -f2Ok $true -vpnDown 40)
+    (M 'celular'    -operadora 'Vivo' -veredito 'medido' -rlOk $true -rlDown 25 -vpnOk $true -f2Ok $true -vpnDown 55)
+)
+Checar 'cenario 7 (medicao): sugere o de maior download VPN (celular)' ($r.meio -eq 'celular') $r.meio
+Checar 'cenario 7 (medicao): informativo'                              ([bool] $r.informativo) "$($r.informativo)"
+Checar 'cenario 7 (medicao): sem juizo (veredito=medido)'              ($r.veredito -eq 'medido') $r.veredito
+Checar 'cenario 7 (medicao): download_mbps preenchido'                 ($r.download_mbps -eq 55) "$($r.download_mbps)"
+
+# 8) modo 'medicao' sem VPN em nenhum meio -> cai na rede local
+$r = Get-ConexaoRecomendada -Modo 'medicao' @(
+    (M 'wifi_local' -veredito 'medido' -rlOk $true -rlDown 30 -vpnOk $false)
+    (M 'celular'    -operadora 'Claro' -veredito 'medido' -rlOk $true -rlDown 18 -vpnOk $false)
+)
+Checar 'cenario 8 (medicao): sem VPN -> maior download na rede local (wifi 30)' ($r.meio -eq 'wifi_local' -and $r.base -eq 'rede_local') "$($r.meio)/$($r.base)"
+
 Write-Host ''
 if ($falhas -eq 0) { Write-Host 'RESULTADO: OK' -ForegroundColor Green }
 else { Write-Host "RESULTADO: $falhas FALHA(S)" -ForegroundColor Red; exit 1 }

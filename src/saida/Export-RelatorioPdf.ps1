@@ -85,9 +85,26 @@ function Get-CorVeredito {
 
 # Tabela "Metrica | Valor | Faixa | Classificacao [ | Motivo do ajuste ]".
 function Get-TabelaAvaliacaoHtml {
-    param($Linhas, [switch] $ComMotivo)
+    param($Linhas, [switch] $ComMotivo, [string] $Modo = 'completo')
     $ls = @($Linhas | Where-Object { $_ })
     if (-not $ls.Count) { return '' }
+
+    if ($Modo -eq 'medicao') {
+        $body = foreach ($a in $ls) {
+            $val = ConvertTo-HtmlSafe (Format-ValorMetrica $a.valor $a.unidade)
+            "      <tr><td>$(ConvertTo-HtmlSafe ([string] $a.rotulo))</td><td class=""mono"">$val</td></tr>"
+        }
+        return "  <table>`n    <thead><tr><th>M&eacute;trica</th><th>Valor medido</th></tr></thead>`n    <tbody>`n$($body -join "`n")`n    </tbody>`n  </table>"
+    }
+    if ($Modo -eq 'referencia') {
+        $body = foreach ($a in $ls) {
+            $val   = ConvertTo-HtmlSafe (Format-ValorMetrica $a.valor $a.unidade)
+            $faixa = ConvertTo-HtmlSafe (Get-FaixaEmPalavras $a.direcao $a.limiar_viavel $a.limiar_ressalva $a.unidade)
+            "      <tr><td>$(ConvertTo-HtmlSafe ([string] $a.rotulo))</td><td class=""mono"">$val</td><td class=""mono small"">$faixa</td></tr>"
+        }
+        return "  <table>`n    <thead><tr><th>M&eacute;trica</th><th>Valor medido</th><th>Faixa de refer&ecirc;ncia</th></tr></thead>`n    <tbody>`n$($body -join "`n")`n    </tbody>`n  </table>"
+    }
+
     $head = if ($ComMotivo) {
         '<tr><th>M&eacute;trica</th><th>Valor medido</th><th>Faixa aceit&aacute;vel</th><th>Classifica&ccedil;&atilde;o</th><th>Motivo do ajuste</th></tr>'
     } else {
@@ -124,17 +141,23 @@ function Get-TabelaVpnNumerosHtml {
 
 # Bloco de um meio na secao 4 (Rede local sem VPN + Com a VPN, lado a lado).
 function Get-MeioBlocoHtml {
-    param($R, $M, [bool] $Recomendado)
+    param($R, $M, [bool] $Recomendado, [string] $Modo = 'completo')
     $tit = ConvertTo-HtmlSafe ([string] $M.rotulo)
     if (-not $tit) { $tit = ConvertTo-HtmlSafe ([string] $M.meio) }
 
     if ($M.nao_aplicavel) {
+        $rot = if ($Modo -eq 'completo') { 'N&Atilde;O APLIC&Aacute;VEL' } else { 'N&Atilde;O SE APLICA' }
         $mot = if ($M.motivo_nao_aplicavel) { ' &mdash; ' + (ConvertTo-HtmlSafe ([string] $M.motivo_nao_aplicavel)) } else { '' }
-        return "  <div class=""meio na""><b>$tit</b> &mdash; N&Atilde;O APLIC&Aacute;VEL$mot</div>"
+        return "  <div class=""meio na""><b>$tit</b> &mdash; $rot$mot</div>"
     }
 
-    $cor  = Get-CorVeredito $M.veredito
-    $ver  = ConvertTo-HtmlSafe (Get-RotuloVeredito $M.veredito)
+    if ($Modo -ne 'completo') {
+        $badge = ''
+    } else {
+        $cor  = Get-CorVeredito $M.veredito
+        $ver  = ConvertTo-HtmlSafe (Get-RotuloVeredito $M.veredito)
+        $badge = "<span class=""badge"" style=""color:$cor;border-color:$cor"">$ver</span>"
+    }
     $flag = if ($Recomendado) { ' <span class="tag">meio recomendado</span>' } else { '' }
 
     $prov = if ($M.rede_local_provedor) { '<div class="small"><b>Provedor:</b> ' + (ConvertTo-HtmlSafe ([string] $M.rede_local_provedor)) + '</div>' } else { '' }
@@ -143,29 +166,31 @@ function Get-MeioBlocoHtml {
         $rot = if ([string] $M.rede_local_falha_tipo -eq 'handshake') { 'Rede local fraca / inst&aacute;vel' } else { 'Teste de velocidade bloqueado no local' }
         $diagBox = '<div class="warn"><b>' + $rot + ':</b> ' + (ConvertTo-HtmlSafe ([string] $M.rede_local_diagnostico)) + '</div>'
     }
-    $f1 = Get-TabelaAvaliacaoHtml -Linhas $M.rede_local_avaliacao
+    $f1 = Get-TabelaAvaliacaoHtml -Linhas $M.rede_local_avaliacao -Modo $Modo
     if (-not $f1) { $f1 = '<div class="small">O teste de velocidade n&atilde;o mediu neste meio.</div>' }
 
     if ($M.vpn_conectou) {
-        $f2 = if ($Recomendado) { Get-TabelaAvaliacaoHtml -Linhas $R.avaliacao -ComMotivo } else { Get-TabelaVpnNumerosHtml $M }
+        $f2 = if ($Recomendado) { Get-TabelaAvaliacaoHtml -Linhas $R.avaliacao -ComMotivo -Modo $Modo } else { Get-TabelaVpnNumerosHtml $M }
         if (-not $f2) { $f2 = '<div class="small">Sem m&eacute;tricas registradas para a fase com a VPN.</div>' }
     } else {
         $mv = if ($M.vpn_motivo) { ' Motivo: ' + (ConvertTo-HtmlSafe ([string] $M.vpn_motivo)) } else { '' }
         $f2 = '<div class="warn"><b>N&atilde;o foi poss&iacute;vel conectar a VPN da Justi&ccedil;a Eleitoral neste meio.</b>' + $mv + '</div>'
     }
+    $subSem = if ($Modo -eq 'completo') { 'Sem VPN conectada &mdash; teste de velocidade' } else { 'Sem VPN &mdash; rede local' }
+    $subCom = if ($Modo -eq 'completo') { 'Com VPN conectada &mdash; diagn&oacute;stico pela VPN da Justi&ccedil;a Eleitoral' } else { 'Com VPN &mdash; pela VPN da Justi&ccedil;a Eleitoral' }
 
     @"
   <div class="meio">
-    <div class="meiotit"><span>$tit</span><span class="badge" style="color:$cor;border-color:$cor">$ver</span>$flag</div>
+    <div class="meiotit"><span>$tit</span>$badge$flag</div>
     <div class="cols">
       <div>
-        <div class="subt">Sem VPN conectada &mdash; teste de velocidade</div>
+        <div class="subt">$subSem</div>
         $prov
         $diagBox
         $f1
       </div>
       <div>
-        <div class="subt">Com VPN conectada &mdash; diagn&oacute;stico pela VPN da Justi&ccedil;a Eleitoral</div>
+        <div class="subt">$subCom</div>
         $f2
       </div>
     </div>
@@ -240,6 +265,99 @@ function Get-CondicionantesDiag {
         }
     }
     @($itens)
+}
+
+# Secao 3 - Painel de Medicoes (modo 'medicao' / 'referencia': sem juizo de viabilidade).
+function Get-PainelMedicoesHtml {
+    param($R)
+    $loc = $R.local
+    $rec = if ($R.PSObject.Properties['conexao_recomendada']) { $R.conexao_recomendada } else { $null }
+    $meds = @(@(if ($R.PSObject.Properties['medicoes']) { $R.medicoes }) | Where-Object { $_ })
+    $quando = try { [datetime] $R.coletado_em } catch { Get-Date }
+    $tipoLocal = if ($loc.tipo -eq 'principal') { 'Local principal' } else { 'Local de conting' + [char]0x00EA + 'ncia' }
+
+    $idRows = @(
+        '<tr><td class="k">Data do diagn&oacute;stico</td><td>{0}</td></tr>' -f $quando.ToString('dd/MM/yyyy HH:mm')
+        '<tr><td class="k">Zona Eleitoral</td><td>ZE {0}</td></tr>' -f $loc.zona_eleitoral
+        '<tr><td class="k">Munic&iacute;pio</td><td>{0} (sede: {1})</td></tr>' -f (ConvertTo-HtmlSafe $loc.municipio_termo), (ConvertTo-HtmlSafe $loc.municipio_sede)
+        '<tr><td class="k">Local</td><td>{0}</td></tr>' -f (ConvertTo-HtmlSafe $loc.nome)
+        '<tr><td class="k">Tipo</td><td>{0}</td></tr>' -f $tipoLocal
+        '<tr><td class="k">Endere&ccedil;o</td><td>{0}</td></tr>' -f (ConvertTo-HtmlSafe $loc.endereco)
+        '<tr><td class="k">Internet do local</td><td>{0}</td></tr>' -f (ConvertTo-HtmlSafe $loc.tipo_internet)
+        '<tr><td class="k">T&eacute;cnico</td><td>{0}</td></tr>' -f (ConvertTo-HtmlSafe ([string] $R.tecnico.nome))
+    )
+
+    $aplic = @($meds | Where-Object { -not $_.nao_aplicavel })
+    $na    = @($meds | Where-Object { $_.nao_aplicavel })
+
+    $sugTxt = if ($rec -and $rec.meio -ne 'nenhuma' -and $rec.rotulo) {
+        $dl = if ($null -ne (Get-Prop $rec 'download_mbps')) { (' &mdash; maior download {0:N1} Mbps{1}' -f [double] $rec.download_mbps, $(if ($rec.base -eq 'vpn') { ' pela VPN' } else { ' na rede local' })) } else { '' }
+        (ConvertTo-HtmlSafe ([string] $rec.rotulo)) + $dl + ' <span class="small">(informativo &mdash; sem avalia&ccedil;&atilde;o de viabilidade)</span>'
+    } else { '&mdash;' }
+
+    $resumoRows = @(
+        '<tr><td class="k">Meios medidos</td><td>{0}</td></tr>' -f $aplic.Count
+        '<tr><td class="k">Meios n&atilde;o aplic&aacute;veis</td><td>{0}</td></tr>' -f $na.Count
+        '<tr><td class="k">Sugest&atilde;o de conex&atilde;o</td><td>{0}</td></tr>' -f $sugTxt
+    )
+
+    $rank = @{ 'lan' = 0; 'wifi' = 1; 'celular' = 2 }
+    $medRows = foreach ($m in ($meds | Sort-Object { $x = $rank[[string] $_.meio]; if ($null -eq $x) { 9 } else { $x } })) {
+        if ($m.nao_aplicavel) {
+            $mot = if ($m.motivo_nao_aplicavel) { ' &mdash; ' + (ConvertTo-HtmlSafe ([string] $m.motivo_nao_aplicavel)) } else { '' }
+            "      <tr><td>$(ConvertTo-HtmlSafe ([string] $m.rotulo))</td><td colspan=""5"" class=""small"">n&atilde;o se aplica$mot</td></tr>"
+            continue
+        }
+        $rl  = if ($null -ne $m.rede_local_download) { '{0:N1} Mbps' -f [double] $m.rede_local_download } elseif ($m.rede_local_ok) { 'ok' } else { 'n&atilde;o rodou' }
+        $dl  = if ($null -ne $m.vpn_download_mbps) { '{0:N1} Mbps' -f [double] $m.vpn_download_mbps } else { '&mdash;' }
+        $up  = if ($null -ne $m.vpn_upload_mbps) { '{0:N1} Mbps' -f [double] $m.vpn_upload_mbps } else { '&mdash;' }
+        $lt  = if ($null -ne $m.latencia_ms) { '{0} ms' -f $m.latencia_ms } else { '&mdash;' }
+        $jt  = if ($null -ne $m.jitter_ms) { '{0} ms' -f $m.jitter_ms } else { '&mdash;' }
+        $pd  = if ($null -ne $m.perda_percentual) { '{0} %' -f $m.perda_percentual } else { '&mdash;' }
+        "      <tr><td>$(ConvertTo-HtmlSafe ([string] $m.rotulo))</td><td class=""mono"">$rl</td><td class=""mono"">$dl</td><td class=""mono"">$up</td><td class=""mono"">$lt</td><td class=""mono"">$jt / $pd</td></tr>"
+    }
+
+    # observacoes: so pendencias de fato (VPN impossivel, meios NA)
+    $obs = @()
+    $vpnObj = if ($R.PSObject.Properties['vpn']) { $R.vpn } else { $null }
+    if ($vpnObj -and $vpnObj.impossivel) {
+        $mm = if ($vpnObj.motivo) { ' (' + [string] $vpnObj.motivo + ')' } else { '' }
+        $obs += 'N' + [char]0x00E3 + 'o foi poss' + [char]0x00ED + 'vel conectar a VPN da Justi' + [char]0x00E7 + 'a Eleitoral' + $mm
+    }
+    foreach ($m in $na) {
+        $mot = if ($m.motivo_nao_aplicavel) { ': ' + [string] $m.motivo_nao_aplicavel } else { '' }
+        $obs += ('{0} n{1}o se aplica{2}' -f $m.rotulo, [char]0x00E3, $mot)
+    }
+    $obsHtml = if ($obs.Count) { '<ul>' + ((@($obs) | ForEach-Object { '<li>' + (ConvertTo-HtmlSafe $_) + '</li>' }) -join '') + '</ul>' } else { 'Sem observa&ccedil;&otilde;es.' }
+
+    @"
+  <div class="bar">Painel de Medi&ccedil;&otilde;es &mdash; Junta Eleitoral Especial 2026</div>
+  <div class="pnl">
+    <div class="pcols">
+      <div>
+        <div class="ptit">Identifica&ccedil;&atilde;o</div>
+        <table class="kv"><tbody>
+$($idRows -join "`n")
+        </tbody></table>
+      </div>
+      <div>
+        <div class="ptit">Resumo</div>
+        <table class="kv"><tbody>
+$($resumoRows -join "`n")
+        </tbody></table>
+        <div class="ptit" style="margin-top:12px">Medi&ccedil;&otilde;es por meio</div>
+        <table>
+          <thead><tr><th>Meio</th><th>Download s/ VPN</th><th>Download VPN</th><th>Upload VPN</th><th>Lat&ecirc;ncia VPN</th><th>Jitter / Perda VPN</th></tr></thead>
+          <tbody>
+$($medRows -join "`n")
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="ptit" style="margin-top:4px">Observa&ccedil;&otilde;es</div>
+    $obsHtml
+  </div>
+"@
 }
 
 # Secao 3 - Painel de Viabilidade de Conectividade.
@@ -361,6 +479,7 @@ function New-RelatorioHtml {
     $r   = $Resultado
     $loc = $r.local
     $amb = $r.ambiente
+    $modoAv = if ($r.PSObject.Properties['modo_avaliacao'] -and $r.modo_avaliacao) { [string] $r.modo_avaliacao } else { 'medicao' }
 
     $quando   = try { [datetime] $r.coletado_em } catch { Get-Date }
     $geradoEm = (Get-Date).ToString('dd/MM/yyyy HH:mm:ss')
@@ -368,8 +487,8 @@ function New-RelatorioHtml {
     $brasao    = Get-BrasaoDataUri
     $imgBrasao = if ($brasao) { '<img class="brasao" src="{0}" alt="">' -f $brasao } else { '' }
 
-    # -------- Secao 3: painel
-    $painel = Get-PainelHtml $r
+    # -------- Secao 3: painel (Viabilidade no modo completo; Medicoes nos demais)
+    $painel = if ($modoAv -eq 'completo') { Get-PainelHtml $r } else { Get-PainelMedicoesHtml $r }
 
     # -------- Secao 4: testes por meio (LAN / Wi-Fi do local / Celular)
     $meds = @(@(if ($r.PSObject.Properties['medicoes']) { $r.medicoes }) | Where-Object { $_ })
@@ -378,10 +497,11 @@ function New-RelatorioHtml {
     $secMeios = ''
     if ($meds.Count) {
         $blocos = foreach ($m in ($meds | Sort-Object { $x = $rank[[string] $_.meio]; if ($null -eq $x) { 9 } else { $x } })) {
-            $ehRec = [bool] ($rec -and ([string] $m.rotulo -eq [string] $rec.rotulo))
-            Get-MeioBlocoHtml -R $r -M $m -Recomendado $ehRec
+            $ehRec = [bool] ($modoAv -eq 'completo' -and $rec -and ([string] $m.rotulo -eq [string] $rec.rotulo))
+            Get-MeioBlocoHtml -R $r -M $m -Recomendado $ehRec -Modo $modoAv
         }
-        $secMeios = "  <div class=""bar"">Testes de comunica&ccedil;&atilde;o por meio</div>`n" + ($blocos -join "`n")
+        $tituloSec = if ($modoAv -eq 'completo') { 'Testes de comunica&ccedil;&atilde;o por meio' } else { 'Medi&ccedil;&otilde;es por meio' }
+        $secMeios = "  <div class=""bar"">$tituloSec</div>`n" + ($blocos -join "`n")
     }
 
     # -------- Secao 5: dados da vistoria do GEL (sem as fotos)

@@ -63,9 +63,38 @@ function Get-RankVeredito {
 #      maior download na Rede Local, marcado como PROVISORIO e local inviavel.
 #   3) nada -> "nenhuma".
 function Get-ConexaoRecomendada {
-    param([object[]] $Medicoes)
+    param(
+        [object[]] $Medicoes,
+        # 'completo' = regra por veredito; qualquer outro = sugestao informativa
+        # pelo maior download (VPN se houver, senao rede local), sem juizo.
+        [string] $Modo = 'completo'
+    )
 
     $validas = @($Medicoes | Where-Object { $_ -and -not [bool] $_.nao_aplicavel -and $_.veredito -ne 'nao_testado' })
+
+    if ($Modo -ne 'completo') {
+        if (-not $validas.Count) {
+            return [pscustomobject]@{
+                meio = 'nenhuma'; operadora = ''; rotulo = Get-RotuloMeio 'nenhuma' ''
+                veredito = 'medido'; provisoria = $false; base = 'nenhuma'
+                download_mbps = $null; informativo = $true
+            }
+        }
+        $comVpn = @($validas | Where-Object { $null -ne $_.vpn_download })
+        $lista  = if ($comVpn.Count) { $comVpn } else { $validas }
+        $campo  = if ($comVpn.Count) { 'vpn_download' } else { 'rede_local_download' }
+        $rec = $lista | Sort-Object @{ Expression = { if ($null -eq $_.$campo) { -1 } else { [double] $_.$campo } }; Descending = $true } | Select-Object -First 1
+        return [pscustomobject]@{
+            meio          = [string] $rec.meio
+            operadora     = [string] $rec.operadora
+            rotulo        = Get-RotuloMeio ([string] $rec.meio) ([string] $rec.operadora)
+            veredito      = 'medido'
+            provisoria    = $false
+            base          = if ($comVpn.Count) { 'vpn' } else { 'rede_local' }
+            download_mbps  = $rec.$campo
+            informativo   = $true
+        }
+    }
 
     $cand = @($validas | Where-Object { [bool] $_.rede_local_ok -and [bool] $_.vpn_conectou -and [bool] $_.fase2_ok })
     if ($cand.Count) {

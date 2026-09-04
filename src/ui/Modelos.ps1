@@ -74,10 +74,12 @@ namespace Conectividade
         }
 
         // Cor da faixa de severidade no painel (tons escuros da identidade DICON).
+        // Classe vazia (modo medicao/referencia - sem juizo) -> cinza neutro.
         public string CorFinal
         {
             get
             {
+                if (string.IsNullOrEmpty(_classeFinal)) return "#9AA4B2";
                 if (_classeFinal == "viavel")   return "#4FC177";
                 if (_classeFinal == "ressalva") return "#E8B93E";
                 return "#E8695C";
@@ -148,7 +150,7 @@ function New-LogEntry {
 }
 
 function New-AvaliacaoRow {
-    param($Detalhe, [string] $Fase = '')
+    param($Detalhe, [string] $Fase = '', [bool] $MostrarVeredito = $true)
     $d = $Detalhe
 
     $valorTxt = if ($null -eq $d.valor) { 'sem medida' }
@@ -166,8 +168,9 @@ function New-AvaliacaoRow {
     $r.Rotulo           = [string] $d.rotulo
     $r.ValorTexto       = $valorTxt
     $r.Regra            = $regra
-    $r.ClasseAutomatica = [string] $d.classe
-    $r.ClasseFinal      = [string] $d.classe
+    # modo medicao/referencia: sem classificacao (a coluna/barra ficam neutras)
+    $r.ClasseAutomatica = if ($MostrarVeredito) { [string] $d.classe } else { '' }
+    $r.ClasseFinal      = if ($MostrarVeredito) { [string] $d.classe } else { '' }
     return $r
 }
 

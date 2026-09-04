@@ -85,15 +85,30 @@ function ConvertTo-PerfisLimiares {
     $lanSem = & $mk $false
     $lanCom = & $mk $true
     [pscustomobject]@{
-        _comentario   = 'migrado do formato plano antigo (v<=0.6.66)'
-        orcamento_vpn = New-OrcamentoVpnPadrao
-        perfis        = [pscustomobject]@{
+        _comentario    = 'migrado do formato plano antigo (v<=0.6.66)'
+        modo_avaliacao = 'medicao'
+        orcamento_vpn  = New-OrcamentoVpnPadrao
+        perfis         = [pscustomobject]@{
             lan        = [pscustomobject]@{ sem_vpn = $lanSem; com_vpn = $lanCom }
             celular    = [pscustomobject]@{ sem_vpn = $lanSem; com_vpn = $lanCom }
             wifi_local = [pscustomobject]@{ folga = (New-FolgaWifiPadrao); ativos = [pscustomobject]@{ sem_vpn = $ativosSem; com_vpn = $ativosCom } }
         }
     }
 }
+
+# Modo de avaliacao: 'medicao' (padrao - so os valores), 'referencia' (valores +
+# faixa, sem reprovar) ou 'completo' (classifica/recomenda/Painel de Viabilidade).
+function Get-ModoAvaliacao {
+    $ovr = Get-Variable -Name ModoAvaliacaoOverride -Scope Global -ValueOnly -ErrorAction SilentlyContinue
+    if ($ovr) { return [string] $ovr }
+    $m = ''
+    try { $m = [string] (Get-LimiaresConfig).modo_avaliacao } catch { }
+    $m = $m.Trim().ToLower()
+    if ($m -in @('medicao', 'referencia', 'completo')) { return $m }
+    return 'medicao'
+}
+function Test-ModoCompleto { (Get-ModoAvaliacao) -eq 'completo' }
+function Test-ModoComFaixa { (Get-ModoAvaliacao) -in @('referencia', 'completo') }
 
 # Doc NESTED (sempre). Prioridade:
 #   1) cache data/limiares.json SE ja estiver no formato novo (Web App novo ou

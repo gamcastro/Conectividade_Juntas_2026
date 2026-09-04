@@ -197,16 +197,20 @@ function New-ResultadoJson {
         }
     }
 
+    $modoAval = try { Get-ModoAvaliacao } catch { 'medicao' }
+
     $recJson = $null
     if ($ConexaoRecomendada) {
         $recJson = [pscustomobject]@{
-            meio       = [string] (Get-Prop $ConexaoRecomendada 'meio')
-            operadora  = [string] (Get-Prop $ConexaoRecomendada 'operadora')
-            rotulo     = [string] (Get-Prop $ConexaoRecomendada 'rotulo')
-            veredito   = [string] (Get-Prop $ConexaoRecomendada 'veredito')
-            provisoria = [bool] (Get-Prop $ConexaoRecomendada 'provisoria')
-            base       = [string] (Get-Prop $ConexaoRecomendada 'base')
-            motivo     = [string] $MotivoRecomendacao
+            meio          = [string] (Get-Prop $ConexaoRecomendada 'meio')
+            operadora     = [string] (Get-Prop $ConexaoRecomendada 'operadora')
+            rotulo        = [string] (Get-Prop $ConexaoRecomendada 'rotulo')
+            veredito      = [string] (Get-Prop $ConexaoRecomendada 'veredito')
+            provisoria    = [bool] (Get-Prop $ConexaoRecomendada 'provisoria')
+            base          = [string] (Get-Prop $ConexaoRecomendada 'base')
+            informativo   = [bool] (Get-Prop $ConexaoRecomendada 'informativo')
+            download_mbps = (Get-Prop $ConexaoRecomendada 'download_mbps')
+            motivo        = [string] $MotivoRecomendacao
         }
         # a decisao final do local passa a ser o veredito do meio recomendado,
         # salvo override explicito do tecnico.
@@ -233,6 +237,7 @@ function New-ResultadoJson {
             telefone            = (Get-CampoLocal $Local 'telefone')
             tipo_internet       = $Local.tipo_internet
         }
+        modo_avaliacao    = $modoAval
         rede_local        = $redeLocal
         vistoria_gel       = (New-BlocoVistoriaGel -VistoriaGel $VistoriaGel -LocalId ([string] (Get-Prop $Local 'id')))
         vpn               = [pscustomobject]@{ impossivel = [bool] $VpnImpossivel; motivo = [string] $VpnMotivo }
