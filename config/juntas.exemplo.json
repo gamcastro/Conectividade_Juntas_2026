@@ -1,5 +1,6 @@
 {
-  "_comentario": "endpoint = URL /exec do Web App do Apps Script (apps-script/Codigo.gs). A lista baixada fica em data/juntas.json e e lida offline em campo. Atualize com o botao 'Atualizar lista' quando houver internet.",
+  "_comentario": "script_id = scriptId do projeto Apps Script (apps-script/Codigo.gs), chamado pela Execution API do Google (script.googleapis.com) -- ver docs/oauth-google.md. A lista baixada fica em data/juntas.json e e lida offline em campo. Atualize com o botao 'Atualizar lista' quando houver internet. 'endpoint' e' legado (URL /exec do Web App antigo) -- nao e mais usado pelo cliente.",
+  "script_id": "COLOQUE_O_SCRIPT_ID_AQUI",
   "endpoint": "https://script.google.com/macros/s/COLOQUE_O_ID_AQUI/exec",
   "recurso": "juntas",
   "validade_cache_horas": 336

@@ -366,30 +366,45 @@ resultado (`New-ResultadoJson`).
   `resultados/pendentes/`; o envio ao Web App acontece depois — no botão
   "Atualizar dados" (com internet) ou no aviso "Reenviar" da tela inicial.
 - Destino: **planilha Google dedicada só a resultados de conectividade**
-  (`PLANILHA_RESULTADOS_ID` em `apps-script/Codigo.gs`, aba `Resultados` criada
-  pelo próprio script). Web App na **v8** (POST `acao:'resultado'` ativo).
-  `gravarResultado` grava por nome de coluna e inclui `conexao_recomendada` /
-  `operadora_recomendada` / `veredito_recomendado` / `recomendacao_provisoria` /
-  `motivo_recomendacao` (migra planilhas antigas via `insertColumnsBefore`); o
-  JSON completo, com `medicoes[]`, fica na coluna `json`. **Deploy do Web App é
-  manual (clasp) — não implantar sem o admin.**
+  (`PLANILHA_RESULTADOS_ID` em `apps-script/Codigo.gs`, aba `Resultados`).
+  `gravarResultado` (v0.6.73: via API do Sheets/`UrlFetchApp`, token de
+  serviço — ver "Transporte" abaixo) grava por nome de coluna, incluindo
+  `conexao_recomendada` / `operadora_recomendada` / `veredito_recomendado` /
+  `recomendacao_provisoria` / `motivo_recomendacao`; colunas novas no futuro
+  são um passo manual (`setupServiceAuth`/`setupAdminPin`/`setupResultados`
+  são todos assim — a migração automática de colunas saiu). O JSON completo,
+  com `medicoes[]`, fica na coluna `json`. **Deploy do Apps Script é manual
+  (clasp) — não implantar sem o admin.**
 - `Send-Resultado` só move para `resultados/enviados/` com resposta
   `{status:'ok'}`; `erro`/`ignorado` mantêm o arquivo em `pendentes/`.
 - Teste: `tools/Testar-Envio.ps1` (HttpListener local simula o Apps Script).
-- **Autenticação Google (v0.6.69, `src/core/AuthGoogle.ps1`)**: quando
-  `config/ambiente.json > google_oauth.enabled` (padrão `false`), toda chamada ao
-  `/exec` (`Invoke-RecursoWebApp`, `Save-Limiares`, `Send-Resultado`) leva
-  `Authorization: Bearer <token>` de uma conta `@tre-ma.jus.br` — para o Web App
-  publicado como `access: DOMAIN` (contorna o bloqueio de Web App anônimo do
-  Workspace). `Get-CabecalhoAuthWebApp` (=`@{}` se desligado) resolve/renova o
-  token; refresh token guardado com **DPAPI** em
+- **Transporte: Apps Script Execution API (v0.6.73, `src/core/AppsScriptApi.ps1`)**:
+  o DICON chama `POST script.googleapis.com/v1/scripts/{script_id}/run`
+  (`function:'executar'`, `apps-script/Codigo.gs`) em vez da URL `/exec` do Web
+  App — testado ao vivo que um Web App `access: DOMAIN` **ignora** um
+  `Authorization: Bearer` (só aceita sessão de navegador). `Invoke-FuncaoAppsScript`
+  é a única chamada (usada por `Sync-Juntas`/`Sync-Tecnicos`/`Sync-Roteiros`/
+  `Sync-Limiares`, `Save-Limiares`, `Send-Resultado`); `script_id` vem de
+  `config/juntas.json`. A função `executar` roda **como quem chamou** — por
+  isso juntas/técnicos/roteiros/limiares (não sensíveis) usam `SpreadsheetApp`
+  normal, mas a gravação de Resultados (sensível: IP/nome/telefone) usa a API
+  do Sheets via `UrlFetchApp` autenticada com um **token de serviço do George**
+  guardado nas Propriedades do Script (`setupServiceAuth`,
+  `tools/Extrair-TokenServico.ps1`) — grava sempre "como George", não importa
+  qual técnico chamou.
+- **Autenticação Google (v0.6.69+, `src/core/AuthGoogle.ps1`)**: quando
+  `config/ambiente.json > google_oauth.enabled` (padrão `false`), toda chamada
+  leva `Authorization: Bearer <token>` de uma conta `@tre-ma.jus.br`.
+  `Get-CabecalhoAuthWebApp` (=`@{}` se desligado) resolve/renova o token;
+  refresh token guardado com **DPAPI** em
   `%LOCALAPPDATA%\DICON\google-refresh.dat` (por usuário Windows). Consentimento
   **1×/máquina**: loopback `127.0.0.1` (PKCE, sem admin) ou fallback device‑code.
   UI: card **"Conta Google"** em Administração (`btnConectarGoogle`/`btnDesconectarGoogle`,
   `panelDeviceCode`); login e "Atualizar dados" tratam o erro `CONECTAR_GOOGLE`
-  chamando `Invoke-ConectarGoogle`. `Codigo.gs` grava `enviado_por` (email do
-  chamador). Setup GCP + rollout em `docs/oauth-google.md`. Teste:
-  `tools/Testar-AuthGoogle.ps1`.
+  chamando `Invoke-ConectarGoogle`. `Codigo.gs` grava `enviado_por` (email de
+  quem chamou — confiável na Execution API). Setup GCP (projeto padrão +
+  Executável de API) + rollout em `docs/oauth-google.md`. Teste:
+  `tools/Testar-AuthGoogle.ps1`, `tools/Testar-Envio.ps1`.
 
 ## Ainda em aberto
 - Limiares exatos de latência/perda/banda/tempo de carregamento por meio ×
@@ -397,11 +412,13 @@ resultado (`New-ResultadoJson`).
   orçamento de VPN provisório para o COM VPN; falta calibrar em campo/homologação
   contra `10.11.1.38` e com o time da totalização) — ver
   `docs/limiares-referencia.md`
-- **Ligar o OAuth + reimplantar o Web App como `DOMAIN`** (v0.6.69): criar a
-  credencial GCP Desktop, preencher `google_oauth` no `ambiente.exemplo.json`,
-  ligar `enabled`, e `clasp redeploy` (homologação → produção). Traz o
-  `Codigo.gs` novo (limiares aninhados) e destrava o sync/save online. Até lá o
-  config local manda. Ver `docs/oauth-google.md`.
+- **Migrar para a Execution API em homologação e depois produção** (v0.6.73):
+  associar o projeto do Apps Script a um projeto GCP padrão (`dicon-oauth`),
+  ativar a Apps Script API nele, `clasp push` + redeploy (implanta
+  `executionApi` junto do `webapp`), reconectar a Conta Google (escopos
+  novos), rodar `setupServiceAuth` (via `tools/Extrair-TokenServico.ps1`) e
+  atualizar `config/juntas.json > script_id` nas máquinas já instaladas. Até
+  lá o config/cache local manda. Ver `docs/oauth-google.md`.
 - Coleta real das métricas da Fase 2 (iperf3 + Selenium + ping) validada ponta a
   ponta (a Fase 1 — rede local — já coleta de verdade)
 - Checagem por meio via overlay modal (v0.6.29+, rollback: tag

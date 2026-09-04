@@ -1,5 +1,30 @@
 /**
- * Web App de apoio ao modulo de Conectividade das Juntas Especiais 2026 (TRE-MA).
+ * Apoio ao modulo de Conectividade das Juntas Especiais 2026 (TRE-MA).
+ *
+ * Transporte principal (v0.6.73+): Apps Script Execution API. O DICON chama
+ *   POST https://script.googleapis.com/v1/scripts/{scriptId}/run
+ *   {"function":"executar","parameters":[{acao:'juntas'|'tecnicos'|'roteiros'|
+ *   'limiares'|'limiares.salvar'|'resultado', ...}]}
+ * autenticado com um token OAuth (Authorization: Bearer) de uma conta
+ * @tre-ma.jus.br. A funcao executa COMO QUEM CHAMOU (nao "como eu"), por isso:
+ *  - juntas/tecnicos/roteiros/limiares (dados nao sensiveis, so leitura) usam
+ *    SpreadsheetApp normalmente -- o chamador so precisa de acesso Leitor as
+ *    3 planilhas de referencia.
+ *  - limiares.salvar (admin, com PIN) tambem usa SpreadsheetApp -- na pratica
+ *    so o dono/editor (George) tem o PIN.
+ *  - resultado (grava em Resultados, planilha sensivel: IP/nome/telefone) usa
+ *    a API do Sheets via UrlFetchApp, autenticada com um TOKEN DE SERVICO
+ *    proprio (setupServiceAuth), pra gravar sempre "como George" mesmo quando
+ *    quem chamou foi outro tecnico -- sem exigir que cada tecnico tenha acesso
+ *    Editor direto a planilha de Resultados.
+ * Setup (uma vez por ambiente, ver docs/oauth-google.md): projeto do Apps
+ * Script associado a um projeto GCP padrao com a Apps Script API ativada;
+ * implantado como "Executavel de API" (ver appsscript.json > executionApi).
+ *
+ * Transporte legado: doGet/doPost na URL /exec (Web App). Ficam no arquivo,
+ * inalterados, mas o DICON nao usa mais esse caminho -- Web Apps com acesso
+ * restrito a dominio so aceitam sessao de navegador, nunca um Bearer token
+ * enviado por um programa (confirmado ao vivo, v0.6.72).
  *
  *   GET  ?recurso=juntas    -> locais (principal + contingencia) por Junta,
  *                              da planilha "Informacoes Juntas Especiais".
@@ -18,11 +43,10 @@
  *                              apos esta mudanca de formato. **
  *   POST {acao:'resultado', ...} -> grava um resultado (so se PLANILHA_RESULTADOS_ID).
  *
- * Implantacao: Implantar > Nova implantacao > "App da Web", Executar como Eu,
- * Acesso "Qualquer pessoa". Copie a URL .../exec para config/juntas.json.
- *
- * Seguranca: o acesso anonimo expoe apenas dados publicos de localizacao e
- * logistica. Nao inclua informacao sensivel nas planilhas de origem.
+ * Seguranca: os dados de juntas/tecnicos/roteiros/limiares nao sao sensiveis
+ * (localizacao e logistica publicas). Resultados (IP/nome/telefone do local)
+ * so e gravado pelo token de servico -- nunca fica acessivel por acesso
+ * anonimo/leitor comum.
  */
 
 var PLANILHA_JUNTAS_URL    = 'https://docs.google.com/spreadsheets/d/11MqlYAJfJBZ5ywkEe5AaYopNmM4UVToYPXADwPO72Us/edit';
@@ -171,10 +195,42 @@ function doPost(e) {
     if (!_idResultados()) {
       return _json({ status: 'ignorado', motivo: 'PLANILHA_RESULTADOS_ID nao configurado' });
     }
-    gravarResultado(body);
+    var quemPost = '';
+    try { quemPost = Session.getActiveUser().getEmail() || ''; } catch (e) { quemPost = ''; }
+    gravarResultado(body, quemPost);
     return _json({ status: 'ok', recebido_em: new Date().toISOString() });
   } catch (err) {
     return _json({ status: 'erro', erro: String(err) });
+  }
+}
+
+
+/**
+ * Dispatcher unico chamado pela Apps Script Execution API
+ * (POST .../scripts/{scriptId}/run, function:"executar", parameters:[{acao,...}]).
+ * Roda como quem chamou (Session.getActiveUser() = o tecnico autenticado).
+ */
+function executar(req) {
+  req = req || {};
+  var acao = req.acao || 'juntas';
+  try {
+    if (acao === 'juntas')   return { atualizado_em: new Date().toISOString(), juntas: listarJuntas() };
+    if (acao === 'tecnicos') return { atualizado_em: new Date().toISOString(), tecnicos: listarTecnicos() };
+    if (acao === 'roteiros') return { atualizado_em: new Date().toISOString(), roteiros: listarRoteiros() };
+    if (acao === 'limiares') return lerLimiares();
+    if (acao === 'limiares.salvar') return salvarLimiares(req);
+
+    if (acao === 'resultado') {
+      if (!_idResultados()) return { status: 'ignorado', motivo: 'PLANILHA_RESULTADOS_ID nao configurado' };
+      var quem = '';
+      try { quem = Session.getActiveUser().getEmail() || ''; } catch (e) { quem = ''; }
+      gravarResultado(req, quem);
+      return { status: 'ok', recebido_em: new Date().toISOString() };
+    }
+
+    return { erro: 'acao desconhecida: ' + acao };
+  } catch (err) {
+    return { erro: String(err) };
   }
 }
 
@@ -596,57 +652,115 @@ function setupResultados(sheetId) {
 }
 
 
-/* ============================ RESULTADOS (POST) ============================ */
+/* ============================ RESULTADOS (POST / Execution API) ============================ */
 
-function gravarResultado(dados) {
-  var ss  = SpreadsheetApp.openById(_idResultados());
-  var aba = ss.getSheetByName(ABA_RESULTADOS) || ss.insertSheet(ABA_RESULTADOS);
+// Token de servico (proprio, guardado nas Propriedades do Script): grava em
+// Resultados sempre "como George", mesmo quando quem chamou 'executar' foi
+// outro tecnico -- ver comentario de cabecalho do arquivo. Configurado 1x com
+// setupServiceAuth(); ate la, gravarResultado lanca erro claro.
+function _tokenServico() {
+  var p = PropertiesService.getScriptProperties();
+  var clientId     = p.getProperty('OAUTH_CLIENT_ID');
+  var clientSecret = p.getProperty('OAUTH_CLIENT_SECRET');
+  var refreshToken = p.getProperty('OAUTH_REFRESH_TOKEN');
+  if (!clientId || !clientSecret || !refreshToken) {
+    throw new Error('Token de servico nao configurado (rode setupServiceAuth no editor -- ver docs/oauth-google.md).');
+  }
+  var resp = UrlFetchApp.fetch('https://oauth2.googleapis.com/token', {
+    method: 'post',
+    muteHttpExceptions: true,
+    payload: {
+      client_id: clientId, client_secret: clientSecret,
+      refresh_token: refreshToken, grant_type: 'refresh_token'
+    }
+  });
+  var j = JSON.parse(resp.getContentText());
+  if (!j.access_token) throw new Error('falha ao renovar token de servico: ' + resp.getContentText());
+  return j.access_token;
+}
 
+// Grava as 3 Script Properties do token de servico. Rode 1x no editor:
+//   setupServiceAuth('<client_id>', '<client_secret>', '<refresh_token>')
+// client_id/client_secret = os mesmos de config/ambiente.exemplo.json >
+// google_oauth. refresh_token = saida de tools/Extrair-TokenServico.ps1,
+// rodado pelo George ja conectado no DICON (Administracao > Conta Google)
+// com o escopo 'spreadsheets'.
+function setupServiceAuth(clientId, clientSecret, refreshToken) {
+  if (!clientId || !clientSecret || !refreshToken) {
+    throw new Error('passe os 3: setupServiceAuth(clientId, clientSecret, refreshToken)');
+  }
+  var p = PropertiesService.getScriptProperties();
+  p.setProperty('OAUTH_CLIENT_ID', String(clientId));
+  p.setProperty('OAUTH_CLIENT_SECRET', String(clientSecret));
+  p.setProperty('OAUTH_REFRESH_TOKEN', String(refreshToken));
+  return 'token de servico gravado.';
+}
+
+function _sheetsGetValores(token, sheetId, a1Range) {
+  var url = 'https://sheets.googleapis.com/v4/spreadsheets/' + sheetId + '/values/' + encodeURIComponent(a1Range);
+  var resp = UrlFetchApp.fetch(url, { method: 'get', muteHttpExceptions: true, headers: { Authorization: 'Bearer ' + token } });
+  if (resp.getResponseCode() >= 300) throw new Error('Sheets API (get ' + a1Range + '): ' + resp.getContentText());
+  var j = JSON.parse(resp.getContentText());
+  return j.values || [];
+}
+
+function _sheetsSetValores(token, sheetId, a1Range, valores) {
+  var url = 'https://sheets.googleapis.com/v4/spreadsheets/' + sheetId + '/values/' + encodeURIComponent(a1Range) + '?valueInputOption=RAW';
+  var resp = UrlFetchApp.fetch(url, {
+    method: 'put', muteHttpExceptions: true, contentType: 'application/json',
+    headers: { Authorization: 'Bearer ' + token }, payload: JSON.stringify({ values: valores })
+  });
+  if (resp.getResponseCode() >= 300) throw new Error('Sheets API (update ' + a1Range + '): ' + resp.getContentText());
+}
+
+function _sheetsAppendLinha(token, sheetId, aba, linha) {
+  var url = 'https://sheets.googleapis.com/v4/spreadsheets/' + sheetId + '/values/' + encodeURIComponent(aba) +
+    '!A:A:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS';
+  var resp = UrlFetchApp.fetch(url, {
+    method: 'post', muteHttpExceptions: true, contentType: 'application/json',
+    headers: { Authorization: 'Bearer ' + token }, payload: JSON.stringify({ values: [linha] })
+  });
+  if (resp.getResponseCode() >= 300) throw new Error('Sheets API (append ' + aba + '): ' + resp.getContentText());
+}
+
+// dados: o resultado completo (ver New-ResultadoJson no cliente). quemChamou:
+// e-mail de quem chamou 'executar' (Session.getActiveUser() -- confiavel na
+// Execution API, roda como o tecnico de verdade), gravado em 'enviado_por'.
+function gravarResultado(dados, quemChamou) {
   var COLS = ['recebido_em', 'enviado_por', 'tecnico', 'local_id', 'zona', 'municipio_termo', 'tipo',
     'classificacao_final', 'classificacao_automatica', 'ajustada',
     'conexao_recomendada', 'operadora_recomendada', 'veredito_recomendado',
     'recomendacao_provisoria', 'motivo_recomendacao',
     'latencia_ms', 'jitter_ms', 'perda_%', 'download_mbps', 'upload_mbps', 'carregamento_s', 'json'];
 
-  if (aba.getLastRow() === 0) {
-    aba.appendRow(COLS);
-  } else {
-    var head = aba.getRange(1, 1, 1, aba.getLastColumn()).getValues()[0];
-    // migracao: planilha de versao anterior nao tem as colunas multi-meio.
-    if (head.indexOf('conexao_recomendada') === -1) {
-      var novas = ['conexao_recomendada', 'operadora_recomendada', 'veredito_recomendado',
-        'recomendacao_provisoria', 'motivo_recomendacao'];
-      var jsonIdx = head.indexOf('json');
-      var at = (jsonIdx === -1) ? head.length + 1 : jsonIdx + 1;  // antes da coluna 'json'
-      aba.insertColumnsBefore(at, novas.length);
-      aba.getRange(1, at, 1, novas.length).setValues([novas]);
-      head = aba.getRange(1, 1, 1, aba.getLastColumn()).getValues()[0];
-    }
-    // migracao: coluna 'enviado_por' (email OAuth do chamador, Web App DOMAIN).
-    if (head.indexOf('enviado_por') === -1) {
-      var tIdx = head.indexOf('tecnico');
-      var at2 = (tIdx === -1) ? head.length + 1 : tIdx + 1;
-      aba.insertColumnsBefore(at2, 1);
-      aba.getRange(1, at2).setValue('enviado_por');
-    }
+  var token   = _tokenServico();
+  var sheetId = _idResultados();
+
+  var cab  = _sheetsGetValores(token, sheetId, ABA_RESULTADOS + '!1:1');
+  var head = (cab.length ? cab[0] : []).map(function (c) { return String(c || '').trim(); });
+  if (!head.length || head.indexOf('recebido_em') === -1) {
+    // planilha nova/vazia: semeia o cabecalho padrao (migracao de colunas de
+    // versoes antigas nao e mais automatica -- ver comentario de cabecalho).
+    _sheetsSetValores(token, sheetId, ABA_RESULTADOS + '!A1', [COLS]);
+    head = COLS;
   }
 
-  var quem = '';
-  try { quem = Session.getActiveUser().getEmail() || ''; } catch (e) { quem = ''; }
+  var dadosArquivo = {};
+  for (var k in dados) { if (k !== 'acao') dadosArquivo[k] = dados[k]; }
 
-  var m = dados.metricas || {};
-  var l = dados.local || {};
-  var c = dados.classificacao || {};
-  var r = dados.conexao_recomendada || {};
+  var m = dadosArquivo.metricas || {};
+  var l = dadosArquivo.local || {};
+  var c = dadosArquivo.classificacao || {};
+  var r = dadosArquivo.conexao_recomendada || {};
   // compat: versao antiga mandava classificacao como string
   var cFinal = (typeof c === 'string') ? c : (c.final || '');
   var cAuto  = (typeof c === 'string') ? c : (c.automatica || '');
   var cAdj   = (typeof c === 'object') ? !!c.ajustada : false;
 
   var valores = {
-    'recebido_em': new Date(),
-    'enviado_por': quem,
-    'tecnico': (dados.tecnico || {}).nome || '',
+    'recebido_em': Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm:ss'),
+    'enviado_por': quemChamou || '',
+    'tecnico': (dadosArquivo.tecnico || {}).nome || '',
     'local_id': l.id || '',
     'zona': l.zona_eleitoral || '',
     'municipio_termo': l.municipio_termo || '',
@@ -665,15 +779,15 @@ function gravarResultado(dados) {
     'download_mbps': m.banda_download_mbps,
     'upload_mbps': m.banda_upload_mbps,
     'carregamento_s': m.carregamento_web_s,
-    'json': JSON.stringify(dados)
+    'json': JSON.stringify(dadosArquivo)
   };
 
   // grava por nome de coluna, tolerando ordem/idade diferentes da planilha.
-  var head2 = aba.getRange(1, 1, 1, aba.getLastColumn()).getValues()[0];
-  var linha = head2.map(function (nome) {
-    return Object.prototype.hasOwnProperty.call(valores, nome) ? valores[nome] : '';
+  var linha = head.map(function (nome) {
+    var v = Object.prototype.hasOwnProperty.call(valores, nome) ? valores[nome] : '';
+    return (v === null || v === undefined) ? '' : v;
   });
-  aba.appendRow(linha);
+  _sheetsAppendLinha(token, sheetId, ABA_RESULTADOS, linha);
 }
 
 

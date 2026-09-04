@@ -37,35 +37,6 @@ function Get-PastaDados {
     return $p
 }
 
-# GET generico ao Web App: ?recurso=<nome>. Devolve o objeto ja convertido.
-function Invoke-RecursoWebApp {
-    param(
-        [Parameter(Mandatory)] [string] $Recurso,
-        [int] $TimeoutS = 45
-    )
-    $cfg = Get-Config 'juntas'
-    $endpoint = $cfg.endpoint
-    if ([string]::IsNullOrWhiteSpace($endpoint) -or $endpoint -like '*COLOQUE_O_ID*') {
-        throw "Endpoint do Web App nao configurado (config/juntas.json > endpoint)."
-    }
-    $sep = if ($endpoint -match '\?') { '&' } else { '?' }
-    $uri = "{0}{1}recurso={2}" -f $endpoint, $sep, $Recurso
-
-    # Web App como 'Qualquer pessoa do dominio' -> header OAuth (@{} se desligado).
-    for ($tent = 1; $tent -le 2; $tent++) {
-        $h = Get-CabecalhoAuthWebApp   # pode lancar CONECTAR_GOOGLE
-        $resp = Invoke-RestMethod -Method Get -Uri $uri -TimeoutSec $TimeoutS -Headers $h
-        # sem token valido, o Google devolve a pagina de login (HTML) em vez do JSON
-        if ((Test-OAuthAtivo) -and ($resp -is [string]) -and ($resp -match '(?i)<html|accounts\.google\.com')) {
-            if ($tent -eq 1) { Get-TokenGoogle -Forcar | Out-Null; continue }
-            throw 'CONECTAR_GOOGLE'
-        }
-        break
-    }
-    if ($resp.erro) { throw "Web App retornou erro ($Recurso): $($resp.erro)" }
-    return $resp
-}
-
 function Read-CacheJson {
     param([string] $Nome, [string] $Campo)
     $arq = Join-Path (Get-PastaDados) $Nome
@@ -103,7 +74,7 @@ function Write-CacheJson {
 
 function Sync-Juntas {
     Write-Log 'Baixando lista de Juntas...' -Nivel Info
-    $resp = Invoke-RecursoWebApp -Recurso 'juntas'
+    $resp = Invoke-FuncaoAppsScript -Acao 'juntas'
     $locais = @($resp.juntas)
     if (-not $locais.Count) { throw "Resposta de 'juntas' vazia." }
     Write-CacheJson -Nome 'juntas.json' -Campo 'juntas' -Itens $locais -Origem 'recurso=juntas'

@@ -32,7 +32,7 @@ function Test-LimiaresNested {
 
 function Sync-Limiares {
     Write-Log 'Baixando limiares...' -Nivel Info
-    $resp = Invoke-RecursoWebApp -Recurso 'limiares'
+    $resp = Invoke-FuncaoAppsScript -Acao 'limiares'
     if (-not $resp.limiares) { throw "Resposta de 'limiares' sem dados." }
     $novo = @($resp.limiares) | Select-Object -First 1
 
@@ -230,21 +230,8 @@ function Save-Limiares {
         [Parameter(Mandatory)] $Limiares,
         [Parameter(Mandatory)] [string] $Pin
     )
-    $cfg = Get-Config 'juntas'
-    $endpoint = $cfg.endpoint
-    if ([string]::IsNullOrWhiteSpace($endpoint) -or $endpoint -like '*COLOQUE_O_ID*') {
-        return 'erro:endpoint do Web App nao configurado'
-    }
-
-    $corpo = @{ acao = 'limiares.salvar'; pin = $Pin; limiares = $Limiares } | ConvertTo-Json -Depth 12
     try {
-        $h = Get-CabecalhoAuthWebApp   # OAuth (@{} se desligado); pode lancar CONECTAR_GOOGLE
-    } catch {
-        return "erro:$_"
-    }
-    try {
-        $resp = Invoke-RestMethod -Method Post -Uri $endpoint -Body $corpo -Headers $h `
-                                  -ContentType 'application/json; charset=utf-8' -TimeoutSec 30
+        $resp = Invoke-FuncaoAppsScript -Acao 'limiares.salvar' -Payload @{ pin = $Pin; limiares = $Limiares } -TimeoutS 30
     } catch {
         return "erro:$_"
     }

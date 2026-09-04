@@ -5,7 +5,7 @@
 
 function Sync-Tecnicos {
     Write-Log 'Baixando lista de tecnicos...' -Nivel Info
-    $resp = Invoke-RecursoWebApp -Recurso 'tecnicos'
+    $resp = Invoke-FuncaoAppsScript -Acao 'tecnicos'
     $itens = @($resp.tecnicos)
     if (-not $itens.Count) { throw "Resposta de 'tecnicos' vazia." }
     Write-CacheJson -Nome 'tecnicos.json' -Campo 'tecnicos' -Itens $itens -Origem 'recurso=tecnicos'
@@ -44,7 +44,7 @@ function Get-TecnicoPorNome {
 
 function Sync-Roteiros {
     Write-Log 'Baixando roteiros...' -Nivel Info
-    $resp = Invoke-RecursoWebApp -Recurso 'roteiros' -TimeoutS 90   # e a chamada mais pesada
+    $resp = Invoke-FuncaoAppsScript -Acao 'roteiros' -TimeoutS 90   # e a chamada mais pesada
     $itens = @($resp.roteiros)
     if (-not $itens.Count) { throw "Resposta de 'roteiros' vazia." }
     Write-CacheJson -Nome 'roteiros.json' -Campo 'roteiros' -Itens $itens -Origem 'recurso=roteiros'
