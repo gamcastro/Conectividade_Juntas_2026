@@ -99,6 +99,15 @@
                     <TextBlock x:Name="lblNavSecao" Text="NAVEGA&#199;&#195;O" Margin="22,0,0,6"
                                FontFamily="Consolas" FontSize="9" Foreground="{DynamicResource Dicon.Text3}"/>
 
+                    <RadioButton x:Name="navInicio" Style="{DynamicResource NavBotao}">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Width="18" Height="18" Stretch="Uniform"
+                                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
+                                  Data="M10,2 L18,9 L16,9 L16,17 L4,17 L4,9 L2,9 Z M7.5,17 L7.5,11.5 L12.5,11.5 L12.5,17 Z"/>
+                            <TextBlock x:Name="lblNavInicio" Text="In&#237;cio" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </RadioButton>
+
                     <RadioButton x:Name="navGuia" Style="{DynamicResource NavBotao}">
                         <StackPanel Orientation="Horizontal">
                             <Path Width="18" Height="18" Stretch="Uniform"

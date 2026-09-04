@@ -126,6 +126,20 @@ try {
     if ($w.FindName('viewHome').Visibility -ne 'Visible') { Write-Host "[2] FALHA: nao foi para a home"; $falhas++ }
     else { Write-Host "[2] Login OK -> home ($($w.FindName('txtSaudacao').Text))" }
 
+    # 2a-inicio. "Inicio" no rail: marcado ao chegar na home, e sempre volta pra
+    # la (item unico e fixo de "voltar ao inicio", pedido depois de nao ter
+    # nenhum jeito direto de fazer isso pelo rail).
+    if ($w.FindName('navInicio').IsChecked -eq $true) { Write-Host "[2a] 'Inicio' marcado ao chegar na home" }
+    else { Write-Host "    FALHA: 'Inicio' nao ficou marcado na home"; $falhas++ }
+    Show-Locais
+    Invoke-Pump
+    $foiPraLocais = "$($w.FindName('viewLocais').Visibility)" -eq 'Visible'
+    $w.FindName('navInicio').IsChecked = $true
+    Invoke-Pump
+    if ($foiPraLocais -and "$($w.FindName('viewHome').Visibility)" -eq 'Visible') {
+        Write-Host "[2a] 'Inicio' volta pra home de qualquer outra tela (Locais)"
+    } else { Write-Host "    FALHA: 'Inicio' nao voltou pra home (viewHome=$($w.FindName('viewHome').Visibility))"; $falhas++ }
+
     # 2c-versao. aviso de versao nova no rodape do rail
     Update-AvisoVersao '99.99.99'
     if ("$($w.FindName('btnAtualizarApp').Visibility)" -eq 'Visible' -and "$($w.FindName('btnAtualizarApp').Content)" -match '99\.99\.99') {

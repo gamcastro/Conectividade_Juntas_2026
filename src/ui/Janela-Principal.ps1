@@ -386,6 +386,7 @@ function New-JanelaPrincipal {
     $window.FindName('btnAtualizarApp').Add_Click({ Invoke-AtualizarApp })
 
     # rail de navegacao (RadioButtons) - handlers ignoram mudanca programatica
+    $window.FindName('navInicio').Add_Checked({ if (-not $Global:NavegandoPrograma) { Show-View 'viewHome' } })
     $window.FindName('navGuia').Add_Checked({ if (-not $Global:NavegandoPrograma) { Show-GuiaBordo } })
     $window.FindName('navLocais').Add_Checked({ if (-not $Global:NavegandoPrograma) { Show-Locais } })
     $window.FindName('navDiag').Add_Checked({ if (-not $Global:NavegandoPrograma) { Open-DiagnosticoLimpo } })
@@ -490,9 +491,9 @@ function Show-View {
     Set-RailTravadoNoDiag ($Nome -eq 'viewDiag')
 
     # sincroniza o item ativo do rail sem disparar os handlers de navegacao
-    $map = @{ viewGuia = 'navGuia'; viewLocais = 'navLocais'; viewLocalDetalhe = 'navLocais'; viewDiag = 'navDiag'; viewAdmin = 'navAdmin' }
+    $map = @{ viewHome = 'navInicio'; viewGuia = 'navGuia'; viewLocais = 'navLocais'; viewLocalDetalhe = 'navLocais'; viewDiag = 'navDiag'; viewAdmin = 'navAdmin' }
     $Global:NavegandoPrograma = $true
-    foreach ($nn in 'navGuia', 'navLocais', 'navDiag', 'navAdmin', 'navAtualizar', 'navAjuda') {
+    foreach ($nn in 'navInicio', 'navGuia', 'navLocais', 'navDiag', 'navAdmin', 'navAtualizar', 'navAjuda') {
         $rb = $w.FindName($nn)
         if ($rb) { $rb.IsChecked = ($map[$Nome] -eq $nn) }
     }
@@ -524,7 +525,7 @@ function Set-RailRecolhido {
     $w.FindName('railNav').Width = if ($On) { 56 } else { 214 }
     $vis = if ($On) { 'Collapsed' } else { 'Visible' }
     foreach ($n in 'railCabTexto', 'lblNavSecao', 'railRodape',
-        'lblNavGuia', 'lblNavLocais', 'lblNavDiag', 'lblNavAdmin', 'lblNavAtualizar', 'lblNavAjuda') {
+        'lblNavInicio', 'lblNavGuia', 'lblNavLocais', 'lblNavDiag', 'lblNavAdmin', 'lblNavAtualizar', 'lblNavAjuda') {
         $c = $w.FindName($n); if ($c) { $c.Visibility = $vis }
     }
     $t = $w.FindName('txtRailToggle')
@@ -783,7 +784,7 @@ function Set-HomeOcupado {
     if ($Ocupado) { $w.FindName('txtAtualizandoMsg').Text = $Rotulo }
     $habilita = (-not $Ocupado) -and (-not $Global:RailTravadoDiag)
     foreach ($n in 'btnMenuGuia', 'btnMenuDiag', 'btnMenuAdmin', 'btnMenuAtualizar',
-        'btnReenviarPendentes', 'btnTrocarUsuario', 'navGuia', 'navLocais', 'navDiag', 'navAdmin', 'navAtualizar', 'navAjuda') {
+        'btnReenviarPendentes', 'btnTrocarUsuario', 'navInicio', 'navGuia', 'navLocais', 'navDiag', 'navAdmin', 'navAtualizar', 'navAjuda') {
         $c = $w.FindName($n); if ($c) { $c.IsEnabled = $habilita }
     }
 }
@@ -800,7 +801,7 @@ function Set-RailTravadoNoDiag {
     $Global:RailTravadoDiag = $Travado
     $w = $Global:JanelaPrincipal
     if (-not $w) { return }
-    foreach ($n in 'navGuia', 'navLocais', 'navDiag', 'navAdmin', 'navAtualizar', 'navAjuda', 'btnTrocarUsuario', 'btnAtualizarApp') {
+    foreach ($n in 'navInicio', 'navGuia', 'navLocais', 'navDiag', 'navAdmin', 'navAtualizar', 'navAjuda', 'btnTrocarUsuario', 'btnAtualizarApp') {
         $c = $w.FindName($n); if ($c) { $c.IsEnabled = -not $Travado }
     }
 }
