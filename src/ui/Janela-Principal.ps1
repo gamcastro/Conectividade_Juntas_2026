@@ -2615,12 +2615,13 @@ function Set-ChkStep {
     if (-not $dot) { return }
     $cor = switch ($Estado) {
         'rodando' { '#E8B93E' } 'ok' { '#4FC177' }
-        'erro'    { '#E8695C' } 'semvpn' { '#E8695C' }
+        'erro'    { '#E8695C' } 'semvpn' { '#E8695C' } 'inviavel' { '#E8695C' }
         default   { '#7D8698' }
     }
     $palavra = switch ($Estado) {
         'rodando' { 'rodando...' } 'ok' { 'ok' } 'erro' { 'erro' }
-        'semvpn'  { 'sem VPN' }    default { 'pendente' }
+        'semvpn'  { 'sem VPN' }    'inviavel' { 'qualidade baixa' }
+        default   { 'pendente' }
     }
     $b = [Windows.Media.SolidColorBrush]::new([Windows.Media.ColorConverter]::ConvertFromString($cor)); $b.Freeze()
     $dot.Fill = $b
@@ -2894,8 +2895,11 @@ function Complete-CheckFase2 {
         if ($Payload -and $Payload.PSObject.Properties['Iperf'] -and $Payload.Iperf) { Update-IperfPainel -Iperf $Payload.Iperf }
         $w.FindName('txtChkResultadoVazio').Visibility = 'Collapsed'
         Write-Log 'Fase 2 concluida.' -Nivel Ok
+        # 'inviavel' = diagnostico rodou normalmente, so a qualidade medida ficou
+        # abaixo do limiar (nao e' falha tecnica -- por isso NAO usa o estado
+        # 'erro', que confundia o tecnico de campo com um problema de execucao).
         $ver = if ($Payload -and $Payload.Decisao) { [string] $Payload.Decisao.Classificacao } else { 'inviavel' }
-        Set-ChkStep 2 $(if ($ver -eq 'inviavel') { 'erro' } else { 'ok' }) '' $(if (Test-RedeJeDireta) { '2. Rede interna (JE)' } else { '' })
+        Set-ChkStep 2 $(if ($ver -eq 'inviavel') { 'inviavel' } else { 'ok' }) '' $(if (Test-RedeJeDireta) { '2. Rede interna (JE)' } else { '' })
     }
     Complete-CheckMeio
 }
