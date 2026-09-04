@@ -958,6 +958,38 @@ try {
     if ("$($w.FindName('lblAmbienteMsg').Text)" -match 'PIN') { Write-Host "[8b] salvar ambiente sem PIN bloqueado" }
     else { Write-Host "    FALHA: salvou ambiente sem PIN ('$($w.FindName('lblAmbienteMsg').Text)')"; $falhas++ }
 
+    # 8c. semaforo do overlay: quais itens aparecem e' configuravel (admin) --
+    # roda numa pasta temporaria (troca $Global:RaizApp por um instante) pra
+    # nao tocar no config/ambiente.json real desta maquina.
+    $tmpCfgDir = Join-Path ([IO.Path]::GetTempPath()) ('dicon-cfgtest-' + [guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path (Join-Path $tmpCfgDir 'config') -Force | Out-Null
+    $raizOrig = $Global:RaizApp
+    $Global:RaizApp = $tmpCfgDir
+    try {
+        $arqSalvo = Save-ConfigAmbiente -Servidor '10.0.0.1' -OverlayRedeLocal $true -OverlayVpn $false -OverlayTotalizacao $true
+        $salvo = Get-Content $arqSalvo -Raw | ConvertFrom-Json
+        if ($salvo.overlay_passos.rede_local -eq $true -and $salvo.overlay_passos.vpn -eq $false -and $salvo.overlay_passos.totalizacao -eq $true) {
+            Write-Host "[8c] Save-ConfigAmbiente grava overlay_passos (rede_local=true, vpn=false, totalizacao=true)"
+        } else { Write-Host "    FALHA: overlay_passos gravado errado ($($salvo.overlay_passos | ConvertTo-Json -Compress))"; $falhas++ }
+
+        $vis = Get-OverlayPassosVisiveis
+        if ($vis.rede_local -eq $true -and $vis.vpn -eq $false -and $vis.totalizacao -eq $true) {
+            Write-Host "[8c] Get-OverlayPassosVisiveis le de volta certo"
+        } else { Write-Host "    FALHA: Get-OverlayPassosVisiveis (rede_local=$($vis.rede_local) vpn=$($vis.vpn) totalizacao=$($vis.totalizacao))"; $falhas++ }
+
+        Reset-OverlayCheck
+        Invoke-Pump
+        $visS1 = "$($w.FindName('rowChkS1').Visibility)"; $visS2 = "$($w.FindName('rowChkS2').Visibility)"; $visS3 = "$($w.FindName('rowChkS3').Visibility)"
+        if ($visS1 -eq 'Visible' -and $visS2 -eq 'Collapsed' -and $visS3 -eq 'Visible') {
+            Write-Host "[8c] overlay esconde so' a linha desmarcada (VPN) e mostra as outras 2"
+        } else { Write-Host "    FALHA: visibilidade das linhas do semaforo (1=$visS1 2=$visS2 3=$visS3)"; $falhas++ }
+    } finally {
+        $Global:RaizApp = $raizOrig
+        Remove-Item $tmpCfgDir -Recurse -Force -ErrorAction SilentlyContinue
+        Reset-OverlayCheck   # volta a config real (config/ambiente.json desta maquina, se houver)
+        Invoke-Pump
+    }
+
     # 9. metrica desativada sai da bateria (motor)
     $limTest = [pscustomobject]@{
         latencia_ms         = [pscustomobject]@{ viavel_ate = 60; ressalva_ate = 120; ativo = $true }

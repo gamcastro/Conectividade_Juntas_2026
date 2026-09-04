@@ -2798,12 +2798,31 @@ function Set-ChkStep {
     $lbl.Text = if ($Texto) { "$baseUsar - $Texto" } else { "$baseUsar - $palavra" }
 }
 
+# Quais dos 3 itens do semaforo aparecem no overlay -- config do admin
+# (config/ambiente.json > overlay_passos), so' visibilidade: nao desliga a
+# medicao em si, so o que o card mostra. Falta a chave/config = mostra tudo
+# (comportamento de sempre).
+function Get-OverlayPassosVisiveis {
+    $amb = $null
+    try { $amb = Get-Config 'ambiente' } catch { }
+    $ov = if ($amb -and $amb.PSObject.Properties['overlay_passos']) { $amb.overlay_passos } else { $null }
+    [pscustomobject]@{
+        rede_local  = if ($ov -and $ov.PSObject.Properties['rede_local'])   { [bool] $ov.rede_local }   else { $true }
+        vpn         = if ($ov -and $ov.PSObject.Properties['vpn'])         { [bool] $ov.vpn }          else { $true }
+        totalizacao = if ($ov -and $ov.PSObject.Properties['totalizacao']) { [bool] $ov.totalizacao }  else { $true }
+    }
+}
+
 function Reset-OverlayCheck {
     $w = $Global:JanelaPrincipal
     if (-not $w) { return }
     Set-ChkStep 1 'pendente'
     Set-ChkStep 2 'pendente'
     Set-ChkStep 3 'pendente' 'em implementacao'
+    $passosVis = Get-OverlayPassosVisiveis
+    $r1 = $w.FindName('rowChkS1'); if ($r1) { $r1.Visibility = if ($passosVis.rede_local)  { 'Visible' } else { 'Collapsed' } }
+    $r2 = $w.FindName('rowChkS2'); if ($r2) { $r2.Visibility = if ($passosVis.vpn)         { 'Visible' } else { 'Collapsed' } }
+    $r3 = $w.FindName('rowChkS3'); if ($r3) { $r3.Visibility = if ($passosVis.totalizacao) { 'Visible' } else { 'Collapsed' } }
     $w.FindName('panelChkVpnGate').Visibility = 'Collapsed'
     $w.FindName('chkVpnImpossivel').IsChecked = $false
     $w.FindName('txtVpnMotivo').Text = ''
@@ -3789,6 +3808,10 @@ function Initialize-Admin {
     $w.FindName('txtIperfDuracaoCfg').Text  = if ($ip -and $ip.duracao_s) { [string] $ip.duracao_s } else { '10' }
     $w.FindName('txtMapsKeyCfg').Text = Get-ChaveMapsStatic
     $w.FindName('lblAmbienteMsg').Text = ''
+    $passosVis = Get-OverlayPassosVisiveis
+    $w.FindName('chkOverlayRedeLocal').IsChecked   = $passosVis.rede_local
+    $w.FindName('chkOverlayVpn').IsChecked         = $passosVis.vpn
+    $w.FindName('chkOverlayTotalizacao').IsChecked = $passosVis.totalizacao
 
     # conta Google (so aparece se o OAuth estiver ligado no ambiente.json)
     $w.FindName('lblContaGoogleMsg').Text = ''
@@ -3814,9 +3837,13 @@ function Invoke-SalvarAmbiente {
     if (-not $okD -or $dur -lt 3 -or $dur -gt 60) { $msg.Foreground = $vermelho; $msg.Text = 'Duracao invalida (3-60 s).'; return }
 
     $mapsKey = ([string] $w.FindName('txtMapsKeyCfg').Text).Trim()
+    $ovRedeLocal  = [bool] $w.FindName('chkOverlayRedeLocal').IsChecked
+    $ovVpn        = [bool] $w.FindName('chkOverlayVpn').IsChecked
+    $ovTotal      = [bool] $w.FindName('chkOverlayTotalizacao').IsChecked
 
     try {
-        $arq = Save-ConfigAmbiente -Servidor $srv -Porta $porta -Duracao $dur -MapsKey $mapsKey
+        $arq = Save-ConfigAmbiente -Servidor $srv -Porta $porta -Duracao $dur -MapsKey $mapsKey `
+            -OverlayRedeLocal $ovRedeLocal -OverlayVpn $ovVpn -OverlayTotalizacao $ovTotal
         $msg.Foreground = [Windows.Media.Brushes]::LightGreen
         $extra = if ($mapsKey) { ' + chave do Google Maps' } else { '' }
         $msg.Text = "Ambiente salvo neste computador ($srv`:$porta$extra)."

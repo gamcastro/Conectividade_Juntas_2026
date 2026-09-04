@@ -1818,6 +1818,17 @@
                                          FontFamily="Consolas" VerticalContentAlignment="Center"/>
                             </Grid>
 
+                            <TextBlock Text="Sem&#225;foro do assistente de diagn&#243;stico" Style="{DynamicResource Rotulo}"
+                                       Margin="0,14,0,4"/>
+                            <TextBlock Text="Quais dos 3 itens aparecem no sem&#225;foro do overlay de checagem (so' informa se rodou, nao a qualidade do resultado)."
+                                       FontSize="11" Foreground="{DynamicResource Dicon.Text3}" TextWrapping="Wrap"
+                                       Margin="0,0,0,6"/>
+                            <StackPanel Orientation="Horizontal">
+                                <CheckBox x:Name="chkOverlayRedeLocal" Content="Rede local (sem VPN)" IsChecked="True" Margin="0,0,20,0"/>
+                                <CheckBox x:Name="chkOverlayVpn" Content="Diagn&#243;stico com a VPN" IsChecked="True" Margin="0,0,20,0"/>
+                                <CheckBox x:Name="chkOverlayTotalizacao" Content="Sistema de totaliza&#231;&#227;o" IsChecked="True"/>
+                            </StackPanel>
+
                             <TextBlock Text="Chave da API do Google Maps (Static)" Style="{DynamicResource Rotulo}"
                                        Margin="0,14,0,4"/>
                             <TextBlock Text="Restrita s&#243; &#224; Maps Static API. Usada no anexo do formul&#225;rio GEL para gerar a imagem do mapa no relat&#243;rio. Vazio = s&#243; o link, sem imagem."
@@ -1900,19 +1911,19 @@
                                    FontSize="11" Foreground="{DynamicResource Dicon.Text3}" Margin="0,2,0,12"/>
 
                         <StackPanel Margin="0,0,0,12">
-                            <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                            <StackPanel x:Name="rowChkS1" Orientation="Horizontal" Margin="0,2,0,0">
                                 <Ellipse x:Name="dotChkS1" Width="10" Height="10" VerticalAlignment="Center"
                                          Margin="0,0,8,0" Fill="{DynamicResource Dicon.Text3}"/>
                                 <TextBlock x:Name="txtChkS1" FontSize="12" Foreground="{DynamicResource Dicon.Text2}"
                                            Text="1. Rede local (sem VPN) - pendente"/>
                             </StackPanel>
-                            <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                            <StackPanel x:Name="rowChkS2" Orientation="Horizontal" Margin="0,4,0,0">
                                 <Ellipse x:Name="dotChkS2" Width="10" Height="10" VerticalAlignment="Center"
                                          Margin="0,0,8,0" Fill="{DynamicResource Dicon.Text3}"/>
                                 <TextBlock x:Name="txtChkS2" FontSize="12" Foreground="{DynamicResource Dicon.Text2}"
                                            Text="2. Diagnostico com a VPN - pendente"/>
                             </StackPanel>
-                            <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                            <StackPanel x:Name="rowChkS3" Orientation="Horizontal" Margin="0,4,0,0">
                                 <Ellipse x:Name="dotChkS3" Width="10" Height="10" VerticalAlignment="Center"
                                          Margin="0,0,8,0" Fill="{DynamicResource Dicon.Text3}"/>
                                 <TextBlock x:Name="txtChkS3" FontSize="12" Foreground="{DynamicResource Dicon.Text3}"

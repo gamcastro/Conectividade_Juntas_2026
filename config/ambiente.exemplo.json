@@ -16,6 +16,12 @@
     "navegadores": ["firefox", "chrome"],
     "timeout_s": 60
   },
+  "overlay_passos": {
+    "_nota": "Quais dos 3 itens do semaforo do overlay de checagem aparecem (so' visibilidade -- nao desliga a medicao em si). Configuravel pela tela de Administracao (card 'Ambiente de teste').",
+    "rede_local": true,
+    "vpn": true,
+    "totalizacao": true
+  },
   "google_maps": {
     "_nota": "chave da Maps Static API (Google Cloud), restrita SO a essa API. Usada no anexo do GEL para gerar a imagem do mapa no relatorio. Preencher pela tela de Administracao.",
     "static_key": ""

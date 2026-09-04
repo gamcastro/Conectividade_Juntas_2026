@@ -30,7 +30,11 @@ Script), em vez de criar um BI/dashboard separado.
   licenças em `bin/iperf3/LICENSES.md`; `Atualizar-DICON.ps1` espelha essa pasta)
   — banda real pela VPN contra servidor iperf3 num Ubuntu no CPD (endereço/porta/duração
   editáveis na tela de **Administração** → `Save-ConfigAmbiente` grava o bloco
-  `iperf3` em `config/ambiente.json` local, PIN do admin). `Test-BandaVpn`
+  `iperf3` em `config/ambiente.json` local, PIN do admin — o mesmo card também
+  tem 3 checkboxes pra escolher quais dos 3 itens do semáforo do overlay
+  aparecem (`overlay_passos.rede_local/vpn/totalizacao`, `Get-OverlayPassosVisiveis`
+  aplicado em `Reset-OverlayCheck`; só visibilidade, não desliga a medição).
+  `Test-BandaVpn`
   (`src/testes/Test-Banda.ps1`) roda download (`-R`) e upload (`-f m`), lê a
   saída linha a linha e transmite cada intervalo (`Write-EventoIperf` →
   `Update-IperfGauge`) para um **velocímetro** no passo 4, igual ao do Speedtest.
@@ -298,7 +302,10 @@ mostra IP da VPN/interface/DNS em verde e o estado vira `f2-vpn-ok` com o botão
 `Set-DiagnosticoVpnImpossivel`, meio inviável → **Fase 3** (Selenium, "em
 implementação"). `Complete-CheckMeio` → `Add-MedicaoAtual`; `Close-OverlayCheck`
 (`btnChkFechar`) fecha. O corpo tem um stepper de 3 linhas
-(`txtChkS1/S2/S3`+`dotChkS1/S2/S3`) e **3 colunas** — Origem (Servidor/IP,
+(`txtChkS1/S2/S3`+`dotChkS1/S2/S3`, linhas `rowChkS1/S2/S3`) — **só informa se
+a etapa rodou** (verde/"testado"; vermelho só numa falha técnica real de
+execução, não por qualidade do resultado — isso fica pro painel/relatório) —
+e **3 colunas** — Origem (Servidor/IP,
 `grpF1Conn`/`grpF2Conn`) · Medição (velocímetro, `Set-ChkFaseView` alterna
 Fase 1 ↔ Fase 2) · Resultado — e abaixo o log (`lstLog`) em coluna única. Ao
 concluir, o card fica **verde/amarelo/vermelho**

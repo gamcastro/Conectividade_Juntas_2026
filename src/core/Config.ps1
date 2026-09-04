@@ -47,7 +47,12 @@ function Save-ConfigAmbiente {
         [Parameter(Mandatory)] [string] $Servidor,
         [int] $Porta   = 5201,
         [int] $Duracao = 10,
-        [string] $MapsKey                 # chave da Maps Static API (opcional)
+        [string] $MapsKey,                 # chave da Maps Static API (opcional)
+        # Quais dos 3 itens do semaforo do overlay de checagem aparecem (so'
+        # visibilidade -- nao desliga a medicao em si, ver Reset-OverlayCheck).
+        [bool] $OverlayRedeLocal  = $true,
+        [bool] $OverlayVpn        = $true,
+        [bool] $OverlayTotalizacao = $true
     )
     $dir  = Join-Path $Global:RaizApp 'config'
     $alvo = Join-Path $dir 'ambiente.json'
@@ -69,6 +74,14 @@ function Save-ConfigAmbiente {
         if ($base.PSObject.Properties['google_maps']) { $base.google_maps = $gm }
         else { $base | Add-Member -NotePropertyName google_maps -NotePropertyValue $gm -Force }
     }
+
+    $novoOverlay = [pscustomobject]@{
+        rede_local  = [bool] $OverlayRedeLocal
+        vpn         = [bool] $OverlayVpn
+        totalizacao = [bool] $OverlayTotalizacao
+    }
+    if ($base.PSObject.Properties['overlay_passos']) { $base.overlay_passos = $novoOverlay }
+    else { $base | Add-Member -NotePropertyName overlay_passos -NotePropertyValue $novoOverlay -Force }
 
     # nao persiste google_oauth em ambiente.json: e camada do exemplo/pacote (a
     # credencial vem de la). Se veio do fallback Get-Config, tira antes de gravar.
