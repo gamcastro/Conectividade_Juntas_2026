@@ -253,6 +253,13 @@ try {
     if (-not $selL) { Write-Host "[4] FALHA: local nao pre-selecionado"; $falhas++ }
     else { Write-Host "[4] Assistente passo 1, local pre-selecionado: $($selL.Rotulo)" }
 
+    # 4a-2. rail travado enquanto o assistente esta aberto (nao pode navegar pra
+    # fora sem querer e perder o fio do diagnostico)
+    $railPreso = -not $w.FindName('navLocais').IsEnabled -and -not $w.FindName('navDiag').IsEnabled -and
+                 -not $w.FindName('navAjuda').IsEnabled -and -not $w.FindName('btnTrocarUsuario').IsEnabled
+    if ($railPreso -and $Global:RailTravadoDiag) { Write-Host "[4a] rail travado ao entrar no assistente" }
+    else { Write-Host "    FALHA: rail nao travou ao abrir o assistente (RailTravadoDiag=$Global:RailTravadoDiag)"; $falhas++ }
+
     # 4b. passo 1 -> 2: cartao de detalhe do local aparece com os campos extras
     Invoke-WizardProximo
     if ($Global:WizardStep -ne 2) { Write-Host "[4b] FALHA: nao foi para o passo 2"; $falhas++ }
@@ -676,6 +683,10 @@ try {
     Invoke-FinalizarDiagnostico
     if ("$($w.FindName('viewHome').Visibility)" -eq 'Visible') { Write-Host "[5d] 'Finalizar' -> volta para a tela inicial" }
     else { Write-Host "    FALHA: 'Finalizar' nao voltou para a home (viewHome=$($w.FindName('viewHome').Visibility))"; $falhas++ }
+    # 5d-4. 'Finalizar' tambem destrava o rail (saiu do assistente)
+    if ($w.FindName('navLocais').IsEnabled -and $w.FindName('btnTrocarUsuario').IsEnabled -and -not $Global:RailTravadoDiag) {
+        Write-Host "[5d] rail destravado depois de 'Finalizar'"
+    } else { Write-Host "    FALHA: rail continuou travado apos 'Finalizar' (RailTravadoDiag=$Global:RailTravadoDiag)"; $falhas++ }
     Show-WizardPasso 6   # volta ao passo 6 (conclusao) para os proximos testes seguirem
 
     # 5e. acompanhamento: guia marca o local como testado; home mostra progresso

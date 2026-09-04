@@ -29,6 +29,7 @@ $Global:MeioSelecionado    = ''      # card do passo 3 selecionado p/ testar: ''
 $Global:CheckMeioAtivo     = $false  # overlay de checagem de um meio esta aberto/rodando
 $Global:ChkFase            = ''      # estado do overlay: ''|f1-pronto|f1-rodando|f2-pronto|f2-rodando|fim
 $Global:NaMeioPendente     = ''      # meio com "nao se aplica" marcado, aguardando a justificativa
+$Global:RailTravadoDiag    = $false  # assistente de diagnostico aberto: rail preso (so libera ao Finalizar/Sair)
 
 # --- multi-meio: o local pode ter varias medicoes, uma por meio de conexao ---
 $Global:Medicoes           = @()     # medicoes ja concluidas/marcadas neste local
@@ -353,7 +354,7 @@ function New-JanelaPrincipal {
     $window.FindName('btnNaCancelar').Add_Click({ Invoke-NaCancelar })
     $window.FindName('btnExportarPdf').Add_Click({ Invoke-ExportarRelatorio })
     $window.FindName('btnTransmitirResultado').Add_Click({ Invoke-TransmitirResultado })
-    $window.FindName('btnDiagVoltar').Add_Click({ Show-View 'viewHome' })
+    $window.FindName('btnDiagVoltar').Add_Click({ Invoke-SairAssistente })
     $window.FindName('btnSalvarResultado').Add_Click({ Invoke-SalvarResultado })
     $window.FindName('btnFinalizarDiag').Add_Click({ Invoke-FinalizarDiagnostico })
     $window.FindName('cboDecisaoFinal').Add_SelectionChanged({
@@ -484,6 +485,9 @@ function Show-View {
         $w.FindName($v).Visibility = if ($v -eq $Nome) { 'Visible' } else { 'Collapsed' }
     }
     $w.FindName('railNav').Visibility = if ($Nome -eq 'viewLogin') { 'Collapsed' } else { 'Visible' }
+
+    # assistente de diagnostico aberto -> trava o rail (ver Set-RailTravadoNoDiag)
+    Set-RailTravadoNoDiag ($Nome -eq 'viewDiag')
 
     # sincroniza o item ativo do rail sem disparar os handlers de navegacao
     $map = @{ viewGuia = 'navGuia'; viewLocais = 'navLocais'; viewLocalDetalhe = 'navLocais'; viewDiag = 'navDiag'; viewAdmin = 'navAdmin' }
@@ -766,6 +770,10 @@ function Enter-Home {
 }
 
 # Trava/destrava a tela inicial e mostra o spinner enquanto um trabalho roda.
+# O rail so' pode ficar habilitado se NEM estiver ocupado NEM o assistente de
+# diagnostico estiver travando-o (Set-RailTravadoNoDiag) -- os runspaces do
+# passo 3 (Fase 1/releitura de placa) tambem passam por aqui, entao sem esse
+# "E" o fim de uma dessas tarefas destravaria o rail no meio do assistente.
 function Set-HomeOcupado {
     param([bool] $Ocupado, [string] $Rotulo = 'Processando...')
     $w = $Global:JanelaPrincipal
@@ -773,10 +781,51 @@ function Set-HomeOcupado {
     $w.FindName('painelAtualizando').Visibility = if ($Ocupado) { 'Visible' } else { 'Collapsed' }
     $ring = $w.FindName('ringHome'); if ($ring) { $ring.IsActive = $Ocupado }
     if ($Ocupado) { $w.FindName('txtAtualizandoMsg').Text = $Rotulo }
+    $habilita = (-not $Ocupado) -and (-not $Global:RailTravadoDiag)
     foreach ($n in 'btnMenuGuia', 'btnMenuDiag', 'btnMenuAdmin', 'btnMenuAtualizar',
         'btnReenviarPendentes', 'btnTrocarUsuario', 'navGuia', 'navLocais', 'navDiag', 'navAdmin', 'navAtualizar', 'navAjuda') {
-        $c = $w.FindName($n); if ($c) { $c.IsEnabled = -not $Ocupado }
+        $c = $w.FindName($n); if ($c) { $c.IsEnabled = $habilita }
     }
+}
+
+# Trava (ou destrava) o rail de navegacao + "Trocar usuario" + "Atualizar app"
+# enquanto o assistente de diagnostico esta aberto -- clicar em Locais/Guia de
+# bordo/Ajuda/Atualizar dados no meio de um diagnostico interrompia o fio
+# (mesma familia de problema do v0.6.82: navegar pra fora do assistente sem
+# querer). So libera de novo ao Finalizar o diagnostico ou confirmar "Sair do
+# assistente" -- ver Show-View (chama isto pra 'viewDiag' vs. qualquer outra
+# view) e btnDiagVoltar/Invoke-FinalizarDiagnostico.
+function Set-RailTravadoNoDiag {
+    param([bool] $Travado)
+    $Global:RailTravadoDiag = $Travado
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    foreach ($n in 'navGuia', 'navLocais', 'navDiag', 'navAdmin', 'navAtualizar', 'navAjuda', 'btnTrocarUsuario', 'btnAtualizarApp') {
+        $c = $w.FindName($n); if ($c) { $c.IsEnabled = -not $Travado }
+    }
+}
+
+# Botao "Sair do assistente" (rodape do assistente, todos os passos): confirma
+# antes de sair, pra nao perder o fio de um diagnostico em andamento por um
+# clique sem querer -- o rail so' destrava de novo depois desse Show-View (ver
+# Set-RailTravadoNoDiag, chamado por Show-View a cada troca de tela).
+function Invoke-SairAssistente {
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    $qtd = @($Global:Medicoes).Count
+    $msg = if ($qtd) {
+        "Ha $qtd medicao(oes) deste Local ainda nao salva(s)/transmitida(s)." +
+        [Environment]::NewLine + [Environment]::NewLine +
+        'Sair do assistente agora? Voce volta para a tela inicial.'
+    } else {
+        'Sair do assistente de diagnostico e voltar para a tela inicial?'
+    }
+    if (-not $Global:ModoTeste) {
+        $r = [System.Windows.MessageBox]::Show($w, $msg, 'Sair do assistente?',
+            [System.Windows.MessageBoxButton]::YesNo, [System.Windows.MessageBoxImage]::Question)
+        if ($r -ne [System.Windows.MessageBoxResult]::Yes) { return }
+    }
+    Show-View 'viewHome'
 }
 
 # Roda -Trabalho num runspace (janela responde + spinner) e chama -AoConcluir
