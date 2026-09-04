@@ -2777,14 +2777,18 @@ function Set-ChkStep {
     if (-not $w) { return }
     $dot = $w.FindName("dotChkS$N"); $lbl = $w.FindName("txtChkS$N")
     if (-not $dot) { return }
+    # O semaforo so informa se a etapa FOI EXECUTADA (verde) -- a qualidade do
+    # resultado (viavel/ressalva/inviavel) fica pro painel/relatorio, nao pro
+    # semaforo rapido do overlay (por isso nao ha mais um estado de "qualidade
+    # baixa" aqui: 'ok' e' testado, ponto).
     $cor = switch ($Estado) {
         'rodando' { '#E8B93E' } 'ok' { '#4FC177' }
-        'erro'    { '#E8695C' } 'semvpn' { '#E8695C' } 'inviavel' { '#E8695C' }
+        'erro'    { '#E8695C' } 'semvpn' { '#E8695C' }
         default   { '#7D8698' }
     }
     $palavra = switch ($Estado) {
-        'rodando' { 'rodando...' } 'ok' { 'ok' } 'erro' { 'erro' }
-        'semvpn'  { 'sem VPN' }    'inviavel' { 'qualidade baixa' }
+        'rodando' { 'rodando...' } 'ok' { 'testado' } 'erro' { 'erro' }
+        'semvpn'  { 'sem VPN' }
         default   { 'pendente' }
     }
     $b = [Windows.Media.SolidColorBrush]::new([Windows.Media.ColorConverter]::ConvertFromString($cor)); $b.Freeze()
@@ -2960,7 +2964,6 @@ function Complete-CheckFase1 {
             Update-SpeedtestPainel -It $it
             $w.FindName('txtChkResultadoVazio').Visibility = 'Collapsed'
             Write-Log 'Fase 1 concluida.' -Nivel Ok
-            Set-ChkStep 1 'ok'
         } else {
             $te = $w.FindName('txtSpeedErro')
             $diag = if ($it -and $it.PSObject.Properties['speedtest_diagnostico']) { [string] $it.speedtest_diagnostico } else { '' }
@@ -2969,8 +2972,10 @@ function Complete-CheckFase1 {
                        else { 'sem resultado de velocidade' }
             $te.Visibility = 'Visible'
             Write-Log ("Fase 1 sem velocidade: {0}" -f $te.Text) -Nivel Aviso
-            Set-ChkStep 1 'erro'
         }
+        # O semaforo so' informa se a etapa rodou (a runspace nao lancou erro) --
+        # nao a qualidade da medida (isso fica pro painel de resultado/relatorio).
+        Set-ChkStep 1 'ok'
     }
     $Global:ChkFase = 'f2-pronto'
     Set-ChkBotao
@@ -3067,11 +3072,10 @@ function Complete-CheckFase2 {
         if ($Payload -and $Payload.PSObject.Properties['Iperf'] -and $Payload.Iperf) { Update-IperfPainel -Iperf $Payload.Iperf }
         $w.FindName('txtChkResultadoVazio').Visibility = 'Collapsed'
         Write-Log 'Fase 2 concluida.' -Nivel Ok
-        # 'inviavel' = diagnostico rodou normalmente, so a qualidade medida ficou
-        # abaixo do limiar (nao e' falha tecnica -- por isso NAO usa o estado
-        # 'erro', que confundia o tecnico de campo com um problema de execucao).
-        $ver = if ($Payload -and $Payload.Decisao) { [string] $Payload.Decisao.Classificacao } else { 'inviavel' }
-        Set-ChkStep 2 $(if ($ver -eq 'inviavel') { 'inviavel' } else { 'ok' }) '' $(if (Test-RedeJeDireta) { '2. Rede interna (JE)' } else { '' })
+        # O semaforo so' informa se a etapa rodou -- a qualidade (viavel/
+        # ressalva/inviavel) fica pro painel de resultado/relatorio, nao pro
+        # semaforo rapido do overlay.
+        Set-ChkStep 2 'ok' '' $(if (Test-RedeJeDireta) { '2. Rede interna (JE)' } else { '' })
     }
     Complete-CheckMeio
 }

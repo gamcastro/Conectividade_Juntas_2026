@@ -461,6 +461,16 @@ try {
     if ($medCel -and "$($w.FindName('btnChkFechar').Content)" -eq 'Concluir') {
         Write-Host "[4d] checagem do meio concluida -> medicao 'celular' registrada (veredito $($medCel.veredito))"
     } else { Write-Host "    FALHA: checagem do meio nao concluiu (btn='$($w.FindName('btnChkFechar').Content)' med=$([bool]$medCel))"; $falhas++ }
+
+    # 4d-2. semaforo do overlay so' informa se rodou (verde), nao a qualidade --
+    # mesmo com veredito 'inviavel' (limiar de celular e' apertado, este cenario
+    # simulado reprova), os passos 1 e 2 ficam verdes/"testado".
+    $cor1 = "$($w.FindName('dotChkS1').Fill.Color)"; $cor2 = "$($w.FindName('dotChkS2').Fill.Color)"
+    $txt1 = "$($w.FindName('txtChkS1').Text)"; $txt2 = "$($w.FindName('txtChkS2').Text)"
+    if ($cor1 -match '4FC177' -and $cor2 -match '4FC177' -and $txt1 -match 'testado' -and $txt2 -match 'testado') {
+        Write-Host "[4d] semaforo (1 e 2) fica verde/'testado' mesmo com veredito '$($medCel.veredito)' -- so informa que rodou"
+    } else { Write-Host "    FALHA: semaforo nao ficou verde/testado (cor1=$cor1 cor2=$cor2 txt1='$txt1' txt2='$txt2' veredito=$($medCel.veredito))"; $falhas++ }
+
     Close-OverlayCheck
     Invoke-Pump
     if ("$($w.FindName('overlayCheck').Visibility)" -eq 'Collapsed' -and -not $Global:CheckMeioAtivo) {
