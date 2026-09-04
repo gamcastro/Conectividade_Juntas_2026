@@ -292,7 +292,7 @@ function Get-PainelMedicoesHtml {
 
     $sugTxt = if ($rec -and $rec.meio -ne 'nenhuma' -and $rec.rotulo) {
         $dl = if ($null -ne (Get-Prop $rec 'download_mbps')) { (' &mdash; maior download {0:N1} Mbps{1}' -f [double] $rec.download_mbps, $(if ($rec.base -eq 'vpn') { ' pela VPN' } else { ' na rede local' })) } else { '' }
-        (ConvertTo-HtmlSafe ([string] $rec.rotulo)) + $dl + ' <span class="small">(informativo &mdash; sem avalia&ccedil;&atilde;o de viabilidade)</span>'
+        (ConvertTo-HtmlSafe ([string] $rec.rotulo)) + $dl
     } else { '&mdash;' }
 
     $resumoRows = @(
