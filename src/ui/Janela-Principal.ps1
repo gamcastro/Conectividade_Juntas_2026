@@ -390,6 +390,7 @@ function New-JanelaPrincipal {
     $window.FindName('navDiag').Add_Checked({ if (-not $Global:NavegandoPrograma) { Open-DiagnosticoLimpo } })
     $window.FindName('navAdmin').Add_Checked({ if (-not $Global:NavegandoPrograma) { Show-Admin } })
     $window.FindName('navAtualizar').Add_Checked({ if (-not $Global:NavegandoPrograma) { Invoke-AtualizarDados } })
+    $window.FindName('navAjuda').Add_Checked({ if (-not $Global:NavegandoPrograma) { Invoke-AbrirAjuda } })
 
     # locais de vistoria
     $window.FindName('btnLocaisVoltar').Add_Click({ Show-View 'viewHome' })
@@ -487,11 +488,20 @@ function Show-View {
     # sincroniza o item ativo do rail sem disparar os handlers de navegacao
     $map = @{ viewGuia = 'navGuia'; viewLocais = 'navLocais'; viewLocalDetalhe = 'navLocais'; viewDiag = 'navDiag'; viewAdmin = 'navAdmin' }
     $Global:NavegandoPrograma = $true
-    foreach ($nn in 'navGuia', 'navLocais', 'navDiag', 'navAdmin', 'navAtualizar') {
+    foreach ($nn in 'navGuia', 'navLocais', 'navDiag', 'navAdmin', 'navAtualizar', 'navAjuda') {
         $rb = $w.FindName($nn)
         if ($rb) { $rb.IsChecked = ($map[$Nome] -eq $nn) }
     }
     $Global:NavegandoPrograma = $false
+}
+
+# Abre o Guia de Campo (passo a passo de instalar/usar o DICON) no navegador.
+# So um link -- nao tem view propria, por isso "Ajuda" nao entra no $map do
+# Show-View (fica sem view "ativa" associada, só o radio marcado ate o proximo
+# clique no rail).
+function Invoke-AbrirAjuda {
+    $url = 'https://claude.ai/code/artifact/22dfe003-67af-46fd-a427-ee5a3d3ad7c8'
+    try { Start-Process $url } catch { Write-Log "Nao consegui abrir o Guia de Campo: $_" -Nivel Erro }
 }
 
 # Recolhe (so icones, ~56px) ou expande (214px) o menu lateral.
@@ -502,7 +512,7 @@ function Set-RailRecolhido {
     $w.FindName('railNav').Width = if ($On) { 56 } else { 214 }
     $vis = if ($On) { 'Collapsed' } else { 'Visible' }
     foreach ($n in 'railCabTexto', 'lblNavSecao', 'railRodape',
-        'lblNavGuia', 'lblNavLocais', 'lblNavDiag', 'lblNavAdmin', 'lblNavAtualizar') {
+        'lblNavGuia', 'lblNavLocais', 'lblNavDiag', 'lblNavAdmin', 'lblNavAtualizar', 'lblNavAjuda') {
         $c = $w.FindName($n); if ($c) { $c.Visibility = $vis }
     }
     $t = $w.FindName('txtRailToggle')
@@ -756,7 +766,7 @@ function Set-HomeOcupado {
     $ring = $w.FindName('ringHome'); if ($ring) { $ring.IsActive = $Ocupado }
     if ($Ocupado) { $w.FindName('txtAtualizandoMsg').Text = $Rotulo }
     foreach ($n in 'btnMenuGuia', 'btnMenuDiag', 'btnMenuAdmin', 'btnMenuAtualizar',
-        'btnReenviarPendentes', 'btnTrocarUsuario', 'navGuia', 'navLocais', 'navDiag', 'navAdmin', 'navAtualizar') {
+        'btnReenviarPendentes', 'btnTrocarUsuario', 'navGuia', 'navLocais', 'navDiag', 'navAdmin', 'navAtualizar', 'navAjuda') {
         $c = $w.FindName($n); if ($c) { $c.IsEnabled = -not $Ocupado }
     }
 }
