@@ -115,8 +115,13 @@ Script), em vez de criar um BI/dashboard separado.
   `%LOCALAPPDATA%\...`. `setup/Preparar-Maquina.ps1` (admin) só é preciso se a
   raiz do C: estiver travada ou for máquina multiusuário. O setup grava
   `config/canal` (gitignored); `Atualizar-DICON.ps1` puxa desse canal sem
-  parâmetro. `$CanalPadrao`/`$EndpointPadrao` no `Baixar-e-Instalar.ps1` são de
-  `homologacao` nesta branch e viram os de `main` no merge para `main`.
+  parâmetro. `$CanalPadrao`/`$DeploymentIdPadrao` no `Baixar-e-Instalar.ps1` são
+  de `homologacao` nesta branch e viram os de `main` no merge para `main`.
+  `setup/Desinstalar-DICON.ps1` (v0.6.75+, também roda via `iex`) remove a
+  instalação + atalho; **nunca apaga** se houver `resultados\pendentes\*.json`
+  (diagnóstico de campo ainda não transmitido) a menos que `$env:DICON_FORCAR`
+  — e mesmo assim faz uma cópia de segurança antes. Uso típico pra "trocar de
+  versão do zero": rodar o desinstalador e depois o `Baixar-e-Instalar.ps1`.
   `Get-CanalInstalacao` (`src/core/Juntas.ps1`) lê `config/canal`; em
   `homologacao` a GUI mostra selos âmbar (`badgeHomologLogin` no login,
   `badgeHomologRail` no rail) e põe o sufixo `- HOMOLOGACAO` no título da janela.
