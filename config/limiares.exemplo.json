@@ -13,7 +13,7 @@
       "sem_vpn": {
         "latencia_ms":         { "viavel_ate": 20,  "ressalva_ate": 80, "ativo": true },
         "jitter_ms":           { "viavel_ate": 10,  "ressalva_ate": 40, "ativo": true },
-        "perda_percentual":    { "viavel_ate": 0.5, "ressalva_ate": 2,  "ativo": true },
+        "perda_percentual":    { "viavel_ate": 0.5, "ressalva_ate": 2,  "ativo": false },
         "banda_download_mbps": { "viavel_min": 25,  "ressalva_min": 5,  "ativo": true },
         "banda_upload_mbps":   { "viavel_min": 5,   "ressalva_min": 1,  "ativo": true }
       },
@@ -30,7 +30,7 @@
       "sem_vpn": {
         "latencia_ms":         { "viavel_ate": 40, "ressalva_ate": 100, "ativo": true },
         "jitter_ms":           { "viavel_ate": 10, "ressalva_ate": 25,  "ativo": true },
-        "perda_percentual":    { "viavel_ate": 1,  "ressalva_ate": 2,   "ativo": true },
+        "perda_percentual":    { "viavel_ate": 1,  "ressalva_ate": 2,   "ativo": false },
         "banda_download_mbps": { "viavel_min": 15, "ressalva_min": 7,   "ativo": true },
         "banda_upload_mbps":   { "viavel_min": 5,  "ressalva_min": 1.5, "ativo": true }
       },
@@ -54,7 +54,7 @@
       },
       "ativos": {
         "sem_vpn": {
-          "latencia_ms": true, "jitter_ms": true, "perda_percentual": true,
+          "latencia_ms": true, "jitter_ms": true, "perda_percentual": false,
           "banda_download_mbps": true, "banda_upload_mbps": true
         },
         "com_vpn": {
