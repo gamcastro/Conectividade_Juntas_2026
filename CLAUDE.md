@@ -272,7 +272,13 @@ que o meio tinha no teste; só "Refazer checagem" renova.
 testados**); o ↻ do topo (`btnRelerPlacas`) relê tudo, sem tocar nos snapshots. Se o IP da placa LAN
 começa com **10.11.** ou **10.198.** (`Test-RedeJusticaEleitoral`), o card LAN
 mostra o selo verde **"REDE DA JUSTIÇA ELEITORAL"** (`cardLocJE`; também no JSON
-`rede_local.lan_rede_je` e no PDF). Wi-Fi só pela bandeja do Windows
+`rede_local.lan_rede_je` e no PDF). Nesse caso, na checagem da **LAN** (v0.6.77+)
+a Fase 2 **não espera o FortiClient** (`Test-RedeJeDireta` — só vale pro meio
+LAN, checa a placa já congelada de `$Global:FaseLocalPayload.Lan`): o local já
+está na rede interna da JE por link direto, então `Start-CheckFase2`/
+`Start-DiagnosticoVpn`/`Update-EstadoVpn` liberam "Iniciar diagnóstico" direto
+(mesmo estado `f2-vpn-ok`, texto "rede interna da JE" em vez de "VPN conectada")
+e o iperf3/totalização são alcançados pela própria LAN. Wi-Fi só pela bandeja do Windows
 (`cardWifiBandeja` explica). Clicar em "Rodar checagem" de um card →
 **`Invoke-CheckMeio <meio>`** abre o **overlay modal `overlayCheck`**
 (`$Global:CheckMeioAtivo`, uma checagem por vez) — **não roda sozinho**: o

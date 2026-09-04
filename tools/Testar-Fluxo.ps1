@@ -522,11 +522,13 @@ try {
     $nLinhas = @($Global:AvaliacaoRows).Count
     $decIni  = [string] $w.FindName('cboDecisaoFinal').SelectedItem
     Write-Host "[5] passo 4: $nVpn linha(s) VPN + $nRl rede local = $nLinhas, decisao '$decIni'"
-    # 6 linhas da Fase 2 (VPN) + 5 da Fase 1 (rede local, Speedtest ok no fixture)
-    if ($nVpn -ne 6 -or $nRl -ne 5 -or $nLinhas -ne 11) { Write-Host "    FALHA: cards do passo 4 (vpn=$nVpn rede_local=$nRl total=$nLinhas)"; $falhas++ }
+    # 6 linhas da Fase 2 (VPN) + 4 da Fase 1 (rede local, Speedtest ok no fixture;
+    # perda_percentual desativada no SEM VPN -- v0.6.79, sonda de perda nao
+    # suportada pelos servidores Ookla da regiao)
+    if ($nVpn -ne 6 -or $nRl -ne 4 -or $nLinhas -ne 10) { Write-Host "    FALHA: cards do passo 4 (vpn=$nVpn rede_local=$nRl total=$nLinhas)"; $falhas++ }
     $rlRows = @($Global:AvaliacaoRows | Where-Object { $_.Fase -eq 'Rede local' })
     $rlDown = $rlRows | Where-Object { $_.Rotulo -eq 'Download' } | Select-Object -First 1
-    if ($rlRows.Count -eq 5 -and $rlDown -and "$($rlDown.ValorTexto)" -match '855') {
+    if ($rlRows.Count -eq 4 -and $rlDown -and "$($rlDown.ValorTexto)" -match '855') {
         Write-Host "[5] card da rede local (Fase 1): $($rlRows.Count) linhas, Download=$($rlDown.ValorTexto)"
     } else { Write-Host "    FALHA: linhas da rede local no passo 4 (n=$($rlRows.Count) down='$($rlDown.ValorTexto)')"; $falhas++ }
     if ("$($w.FindName('cardAvaliacaoRl').Visibility)" -eq 'Visible' -and "$($w.FindName('txtRedeLocalNota').Visibility)" -eq 'Visible') {
@@ -567,7 +569,7 @@ try {
     $novoSel   = if ($selInicial -eq 0) { 1 } else { 0 }
     $w.FindName('tabsMedicoes').SelectedIndex = $novoSel
     Invoke-Pump
-    if ($Global:MedicaoPasso5Idx -ne $idxAntes -and @($Global:AvaliacaoRows).Count -eq 11) {
+    if ($Global:MedicaoPasso5Idx -ne $idxAntes -and @($Global:AvaliacaoRows).Count -eq 10) {
         Write-Host "[5b] troca de medicao re-renderiza o grid (idx $idxAntes -> $($Global:MedicaoPasso5Idx))"
     } else { Write-Host "    FALHA: troca de medicao no passo 4 (idx=$($Global:MedicaoPasso5Idx) linhas=$(@($Global:AvaliacaoRows).Count))"; $falhas++ }
     $lnLan = @($Global:AvaliacaoRows) | Where-Object { $_.Rotulo -eq 'Latencia' } | Select-Object -First 1
