@@ -9,6 +9,8 @@ $ordem = @(
     'core\Elevacao.ps1'
     'core\Processos.ps1'
     'core\Ambiente.ps1'
+    'core\AuthGoogle.ps1'
+    'core\AppsScriptApi.ps1'
     'core\RedeLocal.ps1'
     'core\VistoriaGel.ps1'
     'core\Juntas.ps1'
@@ -36,6 +38,6 @@ foreach ($rel in $ordem) {
 
 # Versao do DICON. Fonte unica: barra lateral + login da GUI, JSON de resultado
 # e relatorio PDF. Manter em sincronia com ModuleVersion em Conectividade.psd1.
-$Global:VersaoApp = '0.7.5'
+$Global:VersaoApp = '0.7.6'
 
 Export-ModuleMember -Function '*-*'

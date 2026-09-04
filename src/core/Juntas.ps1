@@ -37,25 +37,6 @@ function Get-PastaDados {
     return $p
 }
 
-# GET generico ao Web App: ?recurso=<nome>. Devolve o objeto ja convertido.
-function Invoke-RecursoWebApp {
-    param(
-        [Parameter(Mandatory)] [string] $Recurso,
-        [int] $TimeoutS = 45
-    )
-    $cfg = Get-Config 'juntas'
-    $endpoint = $cfg.endpoint
-    if ([string]::IsNullOrWhiteSpace($endpoint) -or $endpoint -like '*COLOQUE_O_ID*') {
-        throw "Endpoint do Web App nao configurado (config/juntas.json > endpoint)."
-    }
-    $sep = if ($endpoint -match '\?') { '&' } else { '?' }
-    $uri = "{0}{1}recurso={2}" -f $endpoint, $sep, $Recurso
-
-    $resp = Invoke-RestMethod -Method Get -Uri $uri -TimeoutSec $TimeoutS
-    if ($resp.erro) { throw "Web App retornou erro ($Recurso): $($resp.erro)" }
-    return $resp
-}
-
 function Read-CacheJson {
     param([string] $Nome, [string] $Campo)
     $arq = Join-Path (Get-PastaDados) $Nome
@@ -93,7 +74,7 @@ function Write-CacheJson {
 
 function Sync-Juntas {
     Write-Log 'Baixando lista de Juntas...' -Nivel Info
-    $resp = Invoke-RecursoWebApp -Recurso 'juntas'
+    $resp = Invoke-FuncaoAppsScript -Acao 'juntas'
     $locais = @($resp.juntas)
     if (-not $locais.Count) { throw "Resposta de 'juntas' vazia." }
     Write-CacheJson -Nome 'juntas.json' -Campo 'juntas' -Itens $locais -Origem 'recurso=juntas'

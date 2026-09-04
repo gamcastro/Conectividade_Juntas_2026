@@ -7,10 +7,10 @@
 
 .EXAMPLE
     .\setup\Instalar-DICON.ps1
-        Modo interativo (pergunta endpoint, PIN e servidor iperf3).
+        Modo interativo (pergunta deploymentId do Apps Script, PIN e servidor iperf3).
 
 .EXAMPLE
-    .\setup\Instalar-DICON.ps1 -Endpoint "https://script.google.com/macros/s/XXX/exec" -Pin 1234 -IperfServidor 10.11.9.20
+    .\setup\Instalar-DICON.ps1 -DeploymentId "AKfycbxHMpUwQuDH1SwRiLersK1Qbk3x90Xpu76zxnPl12Upthotd3UiaTd_eOPQ01FF2PBk" -Pin 1234 -IperfServidor 10.11.9.20
 
 .EXAMPLE
     .\setup\Instalar-DICON.ps1 -SoConfig
@@ -22,7 +22,7 @@
 #>
 [CmdletBinding()]
 param(
-    [string] $Endpoint,
+    [string] $DeploymentId,
     [string] $Pin,
     [string] $IperfServidor,
     [string] $DepsZip,
@@ -98,22 +98,24 @@ function Set-JsonCampo {
     $partes = $Caminho -split '\.'
     $alvo = $doc
     for ($i = 0; $i -lt $partes.Count - 1; $i++) { $alvo = $alvo.$($partes[$i]) }
-    $alvo.$($partes[-1]) = $Valor
+    $campo = $partes[-1]
+    # instalacao antiga (upgrade): o campo pode nao existir ainda no real.json
+    if ($alvo.PSObject.Properties[$campo]) { $alvo.$campo = $Valor }
+    else { $alvo | Add-Member -NotePropertyName $campo -NotePropertyValue $Valor -Force }
     Save-TextoResiliente $Arquivo ($doc | ConvertTo-Json -Depth 10)
 }
 
-if (-not $Endpoint) {
+if (-not $DeploymentId) {
     $atual = ''
-    try { $atual = (Get-Content (Join-Path $Cfg 'juntas.json') -Raw -Encoding UTF8 | ConvertFrom-Json).endpoint } catch { }
+    try { $atual = (Get-Content (Join-Path $Cfg 'juntas.json') -Raw -Encoding UTF8 | ConvertFrom-Json).deployment_id } catch { }
     Write-Host ''
-    $Endpoint = Read-Host "  URL /exec do Web App (Enter para manter '$atual')"
+    $DeploymentId = Read-Host "  deploymentId do Apps Script (Enter para manter '$atual')"
 }
-if ($Endpoint -and $Endpoint -notlike '*COLOQUE_O_ID*') {
-    Set-JsonCampo (Join-Path $Cfg 'juntas.json') 'endpoint' $Endpoint
-    Set-JsonCampo (Join-Path $Cfg 'envio.json')  'endpoint_apps_script' $Endpoint
-    OK "endpoint do Web App gravado"
+if ($DeploymentId -and $DeploymentId -notlike '*COLOQUE_O_DEPLOYMENT_ID*') {
+    Set-JsonCampo (Join-Path $Cfg 'juntas.json') 'deployment_id' $DeploymentId
+    OK "deployment_id do Apps Script gravado"
 } else {
-    Aviso "endpoint nao configurado - ajuste config\juntas.json e config\envio.json depois"
+    Aviso "deployment_id nao configurado - ajuste config\juntas.json depois"
 }
 
 if (-not $IperfServidor) {

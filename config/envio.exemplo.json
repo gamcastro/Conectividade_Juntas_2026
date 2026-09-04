@@ -1,5 +1,5 @@
 {
-  "_comentario": "modo: 'na-hora' tenta enviar ao final da coleta (com fallback para pendentes); 'offline-first' apenas salva local e o reenvio e feito depois. reenvio_ao_atualizar: no botao 'Atualizar dados' (com internet), tambem esvazia a fila de resultados\\pendentes\\.",
+  "_comentario": "modo: 'na-hora' tenta enviar ao final da coleta (com fallback para pendentes); 'offline-first' apenas salva local e o reenvio e feito depois. reenvio_ao_atualizar: no botao 'Atualizar dados' (com internet), tambem esvazia a fila de resultados\\pendentes\\. endpoint_apps_script e' legado (URL /exec do Web App antigo) -- o envio agora usa a Execution API via config/juntas.json > deployment_id, nao esta URL.",
   "endpoint_apps_script": "https://script.google.com/macros/s/COLOQUE_O_ID_AQUI/exec",
   "modo": "offline-first",
   "retentativas": 3,

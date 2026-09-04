@@ -43,7 +43,45 @@ e `rootDir` vazio.)
 ## Config extra
 
 - `?recurso=juntas` -> Juntas/locais; `?recurso=tecnicos`; `?recurso=roteiros`; `?recurso=limiares`.
-- Planilha de config (limiares): `1wAZTeRsbDcFL4lyLF0J9pOmtR-cGElSh93HSpMKTCww` (aba `Limiares`, criada no 1o salvar).
+- Planilha de config (limiares): `1wAZTeRsbDcFL4lyLF0J9pOmtR-cGElSh93HSpMKTCww` (aba `Limiares`, celula A2 = JSON aninhado, criada no 1o salvar).
+
+## Acesso do Web App: DOMAIN (v0.6.69+) -- so URL /exec, nao usado pelo cliente
+
+O `appsscript.json` esta com `"access": "DOMAIN"` ("Qualquer pessoa do dominio")
+em vez de `ANYONE_ANONYMOUS` -> o `clasp redeploy` **nao** cai mais no erro
+"ANYONE access has been disabled by your domain administrator" (a politica do
+Workspace so barra o anonimo). MAS: testado ao vivo que um Web App `DOMAIN` na
+URL `/exec` **ignora** um `Authorization: Bearer` (so aceita sessao de
+navegador) -- por isso o cliente DICON nao usa mais esse caminho.
+
+**Diverge por branch, de proposito (v0.6.73/v0.7.6):** em `homologacao`,
+`webapp.access` = `DOMAIN` (nao tinha jeito de reimplantar anonimo, ver acima).
+Em `main` (producao), **mantido `ANYONE_ANONYMOUS`** no merge -- ha tecnicos em
+campo rodando codigo antigo (sem OAuth) que ainda dependem do `/exec` anonimo;
+trocar pra `DOMAIN` quebraria a sincronizacao deles ate atualizarem. So faz
+sentido trocar producao pra `DOMAIN` tambem depois que **todo** o parque de
+maquinas de campo tiver migrado pro cliente com OAuth (`enabled: true`) --
+decisao futura, nao automatica. Ate la, ao mesclar `homologacao -> main`,
+resolver o conflito de `appsscript.json` **mantendo** `ANYONE_ANONYMOUS` em
+`webapp.access` (o `executionApi.access: DOMAIN` pode ir junto sem problema --
+e' so um caminho a mais, nao afeta quem usa o `/exec` anonimo).
+
+## Transporte real: Execution API + Executavel de API (v0.6.73+)
+
+`appsscript.json` tem tambem `"executionApi": {"access": "DOMAIN"}`, ao lado do
+`webapp`. O `clasp push` + `create-deployment`/`redeploy` de sempre ja leva os
+dois -- a MESMA implantacao (mesmo deploymentId/URL) passa a responder tanto
+`/exec` (legado, nao usado) quanto `scripts.run` da Execution API.
+
+**Setup adicional, uma vez por ambiente** (antes do primeiro `clasp push` deste
+formato): no editor do Apps Script, Configuracoes do projeto > "Projeto do
+Google Cloud" > Alterar projeto > numero do projeto GCP `dicon-oauth` (padrao,
+com a Apps Script API ativada -- NAO o "Padrao" oculto que cada script ganha
+sozinho). Ver `docs/oauth-google.md` para o passo a passo completo (inclui o
+token de servico do `gravarResultado`).
+
+Se uma implantacao antiga estiver fixada numa versao anonima do Web App, edite-a
+no editor (Implantar > Gerenciar implantacoes > lapis > Versao: nova).
 
 ## PIN do admin (para "Salvar limiares")
 

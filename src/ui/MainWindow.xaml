@@ -1208,6 +1208,12 @@
                             <TextBlock Style="{DynamicResource SubtituloTela}" Margin="0,0,0,10"
                                        Text="Cada aba &#233; um meio testado. Ajuste a classifica&#231;&#227;o de uma m&#233;trica se necess&#225;rio &#8212; nesse caso, informe o motivo."/>
 
+                            <Border x:Name="cardSugestaoResultado" Style="{DynamicResource Faixa}" Margin="0,0,0,10"
+                                    Visibility="Collapsed">
+                                <TextBlock x:Name="txtSugestaoResultado" TextWrapping="Wrap" FontSize="12"
+                                           Foreground="{DynamicResource Dicon.Text}"/>
+                            </Border>
+
                             <Border x:Name="cardNaResumo" Style="{DynamicResource Faixa}" Margin="0,0,0,10"
                                     Visibility="Collapsed">
                                 <TextBlock x:Name="txtNaResumo" TextWrapping="Wrap" FontSize="12"
@@ -1245,9 +1251,9 @@
                                                                 IsReadOnly="True" Width="140"/>
                                             <DataGridTextColumn Header="Valor medido" Binding="{Binding ValorTexto}"
                                                                 IsReadOnly="True" Width="110" FontFamily="Consolas"/>
-                                            <DataGridTextColumn Header="Faixa aceit&#225;vel" Binding="{Binding Regra}"
+                                            <DataGridTextColumn x:Name="colVpnFaixa" Header="Faixa aceit&#225;vel" Binding="{Binding Regra}"
                                                                 IsReadOnly="True" Width="250" FontFamily="Consolas"/>
-                                            <DataGridTemplateColumn Header="Sugerida" Width="90" IsReadOnly="True">
+                                            <DataGridTemplateColumn x:Name="colVpnSugerida" Header="Sugerida" Width="90" IsReadOnly="True">
                                                 <DataGridTemplateColumn.CellTemplate>
                                                     <DataTemplate>
                                                         <TextBlock Text="{Binding ClasseAutomatica}"
@@ -1255,7 +1261,7 @@
                                                     </DataTemplate>
                                                 </DataGridTemplateColumn.CellTemplate>
                                             </DataGridTemplateColumn>
-                                            <DataGridTemplateColumn Header="Classifica&#231;&#227;o" Width="150">
+                                            <DataGridTemplateColumn x:Name="colVpnClasse" Header="Classifica&#231;&#227;o" Width="150">
                                                 <DataGridTemplateColumn.CellTemplate>
                                                     <DataTemplate>
                                                         <ComboBox Margin="2" VerticalContentAlignment="Center"
@@ -1264,7 +1270,7 @@
                                                     </DataTemplate>
                                                 </DataGridTemplateColumn.CellTemplate>
                                             </DataGridTemplateColumn>
-                                            <DataGridTemplateColumn Header="Motivo do ajuste" Width="*">
+                                            <DataGridTemplateColumn x:Name="colVpnMotivo" Header="Motivo do ajuste" Width="*">
                                                 <DataGridTemplateColumn.CellTemplate>
                                                     <DataTemplate>
                                                         <TextBox Margin="2" TextWrapping="Wrap" AcceptsReturn="True"
@@ -1302,9 +1308,9 @@
                                                                 IsReadOnly="True" Width="140"/>
                                             <DataGridTextColumn Header="Valor medido" Binding="{Binding ValorTexto}"
                                                                 IsReadOnly="True" Width="110" FontFamily="Consolas"/>
-                                            <DataGridTextColumn Header="Faixa aceit&#225;vel" Binding="{Binding Regra}"
+                                            <DataGridTextColumn x:Name="colRlFaixa" Header="Faixa aceit&#225;vel" Binding="{Binding Regra}"
                                                                 IsReadOnly="True" Width="250" FontFamily="Consolas"/>
-                                            <DataGridTemplateColumn Header="Sugerida" Width="90" IsReadOnly="True">
+                                            <DataGridTemplateColumn x:Name="colRlSugerida" Header="Sugerida" Width="90" IsReadOnly="True">
                                                 <DataGridTemplateColumn.CellTemplate>
                                                     <DataTemplate>
                                                         <TextBlock Text="{Binding ClasseAutomatica}"
@@ -1312,7 +1318,7 @@
                                                     </DataTemplate>
                                                 </DataGridTemplateColumn.CellTemplate>
                                             </DataGridTemplateColumn>
-                                            <DataGridTemplateColumn Header="Classifica&#231;&#227;o" Width="150">
+                                            <DataGridTemplateColumn x:Name="colRlClasse" Header="Classifica&#231;&#227;o" Width="150">
                                                 <DataGridTemplateColumn.CellTemplate>
                                                     <DataTemplate>
                                                         <ComboBox Margin="2" VerticalContentAlignment="Center"
@@ -1321,7 +1327,7 @@
                                                     </DataTemplate>
                                                 </DataGridTemplateColumn.CellTemplate>
                                             </DataGridTemplateColumn>
-                                            <DataGridTemplateColumn Header="Motivo do ajuste" Width="*">
+                                            <DataGridTemplateColumn x:Name="colRlMotivo" Header="Motivo do ajuste" Width="*">
                                                 <DataGridTemplateColumn.CellTemplate>
                                                     <DataTemplate>
                                                         <TextBox Margin="2" TextWrapping="Wrap" AcceptsReturn="True"
@@ -1539,6 +1545,19 @@
                            Style="{DynamicResource SubtituloTela}" Margin="0,6,0,12"/>
 
                 <StackPanel Grid.Row="2">
+                    <Border Style="{DynamicResource Cartao}" Padding="16,12" Margin="0,0,0,12">
+                        <StackPanel>
+                            <TextBlock Text="Modo de avalia&#231;&#227;o" Style="{DynamicResource SecaoTela}" Margin="0,0,0,4"/>
+                            <TextBlock Text="Define o que o assistente e o relat&#243;rio mostram. Salvo junto com os limiares (mesmo PIN)."
+                                       FontSize="11" Foreground="{DynamicResource Dicon.Text3}" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                            <RadioButton x:Name="rbModoMedicao" GroupName="modoAval" Margin="0,3"
+                                         Content="Medi&#231;&#227;o &#8212; s&#243; os valores medidos por meio (LAN / Wi-Fi / Celular). Assistente de 5 passos, sem ju&#237;zo de viabilidade. (padr&#227;o)"/>
+                            <RadioButton x:Name="rbModoReferencia" GroupName="modoAval" Margin="0,3"
+                                         Content="Refer&#234;ncia &#8212; valores e a faixa aceit&#225;vel lado a lado, mas nada &#233; reprovado."/>
+                            <RadioButton x:Name="rbModoCompleto" GroupName="modoAval" Margin="0,3"
+                                         Content="Viabilidade completa &#8212; classifica vi&#225;vel/ressalva/invi&#225;vel, recomenda o meio, Painel de Viabilidade. Assistente de 6 passos."/>
+                        </StackPanel>
+                    </Border>
                     <TabControl x:Name="tabLimiares" MinHeight="230">
                         <TabItem Header="LAN (rede cabeada)">
                             <Border Style="{DynamicResource Cartao}" Padding="2">
@@ -1692,7 +1711,7 @@
                         </TabItem>
                     </TabControl>
 
-                    <Expander Header="Or&#231;amento da VPN (semeia o COM VPN de LAN e Celular)" Margin="0,10,0,0" IsExpanded="False">
+                    <Expander x:Name="expOrcamentoVpn" Header="Or&#231;amento da VPN (semeia o COM VPN de LAN e Celular)" Margin="0,10,0,0" IsExpanded="False">
                         <StackPanel Margin="6,8,0,0">
                             <TextBlock Text="Custo estimado do t&#250;nel: somado ao SEM VPN em lat&#234;ncia/jitter/perda e aplicado como desconto percentual em download/upload. &quot;Recalcular&quot; reescreve as colunas COM VPN de LAN e Celular (n&#227;o salva sozinho)."
                                        FontSize="11" Foreground="{DynamicResource Dicon.Text3}" TextWrapping="Wrap" Margin="0,0,0,8"/>
@@ -1786,6 +1805,47 @@
                                 <Button x:Name="btnSalvarAmbiente" Content="Salvar ambiente"
                                         Style="{DynamicResource BotaoSucesso}"/>
                                 <TextBlock x:Name="lblAmbienteMsg" Margin="14,0,0,0" VerticalAlignment="Center"
+                                           TextWrapping="Wrap" FontSize="12"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <Border x:Name="cardContaGoogle" Style="{DynamicResource Cartao}" Padding="16,14" Margin="0,16,0,0"
+                            Visibility="Collapsed">
+                        <StackPanel>
+                            <TextBlock Text="Conta Google" Style="{DynamicResource SecaoTela}" Margin="0,0,0,4"/>
+                            <TextBlock Text="Usada para autenticar as chamadas ao servi&#231;o de dados (listas, limiares, envio de resultados) quando ele exige conta do dom&#237;nio. A conex&#227;o &#233; feita uma vez por computador; depois &#233; autom&#225;tica."
+                                       FontSize="11" Foreground="{DynamicResource Dicon.Text3}" TextWrapping="Wrap"
+                                       Margin="0,0,0,10"/>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="Conta:" Style="{DynamicResource Rotulo}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                <TextBlock x:Name="lblContaGoogle" Text="n&#227;o conectada" VerticalAlignment="Center"
+                                           FontFamily="Consolas" Foreground="{DynamicResource Dicon.Text}"/>
+                                <mah:ProgressRing x:Name="ringContaGoogle" Width="16" Height="16" Margin="12,0,0,0"
+                                                  IsActive="False" Visibility="Collapsed"
+                                                  Foreground="{DynamicResource Dicon.Accent}"/>
+                            </StackPanel>
+                            <Border x:Name="panelDeviceCode" Style="{DynamicResource Faixa}" Margin="0,10,0,0" Visibility="Collapsed">
+                                <StackPanel>
+                                    <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource Dicon.Text}">
+                                        <Run Text="Sem navegador local. Acesse "/><Run x:Name="runDeviceUrl" Text="google.com/device" FontWeight="Bold"/><Run Text=" e digite o c&#243;digo:"/>
+                                    </TextBlock>
+                                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                                        <TextBox x:Name="txtDeviceCode" IsReadOnly="True" FontFamily="Consolas" FontSize="16"
+                                                 FontWeight="Bold" MinWidth="140" VerticalContentAlignment="Center"/>
+                                        <Button x:Name="btnCopiarDeviceCode" Content="Copiar" Margin="8,0,0,0"
+                                                Style="{DynamicResource BotaoSecundario}"/>
+                                        <Button x:Name="btnAbrirDeviceUrl" Content="Abrir no navegador" Margin="8,0,0,0"
+                                                Style="{DynamicResource BotaoSecundario}"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                            <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                                <Button x:Name="btnConectarGoogle" Content="Conectar conta Google"
+                                        Style="{DynamicResource BotaoSucesso}"/>
+                                <Button x:Name="btnDesconectarGoogle" Content="Desconectar" Margin="8,0,0,0"
+                                        Style="{DynamicResource BotaoFantasma}"/>
+                                <TextBlock x:Name="lblContaGoogleMsg" Margin="14,0,0,0" VerticalAlignment="Center"
                                            TextWrapping="Wrap" FontSize="12"/>
                             </StackPanel>
                         </StackPanel>

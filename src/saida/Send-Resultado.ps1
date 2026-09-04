@@ -3,21 +3,23 @@
 # tentativa de POST. Em caso de sucesso REAL ({status:'ok'}) o arquivo migra de
 # resultados\pendentes\ para resultados\enviados\.
 
-# Probe rapido: o endpoint esta acessivel agora? (evita travar no start offline)
+# Probe rapido: da pra tentar enviar agora? (evita travar no start offline).
+# Nao ha mais uma URL de Web App pra sondar (Execution API); testa internet +
+# conta Google conectada.
 function Test-EnvioDisponivel {
     param(
-        [string] $Endpoint,
+        [string] $Endpoint,   # nao usado (compat); mantido pela assinatura antiga
         [int]    $TimeoutS = 4
     )
-    if ([string]::IsNullOrWhiteSpace($Endpoint)) {
-        try { $Endpoint = (Get-Config 'envio').endpoint_apps_script } catch { return $false }
-    }
-    if ([string]::IsNullOrWhiteSpace($Endpoint) -or $Endpoint -match 'COLOQUE_O_ID_AQUI') { return $false }
+    if (-not (Test-OAuthAtivo)) { return $false }
     try {
-        $null = Invoke-WebRequest -Method Head -Uri $Endpoint -TimeoutSec $TimeoutS -UseBasicParsing -ErrorAction Stop
+        if (-not (Get-RefreshTokenGoogle)) { return $false }
+    } catch { return $false }
+    try {
+        $null = Invoke-WebRequest -Method Head -Uri 'https://script.googleapis.com' -TimeoutSec $TimeoutS -UseBasicParsing -ErrorAction Stop
         return $true
     } catch [System.Net.WebException] {
-        # respondeu algo (405/302/403...) => host acessivel
+        # respondeu algo (404/405...) => host acessivel
         if ($_.Exception.Response) { return $true }
         return $false
     } catch {
@@ -28,34 +30,33 @@ function Test-EnvioDisponivel {
 function Send-Resultado {
     param(
         [string] $Caminho,
-        [string] $Endpoint,
+        [string] $Endpoint,   # nao usado (compat); mantido pela assinatura antiga
         [int]    $Retentativas = 3,
         [int]    $IntervaloS   = 5
     )
 
-    if ([string]::IsNullOrWhiteSpace($Endpoint)) {
-        $Endpoint = (Get-Config 'envio').endpoint_apps_script
-    }
-    if ([string]::IsNullOrWhiteSpace($Endpoint) -or $Endpoint -match 'COLOQUE_O_ID_AQUI') {
-        Write-Log 'Endpoint de envio nao configurado (config/envio.json). Resultado fica em pendentes.' -Nivel Erro
-        return $false
-    }
     if (-not (Test-Path $Caminho)) {
         throw "Send-Resultado: arquivo nao encontrado: $Caminho"
     }
 
-    $corpo = Get-Content -Path $Caminho -Raw -Encoding UTF8
-    $nome  = Split-Path $Caminho -Leaf
+    $dadosObj = $null
+    try { $dadosObj = Get-Content -Path $Caminho -Raw -Encoding UTF8 | ConvertFrom-Json } catch {
+        Write-Log "Send-Resultado: arquivo ilegivel ($Caminho): $_" -Nivel Erro
+        return $false
+    }
+    $nome = Split-Path $Caminho -Leaf
 
     for ($i = 1; $i -le $Retentativas; $i++) {
         $resp  = $null
         $falha = $null
         try {
-            $resp = Invoke-RestMethod -Method Post -Uri $Endpoint -Body $corpo `
-                                      -ContentType 'application/json; charset=utf-8' `
-                                      -TimeoutSec 30 -MaximumRedirection 5
+            $resp = Invoke-FuncaoAppsScript -Acao 'resultado' -Payload $dadosObj -TimeoutS 30
         } catch {
             $falha = "$_"
+            if ($falha -eq 'CONECTAR_GOOGLE') {
+                Write-Log 'Conta Google nao conectada - abra Administracao > Conta Google > Conectar. Resultado fica em pendentes.' -Nivel Erro
+                return $false
+            }
         }
 
         if ($null -ne $resp) {

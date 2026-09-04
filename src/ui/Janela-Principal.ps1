@@ -51,6 +51,9 @@ $Global:FeitoTransmitir    = $false
 $Global:FeitoExportar      = $false
 $Global:UltimoResultadoSalvo = $null # caminho do JSON gravado no passo 7
 
+$Global:ContaGoogleTimer     = $null # DispatcherTimer do poll do device-code (OAuth)
+$Global:ConectarGoogleDepois = $null # scriptblock a rodar quando a conta Google conectar
+
 # Ganchos de teste: preservam o valor definido ANTES de Import-Module -Force.
 if (-not (Get-Variable -Name ModoTeste -Scope Global -ErrorAction SilentlyContinue)) {
     $Global:ModoTeste = $false            # testes: nao abrir arquivos externos
@@ -63,6 +66,12 @@ if (-not (Get-Variable -Name VpnSimulada -Scope Global -ErrorAction SilentlyCont
 }
 if (-not (Get-Variable -Name BandaVpnSimulada -Scope Global -ErrorAction SilentlyContinue)) {
     $Global:BandaVpnSimulada = $null      # testes: resultado fixo p/ Test-BandaVpn (nao roda iperf3)
+}
+if (-not (Get-Variable -Name OAuthConfigOverride -Scope Global -ErrorAction SilentlyContinue)) {
+    $Global:OAuthConfigOverride = $null   # testes: bloco google_oauth fixo (Get-ConfigOAuth)
+}
+if (-not (Get-Variable -Name ModoAvaliacaoOverride -Scope Global -ErrorAction SilentlyContinue)) {
+    $Global:ModoAvaliacaoOverride = $null # testes: 'medicao'|'referencia'|'completo' fixo
 }
 
 $Global:Views = @('viewLogin', 'viewHome', 'viewGuia', 'viewLocais', 'viewLocalDetalhe', 'viewDiag', 'viewAdmin')
@@ -82,6 +91,33 @@ $Global:WizardTitulos = @(
     ('Conclus' + [char]0x00E3 + 'o')
 )
 $Global:WizardNPassos = $Global:WizardPassos.Count
+
+# Ajusta o assistente ao modo de avaliacao: 'completo' = 6 passos (com o passo de
+# decisao / recomendacao); 'medicao'/'referencia' = 5 passos (pula a decisao).
+# Chamado ao abrir o assistente.
+function Set-ModoAssistente {
+    if (Test-ModoCompleto) {
+        $Global:WizardPassos  = @('stepInfo', 'stepJunta', 'stepLocal', 'stepResultado', 'stepDecisao', 'stepFim')
+        $Global:WizardTitulos = @(
+            ('Informa' + [char]0x00E7 + [char]0x00E3 + 'o do teste')
+            'Junta Especial'
+            'Meios de conex' + [char]0x00E3 + 'o'
+            ('Resultado por m' + [char]0x00E9 + 'trica')
+            ('Recomenda' + [char]0x00E7 + [char]0x00E3 + 'o final')
+            ('Conclus' + [char]0x00E3 + 'o')
+        )
+    } else {
+        $Global:WizardPassos  = @('stepInfo', 'stepJunta', 'stepLocal', 'stepResultado', 'stepFim')
+        $Global:WizardTitulos = @(
+            ('Informa' + [char]0x00E7 + [char]0x00E3 + 'o do teste')
+            'Junta Especial'
+            'Meios de conex' + [char]0x00E3 + 'o'
+            ('Medi' + [char]0x00E7 + [char]0x00F5 + 'es por meio')
+            ('Conclus' + [char]0x00E3 + 'o')
+        )
+    }
+    $Global:WizardNPassos = $Global:WizardPassos.Count
+}
 
 function Import-Xaml {
     param([string] $Caminho)
@@ -370,6 +406,18 @@ function New-JanelaPrincipal {
     $window.FindName('btnRecarregarLimiares').Add_Click({ Invoke-RecarregarLimiares })
     $window.FindName('btnAplicarOrcamento').Add_Click({ Invoke-AplicarOrcamento })
     $window.FindName('btnSalvarAmbiente').Add_Click({ Invoke-SalvarAmbiente })
+    foreach ($rb in 'rbModoMedicao', 'rbModoReferencia', 'rbModoCompleto') {
+        $window.FindName($rb).Add_Checked({ Update-VisibilidadeLimiaresAdmin })
+    }
+    $window.FindName('btnConectarGoogle').Add_Click({ Invoke-ConectarGoogle })
+    $window.FindName('btnDesconectarGoogle').Add_Click({ Invoke-DesconectarGoogle })
+    $window.FindName('btnCopiarDeviceCode').Add_Click({
+        try { [Windows.Clipboard]::SetText([string] $Global:JanelaPrincipal.FindName('txtDeviceCode').Text) } catch { }
+    })
+    $window.FindName('btnAbrirDeviceUrl').Add_Click({
+        $u = [string] $Global:JanelaPrincipal.FindName('runDeviceUrl').Text
+        if ($u) { try { Start-Process $u } catch { } }
+    })
     $window.FindName('lstGuiaJuntas').AddHandler(
         [Windows.Controls.Button]::ClickEvent,
         [Windows.RoutedEventHandler] {
@@ -574,6 +622,11 @@ function Invoke-BaixarListaLogin {
         Set-LoginBaixando $false
         Initialize-Login
         $w = $Global:JanelaPrincipal
+        if (Test-PrecisaConectarGoogle $res $erro) {
+            $w.FindName('txtLoginMsg').Text = 'Conecte a conta Google do TRE para baixar as listas... siga no navegador.'
+            Invoke-ConectarGoogle -AoConectar { Invoke-BaixarListaLogin }
+            return
+        }
         if ($erro) {
             $w.FindName('txtLoginMsg').Text = "Falha ao baixar: $erro"
         } elseif ($res) {
@@ -785,6 +838,10 @@ function Invoke-AtualizarDados {
     } -AoConcluir {
         param($res, $erro)
         Initialize-SeletorJuntas
+        if (Test-PrecisaConectarGoogle $res $erro) {
+            Write-Log 'Conta Google nao conectada - siga no navegador para autorizar.' -Nivel Aviso
+            Invoke-ConectarGoogle -AoConectar { Invoke-AtualizarDados }
+        }
         if ($Global:SessaoAtual) { Enter-Home -Sessao $Global:SessaoAtual }   # Enter-Home ja checa versao nova
     }
 }
@@ -997,13 +1054,15 @@ function Show-WizardPasso {
     if ($N -gt $nMax) { $N = $nMax }
     $Global:WizardStep = $N
 
-    for ($i = 0; $i -lt $nMax; $i++) {
-        $vis = if ($i -eq ($N - 1)) { 'Visible' } else { 'Collapsed' }
-        $w.FindName($Global:WizardPassos[$i]).Visibility = $vis
+    # colapsa todos os paineis conhecidos (o array do modo atual pode nao ter os 6)
+    foreach ($p in @('stepInfo', 'stepJunta', 'stepLocal', 'stepResultado', 'stepDecisao', 'stepFim')) {
+        $el = $w.FindName($p); if ($el) { $el.Visibility = 'Collapsed' }
     }
+    $w.FindName($Global:WizardPassos[$N - 1]).Visibility = 'Visible'
+
     $w.FindName('txtWizTitulo').Text = $Global:WizardTitulos[$N - 1]
     $w.FindName('txtWizPasso').Text  = 'Passo {0} de {1}' -f $N, $nMax
-    $w.FindName('prgWizard').Value   = $N
+    $prg = $w.FindName('prgWizard'); $prg.Maximum = $nMax; $prg.Value = $N
 
     $w.FindName('btnWizVoltar').IsEnabled = ($N -gt 1)
     $rf = $w.FindName('btnRefazerTeste'); if ($rf) { $rf.Visibility = 'Collapsed' }
@@ -1012,15 +1071,12 @@ function Show-WizardPasso {
     $prox.Content    = if ($N -eq ($nMax - 1)) { 'Concluir' } else { 'Pr' + [char]0x00F3 + 'ximo' }
     $prox.IsEnabled  = $true
 
-    switch ($N) {
-        2 { Update-DetalheLocal }
-        3 {
-            if (-not $Global:FaseLocalPayload) { Invoke-ProbeRedeLocal }
-            Update-PainelMeios
-        }
-        4 { Update-SeletorMedicoes }
-        5 { Update-DecisaoRecalculada; Update-Passo6Recomendacao }
-        6 { Update-ResumoFim }
+    switch ($Global:WizardPassos[$N - 1]) {
+        'stepJunta'     { Update-DetalheLocal }
+        'stepLocal'     { if (-not $Global:FaseLocalPayload) { Invoke-ProbeRedeLocal }; Update-PainelMeios }
+        'stepResultado' { Update-SeletorMedicoes }
+        'stepDecisao'   { Update-DecisaoRecalculada; Update-Passo6Recomendacao }
+        'stepFim'       { Update-ResumoFim }
     }
 }
 
@@ -1030,16 +1086,17 @@ function Invoke-WizardVoltar {
 
 function Invoke-WizardProximo {
     $w = $Global:JanelaPrincipal
-    switch ($Global:WizardStep) {
-        1 { Show-WizardPasso 2 }
-        2 {
+    $ir = { Show-WizardPasso ($Global:WizardStep + 1) }
+    switch ($Global:WizardPassos[$Global:WizardStep - 1]) {
+        'stepInfo' { & $ir }
+        'stepJunta' {
             if (-not $w.FindName('cboLocal').SelectedItem) {
                 Write-Log 'Selecione a Junta Especial e o Local para continuar.' -Nivel Aviso
                 return
             }
-            Show-WizardPasso 3
+            & $ir
         }
-        3 {
+        'stepLocal' {
             if ($Global:CheckMeioAtivo) {
                 Write-Log 'Conclua a checagem do meio aberta antes de avancar.' -Nivel Aviso
                 return
@@ -1053,22 +1110,26 @@ function Invoke-WizardProximo {
                 return
             }
             if ($todosNA -and -not $temMedicao -and -not $Global:DiagPayload) {
-                Write-Log 'Todos os meios marcados como nao aplicaveis - o local sera registrado como inviavel.' -Nivel Aviso
+                $aviso = if (Test-ModoCompleto) { 'Todos os meios marcados como nao aplicaveis - o local sera registrado como inviavel.' }
+                         else { 'Todos os meios marcados como nao aplicaveis - sem medicoes a registrar.' }
+                Write-Log $aviso -Nivel Aviso
                 Set-DiagnosticoVpnImpossivel -Motivo 'Nenhum meio de conexao se aplica a este local.'
             }
-            Show-WizardPasso 4
+            & $ir
         }
-        4 {
+        'stepResultado' {
             Save-AjustesPasso5   # guarda a medicao aberta antes de checar
-            $falta = Get-JustificativasFaltando -MetricasApenas
-            if ($falta.Count) { Write-Log ('Justificativa obrigatoria em: {0}' -f ($falta -join ', ')) -Nivel Erro; return }
-            Show-WizardPasso 5
+            if (Test-ModoCompleto) {
+                $falta = Get-JustificativasFaltando -MetricasApenas
+                if ($falta.Count) { Write-Log ('Justificativa obrigatoria em: {0}' -f ($falta -join ', ')) -Nivel Erro; return }
+            }
+            & $ir   # completo -> stepDecisao; medicao/referencia -> stepFim
         }
-        5 {
+        'stepDecisao' {
             $falta = Get-JustificativasFaltando
             if ($falta.Count) { Write-Log ('Justificativa obrigatoria em: {0}' -f ($falta -join ', ')) -Nivel Erro; return }
             if (-not (Test-RecomendacaoValida)) { return }
-            Show-WizardPasso 6
+            & $ir
         }
     }
 }
@@ -1863,16 +1924,23 @@ function Update-PainelMeios {
     }
 
     # --- estado (badge + borda) e botao de cada meio ----------------------
+    $modoCompleto = Test-ModoCompleto
     $estadoMeio = {
         param($meio)
         if ($Global:MeiosNaoAplicaveis.ContainsKey($meio)) {
-            $ci = Get-PincelVeredito 'inviavel'
-            return @{ txt = 'NAO SE APLICA - INVIAVEL'; cor = $ci; borda = $ci }
+            if ($modoCompleto) {
+                $ci = Get-PincelVeredito 'inviavel'
+                return @{ txt = 'NAO SE APLICA - INVIAVEL'; cor = $ci; borda = $ci }
+            }
+            return @{ txt = 'NAO SE APLICA'; cor = $cinza; borda = $hair }
         }
         $m = @($Global:Medicoes | Where-Object { $_.meio -eq $meio -and -not $_.nao_aplicavel } | Select-Object -Last 1)
         if ($m) {
-            $c = Get-PincelVeredito $m.veredito
-            return @{ txt = 'TESTADO: ' + (Get-PalavraVeredito $m.veredito).ToUpper(); cor = $c; borda = $c }
+            if ($modoCompleto) {
+                $c = Get-PincelVeredito $m.veredito
+                return @{ txt = 'TESTADO: ' + (Get-PalavraVeredito $m.veredito).ToUpper(); cor = $c; borda = $c }
+            }
+            return @{ txt = 'MEDIDO'; cor = $cinza; borda = $hair }
         }
         @{ txt = 'NAO TESTADO'; cor = $cinza; borda = $hair }
     }
@@ -2000,12 +2068,25 @@ function Update-BannerRecomendacao {
 
     $rec = Get-RecomendacaoLocal
     $card.Visibility = 'Visible'
+    $obs = $w.FindName('txtRecMeiosObs')
+    if (-not (Test-ModoCompleto)) {
+        # sugestao informativa: meio de maior download, sem juizo de viabilidade
+        if (-not $rec -or $rec.meio -eq 'nenhuma') {
+            $w.FindName('txtRecMeios').Text = 'Sugestao de conexao: ainda sem medicao para comparar.'
+        } else {
+            $dl = if ($null -ne $rec.download_mbps) {
+                (' -- maior download ({0:N1} Mbps{1})' -f [double] $rec.download_mbps, $(if ($rec.base -eq 'vpn') { ' pela VPN' } else { ' na rede local' }))
+            } else { '' }
+            $w.FindName('txtRecMeios').Text = 'Sugestao de conexao: usar {0}{1}. (informativo - sem avaliacao de viabilidade)' -f $rec.rotulo, $dl
+        }
+        $obs.Visibility = 'Collapsed'
+        return
+    }
     if (-not $rec -or $rec.meio -eq 'nenhuma') {
         $w.FindName('txtRecMeios').Text = 'Recomendacao para este local: nenhum meio testado ate agora serve. Continue testando os outros meios.'
     } else {
         $w.FindName('txtRecMeios').Text = 'Recomendacao para este local: usar {0} -- {1}.' -f $rec.rotulo, (Get-RotuloVeredito $rec.veredito)
     }
-    $obs = $w.FindName('txtRecMeiosObs')
     if ($rec -and $rec.provisoria) {
         $obs.Text = 'Provisoria: nenhum meio fechou a VPN. Teste os demais meios ou conclua sabendo que o local fica inviavel.'
         $obs.Visibility = 'Visible'
@@ -2886,7 +2967,9 @@ function New-MedicaoAtual {
         iperf               = if ($dp -and $dp.PSObject.Properties['Iperf']) { $dp.Iperf } else { $null }
         ambiente            = if ($dp) { $dp.Ambiente } else { $null }
         avaliacoes          = @()
-        veredito            = if ($dp -and $dp.Decisao) { [string] $dp.Decisao.Classificacao } else { 'nao_testado' }
+        veredito            = if (-not (Test-ModoCompleto)) { if ($dp) { 'medido' } else { 'nao_testado' } }
+                              elseif ($dp -and $dp.Decisao) { [string] $dp.Decisao.Classificacao }
+                              else { 'nao_testado' }
         quando              = (Get-Date).ToString('o')
     }
 }
@@ -2921,7 +3004,7 @@ function Save-AjustesPasso5 {
 # Recomendacao de conexao para o local (a partir das medicoes registradas).
 # Guarda em $Global:RecomendacaoLocal para o JSON/PDF/passo 6.
 function Get-RecomendacaoLocal {
-    $Global:RecomendacaoLocal = Get-ConexaoRecomendada @($Global:Medicoes)
+    $Global:RecomendacaoLocal = Get-ConexaoRecomendada @($Global:Medicoes) -Modo (Get-ModoAvaliacao)
     return $Global:RecomendacaoLocal
 }
 
@@ -3165,19 +3248,27 @@ function Update-ResumoFim {
     $p = $Global:DiagPayload
     if (-not $p) { return }
     $rec = $Global:RecomendacaoLocal
+    $modoCompleto = Test-ModoCompleto
     # a decisao final do local passa a ser o veredito do meio recomendado.
     $dec = if ($rec) { [string] $rec.veredito } else { [string] $w.FindName('cboDecisaoFinal').SelectedItem }
     $txt = 'ZE {0} - {1} / {2} ({3})' -f `
         $p.Local.zona_eleitoral, $p.Local.municipio_termo, $p.Local.nome, $p.Local.tipo
-    if ($rec) {
-        $txt += "`nConexao recomendada: " + [string] $rec.rotulo
-        if ($rec.provisoria) { $txt += '  (provisoria - nenhum meio fechou a VPN)' }
-        if ($Global:MotivoRecomendacao) { $txt += "`nMotivo: " + [string] $Global:MotivoRecomendacao }
+    if ($rec -and $rec.meio -ne 'nenhuma') {
+        $rot = if ($modoCompleto) { 'Conexao recomendada: ' } else { 'Sugestao de conexao: ' }
+        $txt += "`n" + $rot + [string] $rec.rotulo
+        if ($modoCompleto -and $rec.provisoria) { $txt += '  (provisoria - nenhum meio fechou a VPN)' }
+        if (-not $modoCompleto) { $txt += '  (informativo - sem avaliacao de viabilidade)' }
+        if ($modoCompleto -and $Global:MotivoRecomendacao) { $txt += "`nMotivo: " + [string] $Global:MotivoRecomendacao }
     }
     $w.FindName('txtFimLocal').Text = $txt
     $ver = $w.FindName('txtFimVeredito')
-    $ver.Text       = Get-PalavraVeredito $dec
-    $ver.Foreground = Get-PincelVeredito $dec
+    if ($modoCompleto) {
+        $ver.Text       = Get-PalavraVeredito $dec
+        $ver.Foreground = Get-PincelVeredito $dec
+    } else {
+        $ver.Text       = 'MEDICAO CONCLUIDA'
+        $ver.Foreground = Get-PincelVeredito 'medido'
+    }
     $w.FindName('btnSalvarResultado').IsEnabled     = $true
     $w.FindName('btnExportarPdf').IsEnabled         = $true
     $w.FindName('btnTransmitirResultado').IsEnabled = ($Global:FeitoSalvar -and -not $Global:FeitoTransmitir)
@@ -3345,6 +3436,7 @@ function Open-DiagnosticoLimpo {
     Reset-PainelFaseLocal
     Reset-Medicoes
     Set-ProgressoDiag $false
+    Set-ModoAssistente          # 5 ou 6 passos conforme o modo de avaliacao
     Show-WizardPasso 1
     Show-View 'viewDiag'
 }
@@ -3375,6 +3467,7 @@ function Start-DiagnosticoDoGuia {
         Write-Log "Local '$LocalId' nao esta no cache de juntas. Atualize os dados." -Nivel Aviso
     }
 
+    Set-ModoAssistente
     Show-WizardPasso 1
     Show-View 'viewDiag'
 }
@@ -3384,6 +3477,24 @@ function Start-DiagnosticoDoGuia {
 function Show-Admin {
     Initialize-Admin
     Show-View 'viewAdmin'
+}
+
+# Modo escolhido nos radios da tela de Administracao (antes de salvar).
+function Get-ModoAvaliacaoSelecionado {
+    $w = $Global:JanelaPrincipal
+    if ($w.FindName('rbModoCompleto').IsChecked)   { return 'completo' }
+    if ($w.FindName('rbModoReferencia').IsChecked) { return 'referencia' }
+    return 'medicao'
+}
+
+# 'medicao' nao classifica nada -> some as abas de limiares e o orcamento.
+function Update-VisibilidadeLimiaresAdmin {
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    $vis = if ((Get-ModoAvaliacaoSelecionado) -eq 'medicao') { 'Collapsed' } else { 'Visible' }
+    foreach ($n in 'tabLimiares', 'expOrcamentoVpn') {
+        $c = $w.FindName($n); if ($c) { $c.Visibility = $vis }
+    }
 }
 
 function Initialize-Admin {
@@ -3421,6 +3532,13 @@ function Initialize-Admin {
     $w.FindName('txtPinAdmin').Password = ''
     $w.FindName('lblAdminMsg').Text = ''
 
+    # modo de avaliacao (radio) + esconde os limiares quando nao ha o que classificar
+    $modoAv = Get-ModoAvaliacao
+    $w.FindName('rbModoMedicao').IsChecked    = ($modoAv -eq 'medicao')
+    $w.FindName('rbModoReferencia').IsChecked = ($modoAv -eq 'referencia')
+    $w.FindName('rbModoCompleto').IsChecked   = ($modoAv -eq 'completo')
+    Update-VisibilidadeLimiaresAdmin
+
     # ambiente de teste (iperf3) - config local
     $amb = $null
     try { $amb = Get-Config 'ambiente' } catch { }
@@ -3430,6 +3548,11 @@ function Initialize-Admin {
     $w.FindName('txtIperfDuracaoCfg').Text  = if ($ip -and $ip.duracao_s) { [string] $ip.duracao_s } else { '10' }
     $w.FindName('txtMapsKeyCfg').Text = Get-ChaveMapsStatic
     $w.FindName('lblAmbienteMsg').Text = ''
+
+    # conta Google (so aparece se o OAuth estiver ligado no ambiente.json)
+    $w.FindName('lblContaGoogleMsg').Text = ''
+    Stop-PollDeviceCode
+    Update-CardContaGoogle
 }
 
 function Invoke-SalvarAmbiente {
@@ -3543,9 +3666,10 @@ function Invoke-SalvarLimiares {
             $orc[$p[1]] = $n
         }
         $doc = [pscustomobject]@{
-            _comentario   = 'editado pela tela de Administracao do DICON'
-            orcamento_vpn = [pscustomobject] $orc
-            perfis        = [pscustomobject]@{ lan = $perfilLan; celular = $perfilCel; wifi_local = $perfilWifi }
+            _comentario    = 'editado pela tela de Administracao do DICON'
+            modo_avaliacao = Get-ModoAvaliacaoSelecionado
+            orcamento_vpn  = [pscustomobject] $orc
+            perfis         = [pscustomobject]@{ lan = $perfilLan; celular = $perfilCel; wifi_local = $perfilWifi }
         }
     } catch {
         $msg.Foreground = $vermelho
@@ -3631,6 +3755,94 @@ function Invoke-RecarregarLimiares {
         $msg.Foreground = [Windows.Media.Brushes]::OrangeRed
         $msg.Text = "Falha ao baixar: $_"
     }
+}
+
+# ------------------------------------------------------------- CONTA GOOGLE (OAuth)
+
+function Update-CardContaGoogle {
+    $w = $Global:JanelaPrincipal
+    $card = $w.FindName('cardContaGoogle')
+    if (-not $card) { return }
+    if (-not (Test-OAuthAtivo)) { $card.Visibility = 'Collapsed'; return }
+    $card.Visibility = 'Visible'
+    $email = Get-EmailGoogleConectado
+    $w.FindName('lblContaGoogle').Text = if ($email) { $email } else { 'nao conectada' }
+    $w.FindName('btnDesconectarGoogle').IsEnabled = [bool] $email
+}
+
+function Stop-PollDeviceCode {
+    if ($Global:ContaGoogleTimer) { try { $Global:ContaGoogleTimer.Stop() } catch { }; $Global:ContaGoogleTimer = $null }
+    try { Clear-DeviceInfoGoogle } catch { }
+    $w = $Global:JanelaPrincipal
+    if ($w) { $p = $w.FindName('panelDeviceCode'); if ($p) { $p.Visibility = 'Collapsed' } }
+}
+
+function Start-PollDeviceCode {
+    Stop-PollDeviceCode
+    $t = [Windows.Threading.DispatcherTimer]::new()
+    $t.Interval = [TimeSpan]::FromSeconds(1)
+    $t.Add_Tick({
+        try {
+            $di = Get-DeviceInfoGoogle
+            if (-not $di) { return }
+            $w = $Global:JanelaPrincipal
+            $w.FindName('txtDeviceCode').Text = [string] $di.user_code
+            $w.FindName('runDeviceUrl').Text  = [string] $di.verification_url
+            $w.FindName('panelDeviceCode').Visibility = 'Visible'
+        } catch { }
+    })
+    $Global:ContaGoogleTimer = $t
+    $t.Start()
+}
+
+# Conecta a conta Google (consentimento). -AoConectar: scriptblock rodado no
+# sucesso (ex.: re-disparar o "Baixar lista").
+function Invoke-ConectarGoogle {
+    param([scriptblock] $AoConectar)
+    if ($Global:TarefaRedeState) { Write-Log 'Aguarde a tarefa de rede em andamento.' -Nivel Aviso; return }
+    $w = $Global:JanelaPrincipal
+    $msg  = $w.FindName('lblContaGoogleMsg')
+    $ring = $w.FindName('ringContaGoogle')
+    if ($msg)  { $msg.Foreground = [Windows.Media.Brushes]::SkyBlue; $msg.Text = 'Conectando... siga no navegador.' }
+    if ($ring) { $ring.IsActive = $true; $ring.Visibility = 'Visible' }
+    $w.FindName('btnConectarGoogle').IsEnabled = $false
+    Start-PollDeviceCode
+    Start-TarefaRede -Script 'Connect-GoogleConta' -AoConcluir {
+        param($res, $erro)
+        Stop-PollDeviceCode
+        $w = $Global:JanelaPrincipal
+        $msg  = $w.FindName('lblContaGoogleMsg')
+        $ring = $w.FindName('ringContaGoogle')
+        if ($ring) { $ring.IsActive = $false; $ring.Visibility = 'Collapsed' }
+        $w.FindName('btnConectarGoogle').IsEnabled = $true
+        if ($erro) {
+            if ($msg) { $msg.Foreground = [Windows.Media.Brushes]::OrangeRed; $msg.Text = "Nao conectou: $erro" }
+        } else {
+            if ($msg) { $msg.Foreground = [Windows.Media.Brushes]::LightGreen; $msg.Text = "Conta conectada: $res" }
+            Update-CardContaGoogle
+            if ($Global:ConectarGoogleDepois) {
+                $cb = $Global:ConectarGoogleDepois; $Global:ConectarGoogleDepois = $null
+                try { & $cb } catch { }
+            }
+        }
+    }
+    if ($AoConectar) { $Global:ConectarGoogleDepois = $AoConectar }
+}
+
+function Invoke-DesconectarGoogle {
+    Disconnect-GoogleConta
+    Update-CardContaGoogle
+    $w = $Global:JanelaPrincipal
+    $msg = $w.FindName('lblContaGoogleMsg')
+    if ($msg) { $msg.Foreground = [Windows.Media.Brushes]::SkyBlue; $msg.Text = 'Conta desconectada deste computador.' }
+}
+
+# $true se um sync trouxe erro de "precisa conectar a conta Google".
+function Test-PrecisaConectarGoogle {
+    param($Res, $Erro)
+    if ("$Erro" -match 'CONECTAR_GOOGLE') { return $true }
+    if ($Res -and $Res.PSObject.Properties['erros'] -and (($Res.erros -join ' ') -match 'CONECTAR_GOOGLE')) { return $true }
+    return $false
 }
 
 # ------------------------------------------------------------- DIAGNOSTICO (JUNTAS)
@@ -3928,13 +4140,14 @@ function Show-PainelResultado {
     $Global:DiagPayload        = $Payload
     $Global:DecisaoFinalTocada = $false
 
+    $modoCompleto = Test-ModoCompleto
     $rows    = [System.Collections.ObjectModel.ObservableCollection[object]]::new()
     $rowsVpn = [System.Collections.ObjectModel.ObservableCollection[object]]::new()
     $rowsRl  = [System.Collections.ObjectModel.ObservableCollection[object]]::new()
     $addRow = {
         param($d, $fase, $dest)
-        $row = New-AvaliacaoRow -Detalhe $d -Fase $fase
-        if ($Overrides -and $Overrides.ContainsKey([string] $d.metrica)) {
+        $row = New-AvaliacaoRow -Detalhe $d -Fase $fase -MostrarVeredito $modoCompleto
+        if ($modoCompleto -and $Overrides -and $Overrides.ContainsKey([string] $d.metrica)) {
             $o = $Overrides[[string] $d.metrica]
             if ($o.classe_final) { $row.ClasseFinal = [string] $o.classe_final }
             $row.Justificativa = [string] $o.justificativa
@@ -3961,6 +4174,32 @@ function Show-PainelResultado {
     $Global:AvaliacaoRows = $rows
     $w.FindName('dgAvaliacaoVpn').ItemsSource = $rowsVpn
     $w.FindName('dgAvaliacaoRl').ItemsSource  = $rowsRl
+
+    # colunas por modo: medicao = so Metrica|Valor; referencia = + Faixa;
+    # completo = tudo (Sugerida / Classificacao / Motivo do ajuste).
+    $modo    = Get-ModoAvaliacao
+    $comFaixa = ($modo -ne 'medicao')
+    foreach ($n in 'colVpnFaixa', 'colRlFaixa') {
+        $c = $w.FindName($n); if ($c) { $c.Visibility = if ($comFaixa) { 'Visible' } else { 'Collapsed' } }
+    }
+    foreach ($n in 'colVpnSugerida', 'colVpnClasse', 'colVpnMotivo', 'colRlSugerida', 'colRlClasse', 'colRlMotivo') {
+        $c = $w.FindName($n); if ($c) { $c.Visibility = if ($modoCompleto) { 'Visible' } else { 'Collapsed' } }
+    }
+    # banner de sugestao informativa no topo do passo 4 (modo medicao/referencia)
+    $bSug  = $w.FindName('txtSugestaoResultado')
+    $bCard = $w.FindName('cardSugestaoResultado')
+    if ($bSug -and $bCard) {
+        $txt = ''
+        if (-not $modoCompleto -and @($Global:Medicoes | Where-Object { $_ -and -not $_.nao_aplicavel }).Count) {
+            $rc = Get-RecomendacaoLocal
+            if ($rc -and $rc.meio -ne 'nenhuma') {
+                $dl = if ($null -ne $rc.download_mbps) { (' - maior download {0:N1} Mbps' -f [double] $rc.download_mbps) } else { '' }
+                $txt = 'Sugestao de conexao para este local: {0}{1} (informativo, sem avaliacao de viabilidade).' -f $rc.rotulo, $dl
+            }
+        }
+        $bSug.Text = $txt
+        $bCard.Visibility = if ($txt) { 'Visible' } else { 'Collapsed' }
+    }
 
     Set-NotaRedeLocal $rli ($rowsRl.Count -gt 0)
     $dgRl = $w.FindName('dgAvaliacaoRl')
@@ -4038,11 +4277,14 @@ function Update-SeletorMedicoes {
         $tr = [Windows.Controls.TextBlock]::new()
         $tr.Text = [string] $p.med.rotulo; $tr.VerticalAlignment = 'Center'
         $sp.Children.Add($tr) | Out-Null
-        $tv = [Windows.Controls.TextBlock]::new()
-        $tv.Text = '  ' + (Get-PalavraVeredito $p.med.veredito)
-        $tv.VerticalAlignment = 'Center'; $tv.FontSize = 10
-        if ($pincelMudo) { $tv.Foreground = $pincelMudo }
-        $sp.Children.Add($tv) | Out-Null
+        $palavra = if ([string] $p.med.veredito -eq 'medido') { '' } else { '  ' + (Get-PalavraVeredito $p.med.veredito) }
+        if ($palavra) {
+            $tv = [Windows.Controls.TextBlock]::new()
+            $tv.Text = $palavra
+            $tv.VerticalAlignment = 'Center'; $tv.FontSize = 10
+            if ($pincelMudo) { $tv.Foreground = $pincelMudo }
+            $sp.Children.Add($tv) | Out-Null
+        }
         $ti.Header = $sp
         $tabs.Items.Add($ti) | Out-Null
     }
@@ -4087,6 +4329,12 @@ function Invoke-TrocarMedicaoPasso5 {
 function Update-DecisaoRecalculada {
     $w = $Global:JanelaPrincipal
     if (-not $Global:AvaliacaoRows) { return }
+    if (-not (Test-ModoCompleto)) {
+        # modo medicao/referencia: sem veredito recalculado (nao ha passo de decisao)
+        $Global:DecisaoRecalculada = 'medido'
+        $lr = $w.FindName('lblDecisaoRecalc'); if ($lr) { $lr.Text = '' }
+        return
+    }
 
     $classes = @($Global:AvaliacaoRows | ForEach-Object { $_.ClasseFinal })
     $recalc  = Get-ClassificacaoFinal $classes

@@ -241,6 +241,9 @@ try {
     Show-View 'viewHome'
 
     # 4. assistente pelo atalho do guia: abre no passo 1, Junta/Local pre-selecionados
+    # (blocos [4]..[5f] cobrem o modo 'completo' - viabilidade; o modo 'medicao'
+    #  e coberto no bloco [m] mais abaixo)
+    $Global:ModoAvaliacaoOverride = 'completo'
     Start-DiagnosticoDoGuia -LocalId 'ZE99-TESTE-PRINCIPAL'
     Invoke-Pump
     if ($w.FindName('viewDiag').Visibility -ne 'Visible' -or $Global:WizardStep -ne 1) {
@@ -718,6 +721,61 @@ try {
     Remove-VistoriaGel -LocalId 'ZE99-TESTE-PRINCIPAL'
     $Global:LocalDetalheAtual = $null
 
+    # m. modo de avaliacao 'medicao' (padrao de fabrica): assistente de 5 passos,
+    #    sem veredito/faixa/classificacao; relatorio = "Painel de Medicoes".
+    $Global:ModoAvaliacaoOverride = 'medicao'
+    Set-ModoAssistente
+    $passo5 = ($Global:WizardNPassos -eq 5) -and ($Global:WizardPassos -notcontains 'stepDecisao')
+    if ($passo5) { Write-Host "[m] modo medicao: assistente de 5 passos (pula a decisao)" }
+    else { Write-Host "    FALHA: assistente deveria ter 5 passos (n=$($Global:WizardNPassos) passos=$($Global:WizardPassos -join ','))"; $falhas++ }
+
+    Open-DiagnosticoLimpo
+    $cboJm = $w.FindName('cboJunta'); if ($cboJm.Items.Count) { $cboJm.SelectedIndex = 0 }
+    $cboLm = $w.FindName('cboLocal'); if ($cboLm.Items.Count) { $cboLm.SelectedIndex = 0 }
+    Show-WizardPasso ($Global:WizardPassos.IndexOf('stepResultado') + 1)
+    $met = [pscustomobject]@{ LatenciaMediaMs = 12; JitterMs = 1; PerdaPercentual = 0; BandaDownloadMbps = 90; BandaUploadMbps = 30; CarregamentoWebS = 3 }
+    $dec = Invoke-MotorDecisao -Metricas $met -Limiares (Get-PerfilLimiares -Meio lan -Cenario com_vpn)
+    $Global:Medicoes = @([pscustomobject]@{
+            meio = 'lan'; operadora = ''; rotulo = 'Rede cabeada (LAN)'; nao_aplicavel = $false
+            fase_local = $Global:FaseLocalPayload; rede_local_ok = $true; rede_local_download = 850
+            vpn_conectou = $true; vpn_motivo = ''; vpn_download = 90; metricas = $met; fase2_ok = $true
+            decisao = $dec; avaliacoes = @(); veredito = 'medido'; quando = (Get-Date).ToString('o') })
+    Show-PainelResultado -Payload ([pscustomobject]@{ Ambiente = (Get-EstadoAmbiente); Metricas = $met; Decisao = $dec; Local = $cboLm.SelectedItem.Dados })
+    Invoke-Pump
+    $colClasse = "$($w.FindName('colVpnClasse').Visibility)"
+    $colFaixaM = "$($w.FindName('colVpnFaixa').Visibility)"
+    $ver0 = "$($w.FindName('dgAvaliacaoVpn').Items[0].ClasseFinal)"
+    if ($colClasse -eq 'Collapsed' -and $colFaixaM -eq 'Collapsed' -and $ver0 -eq '') {
+        Write-Host "[m] passo 4: sem colunas de faixa/classificacao, sem veredito na linha"
+    } else { Write-Host "    FALHA: passo 4 (colClasse=$colClasse colFaixa=$colFaixaM ver='$ver0')"; $falhas++ }
+    # avanca do stepResultado -> deve cair no stepFim (nao stepDecisao)
+    Invoke-WizardProximo
+    if ($Global:WizardPassos[$Global:WizardStep - 1] -eq 'stepFim') { Write-Host "[m] passo 4 -> conclusao (pula a decisao)" }
+    else { Write-Host "    FALHA: nao pulou a decisao (step=$($Global:WizardStep) painel=$($Global:WizardPassos[$Global:WizardStep-1]))"; $falhas++ }
+
+    # modo 'referencia': aparece a faixa, mas nao a classificacao
+    $Global:ModoAvaliacaoOverride = 'referencia'
+    Show-PainelResultado -Payload ([pscustomobject]@{ Ambiente = (Get-EstadoAmbiente); Metricas = $met; Decisao = $dec; Local = $cboLm.SelectedItem.Dados })
+    Invoke-Pump
+    if ("$($w.FindName('colVpnFaixa').Visibility)" -eq 'Visible' -and "$($w.FindName('colVpnClasse').Visibility)" -eq 'Collapsed') {
+        Write-Host "[m] modo referencia: faixa visivel, classificacao oculta"
+    } else { Write-Host "    FALHA: modo referencia (faixa=$($w.FindName('colVpnFaixa').Visibility) classe=$($w.FindName('colVpnClasse').Visibility))"; $falhas++ }
+
+    # JSON + relatorio no modo medicao
+    $Global:ModoAvaliacaoOverride = 'medicao'
+    $recM = Get-ConexaoRecomendada @($Global:Medicoes) -Modo medicao
+    $docM = New-ResultadoJson -Ambiente (Get-EstadoAmbiente) -Metricas $met -Decisao $dec `
+        -Local $cboLm.SelectedItem.Dados -TecnicoNome 'TESTE' -FaseLocal $Global:FaseLocalPayload `
+        -Medicoes $Global:Medicoes -ConexaoRecomendada $recM
+    $htmlM = New-RelatorioHtml -Resultado $docM
+    if ($docM.modo_avaliacao -eq 'medicao' -and $htmlM -match 'Painel de Medi' -and $htmlM -notmatch 'Painel de Viabilidade') {
+        Write-Host "[m] JSON traz modo_avaliacao='medicao'; relatorio = Painel de Medicoes (sem Painel de Viabilidade)"
+    } else { Write-Host "    FALHA: json/relatorio modo medicao (modo=$($docM.modo_avaliacao))"; $falhas++ }
+
+    $Global:ModoAvaliacaoOverride = 'completo'   # [6]..[9] cobrem o modo completo
+    Reset-Medicoes
+    Clear-PainelResultado
+
     # 6. menu Inicio -> assistente abre limpo no passo 1
     Open-DiagnosticoLimpo
     $selLimpo    = $w.FindName('cboLocal').SelectedItem
@@ -995,6 +1053,7 @@ finally {
     $Global:PastaDadosOverride = $null
     $Global:FaseLocalSimulada  = $null
     $Global:VpnSimulada        = $null
+    $Global:ModoAvaliacaoOverride = $null
     Remove-Item $dataDir -Recurse -Force -EA SilentlyContinue
     # remove os JSON de resultado criados por este teste
     Get-ChildItem $pendDir -Filter *.json -EA SilentlyContinue |
