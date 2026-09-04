@@ -51,7 +51,17 @@ function Invoke-RecursoWebApp {
     $sep = if ($endpoint -match '\?') { '&' } else { '?' }
     $uri = "{0}{1}recurso={2}" -f $endpoint, $sep, $Recurso
 
-    $resp = Invoke-RestMethod -Method Get -Uri $uri -TimeoutSec $TimeoutS
+    # Web App como 'Qualquer pessoa do dominio' -> header OAuth (@{} se desligado).
+    for ($tent = 1; $tent -le 2; $tent++) {
+        $h = Get-CabecalhoAuthWebApp   # pode lancar CONECTAR_GOOGLE
+        $resp = Invoke-RestMethod -Method Get -Uri $uri -TimeoutSec $TimeoutS -Headers $h
+        # sem token valido, o Google devolve a pagina de login (HTML) em vez do JSON
+        if ((Test-OAuthAtivo) -and ($resp -is [string]) -and ($resp -match '(?i)<html|accounts\.google\.com')) {
+            if ($tent -eq 1) { Get-TokenGoogle -Forcar | Out-Null; continue }
+            throw 'CONECTAR_GOOGLE'
+        }
+        break
+    }
     if ($resp.erro) { throw "Web App retornou erro ($Recurso): $($resp.erro)" }
     return $resp
 }

@@ -51,11 +51,16 @@ function Send-Resultado {
         $resp  = $null
         $falha = $null
         try {
-            $resp = Invoke-RestMethod -Method Post -Uri $Endpoint -Body $corpo `
+            $h = try { Get-CabecalhoAuthWebApp } catch { throw }   # OAuth (@{} se desligado)
+            $resp = Invoke-RestMethod -Method Post -Uri $Endpoint -Body $corpo -Headers $h `
                                       -ContentType 'application/json; charset=utf-8' `
                                       -TimeoutSec 30 -MaximumRedirection 5
         } catch {
             $falha = "$_"
+            if ($falha -eq 'CONECTAR_GOOGLE') {
+                Write-Log 'Conta Google nao conectada - abra Administracao > Conta Google > Conectar. Resultado fica em pendentes.' -Nivel Erro
+                return $false
+            }
         }
 
         if ($null -ne $resp) {

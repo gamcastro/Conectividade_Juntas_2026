@@ -223,7 +223,12 @@ function Save-Limiares {
 
     $corpo = @{ acao = 'limiares.salvar'; pin = $Pin; limiares = $Limiares } | ConvertTo-Json -Depth 12
     try {
-        $resp = Invoke-RestMethod -Method Post -Uri $endpoint -Body $corpo `
+        $h = Get-CabecalhoAuthWebApp   # OAuth (@{} se desligado); pode lancar CONECTAR_GOOGLE
+    } catch {
+        return "erro:$_"
+    }
+    try {
+        $resp = Invoke-RestMethod -Method Post -Uri $endpoint -Body $corpo -Headers $h `
                                   -ContentType 'application/json; charset=utf-8' -TimeoutSec 30
     } catch {
         return "erro:$_"

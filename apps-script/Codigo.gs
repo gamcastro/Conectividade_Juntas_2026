@@ -602,7 +602,7 @@ function gravarResultado(dados) {
   var ss  = SpreadsheetApp.openById(_idResultados());
   var aba = ss.getSheetByName(ABA_RESULTADOS) || ss.insertSheet(ABA_RESULTADOS);
 
-  var COLS = ['recebido_em', 'tecnico', 'local_id', 'zona', 'municipio_termo', 'tipo',
+  var COLS = ['recebido_em', 'enviado_por', 'tecnico', 'local_id', 'zona', 'municipio_termo', 'tipo',
     'classificacao_final', 'classificacao_automatica', 'ajustada',
     'conexao_recomendada', 'operadora_recomendada', 'veredito_recomendado',
     'recomendacao_provisoria', 'motivo_recomendacao',
@@ -611,8 +611,8 @@ function gravarResultado(dados) {
   if (aba.getLastRow() === 0) {
     aba.appendRow(COLS);
   } else {
-    // migracao: planilha de versao anterior nao tem as colunas multi-meio.
     var head = aba.getRange(1, 1, 1, aba.getLastColumn()).getValues()[0];
+    // migracao: planilha de versao anterior nao tem as colunas multi-meio.
     if (head.indexOf('conexao_recomendada') === -1) {
       var novas = ['conexao_recomendada', 'operadora_recomendada', 'veredito_recomendado',
         'recomendacao_provisoria', 'motivo_recomendacao'];
@@ -620,8 +620,19 @@ function gravarResultado(dados) {
       var at = (jsonIdx === -1) ? head.length + 1 : jsonIdx + 1;  // antes da coluna 'json'
       aba.insertColumnsBefore(at, novas.length);
       aba.getRange(1, at, 1, novas.length).setValues([novas]);
+      head = aba.getRange(1, 1, 1, aba.getLastColumn()).getValues()[0];
+    }
+    // migracao: coluna 'enviado_por' (email OAuth do chamador, Web App DOMAIN).
+    if (head.indexOf('enviado_por') === -1) {
+      var tIdx = head.indexOf('tecnico');
+      var at2 = (tIdx === -1) ? head.length + 1 : tIdx + 1;
+      aba.insertColumnsBefore(at2, 1);
+      aba.getRange(1, at2).setValue('enviado_por');
     }
   }
+
+  var quem = '';
+  try { quem = Session.getActiveUser().getEmail() || ''; } catch (e) { quem = ''; }
 
   var m = dados.metricas || {};
   var l = dados.local || {};
@@ -634,6 +645,7 @@ function gravarResultado(dados) {
 
   var valores = {
     'recebido_em': new Date(),
+    'enviado_por': quem,
     'tecnico': (dados.tecnico || {}).nome || '',
     'local_id': l.id || '',
     'zona': l.zona_eleitoral || '',

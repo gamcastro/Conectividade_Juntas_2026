@@ -19,5 +19,12 @@
   "google_maps": {
     "_nota": "chave da Maps Static API (Google Cloud), restrita SO a essa API. Usada no anexo do GEL para gerar a imagem do mapa no relatorio. Preencher pela tela de Administracao.",
     "static_key": ""
+  },
+  "google_oauth": {
+    "_nota": "Autenticacao no Web App quando ele e publicado como 'Qualquer pessoa do dominio' (access: DOMAIN) em vez de anonimo. enabled=false -> nada muda. client_id/client_secret: credencial OAuth tipo 'App para computador' (Desktop) do projeto GCP; para app instalado o secret NAO e confidencial (seguranca vem do PKCE + loopback). Ver docs/oauth-google.md.",
+    "enabled": false,
+    "client_id": "",
+    "client_secret": "",
+    "scopes": "openid https://www.googleapis.com/auth/userinfo.email"
   }
 }

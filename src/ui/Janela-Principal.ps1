@@ -51,6 +51,9 @@ $Global:FeitoTransmitir    = $false
 $Global:FeitoExportar      = $false
 $Global:UltimoResultadoSalvo = $null # caminho do JSON gravado no passo 7
 
+$Global:ContaGoogleTimer     = $null # DispatcherTimer do poll do device-code (OAuth)
+$Global:ConectarGoogleDepois = $null # scriptblock a rodar quando a conta Google conectar
+
 # Ganchos de teste: preservam o valor definido ANTES de Import-Module -Force.
 if (-not (Get-Variable -Name ModoTeste -Scope Global -ErrorAction SilentlyContinue)) {
     $Global:ModoTeste = $false            # testes: nao abrir arquivos externos
@@ -63,6 +66,9 @@ if (-not (Get-Variable -Name VpnSimulada -Scope Global -ErrorAction SilentlyCont
 }
 if (-not (Get-Variable -Name BandaVpnSimulada -Scope Global -ErrorAction SilentlyContinue)) {
     $Global:BandaVpnSimulada = $null      # testes: resultado fixo p/ Test-BandaVpn (nao roda iperf3)
+}
+if (-not (Get-Variable -Name OAuthConfigOverride -Scope Global -ErrorAction SilentlyContinue)) {
+    $Global:OAuthConfigOverride = $null   # testes: bloco google_oauth fixo (Get-ConfigOAuth)
 }
 
 $Global:Views = @('viewLogin', 'viewHome', 'viewGuia', 'viewLocais', 'viewLocalDetalhe', 'viewDiag', 'viewAdmin')
@@ -370,6 +376,15 @@ function New-JanelaPrincipal {
     $window.FindName('btnRecarregarLimiares').Add_Click({ Invoke-RecarregarLimiares })
     $window.FindName('btnAplicarOrcamento').Add_Click({ Invoke-AplicarOrcamento })
     $window.FindName('btnSalvarAmbiente').Add_Click({ Invoke-SalvarAmbiente })
+    $window.FindName('btnConectarGoogle').Add_Click({ Invoke-ConectarGoogle })
+    $window.FindName('btnDesconectarGoogle').Add_Click({ Invoke-DesconectarGoogle })
+    $window.FindName('btnCopiarDeviceCode').Add_Click({
+        try { [Windows.Clipboard]::SetText([string] $Global:JanelaPrincipal.FindName('txtDeviceCode').Text) } catch { }
+    })
+    $window.FindName('btnAbrirDeviceUrl').Add_Click({
+        $u = [string] $Global:JanelaPrincipal.FindName('runDeviceUrl').Text
+        if ($u) { try { Start-Process $u } catch { } }
+    })
     $window.FindName('lstGuiaJuntas').AddHandler(
         [Windows.Controls.Button]::ClickEvent,
         [Windows.RoutedEventHandler] {
@@ -574,6 +589,11 @@ function Invoke-BaixarListaLogin {
         Set-LoginBaixando $false
         Initialize-Login
         $w = $Global:JanelaPrincipal
+        if (Test-PrecisaConectarGoogle $res $erro) {
+            $w.FindName('txtLoginMsg').Text = 'Conecte a conta Google do TRE para baixar as listas... siga no navegador.'
+            Invoke-ConectarGoogle -AoConectar { Invoke-BaixarListaLogin }
+            return
+        }
         if ($erro) {
             $w.FindName('txtLoginMsg').Text = "Falha ao baixar: $erro"
         } elseif ($res) {
@@ -785,6 +805,10 @@ function Invoke-AtualizarDados {
     } -AoConcluir {
         param($res, $erro)
         Initialize-SeletorJuntas
+        if (Test-PrecisaConectarGoogle $res $erro) {
+            Write-Log 'Conta Google nao conectada - siga no navegador para autorizar.' -Nivel Aviso
+            Invoke-ConectarGoogle -AoConectar { Invoke-AtualizarDados }
+        }
         if ($Global:SessaoAtual) { Enter-Home -Sessao $Global:SessaoAtual }   # Enter-Home ja checa versao nova
     }
 }
@@ -3430,6 +3454,11 @@ function Initialize-Admin {
     $w.FindName('txtIperfDuracaoCfg').Text  = if ($ip -and $ip.duracao_s) { [string] $ip.duracao_s } else { '10' }
     $w.FindName('txtMapsKeyCfg').Text = Get-ChaveMapsStatic
     $w.FindName('lblAmbienteMsg').Text = ''
+
+    # conta Google (so aparece se o OAuth estiver ligado no ambiente.json)
+    $w.FindName('lblContaGoogleMsg').Text = ''
+    Stop-PollDeviceCode
+    Update-CardContaGoogle
 }
 
 function Invoke-SalvarAmbiente {
@@ -3631,6 +3660,94 @@ function Invoke-RecarregarLimiares {
         $msg.Foreground = [Windows.Media.Brushes]::OrangeRed
         $msg.Text = "Falha ao baixar: $_"
     }
+}
+
+# ------------------------------------------------------------- CONTA GOOGLE (OAuth)
+
+function Update-CardContaGoogle {
+    $w = $Global:JanelaPrincipal
+    $card = $w.FindName('cardContaGoogle')
+    if (-not $card) { return }
+    if (-not (Test-OAuthAtivo)) { $card.Visibility = 'Collapsed'; return }
+    $card.Visibility = 'Visible'
+    $email = Get-EmailGoogleConectado
+    $w.FindName('lblContaGoogle').Text = if ($email) { $email } else { 'nao conectada' }
+    $w.FindName('btnDesconectarGoogle').IsEnabled = [bool] $email
+}
+
+function Stop-PollDeviceCode {
+    if ($Global:ContaGoogleTimer) { try { $Global:ContaGoogleTimer.Stop() } catch { }; $Global:ContaGoogleTimer = $null }
+    try { Clear-DeviceInfoGoogle } catch { }
+    $w = $Global:JanelaPrincipal
+    if ($w) { $p = $w.FindName('panelDeviceCode'); if ($p) { $p.Visibility = 'Collapsed' } }
+}
+
+function Start-PollDeviceCode {
+    Stop-PollDeviceCode
+    $t = [Windows.Threading.DispatcherTimer]::new()
+    $t.Interval = [TimeSpan]::FromSeconds(1)
+    $t.Add_Tick({
+        try {
+            $di = Get-DeviceInfoGoogle
+            if (-not $di) { return }
+            $w = $Global:JanelaPrincipal
+            $w.FindName('txtDeviceCode').Text = [string] $di.user_code
+            $w.FindName('runDeviceUrl').Text  = [string] $di.verification_url
+            $w.FindName('panelDeviceCode').Visibility = 'Visible'
+        } catch { }
+    })
+    $Global:ContaGoogleTimer = $t
+    $t.Start()
+}
+
+# Conecta a conta Google (consentimento). -AoConectar: scriptblock rodado no
+# sucesso (ex.: re-disparar o "Baixar lista").
+function Invoke-ConectarGoogle {
+    param([scriptblock] $AoConectar)
+    if ($Global:TarefaRedeState) { Write-Log 'Aguarde a tarefa de rede em andamento.' -Nivel Aviso; return }
+    $w = $Global:JanelaPrincipal
+    $msg  = $w.FindName('lblContaGoogleMsg')
+    $ring = $w.FindName('ringContaGoogle')
+    if ($msg)  { $msg.Foreground = [Windows.Media.Brushes]::SkyBlue; $msg.Text = 'Conectando... siga no navegador.' }
+    if ($ring) { $ring.IsActive = $true; $ring.Visibility = 'Visible' }
+    $w.FindName('btnConectarGoogle').IsEnabled = $false
+    Start-PollDeviceCode
+    Start-TarefaRede -Script 'Connect-GoogleConta' -AoConcluir {
+        param($res, $erro)
+        Stop-PollDeviceCode
+        $w = $Global:JanelaPrincipal
+        $msg  = $w.FindName('lblContaGoogleMsg')
+        $ring = $w.FindName('ringContaGoogle')
+        if ($ring) { $ring.IsActive = $false; $ring.Visibility = 'Collapsed' }
+        $w.FindName('btnConectarGoogle').IsEnabled = $true
+        if ($erro) {
+            if ($msg) { $msg.Foreground = [Windows.Media.Brushes]::OrangeRed; $msg.Text = "Nao conectou: $erro" }
+        } else {
+            if ($msg) { $msg.Foreground = [Windows.Media.Brushes]::LightGreen; $msg.Text = "Conta conectada: $res" }
+            Update-CardContaGoogle
+            if ($Global:ConectarGoogleDepois) {
+                $cb = $Global:ConectarGoogleDepois; $Global:ConectarGoogleDepois = $null
+                try { & $cb } catch { }
+            }
+        }
+    }
+    if ($AoConectar) { $Global:ConectarGoogleDepois = $AoConectar }
+}
+
+function Invoke-DesconectarGoogle {
+    Disconnect-GoogleConta
+    Update-CardContaGoogle
+    $w = $Global:JanelaPrincipal
+    $msg = $w.FindName('lblContaGoogleMsg')
+    if ($msg) { $msg.Foreground = [Windows.Media.Brushes]::SkyBlue; $msg.Text = 'Conta desconectada deste computador.' }
+}
+
+# $true se um sync trouxe erro de "precisa conectar a conta Google".
+function Test-PrecisaConectarGoogle {
+    param($Res, $Erro)
+    if ("$Erro" -match 'CONECTAR_GOOGLE') { return $true }
+    if ($Res -and $Res.PSObject.Properties['erros'] -and (($Res.erros -join ' ') -match 'CONECTAR_GOOGLE')) { return $true }
+    return $false
 }
 
 # ------------------------------------------------------------- DIAGNOSTICO (JUNTAS)

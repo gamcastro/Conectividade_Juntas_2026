@@ -43,7 +43,18 @@ e `rootDir` vazio.)
 ## Config extra
 
 - `?recurso=juntas` -> Juntas/locais; `?recurso=tecnicos`; `?recurso=roteiros`; `?recurso=limiares`.
-- Planilha de config (limiares): `1wAZTeRsbDcFL4lyLF0J9pOmtR-cGElSh93HSpMKTCww` (aba `Limiares`, criada no 1o salvar).
+- Planilha de config (limiares): `1wAZTeRsbDcFL4lyLF0J9pOmtR-cGElSh93HSpMKTCww` (aba `Limiares`, celula A2 = JSON aninhado, criada no 1o salvar).
+
+## Acesso do Web App: DOMAIN (v0.6.69+)
+
+O `appsscript.json` esta com `"access": "DOMAIN"` ("Qualquer pessoa do dominio")
+em vez de `ANYONE_ANONYMOUS` -> o `clasp redeploy` **nao** cai mais no erro
+"ANYONE access has been disabled by your domain administrator" (a politica do
+Workspace so barra o anonimo). O cliente DICON autentica com OAuth quando
+`config/ambiente.json > google_oauth.enabled` (ver `docs/oauth-google.md`).
+Se uma implantacao antiga estiver fixada numa versao anonima, edite-a no editor
+(Implantar > Gerenciar implantacoes > lapis > Versao: nova) apontando para a
+versao nova com `access: DOMAIN`.
 
 ## PIN do admin (para "Salvar limiares")
 

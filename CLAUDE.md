@@ -359,6 +359,20 @@ resultado (`New-ResultadoJson`).
 - `Send-Resultado` só move para `resultados/enviados/` com resposta
   `{status:'ok'}`; `erro`/`ignorado` mantêm o arquivo em `pendentes/`.
 - Teste: `tools/Testar-Envio.ps1` (HttpListener local simula o Apps Script).
+- **Autenticação Google (v0.6.69, `src/core/AuthGoogle.ps1`)**: quando
+  `config/ambiente.json > google_oauth.enabled` (padrão `false`), toda chamada ao
+  `/exec` (`Invoke-RecursoWebApp`, `Save-Limiares`, `Send-Resultado`) leva
+  `Authorization: Bearer <token>` de uma conta `@tre-ma.jus.br` — para o Web App
+  publicado como `access: DOMAIN` (contorna o bloqueio de Web App anônimo do
+  Workspace). `Get-CabecalhoAuthWebApp` (=`@{}` se desligado) resolve/renova o
+  token; refresh token guardado com **DPAPI** em
+  `%LOCALAPPDATA%\DICON\google-refresh.dat` (por usuário Windows). Consentimento
+  **1×/máquina**: loopback `127.0.0.1` (PKCE, sem admin) ou fallback device‑code.
+  UI: card **"Conta Google"** em Administração (`btnConectarGoogle`/`btnDesconectarGoogle`,
+  `panelDeviceCode`); login e "Atualizar dados" tratam o erro `CONECTAR_GOOGLE`
+  chamando `Invoke-ConectarGoogle`. `Codigo.gs` grava `enviado_por` (email do
+  chamador). Setup GCP + rollout em `docs/oauth-google.md`. Teste:
+  `tools/Testar-AuthGoogle.ps1`.
 
 ## Ainda em aberto
 - Limiares exatos de latência/perda/banda/tempo de carregamento por meio ×
@@ -366,9 +380,11 @@ resultado (`New-ResultadoJson`).
   orçamento de VPN provisório para o COM VPN; falta calibrar em campo/homologação
   contra `10.11.1.38` e com o time da totalização) — ver
   `docs/limiares-referencia.md`
-- **Reimplantar o `apps-script/Codigo.gs`** (clasp) com o novo formato aninhado
-  de limiares (célula A2). Até lá o sync/save online fica off e o config local
-  manda
+- **Ligar o OAuth + reimplantar o Web App como `DOMAIN`** (v0.6.69): criar a
+  credencial GCP Desktop, preencher `google_oauth` no `ambiente.exemplo.json`,
+  ligar `enabled`, e `clasp redeploy` (homologação → produção). Traz o
+  `Codigo.gs` novo (limiares aninhados) e destrava o sync/save online. Até lá o
+  config local manda. Ver `docs/oauth-google.md`.
 - Coleta real das métricas da Fase 2 (iperf3 + Selenium + ping) validada ponta a
   ponta (a Fase 1 — rede local — já coleta de verdade)
 - Checagem por meio via overlay modal (v0.6.29+, rollback: tag
