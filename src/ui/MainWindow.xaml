@@ -1181,6 +1181,9 @@
                                                Margin="0,0,0,6"/>
                                     <TextBlock x:Name="txtNaJustifMeio" FontFamily="Consolas" FontSize="11"
                                                Foreground="{DynamicResource Dicon.Text3}" Margin="0,0,0,8"/>
+                                    <TextBlock Text="Motivo mais comum? Escolha uma sugest&#227;o ou use &#171;Outro&#187; pra digitar:"
+                                               FontSize="12" Foreground="{DynamicResource Dicon.Text2}" Margin="0,0,0,6"/>
+                                    <WrapPanel x:Name="wrapNaSugestoes" Margin="0,0,0,10"/>
                                     <TextBlock Text="Justificativa (obrigat&#243;ria &#8212; vai no relat&#243;rio; o meio fica INVI&#193;VEL):"
                                                FontSize="12" Foreground="{DynamicResource Dicon.Text2}" Margin="0,0,0,4"/>
                                     <TextBox x:Name="txtNaJustif" MinHeight="70" TextWrapping="Wrap" AcceptsReturn="True"

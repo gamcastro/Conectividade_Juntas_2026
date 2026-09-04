@@ -1744,6 +1744,71 @@ function Get-ChkNaNome {
     switch ($Meio) { 'lan' { 'chkNaLan' } 'wifi_local' { 'chkNaWifi' } 'celular' { 'chkNaCelular' } default { '' } }
 }
 
+# Motivos mais comuns de "nao se aplica", por meio -- so' sugestoes: o
+# tecnico ainda pode editar o texto livremente depois de escolher uma, ou
+# usar "Outro" pra digitar do zero.
+function Get-SugestoesNaMeio {
+    param([string] $Meio)
+    switch ($Meio) {
+        'lan' {
+            'Nao tem ponto de rede no local',
+            'Cabo de rede nao alcanca a sala',
+            'Placa de rede com defeito',
+            'Sem infraestrutura de rede cabeada'
+        }
+        'wifi_local' {
+            'Nao tem Wi-Fi no local',
+            'Sinal do Wi-Fi muito fraco',
+            'Nao foi informada a senha da rede',
+            'Wi-Fi de uso restrito/corporativo'
+        }
+        'celular' {
+            'Sem sinal de celular no local',
+            'Sem chip/plano de dados disponivel',
+            'Bateria do celular insuficiente',
+            'Roteamento (hotspot) nao disponivel no aparelho'
+        }
+        default { @() }
+    }
+}
+
+# Monta os "chips" de sugestao (+ "Outro") no wrapNaSugestoes, um Button por
+# opcao. Cada botao guarda o proprio texto no .Tag; o clique le $this.Tag --
+# nao fecha sobre a variavel do laco (evita o problema classico de closure
+# em PowerShell, sem precisar de .GetNewClosure()).
+function Update-SugestoesNaMeio {
+    param([string] $Meio)
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    $wrap = $w.FindName('wrapNaSugestoes')
+    if (-not $wrap) { return }
+    $wrap.Children.Clear()
+    $estiloChip = $w.TryFindResource('BotaoFantasma')
+    foreach ($texto in @(Get-SugestoesNaMeio $Meio) + 'Outro (digitar)') {
+        $btn = [Windows.Controls.Button]::new()
+        $btn.Content = $texto
+        $btn.Tag     = $texto
+        if ($estiloChip) { $btn.Style = $estiloChip }
+        $btn.Margin  = [Windows.Thickness]::new(0, 0, 8, 8)
+        $btn.Padding = [Windows.Thickness]::new(12, 5, 12, 5)
+        $btn.FontSize = 12.5
+        $btn.Add_Click({ Invoke-NaSugestaoEscolhida -Texto $this.Tag })
+        [void] $wrap.Children.Add($btn)
+    }
+}
+
+# Clique num "chip" de sugestao: preenche a justificativa (o tecnico ainda
+# pode editar); "Outro" so' limpa e foca o campo pra digitar do zero.
+function Invoke-NaSugestaoEscolhida {
+    param([string] $Texto)
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    $tb = $w.FindName('txtNaJustif')
+    if (-not $tb) { return }
+    $tb.Text = if ($Texto -eq 'Outro (digitar)') { '' } else { $Texto }
+    try { $tb.Focus(); $tb.CaretIndex = $tb.Text.Length } catch { }
+}
+
 # Abre o card de justificativa "nao se aplica" para um meio.
 function Open-CardNaJustif {
     param([string] $Meio)
@@ -1755,6 +1820,7 @@ function Open-CardNaJustif {
     }
     $Global:NaMeioPendente = $Meio
     $w.FindName('txtNaJustifMeio').Text = 'Meio: ' + (Get-RotuloMeio $Meio '')
+    Update-SugestoesNaMeio $Meio
     $ja = if ($Global:MeiosNaoAplicaveis.ContainsKey($Meio)) { [string] $Global:MeiosNaoAplicaveis[$Meio] } else { '' }
     $w.FindName('txtNaJustif').Text = $ja
     $w.FindName('cardNaJustif').Visibility = 'Visible'

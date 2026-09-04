@@ -485,6 +485,23 @@ try {
     if ("$($w.FindName('cardNaJustif').Visibility)" -eq 'Visible' -and $Global:NaMeioPendente -eq 'lan') {
         Write-Host "[4f] marcar 'nao se aplica' abre o card de justificativa"
     } else { Write-Host "    FALHA: card de justificativa nao abriu (vis=$($w.FindName('cardNaJustif').Visibility) pend='$($Global:NaMeioPendente)')"; $falhas++ }
+
+    # 4f-2. chips de sugestao de motivo (por meio) + "Outro" pra digitar
+    $wrapSug = $w.FindName('wrapNaSugestoes')
+    $sugEsperado = (@(Get-SugestoesNaMeio 'lan')).Count + 1   # + "Outro (digitar)"
+    if ($wrapSug.Children.Count -eq $sugEsperado) { Write-Host "[4f] chips de sugestao da LAN: $($wrapSug.Children.Count) (incl. Outro)" }
+    else { Write-Host "    FALHA: chips de sugestao (esperado=$sugEsperado obtido=$($wrapSug.Children.Count))"; $falhas++ }
+    $chip1 = $wrapSug.Children[0]
+    $chip1.RaiseEvent([Windows.RoutedEventArgs]::new([Windows.Controls.Button]::ClickEvent))
+    Invoke-Pump
+    if ($w.FindName('txtNaJustif').Text -eq [string] $chip1.Tag) { Write-Host "[4f] clicar num chip preenche a justificativa ('$($chip1.Tag)')" }
+    else { Write-Host "    FALHA: clique no chip nao preencheu (txt='$($w.FindName('txtNaJustif').Text)')"; $falhas++ }
+    $chipOutro = @($wrapSug.Children) | Where-Object { $_.Tag -eq 'Outro (digitar)' } | Select-Object -First 1
+    $chipOutro.RaiseEvent([Windows.RoutedEventArgs]::new([Windows.Controls.Button]::ClickEvent))
+    Invoke-Pump
+    if ("$($w.FindName('txtNaJustif').Text)" -eq '') { Write-Host "[4f] chip 'Outro' limpa o campo pra digitar do zero" }
+    else { Write-Host "    FALHA: 'Outro' nao limpou o campo (txt='$($w.FindName('txtNaJustif').Text)')"; $falhas++ }
+
     Invoke-NaRegistrar   # sem texto -> nao registra
     if (-not $Global:MeiosNaoAplicaveis.ContainsKey('lan')) { Write-Host "[4f] 'Registrar' sem justificativa nao grava" }
     else { Write-Host "    FALHA: registrou sem justificativa"; $falhas++ }
