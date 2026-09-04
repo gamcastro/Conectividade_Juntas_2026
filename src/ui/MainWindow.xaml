@@ -1934,6 +1934,12 @@
                         <StackPanel x:Name="rowChkAcao" Orientation="Horizontal" Margin="0,0,0,6">
                             <Button x:Name="btnChkIniciar" Content="Iniciar checagem da rede local"
                                     Style="{DynamicResource BotaoPrimario}" Padding="22,9"/>
+                            <Button x:Name="btnChkRefazerFase1" Content="Refazer Fase 1" Margin="10,0,0,0"
+                                    Style="{DynamicResource BotaoSecundario}" Padding="16,9" Visibility="Collapsed"
+                                    ToolTip="Reroda a rede local (sem VPN); o resultado passa a ser a media com a(s) tentativa(s) anterior(es)"/>
+                            <Button x:Name="btnChkRefazerFase2" Content="Refazer Fase 2 (VPN)" Margin="10,0,0,0"
+                                    Style="{DynamicResource BotaoSecundario}" Padding="16,9" Visibility="Collapsed"
+                                    ToolTip="Reroda o diagnostico com a VPN; o resultado passa a ser a media com a(s) tentativa(s) anterior(es)"/>
                             <mah:ProgressRing x:Name="ringChk" Width="18" Height="18" Margin="12,0,0,0"
                                               IsActive="False" Visibility="Collapsed"
                                               Foreground="{DynamicResource Dicon.Accent}"/>

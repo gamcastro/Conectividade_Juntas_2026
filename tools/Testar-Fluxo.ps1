@@ -471,6 +471,73 @@ try {
         Write-Host "[4d] semaforo (1 e 2) fica verde/'testado' mesmo com veredito '$($medCel.veredito)' -- so informa que rodou"
     } else { Write-Host "    FALHA: semaforo nao ficou verde/testado (cor1=$cor1 cor2=$cor2 txt1='$txt1' txt2='$txt2' veredito=$($medCel.veredito))"; $falhas++ }
 
+    # 4d-3. "Refazer Fase 1" dentro do mesmo overlay -- so aparece depois de 1
+    # tentativa, acumula em Fase1Tentativas e o resultado exibido/gravado vira
+    # a MEDIA (nao so a ultima tentativa). O medio ja existe (ChkFase='fim'),
+    # entao Complete-RefazerFase1 tem que atualiza-lo tambem.
+    # Guarda o estado pre-"refazer" p/ devolver depois -- os cenarios seguintes
+    # ([5] passo 4 etc.) esperam os numeros originais (855.63 Mbps) do meio
+    # Celular, nao a media que este teste do "Refazer" produz de proposito.
+    $preFase1Tentativas = $Global:Fase1Tentativas
+    $preFase1Payload    = $Global:FaseLocalPayload
+    $preFase2Tentativas = $Global:Fase2Tentativas
+    $preFase2Payload    = $Global:DiagPayload
+    if ("$($w.FindName('btnChkRefazerFase1').Visibility)" -eq 'Visible' -and "$($w.FindName('btnChkRefazerFase2').Visibility)" -eq 'Visible') {
+        Write-Host "[4d-3] botoes 'Refazer Fase 1/2' aparecem apos a 1a tentativa de cada fase"
+    } else { Write-Host "    FALHA: botoes de refazer nao apareceram (f1=$($w.FindName('btnChkRefazerFase1').Visibility) f2=$($w.FindName('btnChkRefazerFase2').Visibility))"; $falhas++ }
+    $downloadOriginal = $Global:FaseLocalSimulada.Internet.download_mbps
+    $downloadEsperadoMedia = [math]::Round((($downloadOriginal + ($downloadOriginal + 100)) / 2), 2)
+    $Global:FaseLocalSimulada.Internet.download_mbps = $downloadOriginal + 100
+    Invoke-RefazerFase1
+    $deadline = (Get-Date).AddSeconds($TimeoutS)
+    while ((Get-Date) -lt $deadline) {
+        Invoke-Pump ; Start-Sleep -Milliseconds 120
+        if ($null -eq $Global:TarefaRedeState -and @($Global:Fase1Tentativas).Count -ge 2) { break }
+    }
+    $Global:FaseLocalSimulada.Internet.download_mbps = $downloadOriginal   # devolve p/ nao afetar cenarios seguintes
+    $medCelPos1 = @($Global:Medicoes | Where-Object { $_.meio -eq 'celular' -and -not $_.nao_aplicavel } | Select-Object -First 1)
+    if (@($Global:Fase1Tentativas).Count -eq 2 -and $Global:FaseLocalPayload.Internet.download_mbps -eq $downloadEsperadoMedia -and
+        $medCelPos1 -and $medCelPos1.fase1_tentativas -eq 2) {
+        Write-Host "[4d-3] 'Refazer Fase 1' acumulou 2 tentativas e gravou a media ($($Global:FaseLocalPayload.Internet.download_mbps) Mbps) no medio"
+    } else {
+        Write-Host "    FALHA: refazer Fase 1 nao mediou certo (tentativas=$(@($Global:Fase1Tentativas).Count) download=$($Global:FaseLocalPayload.Internet.download_mbps) esperado=$downloadEsperadoMedia medio.fase1_tentativas=$($medCelPos1.fase1_tentativas))"
+        $falhas++
+    }
+
+    # 4d-4. "Refazer Fase 2" (VPN): mesma ideia, mas agora com um valor real de
+    # banda (a 1a tentativa simulada tem DownloadMbps=$null -- Get-MediaSegura
+    # ignora nulos, entao a media so' considera as tentativas com numero).
+    $Global:BandaVpnSimulada.iperf_ok = $true
+    $Global:BandaVpnSimulada.DownloadMbps = 20
+    $Global:BandaVpnSimulada.UploadMbps = 5
+    Invoke-RefazerFase2
+    $deadline = (Get-Date).AddSeconds($TimeoutS)
+    while ((Get-Date) -lt $deadline) {
+        Invoke-Pump ; Start-Sleep -Milliseconds 120
+        if ($null -eq $Global:DiagRunState -and @($Global:Fase2Tentativas).Count -ge 2) { break }
+    }
+    $Global:BandaVpnSimulada.iperf_ok = $false   # devolve aos defaults p/ nao afetar cenarios seguintes
+    $Global:BandaVpnSimulada.DownloadMbps = $null
+    $Global:BandaVpnSimulada.UploadMbps = $null
+    $medCelPos2 = @($Global:Medicoes | Where-Object { $_.meio -eq 'celular' -and -not $_.nao_aplicavel } | Select-Object -First 1)
+    if (@($Global:Fase2Tentativas).Count -eq 2 -and $Global:DiagPayload.Metricas.BandaDownloadMbps -eq 20 -and
+        $medCelPos2 -and $medCelPos2.fase2_tentativas -eq 2) {
+        Write-Host "[4d-4] 'Refazer Fase 2' acumulou 2 tentativas e gravou a media (banda=$($Global:DiagPayload.Metricas.BandaDownloadMbps) Mbps) no medio"
+    } else {
+        Write-Host "    FALHA: refazer Fase 2 nao mediou certo (tentativas=$(@($Global:Fase2Tentativas).Count) banda=$($Global:DiagPayload.Metricas.BandaDownloadMbps) medio.fase2_tentativas=$($medCelPos2.fase2_tentativas))"
+        $falhas++
+    }
+
+    # devolve o estado do meio Celular como estava antes do teste do "Refazer"
+    # (uma so' tentativa por fase, numeros originais) -- os cenarios seguintes
+    # dependem dos numeros exatos da 1a rodada, nao da media que este teste gerou.
+    $Global:Fase1Tentativas = $preFase1Tentativas
+    $Global:FaseLocalPayload = $preFase1Payload
+    $Global:Fase2Tentativas = $preFase2Tentativas
+    $Global:DiagPayload = $preFase2Payload
+    Add-MedicaoAtual
+    Set-ChkBotao
+
     Close-OverlayCheck
     Invoke-Pump
     if ("$($w.FindName('overlayCheck').Visibility)" -eq 'Collapsed' -and -not $Global:CheckMeioAtivo) {

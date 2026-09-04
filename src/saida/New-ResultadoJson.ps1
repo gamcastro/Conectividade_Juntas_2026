@@ -212,6 +212,11 @@ function New-ResultadoJson {
             perda_percentual      = (Get-Prop $mMet 'PerdaPercentual')
             veredito             = [string] (Get-Prop $m 'veredito')
             quando               = [string] (Get-Prop $m 'quando')
+            # Quantas tentativas foram combinadas na media (0/1 = tecnico nao
+            # usou "Refazer Fase 1/2" no overlay; ver Get-Fase1Media/Get-Fase2Media
+            # em src/ui/Janela-Principal.ps1).
+            rede_local_tentativas = (Get-Prop $m 'fase1_tentativas')
+            vpn_tentativas        = (Get-Prop $m 'fase2_tentativas')
         }
     }
 

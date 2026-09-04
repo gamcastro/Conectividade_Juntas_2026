@@ -29,6 +29,8 @@ $Global:MeioSelecionado    = ''      # card do passo 3 selecionado p/ testar: ''
 $Global:CheckMeioAtivo     = $false  # overlay de checagem de um meio esta aberto/rodando
 $Global:ChkFase            = ''      # estado do overlay: ''|f1-pronto|f1-rodando|f2-pronto|f2-rodando|fim
 $Global:NaMeioPendente     = ''      # meio com "nao se aplica" marcado, aguardando a justificativa
+$Global:Fase1Tentativas    = @()     # payloads brutos de Invoke-FaseLocal desta sessao de overlay ("Refazer")
+$Global:Fase2Tentativas    = @()     # payloads brutos de Invoke-DiagnosticoCompleto desta sessao de overlay
 $Global:RailTravadoDiag    = $false  # assistente de diagnostico aberto: rail preso (so libera ao Finalizar/Sair)
 
 # --- multi-meio: o local pode ter varias medicoes, uma por meio de conexao ---
@@ -317,6 +319,8 @@ function New-JanelaPrincipal {
     $window.FindName('btnCheckWifi').Add_Click({ Invoke-CheckMeio 'wifi' })
     $window.FindName('btnCheckCelular').Add_Click({ Invoke-CheckMeio 'celular' })
     $window.FindName('btnChkIniciar').Add_Click({ Invoke-ChkAvancar })
+    $window.FindName('btnChkRefazerFase1').Add_Click({ Invoke-RefazerFase1 })
+    $window.FindName('btnChkRefazerFase2').Add_Click({ Invoke-RefazerFase2 })
     $window.FindName('btnChkFechar').Add_Click({ Close-OverlayCheck })
     $window.FindName('btnChkVpnImpossivel').Add_Click({ Invoke-CheckVpnImpossivel })
     $window.FindName('btnAbrirFortiClient').Add_Click({ Invoke-AbrirFortiClient })
@@ -2764,11 +2768,18 @@ function Set-ChkBotao {
         'f2-vpn-ok'  { $b.Content = if ($jeDir) { 'Iniciar checagem da rede interna' } else { 'Iniciar diagnostico com a VPN' }; $b.Visibility = 'Visible'; $b.IsEnabled = $true }
         default      { $b.Visibility = 'Collapsed' }
     }
+    $rod = $Global:ChkFase -in @('f1-rodando', 'f2-rodando')
     $r = $w.FindName('ringChk')
     if ($r) {
-        $rod = $Global:ChkFase -in @('f1-rodando', 'f2-rodando')
         $r.IsActive = $rod ; $r.Visibility = if ($rod) { 'Visible' } else { 'Collapsed' }
     }
+    # "Refazer Fase 1/2": aparecem depois que a fase correspondente completou
+    # pelo menos 1 vez nesta sessao de overlay (Fase1Tentativas/Fase2Tentativas),
+    # escondidos enquanto alguma tarefa esta rodando.
+    $b1 = $w.FindName('btnChkRefazerFase1')
+    if ($b1) { $b1.Visibility = if (@($Global:Fase1Tentativas).Count -and -not $rod) { 'Visible' } else { 'Collapsed' } }
+    $b2 = $w.FindName('btnChkRefazerFase2')
+    if ($b2) { $b2.Visibility = if (@($Global:Fase2Tentativas).Count -and -not $rod) { 'Visible' } else { 'Collapsed' } }
 }
 
 # Alterna as 3 colunas do corpo entre Fase 1 (Ookla) e Fase 2 (iperf3).
@@ -2945,6 +2956,8 @@ function Invoke-CheckMeio {
     $Global:FaseLocalTipo  = $Meio
     $Global:CheckMeioAtivo = $true
     $Global:DiagPayload    = $null
+    $Global:Fase1Tentativas = @()
+    $Global:Fase2Tentativas = @()
     if ($Global:LogEntries) { $Global:LogEntries.Clear() }
 
     $mo  = Get-MeioDoPasso3
@@ -2967,6 +2980,47 @@ function Invoke-ChkAvancar {
     }
 }
 
+# Media aritmetica de uma lista de valores (ignora $null); $null se todos
+# forem $null. Usada pra combinar tentativas repetidas de uma mesma fase.
+function Get-MediaSegura {
+    param($Valores)
+    $n = @($Valores | Where-Object { $null -ne $_ })
+    if (-not $n.Count) { return $null }
+    [math]::Round((($n | Measure-Object -Average).Average), 2)
+}
+
+# Clona um objeto via round-trip JSON (mesmo idioma de New-MedicaoAtual pro
+# snapshot_adaptador) -- protege contra o objeto de origem ser reaproveitado/
+# mutado depois (ex.: $Global:FaseLocalSimulada e' o mesmo objeto a cada
+# chamada, no hook de teste).
+function Copy-ObjetoProfundo {
+    param($Objeto)
+    if ($null -eq $Objeto) { return $null }
+    $Objeto | ConvertTo-Json -Depth 8 -Compress | ConvertFrom-Json
+}
+
+# Combina N payloads de Invoke-FaseLocal (Fase 1) numa media: os campos
+# numericos de Internet (download/upload/ping/jitter/perda) viram a media de
+# todas as tentativas; Lan/Wireless/Host/TipoUsado vem da ULTIMA tentativa
+# (nao ha o que "mediar" numa placa de rede).
+function Get-Fase1Media {
+    param($Tentativas)
+    $lista = @($Tentativas | Where-Object { $_ })
+    if (-not $lista.Count) { return $null }
+    $resultado = Copy-ObjetoProfundo $lista[-1]
+    if ($resultado.PSObject.Properties['Internet'] -and $resultado.Internet) {
+        $it = $resultado.Internet
+        $it.download_mbps = Get-MediaSegura ($lista | ForEach-Object { $_.Internet.download_mbps })
+        $it.upload_mbps   = Get-MediaSegura ($lista | ForEach-Object { $_.Internet.upload_mbps })
+        $it.ping_ms       = Get-MediaSegura ($lista | ForEach-Object { $_.Internet.ping_ms })
+        $it.jitter_ms     = Get-MediaSegura ($lista | ForEach-Object { $_.Internet.jitter_ms })
+        if ($it.PSObject.Properties['perda_pct']) {
+            $it.perda_pct = Get-MediaSegura ($lista | ForEach-Object { $_.Internet.perda_pct })
+        }
+    }
+    $resultado
+}
+
 function Start-CheckFase1 {
     $w = $Global:JanelaPrincipal
     $Global:ChkFase = 'f1-rodando'
@@ -2983,36 +3037,51 @@ function Start-CheckFase1 {
     Start-TarefaRede -Script 'Invoke-FaseLocal' -AoConcluir { param($res, $erro) Complete-CheckFase1 $res $erro }
 }
 
-function Complete-CheckFase1 {
+# Processa 1 resultado de Fase 1 (primeira vez OU "Refazer"): acumula em
+# $Global:Fase1Tentativas, recalcula a media (Get-Fase1Media) e atualiza
+# $Global:FaseLocalPayload + o painel. NAO mexe em $Global:ChkFase -- quem
+# chama decide se avanca o assistente (Complete-CheckFase1) ou nao
+# (Complete-RefazerFase1). Devolve $true/$false (sucesso/erro).
+function Update-ResultadoFase1 {
     param($Payload, $Erro)
-    Set-FaseLocalOcupado $false
     $w = $Global:JanelaPrincipal
+    Set-FaseLocalOcupado $false
     if ($Erro) {
         Write-Log "Fase 1 falhou: $Erro" -Nivel Erro
         Set-ChkStep 1 'erro'
-    } else {
-        if ($Payload -and $Global:FaseLocalTipo) {
-            $Payload | Add-Member -NotePropertyName TipoUsado -NotePropertyValue ([string] $Global:FaseLocalTipo) -Force
-        }
-        $Global:FaseLocalPayload = $Payload
-        $it = if ($Payload) { $Payload.Internet } else { $null }
-        if ($it -and $it.speedtest_ok) {
-            Update-SpeedtestPainel -It $it
-            $w.FindName('txtChkResultadoVazio').Visibility = 'Collapsed'
-            Write-Log 'Fase 1 concluida.' -Nivel Ok
-        } else {
-            $te = $w.FindName('txtSpeedErro')
-            $diag = if ($it -and $it.PSObject.Properties['speedtest_diagnostico']) { [string] $it.speedtest_diagnostico } else { '' }
-            $te.Text = if ($diag) { $diag }
-                       elseif ($it -and $it.speedtest_erro) { [string] $it.speedtest_erro }
-                       else { 'sem resultado de velocidade' }
-            $te.Visibility = 'Visible'
-            Write-Log ("Fase 1 sem velocidade: {0}" -f $te.Text) -Nivel Aviso
-        }
-        # O semaforo so' informa se a etapa rodou (a runspace nao lancou erro) --
-        # nao a qualidade da medida (isso fica pro painel de resultado/relatorio).
-        Set-ChkStep 1 'ok'
+        return $false
     }
+    if ($Payload -and $Global:FaseLocalTipo) {
+        $Payload | Add-Member -NotePropertyName TipoUsado -NotePropertyValue ([string] $Global:FaseLocalTipo) -Force
+    }
+    $Global:Fase1Tentativas = @($Global:Fase1Tentativas) + (Copy-ObjetoProfundo $Payload)
+    $n = @($Global:Fase1Tentativas).Count
+    $media = Get-Fase1Media $Global:Fase1Tentativas
+    $Global:FaseLocalPayload = $media
+    $it = if ($media) { $media.Internet } else { $null }
+    $sufMedia = if ($n -gt 1) { " (media de $n tentativas)" } else { '' }
+    if ($it -and $it.speedtest_ok) {
+        Update-SpeedtestPainel -It $it
+        $w.FindName('txtChkResultadoVazio').Visibility = 'Collapsed'
+        Write-Log "Fase 1 concluida$sufMedia." -Nivel Ok
+    } else {
+        $te = $w.FindName('txtSpeedErro')
+        $diag = if ($it -and $it.PSObject.Properties['speedtest_diagnostico']) { [string] $it.speedtest_diagnostico } else { '' }
+        $te.Text = if ($diag) { $diag }
+                   elseif ($it -and $it.speedtest_erro) { [string] $it.speedtest_erro }
+                   else { 'sem resultado de velocidade' }
+        $te.Visibility = 'Visible'
+        Write-Log ("Fase 1 sem velocidade{0}: {1}" -f $sufMedia, $te.Text) -Nivel Aviso
+    }
+    # O semaforo so' informa se a etapa rodou (a runspace nao lancou erro) --
+    # nao a qualidade da medida (isso fica pro painel de resultado/relatorio).
+    Set-ChkStep 1 'ok'
+    return $true
+}
+
+function Complete-CheckFase1 {
+    param($Payload, $Erro)
+    Update-ResultadoFase1 -Payload $Payload -Erro $Erro | Out-Null
     $Global:ChkFase = 'f2-pronto'
     Set-ChkBotao
     if (Test-RedeJeDireta) {
@@ -3020,6 +3089,37 @@ function Complete-CheckFase1 {
     } else {
         Write-Log 'Clique em "Testar a VPN (Fase 2)" quando estiver com a VPN do TRE conectada.' -Nivel Info
     }
+}
+
+# Botao "Refazer Fase 1": reroda a rede local (sem VPN) sem sair do overlay e
+# sem mexer em $Global:ChkFase -- o resultado exibido/gravado passa a ser a
+# media desta tentativa com as anteriores (ver Update-ResultadoFase1).
+function Invoke-RefazerFase1 {
+    if ($Global:TarefaRedeState -or $Global:DiagRunState) {
+        Write-Log 'Aguarde a etapa em andamento terminar antes de refazer.' -Nivel Aviso
+        return
+    }
+    $w = $Global:JanelaPrincipal
+    Set-ChkStep 1 'rodando'
+    Set-ChkFaseView 'f1'
+    $w.FindName('painelSpeedResultado').Visibility = 'Collapsed'
+    $w.FindName('txtChkResultadoVazio').Visibility = 'Visible'
+    Reset-Velocimetro
+    $w.FindName('txtVeloFase').Text = 'iniciando...'
+    Set-ChkBotao   # esconde os botoes de refazer enquanto esta rodando
+    Write-Log 'Refazendo a Fase 1 (rede local, sem VPN)...' -Nivel Info
+    if ($Global:FaseLocalSimulada) { Complete-RefazerFase1 $Global:FaseLocalSimulada $null; return }
+    Set-FaseLocalOcupado $true
+    Start-TarefaRede -Script 'Invoke-FaseLocal' -AoConcluir { param($res, $erro) Complete-RefazerFase1 $res $erro }
+}
+
+function Complete-RefazerFase1 {
+    param($Payload, $Erro)
+    $ok = Update-ResultadoFase1 -Payload $Payload -Erro $Erro
+    # O medio so existe se a Fase 2 ja rodou pelo menos 1 vez (ChkFase 'fim')
+    # -- se existir, atualiza com a nova media tambem.
+    if ($ok -and $Global:ChkFase -eq 'fim') { Add-MedicaoAtual }
+    Set-ChkBotao
 }
 
 # Verdadeiro se ja da pra falar com a rede da JE sem precisar de VPN: o meio da
@@ -3095,25 +3195,108 @@ function Start-DiagnosticoVpn {
     Start-DiagnosticoAssincrono -Local $selD -Meio $meio -AoConcluir { param($res, $erro) Complete-CheckFase2 $res $erro }
 }
 
-function Complete-CheckFase2 {
+# Combina N payloads de Invoke-DiagnosticoCompleto (Fase 2) numa media:
+# Metricas.* vira a media de todas as tentativas; Decisao e' RECALCULADA com
+# a media (Invoke-MotorDecisao), nao so copiada da ultima tentativa; Iperf.
+# Download/UploadMbps espelham a media (mesma fonte de Metricas.Banda*Mbps);
+# Ambiente/Local vem da ultima tentativa.
+function Get-Fase2Media {
+    param($Tentativas, [string] $Meio)
+    $lista = @($Tentativas | Where-Object { $_ })
+    if (-not $lista.Count) { return $null }
+    $resultado = Copy-ObjetoProfundo $lista[-1]
+    if ($resultado.PSObject.Properties['Metricas'] -and $resultado.Metricas) {
+        $met = $resultado.Metricas
+        $met.LatenciaMediaMs   = Get-MediaSegura ($lista | ForEach-Object { $_.Metricas.LatenciaMediaMs })
+        $met.JitterMs          = Get-MediaSegura ($lista | ForEach-Object { $_.Metricas.JitterMs })
+        $met.PerdaPercentual   = Get-MediaSegura ($lista | ForEach-Object { $_.Metricas.PerdaPercentual })
+        $met.BandaDownloadMbps = Get-MediaSegura ($lista | ForEach-Object { $_.Metricas.BandaDownloadMbps })
+        $met.BandaUploadMbps   = Get-MediaSegura ($lista | ForEach-Object { $_.Metricas.BandaUploadMbps })
+        $met.CarregamentoWebS  = Get-MediaSegura ($lista | ForEach-Object { $_.Metricas.CarregamentoWebS })
+        try {
+            $limiares = Get-PerfilLimiares -Meio $Meio -Cenario 'com_vpn'
+            $resultado.Decisao = Invoke-MotorDecisao -Metricas $met -Limiares $limiares
+        } catch { }
+    }
+    if ($resultado.PSObject.Properties['Iperf'] -and $resultado.Iperf) {
+        $resultado.Iperf.DownloadMbps = $resultado.Metricas.BandaDownloadMbps
+        $resultado.Iperf.UploadMbps   = $resultado.Metricas.BandaUploadMbps
+        $resultado.Iperf.iperf_ok     = [bool] @($lista | Where-Object { $_.Iperf -and $_.Iperf.iperf_ok }).Count
+    }
+    $resultado
+}
+
+# Processa 1 resultado de Fase 2 (primeira vez OU "Refazer"): acumula em
+# $Global:Fase2Tentativas, recalcula a media (Get-Fase2Media) e atualiza
+# $Global:DiagPayload + o painel. NAO mexe em $Global:ChkFase. Devolve
+# $true/$false (sucesso/erro).
+function Update-ResultadoFase2 {
     param($Payload, $Erro)
-    Set-ProgressoDiag $false
     $w = $Global:JanelaPrincipal
+    Set-ProgressoDiag $false
     $rd = $w.FindName('ringDiag'); if ($rd) { $rd.IsActive = $false; $rd.Visibility = 'Collapsed' }
     if ($Erro) {
         Write-Log "Fase 2 falhou: $Erro" -Nivel Erro
         Set-ChkStep 2 'erro' '' $(if (Test-RedeJeDireta) { '2. Rede interna (JE)' } else { '' })
-    } else {
-        Show-PainelResultado -Payload $Payload
-        if ($Payload -and $Payload.PSObject.Properties['Iperf'] -and $Payload.Iperf) { Update-IperfPainel -Iperf $Payload.Iperf }
-        $w.FindName('txtChkResultadoVazio').Visibility = 'Collapsed'
-        Write-Log 'Fase 2 concluida.' -Nivel Ok
-        # O semaforo so' informa se a etapa rodou -- a qualidade (viavel/
-        # ressalva/inviavel) fica pro painel de resultado/relatorio, nao pro
-        # semaforo rapido do overlay.
-        Set-ChkStep 2 'ok' '' $(if (Test-RedeJeDireta) { '2. Rede interna (JE)' } else { '' })
+        return $false
     }
+    $Global:Fase2Tentativas = @($Global:Fase2Tentativas) + (Copy-ObjetoProfundo $Payload)
+    $n = @($Global:Fase2Tentativas).Count
+    $meio  = (Get-MeioDoPasso3).meio
+    $media = Get-Fase2Media -Tentativas $Global:Fase2Tentativas -Meio $meio
+    $Global:DiagPayload = $media
+    Show-PainelResultado -Payload $media
+    if ($media -and $media.PSObject.Properties['Iperf'] -and $media.Iperf) { Update-IperfPainel -Iperf $media.Iperf }
+    $w.FindName('txtChkResultadoVazio').Visibility = 'Collapsed'
+    $sufMedia = if ($n -gt 1) { " (media de $n tentativas)" } else { '' }
+    Write-Log "Fase 2 concluida$sufMedia." -Nivel Ok
+    # O semaforo so' informa se a etapa rodou -- a qualidade (viavel/
+    # ressalva/inviavel) fica pro painel de resultado/relatorio, nao pro
+    # semaforo rapido do overlay.
+    Set-ChkStep 2 'ok' '' $(if (Test-RedeJeDireta) { '2. Rede interna (JE)' } else { '' })
+    return $true
+}
+
+function Complete-CheckFase2 {
+    param($Payload, $Erro)
+    Update-ResultadoFase2 -Payload $Payload -Erro $Erro | Out-Null
     Complete-CheckMeio
+}
+
+# Botao "Refazer Fase 2": reroda o diagnostico com a VPN sem sair do overlay
+# (so aparece depois que a Fase 2 ja completou 1a vez -- ver Set-ChkBotao).
+# Como o medio ja existe nesse ponto (Complete-CheckMeio ja rodou
+# Add-MedicaoAtual na 1a vez), esta sempre atualiza ele com a nova media.
+function Invoke-RefazerFase2 {
+    if ($Global:TarefaRedeState -or $Global:DiagRunState) {
+        Write-Log 'Aguarde a etapa em andamento terminar antes de refazer.' -Nivel Aviso
+        return
+    }
+    if (-not (Test-VpnAtiva) -and -not (Test-RedeJeDireta)) {
+        Write-Log 'A VPN caiu. Reconecte pelo FortiClient antes de refazer a Fase 2.' -Nivel Aviso
+        return
+    }
+    $w = $Global:JanelaPrincipal
+    Set-ChkFaseView 'f2'
+    Reset-Velocimetro -Suf 'Vpn'
+    $w.FindName('txtVeloFaseVpn').Text = 'iniciando...'
+    $rd = $w.FindName('ringDiag'); if ($rd) { $rd.IsActive = $true; $rd.Visibility = 'Visible' }
+    Set-ChkBotao   # esconde os botoes de refazer enquanto esta rodando
+    $jeDir = Test-RedeJeDireta
+    Write-Log $(if ($jeDir) { 'Refazendo a checagem da rede interna...' } else { 'Refazendo a Fase 2 (diagnostico com a VPN)...' }) -Nivel Info
+    Set-ChkStep 2 'rodando' '' $(if ($jeDir) { '2. Rede interna (JE)' } else { '' })
+    Set-ProgressoDiag $true
+    $sel  = $w.FindName('cboLocal').SelectedItem
+    $selD = if ($sel) { $sel.Dados } else { $null }
+    $meio = (Get-MeioDoPasso3).meio
+    Start-DiagnosticoAssincrono -Local $selD -Meio $meio -AoConcluir { param($res, $erro) Complete-RefazerFase2 $res $erro }
+}
+
+function Complete-RefazerFase2 {
+    param($Payload, $Erro)
+    $ok = Update-ResultadoFase2 -Payload $Payload -Erro $Erro
+    if ($ok) { Add-MedicaoAtual }
+    Set-ChkBotao
 }
 
 # Botao "Registrar este meio sem a VPN" (no gate da Fase 2).
@@ -3227,6 +3410,10 @@ function New-MedicaoAtual {
                               elseif ($dp -and $dp.Decisao) { [string] $dp.Decisao.Classificacao }
                               else { 'nao_testado' }
         quando              = (Get-Date).ToString('o')
+        # Quantas tentativas foram combinadas na media desta medicao (0/1 =
+        # nao usou "Refazer"; ver Update-ResultadoFase1/2, Get-Fase1Media/2).
+        fase1_tentativas    = @($Global:Fase1Tentativas).Count
+        fase2_tentativas    = @($Global:Fase2Tentativas).Count
     }
 }
 
