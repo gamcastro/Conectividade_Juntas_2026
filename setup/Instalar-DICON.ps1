@@ -120,7 +120,8 @@ if ($DeploymentId -and $DeploymentId -notlike '*COLOQUE_O_DEPLOYMENT_ID*') {
 
 if (-not $IperfServidor) {
     Write-Host ''
-    $IperfServidor = Read-Host "  IP/host do servidor iperf3 no CPD (Enter para pular)"
+    $resp = Read-Host "  IP/host do servidor iperf3 no CPD (Enter para usar o padrao 10.11.1.38)"
+    $IperfServidor = if ($resp) { $resp } else { '10.11.1.38' }
 }
 if ($IperfServidor) {
     Set-JsonCampo (Join-Path $Cfg 'ambiente.json') 'iperf3.servidor' $IperfServidor

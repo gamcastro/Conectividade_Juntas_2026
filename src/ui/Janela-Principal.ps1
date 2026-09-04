@@ -2790,6 +2790,20 @@ function Complete-CheckFase1 {
     Write-Log 'Clique em "Testar a VPN (Fase 2)" quando estiver com a VPN do TRE conectada.' -Nivel Info
 }
 
+# Verdadeiro se ja da pra falar com a rede da JE sem precisar de VPN: o meio da
+# vez e a LAN e a placa ja esta na faixa interna (10.11./10.198., ver
+# Test-RedeJusticaEleitoral) -- local com link direto/dedicado a JE, tipico de
+# predios do proprio TRE. Nesse caso o iperf3/totalizacao ja sao alcancaveis
+# pela LAN; esperar o FortiClient conectar nao faz sentido (nao ha VPN nenhuma
+# pra subir).
+function Test-RedeJeDireta {
+    if ((Get-MeioDoPasso3).meio -ne 'lan') { return $false }
+    $fl = $Global:FaseLocalPayload
+    if (-not $fl -or -not $fl.Lan -or -not $fl.Lan.conectado) { return $false }
+    $ip = [string] $fl.Lan.ipv4
+    return [bool] ($ip -and (Test-RedeJusticaEleitoral $ip))
+}
+
 # Botao "Testar a VPN (Fase 2)": SO verifica a VPN e mostra o estado. Nao dispara
 # o diagnostico - o tecnico confere o IP da VPN e clica em "Iniciar diagnostico".
 function Start-CheckFase2 {
@@ -2808,6 +2822,12 @@ function Start-CheckFase2 {
         Set-ChkStep 2 'rodando' 'VPN conectada - clique em Iniciar'
         Set-ChkBotao
         Write-Log 'VPN da JE conectada. Confira o IP e clique em "Iniciar diagnostico com a VPN".' -Nivel Ok
+    } elseif (Test-RedeJeDireta) {
+        $Global:ChkFase = 'f2-vpn-ok'
+        $w.FindName('panelChkVpnGate').Visibility = 'Visible'
+        Set-ChkStep 2 'rodando' 'rede interna da JE - clique em Iniciar'
+        Set-ChkBotao
+        Write-Log 'Local ja na rede interna da Justica Eleitoral (LAN) - sem VPN necessaria. Clique em "Iniciar diagnostico".' -Nivel Ok
     } else {
         $Global:ChkFase = 'f2-pronto'
         Set-ChkBotao
@@ -2821,7 +2841,7 @@ function Start-CheckFase2 {
 # Botao "Iniciar diagnostico com a VPN": agora sim roda a bateria da Fase 2.
 function Start-DiagnosticoVpn {
     $w = $Global:JanelaPrincipal
-    if (-not (Test-VpnAtiva)) {
+    if (-not (Test-VpnAtiva) -and -not (Test-RedeJeDireta)) {
         Write-Log 'A VPN caiu. Reconecte pelo FortiClient e clique em "Verificar novamente".' -Nivel Aviso
         Start-CheckFase2
         return
@@ -3961,7 +3981,9 @@ function Update-EstadoVpn {
     $w = $Global:JanelaPrincipal
     if (-not $w) { return }
     $d = Get-DetalheVpn
-    $vpn = [bool] $d.ativa
+    $vpn   = [bool] $d.ativa
+    $jeDir = (-not $vpn) -and (Test-RedeJeDireta)   # LAN ja na faixa interna da JE, sem VPN
+    $ok    = $vpn -or $jeDir
 
     $verde    = Get-PincelVeredito 'viavel'
     $vermelho = Get-PincelVeredito 'inviavel'
@@ -3978,15 +4000,21 @@ function Update-EstadoVpn {
             if (@($d.dns).Count) { $linhas += ('DNS: {0}' -f ((@($d.dns)) -join ', ')) }
             $tv.Text = ($linhas -join "`n")
             $tv.Foreground = $verde ; $dv.Fill = $verde
+        } elseif ($jeDir) {
+            $ipLan = [string] $Global:FaseLocalPayload.Lan.ipv4
+            $linhas = @('Local ja na rede interna da Justica Eleitoral (LAN) - VPN nao e necessaria.')
+            if ($ipLan) { $linhas += ('IP da LAN: {0}  (faixa interna da JE)' -f $ipLan) }
+            $tv.Text = ($linhas -join "`n")
+            $tv.Foreground = $verde ; $dv.Fill = $verde
         } else {
             $tv.Text = 'VPN da Justica Eleitoral NAO detectada - conecte pelo FortiClient e clique em "Verificar novamente".'
             $tv.Foreground = $vermelho ; $dv.Fill = $vermelho
         }
     }
-    $bf = $w.FindName('btnAbrirFortiClient'); if ($bf) { $bf.Visibility = if ($vpn) { 'Collapsed' } else { 'Visible' } }
-    $bv = $w.FindName('btnReverificarVpn');   if ($bv) { $bv.Visibility = if ($vpn) { 'Collapsed' } else { 'Visible' } }
-    # VPN conectada -> some a saida de escape "nao consegui a VPN" (nao faz sentido)
-    if ($vpn) {
+    $bf = $w.FindName('btnAbrirFortiClient'); if ($bf) { $bf.Visibility = if ($ok) { 'Collapsed' } else { 'Visible' } }
+    $bv = $w.FindName('btnReverificarVpn');   if ($bv) { $bv.Visibility = if ($ok) { 'Collapsed' } else { 'Visible' } }
+    # VPN conectada (ou ja na rede interna) -> some a saida de escape "nao consegui a VPN"
+    if ($ok) {
         $ci = $w.FindName('chkVpnImpossivel'); if ($ci) { $ci.IsChecked = $false }
         foreach ($n in 'chkVpnImpossivel', 'txtVpnMotivo', 'txtVpnMotivoDica', 'btnChkVpnImpossivel') {
             $c = $w.FindName($n); if ($c) { $c.Visibility = 'Collapsed' }
