@@ -616,6 +616,23 @@ try {
         Write-Host "[4g] Fase 2 sem VPN: aparece o gate + 'registrar sem a VPN'"
     } else { Write-Host "    FALHA: gate de VPN nao apareceu (gate=$($w.FindName('panelChkVpnGate').Visibility))"; $falhas++ }
     $w.FindName('chkVpnImpossivel').IsChecked = $true ; Update-VpnImpossivel
+    # [4g-2] chips de sugestao (+ "Outro") no card "nao consegui a VPN", mesmo
+    # padrao do card "nao se aplica" (v0.6.92): 1 botao por Get-SugestoesVpnImpossivel + "Outro".
+    $wrapVpn = $w.FindName('wrapVpnSugestoes')
+    $chipsVpnEsperados = @(Get-SugestoesVpnImpossivel).Count + 1
+    if ("$($wrapVpn.Visibility)" -eq 'Visible' -and $wrapVpn.Children.Count -eq $chipsVpnEsperados) {
+        Write-Host "[4g-2] chips de motivo da VPN aparecem ($($wrapVpn.Children.Count), esperado $chipsVpnEsperados)"
+    } else { Write-Host "    FALHA: chips da VPN (vis=$($wrapVpn.Visibility) n=$($wrapVpn.Children.Count) esperado=$chipsVpnEsperados)"; $falhas++ }
+    $chipVpn1 = $wrapVpn.Children[0]
+    $chipVpn1.RaiseEvent([Windows.RoutedEventArgs]::new([Windows.Controls.Button]::ClickEvent))
+    if ($w.FindName('txtVpnMotivo').Text -eq [string] $chipVpn1.Tag) {
+        Write-Host "[4g-2] clicar num chip preenche o motivo da VPN ('$($chipVpn1.Tag)')"
+    } else { Write-Host "    FALHA: chip da VPN nao preencheu (txt='$($w.FindName('txtVpnMotivo').Text)')"; $falhas++ }
+    $chipVpnOutro = $wrapVpn.Children[$wrapVpn.Children.Count - 1]
+    $chipVpnOutro.RaiseEvent([Windows.RoutedEventArgs]::new([Windows.Controls.Button]::ClickEvent))
+    if (-not $w.FindName('txtVpnMotivo').Text) {
+        Write-Host "[4g-2] 'Outro' limpa o motivo da VPN pra digitar"
+    } else { Write-Host "    FALHA: 'Outro' da VPN nao limpou (txt='$($w.FindName('txtVpnMotivo').Text)')"; $falhas++ }
     $w.FindName('txtVpnMotivo').Text = 'FortiClient corrompido; sem internet no local para reinstalar.'
     Invoke-CheckVpnImpossivel
     Invoke-Pump
@@ -1020,6 +1037,11 @@ try {
     if ($srvCfg -and "$($w.FindName('txtIperfPortaCfg').Text)" -match '\d') {
         Write-Host "[8b] admin carrega servidor iperf3: $srvCfg`:$($w.FindName('txtIperfPortaCfg').Text)"
     } else { Write-Host "    FALHA: campos do servidor iperf3 nao carregaram (srv='$srvCfg')"; $falhas++ }
+    # 8b-2. campos de sugestao de motivo tambem carregam (uma por linha)
+    $sugLanTela = "$($w.FindName('txtSugNaLan').Text)" -split "`r?`n"
+    if (@(Compare-Object $sugLanTela (Get-SugestoesNaMeio 'lan')).Count -eq 0) {
+        Write-Host "[8b] admin carrega sugestoes de motivo (LAN: $($sugLanTela.Count) linha(s))"
+    } else { Write-Host "    FALHA: campo de sugestoes LAN nao carregou certo (tela='$sugLanTela')"; $falhas++ }
     $w.FindName('txtPinAdmin').Password = ''
     Invoke-SalvarAmbiente
     if ("$($w.FindName('lblAmbienteMsg').Text)" -match 'PIN') { Write-Host "[8b] salvar ambiente sem PIN bloqueado" }
@@ -1050,6 +1072,21 @@ try {
         if ($visS1 -eq 'Visible' -and $visS2 -eq 'Collapsed' -and $visS3 -eq 'Visible') {
             Write-Host "[8c] overlay esconde so' a linha desmarcada (VPN) e mostra as outras 2"
         } else { Write-Host "    FALHA: visibilidade das linhas do semaforo (1=$visS1 2=$visS2 3=$visS3)"; $falhas++ }
+
+        # 8d. sugestoes de motivo (chips) sao configuraveis pelo admin -- mesma
+        # pasta temporaria, sem tocar no config/ambiente.json real.
+        $sugLanCustom = @('Motivo customizado LAN 1', 'Motivo customizado LAN 2')
+        $sugVpnCustom = @('Motivo customizado VPN 1')
+        Save-ConfigAmbiente -Servidor '10.0.0.1' -SugNaLan $sugLanCustom -SugNaWifi @() -SugNaCelular @() -SugVpnImpossivel $sugVpnCustom | Out-Null
+        $lanLida = @(Get-SugestoesNaMeio 'lan')
+        $vpnLida = @(Get-SugestoesVpnImpossivel)
+        if (@(Compare-Object $lanLida $sugLanCustom).Count -eq 0 -and @(Compare-Object $vpnLida $sugVpnCustom).Count -eq 0) {
+            Write-Host "[8d] Get-SugestoesNaMeio/Get-SugestoesVpnImpossivel leem a lista customizada do admin"
+        } else { Write-Host "    FALHA: sugestoes customizadas (lan=$($lanLida -join '|') vpn=$($vpnLida -join '|'))"; $falhas++ }
+        $wifiLidaVazia = @(Get-SugestoesNaMeio 'wifi_local')
+        if (@(Compare-Object $wifiLidaVazia (Get-SugestoesNaMeioPadrao 'wifi_local')).Count -eq 0) {
+            Write-Host "[8d] lista vazia no admin volta a usar a sugestao padrao embutida"
+        } else { Write-Host "    FALHA: fallback p/ padrao nao ocorreu (wifi=$($wifiLidaVazia -join '|'))"; $falhas++ }
     } finally {
         $Global:RaizApp = $raizOrig
         Remove-Item $tmpCfgDir -Recurse -Force -ErrorAction SilentlyContinue

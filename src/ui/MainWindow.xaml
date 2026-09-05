@@ -1829,6 +1829,35 @@
                                 <CheckBox x:Name="chkOverlayTotalizacao" Content="Sistema de totaliza&#231;&#227;o" IsChecked="True"/>
                             </StackPanel>
 
+                            <TextBlock Text="Sugest&#245;es de motivo (chips)" Style="{DynamicResource Rotulo}"
+                                       Margin="0,14,0,4"/>
+                            <TextBlock Text="Uma sugest&#227;o por linha; aparecem como bot&#245;es no card 'n&#227;o se aplica' de cada meio e no card 'n&#227;o consegui a VPN'. Deixe em branco pra usar a lista padr&#227;o do DICON."
+                                       FontSize="11" Foreground="{DynamicResource Dicon.Text3}" TextWrapping="Wrap"
+                                       Margin="0,0,0,8"/>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="12"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="LAN n&#227;o se aplica" FontSize="11" Foreground="{DynamicResource Dicon.Text3}" Margin="0,0,0,3"/>
+                                    <TextBox x:Name="txtSugNaLan" MinHeight="82" TextWrapping="Wrap" AcceptsReturn="True"
+                                             VerticalScrollBarVisibility="Auto" Padding="6,5" FontSize="12" Margin="0,0,0,10"/>
+                                    <TextBlock Text="Wi-Fi do local n&#227;o se aplica" FontSize="11" Foreground="{DynamicResource Dicon.Text3}" Margin="0,0,0,3"/>
+                                    <TextBox x:Name="txtSugNaWifi" MinHeight="82" TextWrapping="Wrap" AcceptsReturn="True"
+                                             VerticalScrollBarVisibility="Auto" Padding="6,5" FontSize="12"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Text="Celular n&#227;o se aplica" FontSize="11" Foreground="{DynamicResource Dicon.Text3}" Margin="0,0,0,3"/>
+                                    <TextBox x:Name="txtSugNaCelular" MinHeight="82" TextWrapping="Wrap" AcceptsReturn="True"
+                                             VerticalScrollBarVisibility="Auto" Padding="6,5" FontSize="12" Margin="0,0,0,10"/>
+                                    <TextBlock Text="N&#227;o consegui a VPN" FontSize="11" Foreground="{DynamicResource Dicon.Text3}" Margin="0,0,0,3"/>
+                                    <TextBox x:Name="txtSugVpnImpossivel" MinHeight="82" TextWrapping="Wrap" AcceptsReturn="True"
+                                             VerticalScrollBarVisibility="Auto" Padding="6,5" FontSize="12"/>
+                                </StackPanel>
+                            </Grid>
+
                             <TextBlock Text="Chave da API do Google Maps (Static)" Style="{DynamicResource Rotulo}"
                                        Margin="0,14,0,4"/>
                             <TextBlock Text="Restrita s&#243; &#224; Maps Static API. Usada no anexo do formul&#225;rio GEL para gerar a imagem do mapa no relat&#243;rio. Vazio = s&#243; o link, sem imagem."
@@ -1963,6 +1992,11 @@
                                 </StackPanel>
                                 <CheckBox x:Name="chkVpnImpossivel" Margin="0,14,0,0"
                                           Content="N&#227;o foi poss&#237;vel conectar a VPN da JE neste local"/>
+                                <TextBlock x:Name="txtVpnSugestoesDica"
+                                           Text="Motivo mais comum? Escolha uma sugest&#227;o ou use &#171;Outro&#187; pra digitar:"
+                                           FontSize="12" Foreground="{DynamicResource Dicon.Text2}" Margin="0,8,0,6"
+                                           Visibility="Collapsed"/>
+                                <WrapPanel x:Name="wrapVpnSugestoes" Margin="0,0,0,4" Visibility="Collapsed"/>
                                 <TextBox x:Name="txtVpnMotivo" Margin="0,8,0,0" MinHeight="72"
                                          TextWrapping="Wrap" AcceptsReturn="True" AcceptsTab="False"
                                          VerticalContentAlignment="Top" VerticalScrollBarVisibility="Auto"

@@ -33,7 +33,16 @@ Script), em vez de criar um BI/dashboard separado.
   `iperf3` em `config/ambiente.json` local, PIN do admin — o mesmo card também
   tem 3 checkboxes pra escolher quais dos 3 itens do semáforo do overlay
   aparecem (`overlay_passos.rede_local/vpn/totalizacao`, `Get-OverlayPassosVisiveis`
-  aplicado em `Reset-OverlayCheck`; só visibilidade, não desliga a medição).
+  aplicado em `Reset-OverlayCheck`; só visibilidade, não desliga a medição) e 4
+  caixas de texto (uma sugestão por linha) para as **sugestões de motivo**
+  (chips + "Outro") oferecidas ao técnico: no card "não se aplica" de cada meio
+  (`sugestoes_motivo.na_lan/na_wifi_local/na_celular`) e no card "não consegui
+  a VPN" da Fase 2 (`sugestoes_motivo.vpn_impossivel`) — `Get-SugestoesNaMeio`/
+  `Get-SugestoesVpnImpossivel` leem de `config/ambiente.json`, caindo na lista
+  padrão embutida (`Get-SugestoesNaMeioPadrao`/`Get-SugestoesVpnImpossivelPadrao`)
+  se a caixa ficar vazia; os chips em si são montados por
+  `Update-SugestoesNaMeio`/`Update-SugestoesVpnImpossivel` (um `Button` por
+  sugestão + "Outro (digitar)", que só limpa o campo).
   `Test-BandaVpn`
   (`src/testes/Test-Banda.ps1`) roda download (`-R`) e upload (`-f m`), lê a
   saída linha a linha e transmite cada intervalo (`Write-EventoIperf` →

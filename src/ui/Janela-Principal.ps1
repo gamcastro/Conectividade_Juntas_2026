@@ -1768,7 +1768,9 @@ function Get-ChkNaNome {
 # Motivos mais comuns de "nao se aplica", por meio -- so' sugestoes: o
 # tecnico ainda pode editar o texto livremente depois de escolher uma, ou
 # usar "Outro" pra digitar do zero.
-function Get-SugestoesNaMeio {
+# Listas padrao (embutidas), usadas quando o admin nao configurou nada em
+# config/ambiente.json > sugestoes_motivo (ver Get-SugestoesNaMeio).
+function Get-SugestoesNaMeioPadrao {
     param([string] $Meio)
     switch ($Meio) {
         'lan' {
@@ -1791,6 +1793,43 @@ function Get-SugestoesNaMeio {
         }
         default { @() }
     }
+}
+
+# Sugestoes de motivo "nao se aplica" p/ um meio -- config/ambiente.json >
+# sugestoes_motivo.na_<meio> (editavel na tela de Administracao) se houver,
+# senao a lista padrao embutida.
+function Get-SugestoesNaMeio {
+    param([string] $Meio)
+    $chave = switch ($Meio) { 'lan' { 'na_lan' } 'wifi_local' { 'na_wifi_local' } 'celular' { 'na_celular' } default { '' } }
+    $lista = @()
+    if ($chave) {
+        try {
+            $amb = Get-Config 'ambiente'
+            if ($amb.PSObject.Properties['sugestoes_motivo'] -and $amb.sugestoes_motivo.PSObject.Properties[$chave]) {
+                $lista = @($amb.sugestoes_motivo.$chave | Where-Object { $_ })
+            }
+        } catch { }
+    }
+    if ($lista.Count) { $lista } else { Get-SugestoesNaMeioPadrao $Meio }
+}
+
+# Mesma ideia para o motivo de "nao consegui conectar a VPN" (Fase 2).
+function Get-SugestoesVpnImpossivelPadrao {
+    'FortiClient nao instalado ou nao abre',
+    'Credencial/certificado da VPN invalido ou expirado',
+    'Internet local insuficiente para estabelecer o tunel',
+    'Link do local bloqueia a porta/protocolo da VPN'
+}
+
+function Get-SugestoesVpnImpossivel {
+    $lista = @()
+    try {
+        $amb = Get-Config 'ambiente'
+        if ($amb.PSObject.Properties['sugestoes_motivo'] -and $amb.sugestoes_motivo.PSObject.Properties['vpn_impossivel']) {
+            $lista = @($amb.sugestoes_motivo.vpn_impossivel | Where-Object { $_ })
+        }
+    } catch { }
+    if ($lista.Count) { $lista } else { Get-SugestoesVpnImpossivelPadrao }
 }
 
 # Monta os "chips" de sugestao (+ "Outro") no wrapNaSugestoes, um Button por
@@ -1825,6 +1864,37 @@ function Invoke-NaSugestaoEscolhida {
     $w = $Global:JanelaPrincipal
     if (-not $w) { return }
     $tb = $w.FindName('txtNaJustif')
+    if (-not $tb) { return }
+    $tb.Text = if ($Texto -eq 'Outro (digitar)') { '' } else { $Texto }
+    try { $tb.Focus(); $tb.CaretIndex = $tb.Text.Length } catch { }
+}
+
+# Mesma ideia (chips + "Outro") para o card "nao consegui a VPN" (Fase 2).
+function Update-SugestoesVpnImpossivel {
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    $wrap = $w.FindName('wrapVpnSugestoes')
+    if (-not $wrap) { return }
+    $wrap.Children.Clear()
+    $estiloChip = $w.TryFindResource('BotaoFantasma')
+    foreach ($texto in @(Get-SugestoesVpnImpossivel) + 'Outro (digitar)') {
+        $btn = [Windows.Controls.Button]::new()
+        $btn.Content = $texto
+        $btn.Tag     = $texto
+        if ($estiloChip) { $btn.Style = $estiloChip }
+        $btn.Margin  = [Windows.Thickness]::new(0, 0, 8, 8)
+        $btn.Padding = [Windows.Thickness]::new(12, 5, 12, 5)
+        $btn.FontSize = 12.5
+        $btn.Add_Click({ Invoke-VpnSugestaoEscolhida -Texto $this.Tag })
+        [void] $wrap.Children.Add($btn)
+    }
+}
+
+function Invoke-VpnSugestaoEscolhida {
+    param([string] $Texto)
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    $tb = $w.FindName('txtVpnMotivo')
     if (-not $tb) { return }
     $tb.Text = if ($Texto -eq 'Outro (digitar)') { '' } else { $Texto }
     try { $tb.Focus(); $tb.CaretIndex = $tb.Text.Length } catch { }
@@ -2856,6 +2926,7 @@ function Reset-OverlayCheck {
     $w.FindName('txtVpnMotivo').Text = ''
     $w.FindName('txtVpnMotivo').Visibility = 'Collapsed'
     $w.FindName('txtVpnMotivoDica').Visibility = 'Collapsed'
+    foreach ($n in 'wrapVpnSugestoes', 'txtVpnSugestoesDica') { $c = $w.FindName($n); if ($c) { $c.Visibility = 'Collapsed' } }
     $w.FindName('btnChkVpnImpossivel').Visibility = 'Collapsed'
     $w.FindName('btnChkFechar').Content = 'Cancelar'
     foreach ($n in 'painelSpeedResultado', 'painelIperfResultado', 'txtSpeedErro', 'txtIperfErro', 'ringDiag') {
@@ -4017,6 +4088,12 @@ function Initialize-Admin {
     $w.FindName('chkOverlayVpn').IsChecked         = $passosVis.vpn
     $w.FindName('chkOverlayTotalizacao').IsChecked = $passosVis.totalizacao
 
+    # sugestoes de motivo (chips + "Outro"), uma por linha
+    $w.FindName('txtSugNaLan').Text        = (Get-SugestoesNaMeio 'lan')        -join "`n"
+    $w.FindName('txtSugNaWifi').Text       = (Get-SugestoesNaMeio 'wifi_local') -join "`n"
+    $w.FindName('txtSugNaCelular').Text    = (Get-SugestoesNaMeio 'celular')    -join "`n"
+    $w.FindName('txtSugVpnImpossivel').Text = (Get-SugestoesVpnImpossivel)      -join "`n"
+
     # conta Google (so aparece se o OAuth estiver ligado no ambiente.json)
     $w.FindName('lblContaGoogleMsg').Text = ''
     Stop-PollDeviceCode
@@ -4045,9 +4122,18 @@ function Invoke-SalvarAmbiente {
     $ovVpn        = [bool] $w.FindName('chkOverlayVpn').IsChecked
     $ovTotal      = [bool] $w.FindName('chkOverlayTotalizacao').IsChecked
 
+    # sugestoes de motivo: uma por linha nas caixas de texto -> array (tira
+    # linhas vazias); lista vazia = volta a usar a padrao embutida no DICON.
+    $partirLinhas = { param($Texto) @(([string] $Texto) -split "`r?`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ }) }
+    $sugNaLan         = & $partirLinhas $w.FindName('txtSugNaLan').Text
+    $sugNaWifi        = & $partirLinhas $w.FindName('txtSugNaWifi').Text
+    $sugNaCelular     = & $partirLinhas $w.FindName('txtSugNaCelular').Text
+    $sugVpnImpossivel = & $partirLinhas $w.FindName('txtSugVpnImpossivel').Text
+
     try {
         $arq = Save-ConfigAmbiente -Servidor $srv -Porta $porta -Duracao $dur -MapsKey $mapsKey `
-            -OverlayRedeLocal $ovRedeLocal -OverlayVpn $ovVpn -OverlayTotalizacao $ovTotal
+            -OverlayRedeLocal $ovRedeLocal -OverlayVpn $ovVpn -OverlayTotalizacao $ovTotal `
+            -SugNaLan $sugNaLan -SugNaWifi $sugNaWifi -SugNaCelular $sugNaCelular -SugVpnImpossivel $sugVpnImpossivel
         $msg.Foreground = [Windows.Media.Brushes]::LightGreen
         $extra = if ($mapsKey) { ' + chave do Google Maps' } else { '' }
         $msg.Text = "Ambiente salvo neste computador ($srv`:$porta$extra)."
@@ -4468,7 +4554,7 @@ function Update-EstadoVpn {
     # VPN conectada (ou ja na rede interna) -> some a saida de escape "nao consegui a VPN"
     if ($ok) {
         $ci = $w.FindName('chkVpnImpossivel'); if ($ci) { $ci.IsChecked = $false }
-        foreach ($n in 'chkVpnImpossivel', 'txtVpnMotivo', 'txtVpnMotivoDica', 'btnChkVpnImpossivel') {
+        foreach ($n in 'chkVpnImpossivel', 'txtVpnMotivo', 'txtVpnMotivoDica', 'btnChkVpnImpossivel', 'wrapVpnSugestoes', 'txtVpnSugestoesDica') {
             $c = $w.FindName($n); if ($c) { $c.Visibility = 'Collapsed' }
         }
     }
@@ -4482,7 +4568,8 @@ function Update-VpnImpossivel {
     $vis = if ($on) { 'Visible' } else { 'Collapsed' }
     $w.FindName('txtVpnMotivo').Visibility     = $vis
     $w.FindName('txtVpnMotivoDica').Visibility = $vis
-    if (-not $on) { $w.FindName('txtVpnMotivo').Text = '' }
+    foreach ($n in 'wrapVpnSugestoes', 'txtVpnSugestoesDica') { $c = $w.FindName($n); if ($c) { $c.Visibility = $vis } }
+    if ($on) { Update-SugestoesVpnImpossivel } else { $w.FindName('txtVpnMotivo').Text = '' }
 }
 
 # Registra o local como INVIAVEL por VPN indisponivel (sem rodar a bateria).
@@ -4561,6 +4648,7 @@ function Clear-PainelResultado {
     $w.FindName('txtVpnMotivo').Text = ''
     $w.FindName('txtVpnMotivo').Visibility = 'Collapsed'
     $w.FindName('txtVpnMotivoDica').Visibility = 'Collapsed'
+    foreach ($n in 'wrapVpnSugestoes', 'txtVpnSugestoesDica') { $c = $w.FindName($n); if ($c) { $c.Visibility = 'Collapsed' } }
     Reset-Velocimetro -Suf 'Vpn'
     $Global:FeitoSalvar     = $false
     $Global:FeitoTransmitir = $false

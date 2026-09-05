@@ -22,6 +22,33 @@
     "vpn": true,
     "totalizacao": true
   },
+  "sugestoes_motivo": {
+    "_nota": "Sugestoes (chips + 'Outro') oferecidas no card 'nao se aplica' de cada meio (passo 3) e no card 'nao consegui a VPN' (overlay de checagem). Uma por linha na tela de Administracao (card 'Ambiente de teste'); lista vazia = usa a lista padrao embutida no DICON.",
+    "na_lan": [
+      "Nao tem ponto de rede no local",
+      "Cabo de rede nao alcanca a sala",
+      "Placa de rede com defeito",
+      "Sem infraestrutura de rede cabeada"
+    ],
+    "na_wifi_local": [
+      "Nao tem Wi-Fi no local",
+      "Sinal do Wi-Fi muito fraco",
+      "Nao foi informada a senha da rede",
+      "Wi-Fi de uso restrito/corporativo"
+    ],
+    "na_celular": [
+      "Sem sinal de celular no local",
+      "Sem chip/plano de dados disponivel",
+      "Bateria do celular insuficiente",
+      "Roteamento (hotspot) nao disponivel no aparelho"
+    ],
+    "vpn_impossivel": [
+      "FortiClient nao instalado ou nao abre",
+      "Credencial/certificado da VPN invalido ou expirado",
+      "Internet local insuficiente para estabelecer o tunel",
+      "Link do local bloqueia a porta/protocolo da VPN"
+    ]
+  },
   "google_maps": {
     "_nota": "chave da Maps Static API (Google Cloud), restrita SO a essa API. Usada no anexo do GEL para gerar a imagem do mapa no relatorio. Preencher pela tela de Administracao.",
     "static_key": ""
