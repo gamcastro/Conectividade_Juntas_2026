@@ -18,15 +18,20 @@ function Test-Latencia {
             $respostas = Test-Connection -ComputerName $Alvo -Count $Amostras -ErrorAction Stop
         } catch {
             Write-Log "Sem resposta de $Alvo" -Nivel Erro
-            return [pscustomobject]@{ Alvo = $Alvo; LatenciaMediaMs = $null; JitterMs = $null; PerdaPercentual = 100 }
+            return [pscustomobject]@{ Alvo = $Alvo; LatenciaMediaMs = $null; JitterMs = $null; PerdaPercentual = 100; Amostras = $Amostras; AmostrasMs = @() }
         }
     }
 
-    $tempos = foreach ($r in $respostas) {
-        if ($null -ne $r.Latency)      { $r.Latency }
-        elseif ($null -ne $r.ResponseTime) { $r.ResponseTime }
+    # amostrasOrdenadas preserva a posicao de cada ping (1..N), com $null nas
+    # que nao responderam -- e' o que vai pro grafico "latencia por amostra"
+    # do relatorio (perda = buraco na linha; ver Get-GraficoLinhaHtml).
+    $amostrasOrdenadas = foreach ($r in $respostas) {
+        if ($null -ne $r.Latency)          { [double] $r.Latency }
+        elseif ($null -ne $r.ResponseTime) { [double] $r.ResponseTime }
+        else                                { $null }
     }
-    $tempos = @($tempos | Where-Object { $_ -ne $null })
+    $amostrasOrdenadas = @($amostrasOrdenadas)
+    $tempos = @($amostrasOrdenadas | Where-Object { $_ -ne $null })
 
     $perda  = [math]::Round(100 * (1 - ($tempos.Count / [double]$Amostras)), 1)
     $media  = if ($tempos.Count) { [math]::Round((($tempos | Measure-Object -Average).Average), 1) } else { $null }
@@ -45,5 +50,6 @@ function Test-Latencia {
         JitterMs        = $jitter
         PerdaPercentual = $perda
         Amostras        = $Amostras
+        AmostrasMs      = $amostrasOrdenadas
     }
 }

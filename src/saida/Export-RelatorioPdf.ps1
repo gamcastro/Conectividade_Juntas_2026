@@ -81,6 +81,133 @@ function Get-CorVeredito {
     }
 }
 
+# --------------------------------------------------------------- graficos (SVG)
+# Sem biblioteca nenhuma (o PDF e' impresso por um Chrome/Edge headless a
+# partir do HTML) -- so' string building de <svg>, no mesmo espirito do resto
+# deste arquivo. As duas funcoes sao puras (recebem dado pronto, sem tocar em
+# $Global:*), pra serem faceis de testar isoladas.
+
+# Grafico de barras horizontais. $Barras: lista de {Rotulo; Valor; Cor?} --
+# Valor $null vira uma linha "sem medida" (sem barra). Devolve '' se nao
+# houver nenhuma barra (o chamador so' inclui o grafico se vier algo).
+function Get-GraficoBarrasHtml {
+    param(
+        [Parameter(Mandatory)] [AllowEmptyCollection()] [array] $Barras,
+        [string] $Titulo = '',
+        [string] $Unidade = '',
+        [int] $Largura = 300,
+        [int] $AlturaBarra = 16,
+        [int] $EspacoBarra = 8
+    )
+    $itens = @($Barras | Where-Object { $_ })
+    if (-not $itens.Count) { return '' }
+    $comValor = @($itens | Where-Object { $null -ne $_.Valor -and "$($_.Valor)" -ne '' })
+    $max = if ($comValor.Count) { ($comValor | ForEach-Object { [double] $_.Valor } | Measure-Object -Maximum).Maximum } else { 0 }
+    if ($max -le 0) { $max = 1 }
+
+    $margemRotulo = 92
+    $margemValor  = 58
+    $areaBarra = [math]::Max(20, $Largura - $margemRotulo - $margemValor)
+    $passo = $AlturaBarra + $EspacoBarra
+    $alturaSvg = ($itens.Count * $passo) + $EspacoBarra
+
+    $y = $EspacoBarra
+    $partes = foreach ($b in $itens) {
+        $rotulo = ConvertTo-HtmlSafe ([string] $b.Rotulo)
+        $meioY  = [math]::Round($y + $AlturaBarra * 0.72, 1)
+        if ($null -eq $b.Valor -or "$($b.Valor)" -eq '') {
+            @"
+<text x="0" y="$meioY" font-size="9" fill="#8891A0">$rotulo</text>
+<text x="$margemRotulo" y="$meioY" font-size="9" fill="#8891A0" font-style="italic">sem medida</text>
+"@
+        } else {
+            $cor = if ($b.PSObject.Properties['Cor'] -and $b.Cor) { [string] $b.Cor } else { '#123FA8' }
+            $w = [math]::Round(($areaBarra * ([math]::Min(1.0, [double] $b.Valor / $max))), 1)
+            if ($w -lt 1) { $w = 1 }
+            $valTxt = ConvertTo-HtmlSafe (('{0:N1} {1}' -f [double] $b.Valor, $Unidade).Trim())
+            @"
+<text x="0" y="$meioY" font-size="9" fill="#14181F">$rotulo</text>
+<rect x="$margemRotulo" y="$y" width="$w" height="$AlturaBarra" rx="2" fill="$cor"/>
+<text x="$($margemRotulo + $areaBarra + 6)" y="$meioY" font-size="9" fill="#14181F">$valTxt</text>
+"@
+        }
+        $y += $passo
+    }
+    $tit = if ($Titulo) { '<div class="graftit">' + (ConvertTo-HtmlSafe $Titulo) + '</div>' } else { '' }
+    @"
+<div class="grafico">
+  $tit
+  <svg width="$Largura" height="$alturaSvg" viewBox="0 0 $Largura $alturaSvg" xmlns="http://www.w3.org/2000/svg">
+    $($partes -join "`n")
+  </svg>
+</div>
+"@
+}
+
+# Grafico de linha (curva ao longo do tempo). $Series: lista de {Nome; Cor;
+# Pontos:[{T;V}]} -- T/V numericos; V=$null vira um "buraco" na linha (sem
+# interpolar, e' assim que uma amostra perdida/falha aparece). Devolve ''
+# se nenhuma serie tiver ponto valido.
+function Get-GraficoLinhaHtml {
+    param(
+        [Parameter(Mandatory)] [AllowEmptyCollection()] [array] $Series,
+        [string] $Titulo = '',
+        [string] $EixoY = '',
+        [int] $Largura = 300,
+        [int] $Altura = 110
+    )
+    $comPonto = @($Series | Where-Object { $_ -and $_.Pontos } | ForEach-Object { $_.Pontos } | Where-Object { $_ -and $null -ne $_.V -and $null -ne $_.T })
+    if (-not $comPonto.Count) { return '' }
+
+    $margemEsq = 34; $margemDir = 8; $margemTopo = 10; $margemBaixo = 20
+    $areaW = [math]::Max(20, $Largura - $margemEsq - $margemDir)
+    $areaH = [math]::Max(20, $Altura - $margemTopo - $margemBaixo)
+    $tMin = ($comPonto | ForEach-Object { [double] $_.T } | Measure-Object -Minimum).Minimum
+    $tMax = ($comPonto | ForEach-Object { [double] $_.T } | Measure-Object -Maximum).Maximum
+    if ($tMax -le $tMin) { $tMax = $tMin + 1 }
+    $vMax = ($comPonto | ForEach-Object { [double] $_.V } | Measure-Object -Maximum).Maximum
+    if ($vMax -le 0) { $vMax = 1 }
+    $escX = { param($t) [math]::Round($margemEsq + ((([double] $t - $tMin) / ($tMax - $tMin)) * $areaW), 1) }
+    $escY = { param($v) [math]::Round($margemTopo + $areaH - (([double] $v / $vMax) * $areaH), 1) }
+
+    $linhas = foreach ($s in @($Series | Where-Object { $_ -and $_.Pontos })) {
+        $cor = if ($s.Cor) { [string] $s.Cor } else { '#123FA8' }
+        $trechoAtual = New-Object System.Collections.Generic.List[string]
+        $trechos = New-Object System.Collections.Generic.List[string]
+        foreach ($p in @($s.Pontos)) {
+            if (-not $p -or $null -eq $p.V -or $null -eq $p.T) {
+                if ($trechoAtual.Count -gt 1) { $trechos.Add(($trechoAtual -join ' ')) }
+                $trechoAtual = New-Object System.Collections.Generic.List[string]
+                continue
+            }
+            $trechoAtual.Add(('{0},{1}' -f (& $escX $p.T), (& $escY $p.V)))
+        }
+        if ($trechoAtual.Count -gt 1) { $trechos.Add(($trechoAtual -join ' ')) }
+        foreach ($pts in $trechos) { '<polyline points="' + $pts + '" fill="none" stroke="' + $cor + '" stroke-width="1.6"/>' }
+    }
+
+    # eixo Y: so' o valor maximo, pra nao poluir (grafico pequeno)
+    $eixoYHtml = "<text x=""2"" y=""$($margemTopo + 4)"" font-size=""8"" fill=""#8891A0"">$('{0:N0}' -f $vMax) $(ConvertTo-HtmlSafe $EixoY)</text>" +
+                 "<text x=""2"" y=""$($margemTopo + $areaH)"" font-size=""8"" fill=""#8891A0"">0</text>"
+    $legenda = ($Series | Where-Object { $_ -and $_.Nome } | ForEach-Object {
+        '<span style="color:' + [string] $_.Cor + '">&#9632;</span> ' + (ConvertTo-HtmlSafe ([string] $_.Nome))
+    }) -join '&nbsp;&nbsp;'
+    $tit = if ($Titulo) { '<div class="graftit">' + (ConvertTo-HtmlSafe $Titulo) + '</div>' } else { '' }
+    $legHtml = if ($legenda) { '<div class="graflegenda">' + $legenda + '</div>' } else { '' }
+    @"
+<div class="grafico">
+  $tit
+  <svg width="$Largura" height="$Altura" viewBox="0 0 $Largura $Altura" xmlns="http://www.w3.org/2000/svg">
+    <line x1="$margemEsq" y1="$margemTopo" x2="$margemEsq" y2="$($margemTopo + $areaH)" stroke="#D6DBE6" stroke-width="1"/>
+    <line x1="$margemEsq" y1="$($margemTopo + $areaH)" x2="$($margemEsq + $areaW)" y2="$($margemTopo + $areaH)" stroke="#D6DBE6" stroke-width="1"/>
+    $eixoYHtml
+    $($linhas -join "`n")
+  </svg>
+  $legHtml
+</div>
+"@
+}
+
 # ------------------------------------------------------------- helpers do relatorio
 
 # Tabela "Metrica | Valor | Faixa | Classificacao [ | Motivo do ajuste ]".
@@ -139,6 +266,103 @@ function Get-TabelaVpnNumerosHtml {
     "  <table>`n    <thead><tr><th>M&eacute;trica</th><th>Valor medido</th></tr></thead>`n    <tbody>`n$($rows -join "`n")`n    </tbody>`n  </table>"
 }
 
+# Item 2 do pedido do usuario: barras "sem VPN vs com VPN" pro mesmo meio --
+# um mini-grafico por metrica (download/upload/latencia), so' as que tiverem
+# pelo menos um dos dois lados medido.
+function Get-GraficoSemComVpnHtml {
+    param($M)
+    $grupos = @(
+        @{ Titulo = 'Download (Mbps)'; Unidade = 'Mbps'; Sem = (Get-Prop $M 'rede_local_download'); Com = (Get-Prop $M 'vpn_download_mbps') }
+        @{ Titulo = 'Upload (Mbps)';   Unidade = 'Mbps'; Sem = (Get-Prop $M 'rede_local_upload_mbps'); Com = (Get-Prop $M 'vpn_upload_mbps') }
+        @{ Titulo = 'Lat' + [char]0x00EA + 'ncia (ms)'; Unidade = 'ms'; Sem = (Get-Prop $M 'download_lat_ms'); Com = (Get-Prop $M 'latencia_ms') }
+    )
+    $blocos = foreach ($g in $grupos) {
+        if ($null -eq $g.Sem -and $null -eq $g.Com) { continue }
+        $barras = @(
+            [pscustomobject]@{ Rotulo = 'Sem VPN'; Valor = $g.Sem; Cor = '#5C6472' }
+            [pscustomobject]@{ Rotulo = 'Com VPN'; Valor = $g.Com; Cor = '#123FA8' }
+        )
+        Get-GraficoBarrasHtml -Barras $barras -Titulo $g.Titulo -Unidade $g.Unidade -Largura 230 -AlturaBarra 14 -EspacoBarra 6
+    }
+    $blocos = @($blocos | Where-Object { $_ })
+    if (-not $blocos.Count) { return '' }
+    '<div class="graflinha">' + ($blocos -join "`n") + '</div>'
+}
+
+# Item 5: curva de velocidade do speedtest (Fase 1, sem VPN) -- 2 series
+# (Download/Upload), eixo X = % daquela fase (ver ConvertTo-SerieVelocidadeSpeedtest).
+function Get-GraficoCurvaVelocidadeHtml {
+    param($M)
+    $pontos = @(Get-Prop $M 'rede_local_serie_velocidade')
+    if (-not $pontos.Count) { return '' }
+    $mk = { param($Fase) @($pontos | Where-Object { $_.Fase -eq $Fase } | ForEach-Object { [pscustomobject]@{ T = $_.T; V = $_.Mbps } }) }
+    $series = @(
+        [pscustomobject]@{ Nome = 'Download'; Cor = '#123FA8'; Pontos = @(& $mk 'download') }
+        [pscustomobject]@{ Nome = 'Upload';   Cor = '#1B7F3B'; Pontos = @(& $mk 'upload') }
+    )
+    Get-GraficoLinhaHtml -Series $series -Titulo ('Velocidade ao longo do teste (% da fase)') -EixoY 'Mbps' -Largura 300 -Altura 100
+}
+
+# Item 6a: curva de banda do iperf3 (Fase 2, com VPN) -- download e upload em
+# sequencia na mesma linha do tempo (ver Test-BandaVpn/SerieBanda).
+function Get-GraficoCurvaBandaVpnHtml {
+    param($M)
+    $pontos = @(Get-Prop $M 'vpn_serie_banda')
+    if (-not $pontos.Count) { return '' }
+    $mk = { param($Fase) @($pontos | Where-Object { $_.Fase -eq $Fase } | ForEach-Object { [pscustomobject]@{ T = $_.T; V = $_.Mbps } }) }
+    $series = @(
+        [pscustomobject]@{ Nome = 'Download'; Cor = '#123FA8'; Pontos = @(& $mk 'download') }
+        [pscustomobject]@{ Nome = 'Upload';   Cor = '#1B7F3B'; Pontos = @(& $mk 'upload') }
+    )
+    Get-GraficoLinhaHtml -Series $series -Titulo 'Banda pela VPN ao longo do teste (s)' -EixoY 'Mbps' -Largura 300 -Altura 100
+}
+
+# Item 6b: latencia por amostra do ping (Fase 2, com VPN) -- uma amostra sem
+# resposta vira um buraco na linha (ver Test-Latencia/AmostrasMs).
+function Get-GraficoLatenciaAmostraHtml {
+    param($M)
+    $amostras = @(Get-Prop $M 'vpn_serie_latencia')
+    if (-not $amostras.Count) { return '' }
+    $pontos = for ($i = 0; $i -lt $amostras.Count; $i++) {
+        [pscustomobject]@{ T = $i + 1; V = $amostras[$i] }
+    }
+    $series = @([pscustomobject]@{ Nome = 'Lat' + [char]0x00EA + 'ncia'; Cor = '#B77F00'; Pontos = @($pontos) })
+    $titulo = 'Lat' + [char]0x00EA + 'ncia por amostra do ping (falha = buraco na linha)'
+    Get-GraficoLinhaHtml -Series $series -Titulo $titulo -EixoY 'ms' -Largura 300 -Altura 100
+}
+
+# Item 7: comparacao entre as tentativas do "Refazer" (so' aparece quando o
+# tecnico refez a fase pelo menos uma vez -- ver New-MedicaoAtual/
+# fase1_tentativas_detalhe/fase2_tentativas_detalhe).
+function Get-GraficoTentativasHtml {
+    param($M)
+    $blocos = @()
+
+    $f1 = @(Get-Prop $M 'rede_local_tentativas_detalhe')
+    if ($f1.Count -gt 1) {
+        $dlAtual = Get-Prop $M 'rede_local_download'
+        $mediaDl = if ($null -ne $dlAtual) { [double] $dlAtual } else { $null }
+        $barrasDl = @()
+        for ($i = 0; $i -lt $f1.Count; $i++) { $barrasDl += [pscustomobject]@{ Rotulo = "Tentativa $($i+1)"; Valor = $f1[$i].download_mbps; Cor = '#8891A0' } }
+        $barrasDl += [pscustomobject]@{ Rotulo = 'M' + [char]0x00E9 + 'dia'; Valor = $mediaDl; Cor = '#123FA8' }
+        $blocos += Get-GraficoBarrasHtml -Barras $barrasDl -Titulo 'Rede local -- download por tentativa (Mbps)' -Unidade 'Mbps' -Largura 260 -AlturaBarra 14 -EspacoBarra 6
+    }
+
+    $f2 = @(Get-Prop $M 'vpn_tentativas_detalhe')
+    if ($f2.Count -gt 1) {
+        $dlAtual2 = Get-Prop $M 'vpn_download_mbps'
+        $mediaDl2 = if ($null -ne $dlAtual2) { [double] $dlAtual2 } else { $null }
+        $barrasDl2 = @()
+        for ($i = 0; $i -lt $f2.Count; $i++) { $barrasDl2 += [pscustomobject]@{ Rotulo = "Tentativa $($i+1)"; Valor = $f2[$i].download_mbps; Cor = '#8891A0' } }
+        $barrasDl2 += [pscustomobject]@{ Rotulo = 'M' + [char]0x00E9 + 'dia'; Valor = $mediaDl2; Cor = '#123FA8' }
+        $blocos += Get-GraficoBarrasHtml -Barras $barrasDl2 -Titulo 'Com VPN -- download por tentativa (Mbps)' -Unidade 'Mbps' -Largura 260 -AlturaBarra 14 -EspacoBarra 6
+    }
+
+    $blocos = @($blocos | Where-Object { $_ })
+    if (-not $blocos.Count) { return '' }
+    '<div class="ptit" style="margin-top:8px">Tentativas do "Refazer"</div><div class="graflinha">' + ($blocos -join "`n") + '</div>'
+}
+
 # Bloco de um meio na secao 4 (Rede local sem VPN + Com a VPN, lado a lado).
 function Get-MeioBlocoHtml {
     param($R, $M, [bool] $Recomendado, [string] $Modo = 'completo')
@@ -190,20 +414,30 @@ function Get-MeioBlocoHtml {
     }
     $f1 = Get-TabelaAvaliacaoHtml -Linhas $M.rede_local_avaliacao -Modo $Modo
     if (-not $f1) { $f1 = '<div class="small">O teste de velocidade n&atilde;o mediu neste meio.</div>' }
+    $grafVelocidade = Get-GraficoCurvaVelocidadeHtml -M $M
 
     if ($M.vpn_conectou) {
         $f2 = if ($Recomendado) { Get-TabelaAvaliacaoHtml -Linhas $R.avaliacao -ComMotivo -Modo $Modo } else { Get-TabelaVpnNumerosHtml $M }
         if (-not $f2) { $f2 = '<div class="small">Sem m&eacute;tricas registradas para a fase com a VPN.</div>' }
+        $grafBanda    = Get-GraficoCurvaBandaVpnHtml -M $M
+        $grafLatencia = Get-GraficoLatenciaAmostraHtml -M $M
     } else {
         $mv = if ($M.vpn_motivo) { ' Motivo: ' + (ConvertTo-HtmlSafe ([string] $M.vpn_motivo)) } else { '' }
         $f2 = '<div class="warn"><b>N&atilde;o foi poss&iacute;vel conectar a VPN da Justi&ccedil;a Eleitoral neste meio.</b>' + $mv + '</div>'
+        $grafBanda = ''; $grafLatencia = ''
     }
     $subSem = if ($Modo -eq 'completo') { 'Sem VPN conectada &mdash; teste de velocidade' } else { 'Sem VPN &mdash; rede local' }
     $subCom = if ($Modo -eq 'completo') { 'Com VPN conectada &mdash; diagn&oacute;stico pela VPN da Justi&ccedil;a Eleitoral' } else { 'Com VPN &mdash; pela VPN da Justi&ccedil;a Eleitoral' }
 
+    # itens 2 (sem/com VPN) e 7 (tentativas do "Refazer") -- so' aparecem se
+    # houver algo pra mostrar (as proprias funcoes devolvem '' senao).
+    $grafSemCom     = Get-GraficoSemComVpnHtml -M $M
+    $grafTentativas = Get-GraficoTentativasHtml -M $M
+
     @"
   <div class="meio">
     <div class="meiotit"><span>$tit</span>$badge$flag</div>
+    $grafSemCom
     <div class="cols">
       <div>
         <div class="subt">$subSem</div>
@@ -211,12 +445,16 @@ function Get-MeioBlocoHtml {
         $infoPlacaHtml
         $diagBox
         $f1
+        $grafVelocidade
       </div>
       <div>
         <div class="subt">$subCom</div>
         $f2
+        $grafBanda
+        $grafLatencia
       </div>
     </div>
+    $grafTentativas
   </div>
 "@
 }
@@ -290,6 +528,31 @@ function Get-CondicionantesDiag {
     @($itens)
 }
 
+# Item 1: barras comparando os meios testados (LAN x Wi-Fi x Celular) por
+# metrica -- usado tanto no Painel de Medicoes quanto no de Viabilidade
+# (mesmos campos, ja no JSON de cada medicao). $Meds: so' os "aplicaveis".
+function Get-GraficoComparacaoMeiosHtml {
+    param($Meds)
+    $aplic = @($Meds | Where-Object { $_ -and -not $_.nao_aplicavel })
+    if ($aplic.Count -lt 2) { return '' }   # com 1 meio so, comparar nao ajuda
+    $grupos = @(
+        @{ Titulo = 'Download s/ VPN (Mbps)'; Unidade = 'Mbps'; Campo = 'rede_local_download' }
+        @{ Titulo = 'Upload s/ VPN (Mbps)';   Unidade = 'Mbps'; Campo = 'rede_local_upload_mbps' }
+        @{ Titulo = 'Download c/ VPN (Mbps)'; Unidade = 'Mbps'; Campo = 'vpn_download_mbps' }
+        @{ Titulo = 'Lat' + [char]0x00EA + 'ncia c/ VPN (ms)'; Unidade = 'ms'; Campo = 'latencia_ms' }
+    )
+    $blocos = foreach ($g in $grupos) {
+        $barras = @($aplic | ForEach-Object {
+            [pscustomobject]@{ Rotulo = [string] $_.rotulo; Valor = (Get-Prop $_ $g.Campo); Cor = '#123FA8' }
+        })
+        if (-not @($barras | Where-Object { $null -ne $_.Valor }).Count) { continue }
+        Get-GraficoBarrasHtml -Barras $barras -Titulo $g.Titulo -Unidade $g.Unidade -Largura 260 -AlturaBarra 14 -EspacoBarra 6
+    }
+    $blocos = @($blocos | Where-Object { $_ })
+    if (-not $blocos.Count) { return '' }
+    '<div class="ptit" style="margin-top:12px">Compara' + [char]0x00E7 + [char]0x00E3 + 'o entre os meios</div><div class="graflinha">' + ($blocos -join "`n") + '</div>'
+}
+
 # Secao 3 - Painel de Medicoes (modo 'medicao' / 'referencia': sem juizo de viabilidade).
 function Get-PainelMedicoesHtml {
     param($R)
@@ -351,6 +614,7 @@ function Get-PainelMedicoesHtml {
         $obs += ('{0} n{1}o se aplica{2}' -f $m.rotulo, [char]0x00E3, $mot)
     }
     $obsHtml = if ($obs.Count) { '<ul>' + ((@($obs) | ForEach-Object { '<li>' + (ConvertTo-HtmlSafe $_) + '</li>' }) -join '') + '</ul>' } else { 'Sem observa&ccedil;&otilde;es.' }
+    $grafComparacao = Get-GraficoComparacaoMeiosHtml -Meds $meds
 
     @"
   <div class="bar">Painel de Medi&ccedil;&otilde;es &mdash; Junta Eleitoral Especial 2026</div>
@@ -374,6 +638,7 @@ $($resumoRows -join "`n")
 $($medRows -join "`n")
           </tbody>
         </table>
+        $grafComparacao
       </div>
     </div>
     <div class="ptit" style="margin-top:4px">Observa&ccedil;&otilde;es</div>
@@ -463,6 +728,7 @@ function Get-PainelHtml {
     if ($aju) { $concRows += '<tr><td class="k">Ajuste da recomenda&ccedil;&atilde;o</td><td>{0}</td></tr>' -f $aju }
     $concRows += '<tr><td class="k">Condicionantes / pend&ecirc;ncias</td><td>{0}</td></tr>' -f $condHtml
     $concRows += '<tr><td class="k">Observa&ccedil;&otilde;es finais</td><td>{0}</td></tr>' -f $obs
+    $grafComparacao = Get-GraficoComparacaoMeiosHtml -Meds $meds
 
     @"
   <div class="bar">Painel de Viabilidade de Conectividade &mdash; Junta Eleitoral Especial 2026</div>
@@ -484,6 +750,7 @@ $($idRows -join "`n")
 $($sitRows -join "`n")
           </tbody>
         </table>
+        $grafComparacao
       </div>
     </div>
     <div class="ptit" style="margin-top:4px">Conclus&atilde;o do diagn&oacute;stico</div>
@@ -680,6 +947,12 @@ function New-RelatorioHtml {
          font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
   .meio .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0 18px; padding: 8px 12px 2px; }
   .warn { background: #FFF8E1; border-left: 3px solid #E0A800; padding: 6px 10px; margin: 4px 0 8px; font-size: 10.5px; }
+
+  .graflinha { display: flex; flex-wrap: wrap; gap: 10px 18px; margin: 4px 0; }
+  .grafico { page-break-inside: avoid; }
+  .graftit { font-size: 9.5px; font-weight: 700; color: #5C6472; text-transform: uppercase;
+             letter-spacing: .03em; margin: 0 0 3px; }
+  .graflegenda { font-size: 9px; color: #5C6472; margin-top: 2px; }
 
   .gel { border: 1px solid #BFC9DA; border-top: none; padding: 10px 12px 4px; }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 24px; margin: 2px 0 10px; }

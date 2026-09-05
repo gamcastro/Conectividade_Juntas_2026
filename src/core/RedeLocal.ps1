@@ -96,6 +96,24 @@ function Invoke-SpeedtestStreaming {
     [pscustomobject]@{ Eventos = $eventos; Erro = ($errBuf -join "`n") }
 }
 
+# Curva de velocidade (download/upload) pro grafico do relatorio -- puro
+# (recebe a lista de eventos ja capturada por Invoke-SpeedtestStreaming),
+# devolve [{T;Fase;Mbps}] em ordem. T = progress (0-100, "% daquela fase")
+# em vez de segundos: e' o unico campo de tempo confiavel no JSONL do Ookla
+# CLI pra progresso (ja usado em Update-Speedtest); um "elapsed" em ms nao e'
+# garantido em toda versao do CLI.
+function ConvertTo-SerieVelocidadeSpeedtest {
+    param($Eventos)
+    $serie = foreach ($e in @($Eventos)) {
+        if ($e.type -eq 'download' -and $e.PSObject.Properties['download'] -and $e.download) {
+            [pscustomobject]@{ T = [math]::Round([double] $e.download.progress * 100, 1); Fase = 'download'; Mbps = (ConvertTo-Mbps $e.download.bandwidth) }
+        } elseif ($e.type -eq 'upload' -and $e.PSObject.Properties['upload'] -and $e.upload) {
+            [pscustomobject]@{ T = [math]::Round([double] $e.upload.progress * 100, 1); Fase = 'upload'; Mbps = (ConvertTo-Mbps $e.upload.bandwidth) }
+        }
+    }
+    @($serie | Where-Object { $_ })
+}
+
 # Extrai os IDs de servidor da saida de "speedtest.exe --servers" (tabela ou
 # jsonl). Puro (recebe texto) para ser testavel sem o binario.
 function ConvertFrom-ListaServidoresSpeedtest {
@@ -415,6 +433,11 @@ function Test-InternetLocal {
         upload_lat_ms   = $null
         resultado_url   = ''
         resultado_id    = ''
+        # Curva de velocidade ao longo do teste, pro grafico do relatorio (ver
+        # ConvertTo-SerieVelocidadeSpeedtest) -- [{T;Fase;Mbps}], T = 0-100
+        # ("% daquela fase", nao segundos: o unico campo confiavel do JSONL do
+        # Ookla CLI pra isso e' .progress, ja usado em Update-Speedtest).
+        serie_velocidade = @()
         quando          = (Get-Date).ToString('o')
     }
 
@@ -556,6 +579,7 @@ function Test-InternetLocal {
         $r.resultado_url = [string] $res.result.url
         $r.resultado_id  = [string] $res.result.id
     }
+    $r.serie_velocidade = @(ConvertTo-SerieVelocidadeSpeedtest $saida.Eventos)
     Write-Log ("Teste de velocidade OK: down {0} Mbps / up {1} Mbps / ping {2} ms ({3})" -f $r.download_mbps, $r.upload_mbps, $r.ping_ms, $r.isp) -Nivel Ok
     [pscustomobject] $r
 }

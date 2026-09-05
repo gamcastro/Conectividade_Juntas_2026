@@ -204,6 +204,9 @@ function New-ResultadoJson {
             rede_local_wifi_ssid            = $mWifiSsid
             limiares_meio          = $mMeio
             rede_local_avaliacao   = @(Get-AvaliacaoRedeLocalJson $mIt $mOvr $mMeio)
+            # curva de velocidade do teste (sem VPN), pro grafico do relatorio
+            # -- ver ConvertTo-SerieVelocidadeSpeedtest em src/core/RedeLocal.ps1.
+            rede_local_serie_velocidade = @(Get-Prop $mIt 'serie_velocidade')
             vpn_conectou         = [bool] (Get-Prop $m 'vpn_conectou')
             vpn_motivo           = [string] (Get-Prop $m 'vpn_motivo')
             vpn_download_mbps     = (Get-Prop $mMet 'BandaDownloadMbps')
@@ -211,13 +214,22 @@ function New-ResultadoJson {
             latencia_ms           = (Get-Prop $mMet 'LatenciaMediaMs')
             jitter_ms             = (Get-Prop $mMet 'JitterMs')
             perda_percentual      = (Get-Prop $mMet 'PerdaPercentual')
+            # curva de banda do iperf3 (download+upload) e amostras de
+            # latencia do ping (com VPN), pros graficos do relatorio -- ver
+            # Test-BandaVpn (src/testes/Test-Banda.ps1) e Test-Latencia
+            # (src/testes/Test-Latencia.ps1).
+            vpn_serie_banda       = @(Get-Prop (Get-Prop $m 'iperf') 'SerieBanda')
+            vpn_serie_latencia    = @(Get-Prop $mMet 'SerieLatenciaMs')
             veredito             = [string] (Get-Prop $m 'veredito')
             quando               = [string] (Get-Prop $m 'quando')
             # Quantas tentativas foram combinadas na media (0/1 = tecnico nao
             # usou "Refazer Fase 1/2" no overlay; ver Get-Fase1Media/Get-Fase2Media
-            # em src/ui/Janela-Principal.ps1).
+            # em src/ui/Janela-Principal.ps1) + o resumo de CADA tentativa (pro
+            # grafico "tentativas do Refazer" do relatorio).
             rede_local_tentativas = (Get-Prop $m 'fase1_tentativas')
             vpn_tentativas        = (Get-Prop $m 'fase2_tentativas')
+            rede_local_tentativas_detalhe = @(Get-Prop $m 'fase1_tentativas_detalhe')
+            vpn_tentativas_detalhe        = @(Get-Prop $m 'fase2_tentativas_detalhe')
         }
     }
 

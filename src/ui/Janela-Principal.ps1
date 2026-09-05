@@ -3492,6 +3492,32 @@ function New-MedicaoAtual {
         if ($srcAdap) { $snap = $srcAdap | ConvertTo-Json -Depth 6 -Compress | ConvertFrom-Json }
     } catch { }
 
+    # Resumo de CADA tentativa (nao so' a media) pro grafico "tentativas do
+    # Refazer" do relatorio. Calculado em variavel separada (nao inline no
+    # literal @{} abaixo) de proposito: um if/pipeline direto como valor de
+    # chave sofre o "unroll" classico do PowerShell (0 itens vira $null, 1
+    # item perde o array) -- ver Save-ConfigAmbiente (src/core/Config.ps1)
+    # pra outro caso do mesmo bug ja corrigido nesta sessao.
+    $fase1Detalhe = @($Global:Fase1Tentativas | ForEach-Object {
+        $itT = if ($_ -and $_.PSObject.Properties['Internet']) { $_.Internet } else { $null }
+        [pscustomobject]@{
+            download_mbps = if ($itT -and $itT.PSObject.Properties['download_mbps']) { $itT.download_mbps } else { $null }
+            upload_mbps   = if ($itT -and $itT.PSObject.Properties['upload_mbps'])   { $itT.upload_mbps }   else { $null }
+            ping_ms       = if ($itT -and $itT.PSObject.Properties['ping_ms'])       { $itT.ping_ms }       else { $null }
+            jitter_ms     = if ($itT -and $itT.PSObject.Properties['jitter_ms'])     { $itT.jitter_ms }     else { $null }
+        }
+    })
+    $fase2Detalhe = @($Global:Fase2Tentativas | ForEach-Object {
+        $metT = if ($_ -and $_.PSObject.Properties['Metricas']) { $_.Metricas } else { $null }
+        [pscustomobject]@{
+            latencia_ms   = if ($metT) { $metT.LatenciaMediaMs } else { $null }
+            jitter_ms     = if ($metT) { $metT.JitterMs } else { $null }
+            perda_pct     = if ($metT) { $metT.PerdaPercentual } else { $null }
+            download_mbps = if ($metT) { $metT.BandaDownloadMbps } else { $null }
+            upload_mbps   = if ($metT) { $metT.BandaUploadMbps } else { $null }
+        }
+    })
+
     [pscustomobject]@{
         meio                = $mo.meio
         operadora           = $mo.operadora
@@ -3519,6 +3545,8 @@ function New-MedicaoAtual {
         # nao usou "Refazer"; ver Update-ResultadoFase1/2, Get-Fase1Media/2).
         fase1_tentativas    = @($Global:Fase1Tentativas).Count
         fase2_tentativas    = @($Global:Fase2Tentativas).Count
+        fase1_tentativas_detalhe = $fase1Detalhe
+        fase2_tentativas_detalhe = $fase2Detalhe
     }
 }
 
