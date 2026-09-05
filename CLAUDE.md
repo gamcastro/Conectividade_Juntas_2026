@@ -354,7 +354,14 @@ nos modos `medicao`/`referencia` esse cartão fica escondido
 (`cardDecisaoViavel`), o título/rótulo do motivo mudam para "SUGESTÃO DE
 CONEXÃO PARA ESTE LOCAL"/"Motivo do ajuste (opcional)" e o motivo é
 **opcional** — o técnico pode trocar a conexão sugerida (calculada pelo
-maior download) sem precisar justificar, já que é só informativo →
+maior download) sem precisar justificar, já que é só informativo. Quando a
+conexão escolhida no combo é a **LAN**, aparece o card `cardCaboLan`
+(`Update-CardCaboLan`, chamado do `Update-ContextoRecomendacao`): chips
+"Não precisa / 5 m / 10 m / 15 m / Outro (digitar)" (`wrapCaboLan` +
+`txtCaboLanOutro`) → `$Global:CaboLan` = `{necessario;metros}`, que vai pro
+JSON (`cabo_lan`, via `-CaboLan` em `New-ResultadoJson`/`Save-Diagnostico`)
+e vira uma linha "Cabo de rede (LAN)" no relatório
+(`Get-CaboLanTextoRelatorio`) →
 6. conclusão: **Salvar** / **Transmitir** / **Exportar relatório (PDF)** + checklist.
 Os runspaces são `Start-TarefaRede` (`$Global:TarefaRedeState`, Fase 1/probe) e
 `Start-DiagnosticoAssincrono` (`$Global:DiagRunState`, Fase 2, com `-AoConcluir`).

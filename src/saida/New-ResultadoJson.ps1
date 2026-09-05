@@ -71,6 +71,9 @@ function New-ResultadoJson {
         $Medicoes,
         $ConexaoRecomendada,
         [string]   $MotivoRecomendacao,
+        # Precisa passar cabo de rede ate o ponto (so' faz sentido quando a
+        # conexao escolhida e' a LAN). {necessario;metros}. Opcional.
+        $CaboLan,
         # Anexo do formulario GEL (coordenadas / suporte / eletrica). Opcional.
         $VistoriaGel
     )
@@ -277,6 +280,13 @@ function New-ResultadoJson {
         rede_local        = $redeLocal
         vistoria_gel       = (New-BlocoVistoriaGel -VistoriaGel $VistoriaGel -LocalId ([string] (Get-Prop $Local 'id')))
         vpn               = [pscustomobject]@{ impossivel = [bool] $VpnImpossivel; motivo = [string] $VpnMotivo }
+        cabo_lan          = $(if ($CaboLan) {
+            $nec = Get-Prop $CaboLan 'necessario'
+            [pscustomobject]@{
+                necessario = $(if ($null -ne $nec) { [bool] $nec } else { $null })
+                metros     = (Get-Prop $CaboLan 'metros')
+            }
+        } else { $null })
         medicoes          = @($medicoesJson)
         conexao_recomendada = $recJson
         ambiente          = $Ambiente

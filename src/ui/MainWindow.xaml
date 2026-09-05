@@ -1431,6 +1431,28 @@
                                 </StackPanel>
                             </Border>
 
+                            <!-- cabo de rede: so' aparece quando a conexao escolhida for a LAN -->
+                            <Border x:Name="cardCaboLan" Style="{DynamicResource Cartao}" Padding="16,14"
+                                    Margin="0,16,0,0" Visibility="Collapsed">
+                                <StackPanel>
+                                    <TextBlock Text="CABO DE REDE (LAN)" FontFamily="Consolas" FontSize="9"
+                                               Foreground="{DynamicResource Dicon.Text3}"/>
+                                    <TextBlock Text="A conex&#227;o escolhida &#233; a rede cabeada. &#201; preciso passar cabo de rede at&#233; o ponto? De quantos metros?"
+                                               Margin="0,4,0,8" TextWrapping="Wrap"
+                                               Foreground="{DynamicResource Dicon.Text2}" FontSize="12"/>
+                                    <WrapPanel x:Name="wrapCaboLan"/>
+                                    <StackPanel x:Name="panelCaboLanOutro" Orientation="Horizontal"
+                                                Margin="0,2,0,0" Visibility="Collapsed">
+                                        <TextBox x:Name="txtCaboLanOutro" Width="80" MinHeight="30"
+                                                 VerticalContentAlignment="Center"/>
+                                        <TextBlock Text="metros" VerticalAlignment="Center" Margin="6,0,0,0"
+                                                   Foreground="{DynamicResource Dicon.Text3}" FontSize="12"/>
+                                    </StackPanel>
+                                    <TextBlock x:Name="txtCaboLanResumo" Margin="0,8,0,0" FontFamily="Consolas"
+                                               FontSize="11" Foreground="{DynamicResource Dicon.Text2}"/>
+                                </StackPanel>
+                            </Border>
+
                             <TextBlock Text="Medi&#231;&#245;es feitas neste local"
                                        Style="{DynamicResource SecaoTela}" Margin="0,16,0,6"/>
                             <DataGrid x:Name="dgMedicoes" Style="{DynamicResource GridMetricas}"

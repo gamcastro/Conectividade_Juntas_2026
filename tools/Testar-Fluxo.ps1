@@ -1062,8 +1062,23 @@ try {
     # mesmo assim) -- exatamente o pedido: "calculado pela ferramenta, mas
     # pode ser ajustado pelo tecnico". Avanca SEM motivo -- opcional fora do
     # modo completo, nao deve bloquear.
+    # card "cabo de rede (LAN)": so' aparece quando a conexao escolhida e' a LAN.
+    $cboRec.SelectedItem = @($optsM | Where-Object { $_ -match 'Wi-Fi' } | Select-Object -First 1)
+    Update-ContextoRecomendacao
+    $caboEscondidoWifi = "$($w.FindName('cardCaboLan').Visibility)" -eq 'Collapsed'
     $cboRec.SelectedItem = 'Rede cabeada (LAN)'
     Update-ContextoRecomendacao
+    $wrapCabo = $w.FindName('wrapCaboLan')
+    if ($caboEscondidoWifi -and "$($w.FindName('cardCaboLan').Visibility)" -eq 'Visible' -and $wrapCabo.Children.Count -eq 5) {
+        Write-Host "[m-cabo] card do cabo de rede: escondido no Wi-Fi, visivel na LAN com 5 chips"
+    } else { Write-Host "    FALHA: card do cabo (wifiHid=$caboEscondidoWifi lanVis=$($w.FindName('cardCaboLan').Visibility) chips=$($wrapCabo.Children.Count))"; $falhas++ }
+    # clica no chip "10 m"
+    $chip10 = @($wrapCabo.Children | Where-Object { "$($_.Tag)" -eq '10 m' } | Select-Object -First 1)
+    $chip10.RaiseEvent([Windows.RoutedEventArgs]::new([Windows.Controls.Button]::ClickEvent))
+    if ($Global:CaboLan -and $Global:CaboLan.necessario -eq $true -and $Global:CaboLan.metros -eq 10) {
+        Write-Host "[m-cabo] chip '10 m' grava necessario=true / metros=10"
+    } else { Write-Host "    FALHA: chip 10 m (cabo=$($Global:CaboLan | ConvertTo-Json -Compress))"; $falhas++ }
+
     $w.FindName('txtMotivoRec').Text = ''
     Invoke-WizardProximo
     if ($Global:WizardPassos[$Global:WizardStep - 1] -eq 'stepFim' -and $Global:RecomendacaoLocal.meio -eq 'lan') {
@@ -1078,8 +1093,12 @@ try {
     # nao o calculo automatico (que teria escolhido o Wi-Fi, maior download).
     $docM = New-ResultadoJson -Ambiente (Get-EstadoAmbiente) -Metricas $met -Decisao $dec `
         -Local $cboLm.SelectedItem.Dados -TecnicoNome 'TESTE' -FaseLocal $Global:FaseLocalPayload `
-        -Medicoes $Global:Medicoes -ConexaoRecomendada $Global:RecomendacaoLocal -MotivoRecomendacao ([string] $Global:MotivoRecomendacao)
+        -Medicoes $Global:Medicoes -ConexaoRecomendada $Global:RecomendacaoLocal -MotivoRecomendacao ([string] $Global:MotivoRecomendacao) `
+        -CaboLan $Global:CaboLan
     $htmlM = New-RelatorioHtml -Resultado $docM
+    if ($docM.cabo_lan -and $docM.cabo_lan.necessario -eq $true -and $docM.cabo_lan.metros -eq 10 -and $htmlM -match 'Cabo de rede') {
+        Write-Host "[m-cabo] JSON traz cabo_lan (necessario/metros) e o relatorio mostra a linha 'Cabo de rede'"
+    } else { Write-Host "    FALHA: cabo_lan no JSON/relatorio (cabo=$($docM.cabo_lan | ConvertTo-Json -Compress) htmlOk=$($htmlM -match 'Cabo de rede'))"; $falhas++ }
     if ($docM.modo_avaliacao -eq 'medicao' -and $htmlM -match 'Painel de Medi' -and $htmlM -notmatch 'Painel de Viabilidade') {
         Write-Host "[m] JSON traz modo_avaliacao='medicao'; relatorio = Painel de Medicoes (sem Painel de Viabilidade)"
     } else { Write-Host "    FALHA: json/relatorio modo medicao (modo=$($docM.modo_avaliacao))"; $falhas++ }

@@ -42,6 +42,7 @@ $Global:AvisarRetirarCaboLan = $false # depois do teste da LAN: lembrar de tirar
 $Global:RecomendacaoLocal  = $null   # {meio;operadora;rotulo;veredito;provisoria;base}
 $Global:LocalMedicoesId    = ''      # id do local a que as medicoes atuais pertencem
 $Global:MotivoRecomendacao = ''      # justificativa da conexao recomendada (passo 6)
+$Global:CaboLan            = $null   # {necessario;metros} - so' quando a conexao escolhida e' LAN
 $Global:AtualizandoRecomendacao = $false  # guarda: set programatico do combo de recomendacao
 $Global:MedicoesPasso5     = @()     # [{idx;med}] das medicoes testaveis no seletor do passo 5
 $Global:MedicaoPasso5Idx   = -1      # indice em $Global:Medicoes da medicao aberta no passo 5 (-1 = ultima)
@@ -363,6 +364,14 @@ function New-JanelaPrincipal {
         })
     $window.FindName('txtMotivoRec').Add_TextChanged({
             $Global:MotivoRecomendacao = [string] $Global:JanelaPrincipal.FindName('txtMotivoRec').Text
+        })
+    $window.FindName('txtCaboLanOutro').Add_TextChanged({
+            if ($Global:CaboLan -and $Global:CaboLan.necessario) {
+                $t = ([string] $Global:JanelaPrincipal.FindName('txtCaboLanOutro').Text) -replace ',', '.'
+                $v = 0.0
+                $Global:CaboLan.metros = if ([double]::TryParse($t, [ref] $v) -and $v -gt 0) { $v } else { $null }
+                Update-CaboLanResumo
+            }
         })
 
     # "Detalhes da execucao" (lstLog) rola sozinho pro final a cada evento novo.
@@ -3715,6 +3724,7 @@ function Update-ContextoRecomendacao {
     if (-not $w) { return }
     $sel = [string] $w.FindName('cboConexaoRec').SelectedItem
     $obj = Resolve-RecomendacaoSelecionada -Rotulo $sel
+    Update-CardCaboLan -Meio ([string] $(if ($obj) { $obj.meio } else { '' }))
     $lbl = $w.FindName('lblRecContexto')
     if (-not $lbl) { return }
     if (-not (Test-ModoCompleto)) {
@@ -3734,6 +3744,96 @@ function Update-ContextoRecomendacao {
         default      { 'nenhum meio de conexao pode ser usado neste local' }
     }
     $lbl.Text = 'Veredito do local por esta conexao: {0}. ({1})' -f (Get-RotuloVeredito $obj.veredito), $base
+}
+
+# Card "cabo de rede (LAN)" do passo 5: so' aparece quando a conexao
+# escolhida no combo e' a rede cabeada. E' info de infraestrutura pro
+# planejamento (vai no JSON e no relatorio); nao entra na decisao.
+# Chips: "Nao precisa" / "5 m" / "10 m" / "15 m" / "Outro (digitar)".
+$Global:OpcoesCaboLan = @('Nao precisa de cabo', '5 m', '10 m', '15 m', 'Outro (digitar)')
+
+function Update-CardCaboLan {
+    param([string] $Meio)
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    $card = $w.FindName('cardCaboLan')
+    if (-not $card) { return }
+    if ($Meio -ne 'lan') {
+        $card.Visibility = 'Collapsed'
+        $Global:CaboLan = $null
+        return
+    }
+    $card.Visibility = 'Visible'
+    $wrap = $w.FindName('wrapCaboLan')
+    if ($wrap -and $wrap.Children.Count -eq 0) {
+        $estiloChip = $w.TryFindResource('BotaoFantasma')
+        foreach ($texto in $Global:OpcoesCaboLan) {
+            $btn = [Windows.Controls.Button]::new()
+            $btn.Content = $texto
+            $btn.Tag     = $texto
+            if ($estiloChip) { $btn.Style = $estiloChip }
+            $btn.Margin  = [Windows.Thickness]::new(0, 0, 8, 8)
+            $btn.Padding = [Windows.Thickness]::new(12, 5, 12, 5)
+            $btn.FontSize = 12.5
+            $btn.Add_Click({ Invoke-CaboLanEscolha -Texto $this.Tag })
+            [void] $wrap.Children.Add($btn)
+        }
+    }
+    # reabriu o passo com um valor "Outro" ja escolhido -> mostra o campo de novo
+    $tb = $w.FindName('txtCaboLanOutro'); $po = $w.FindName('panelCaboLanOutro')
+    $c  = $Global:CaboLan
+    if ($tb -and $po -and $c -and $c.necessario -and $null -ne $c.metros -and ([double] $c.metros) -notin 5, 10, 15) {
+        $tb.Text = ('{0:0.#}' -f [double] $c.metros)
+        $po.Visibility = 'Visible'
+    }
+    Update-CaboLanResumo
+}
+
+function Invoke-CaboLanEscolha {
+    param([string] $Texto)
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    $po = $w.FindName('panelCaboLanOutro')
+    switch ($Texto) {
+        'Nao precisa de cabo' {
+            $Global:CaboLan = [pscustomobject]@{ necessario = $false; metros = $null }
+            if ($po) { $po.Visibility = 'Collapsed' }
+        }
+        'Outro (digitar)' {
+            $m = $null
+            $tb = $w.FindName('txtCaboLanOutro')
+            if ($tb) {
+                $v = 0.0
+                if ([double]::TryParse((([string] $tb.Text) -replace ',', '.'), [ref] $v) -and $v -gt 0) { $m = $v }
+            }
+            $Global:CaboLan = [pscustomobject]@{ necessario = $true; metros = $m }
+            if ($po) { $po.Visibility = 'Visible' }
+            if ($tb) { try { $tb.Focus(); $tb.CaretIndex = $tb.Text.Length } catch { } }
+        }
+        default {
+            $n = 0; [void][int]::TryParse(($Texto -replace '[^\d]', ''), [ref] $n)
+            $Global:CaboLan = [pscustomobject]@{ necessario = $true; metros = $n }
+            if ($po) { $po.Visibility = 'Collapsed' }
+        }
+    }
+    Update-CaboLanResumo
+}
+
+function Update-CaboLanResumo {
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    $lbl = $w.FindName('txtCaboLanResumo')
+    if (-not $lbl) { return }
+    $c = $Global:CaboLan
+    $lbl.Text = if (-not $c -or $null -eq $c.necessario) {
+        'Nao informado.'
+    } elseif (-not $c.necessario) {
+        'Selecionado: nao precisa passar cabo de rede.'
+    } elseif ($null -ne $c.metros -and [double] $c.metros -gt 0) {
+        'Selecionado: precisa de cabo de rede de aprox. {0:0.#} m.' -f [double] $c.metros
+    } else {
+        'Selecionado: precisa de cabo de rede - digite os metros no campo "Outro".'
+    }
 }
 
 # Tabela read-only das medicoes feitas no local (passo 6).
@@ -3811,6 +3911,7 @@ function Reset-Medicoes {
     $Global:AvisarRetirarCaboLan = $false
     $Global:RecomendacaoLocal  = $null
     $Global:MotivoRecomendacao = ''
+    $Global:CaboLan            = $null
     $Global:MedicoesPasso5     = @()
     $Global:MedicaoPasso5Idx   = -1
 }
@@ -4032,6 +4133,7 @@ function Invoke-ExportarRelatorio {
             -VpnMotivo (([string] $w.FindName('txtVpnMotivo').Text).Trim()) `
             -Medicoes $Global:Medicoes -ConexaoRecomendada $rec `
             -MotivoRecomendacao ([string] $Global:MotivoRecomendacao) `
+            -CaboLan $Global:CaboLan `
             -VistoriaGel $Global:VistoriaGel
     } catch {
         $st.Text = "Falha ao montar o relatorio: $_"
@@ -5085,6 +5187,7 @@ function Invoke-SalvarResultado {
             -VpnMotivo (([string] $w.FindName('txtVpnMotivo').Text).Trim()) `
             -Medicoes $Global:Medicoes -ConexaoRecomendada $rec `
             -MotivoRecomendacao ([string] $Global:MotivoRecomendacao) `
+            -CaboLan $Global:CaboLan `
             -VistoriaGel $Global:VistoriaGel
         Write-Log "Resultado salvo: $caminho" -Nivel Ok
         $Global:FeitoSalvar          = $true

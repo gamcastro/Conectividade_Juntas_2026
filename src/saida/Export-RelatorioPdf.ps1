@@ -460,6 +460,22 @@ function Get-MeioBlocoHtml {
 }
 
 # Classificacao do local (analogo ao "Classificacao do imovel" da SEMAP).
+# Frase pro relatorio sobre o cabo de rede (so' quando a conexao escolhida
+# e' a LAN e o tecnico respondeu). '' = nao informado -> a linha nao aparece.
+function Get-CaboLanTextoRelatorio {
+    param($R)
+    $c = if ($R.PSObject.Properties['cabo_lan']) { $R.cabo_lan } else { $null }
+    if (-not $c) { return '' }
+    $nec = if ($c.PSObject.Properties['necessario']) { $c.necessario } else { $null }
+    if ($null -eq $nec) { return '' }
+    if (-not $nec) { return 'N&atilde;o &eacute; preciso passar cabo de rede at&eacute; o ponto.' }
+    $m = if ($c.PSObject.Properties['metros']) { $c.metros } else { $null }
+    if ($null -ne $m -and [double] $m -gt 0) {
+        return ('&Eacute; preciso passar cabo de rede de aprox. {0:0.#} m at&eacute; o ponto.' -f [double] $m)
+    }
+    return '&Eacute; preciso passar cabo de rede (metragem n&atilde;o informada).'
+}
+
 function Get-ClassificacaoLocalTexto {
     param([string] $VeredictoFinal)
     switch ($VeredictoFinal) {
@@ -586,6 +602,8 @@ function Get-PainelMedicoesHtml {
         '<tr><td class="k">Meios n&atilde;o aplic&aacute;veis</td><td>{0}</td></tr>' -f $na.Count
         '<tr><td class="k">Sugest&atilde;o de conex&atilde;o</td><td>{0}</td></tr>' -f $sugTxt
     )
+    $caboTxt = Get-CaboLanTextoRelatorio $R
+    if ($caboTxt) { $resumoRows += '<tr><td class="k">Cabo de rede (LAN)</td><td>{0}</td></tr>' -f $caboTxt }
 
     $rank = @{ 'lan' = 0; 'wifi' = 1; 'celular' = 2 }
     $medRows = foreach ($m in ($meds | Sort-Object { $x = $rank[[string] $_.meio]; if ($null -eq $x) { 9 } else { $x } })) {
@@ -725,6 +743,8 @@ function Get-PainelHtml {
         '<tr><td class="k">Conex&atilde;o recomendada</td><td>{0}</td></tr>' -f $recTxt
         '<tr><td class="k">Motivo da recomenda&ccedil;&atilde;o</td><td>{0}</td></tr>' -f $motRec
     )
+    $caboTxt = Get-CaboLanTextoRelatorio $R
+    if ($caboTxt) { $concRows += '<tr><td class="k">Cabo de rede (LAN)</td><td>{0}</td></tr>' -f $caboTxt }
     if ($aju) { $concRows += '<tr><td class="k">Ajuste da recomenda&ccedil;&atilde;o</td><td>{0}</td></tr>' -f $aju }
     $concRows += '<tr><td class="k">Condicionantes / pend&ecirc;ncias</td><td>{0}</td></tr>' -f $condHtml
     $concRows += '<tr><td class="k">Observa&ccedil;&otilde;es finais</td><td>{0}</td></tr>' -f $obs
