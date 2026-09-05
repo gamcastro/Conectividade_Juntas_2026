@@ -42,6 +42,14 @@
  *                              Script Property). ** Exige redeploy manual (clasp)
  *                              apos esta mudanca de formato. **
  *   POST {acao:'resultado', ...} -> grava um resultado (so se PLANILHA_RESULTADOS_ID).
+ *   POST {acao:'resultados.listar', tecnico?, local_ids?} -> indice LEVE dos
+ *                              resultados ja transmitidos (local_id + data +
+ *                              veredito, sem o JSON completo). Camada 1 do sync
+ *                              de volta -- recupera o "testado" do painel do
+ *                              tecnico depois de formatar/trocar de notebook.
+ *   POST {acao:'resultados.obter', local_id, linha?} -> o resultado COMPLETO de
+ *                              um local (conteudo da coluna 'json'). Camada 2.
+ *   Ambos leem a planilha de Resultados pelo token de servico (como 'resultado').
  *
  * Seguranca: os dados de juntas/tecnicos/roteiros/limiares nao sao sensiveis
  * (localizacao e logistica publicas). Resultados (IP/nome/telefone do local)
@@ -191,6 +199,9 @@ function doPost(e) {
       return _json(salvarLimiares(body));
     }
 
+    if (acao === 'resultados.listar') return _json(listarResultados(body));
+    if (acao === 'resultados.obter')  return _json(obterResultado(body));
+
     // acao 'resultado'
     if (!_idResultados()) {
       return _json({ status: 'ignorado', motivo: 'PLANILHA_RESULTADOS_ID nao configurado' });
@@ -219,6 +230,9 @@ function executar(req) {
     if (acao === 'roteiros') return { atualizado_em: new Date().toISOString(), roteiros: listarRoteiros() };
     if (acao === 'limiares') return lerLimiares();
     if (acao === 'limiares.salvar') return salvarLimiares(req);
+
+    if (acao === 'resultados.listar') return listarResultados(req);
+    if (acao === 'resultados.obter')  return obterResultado(req);
 
     if (acao === 'resultado') {
       if (!_idResultados()) return { status: 'ignorado', motivo: 'PLANILHA_RESULTADOS_ID nao configurado' };
@@ -788,6 +802,112 @@ function gravarResultado(dados, quemChamou) {
     return (v === null || v === undefined) ? '' : v;
   });
   _sheetsAppendLinha(token, sheetId, ABA_RESULTADOS, linha);
+}
+
+
+/* ===== RESULTADOS: leitura de volta (sync de 2 camadas) ===== */
+
+// Le a aba de Resultados inteira pelo token de servico e devolve
+// { head:[...], linhas:[[...]], ix:{coluna->indice} }. Compartilhado pelas
+// duas camadas abaixo.
+function _lerAbaResultados() {
+  var token = _tokenServico();
+  var sheetId = _idResultados();
+  var linhas = _sheetsGetValores(token, sheetId, ABA_RESULTADOS);
+  var head = (linhas.length ? linhas[0] : []).map(function (c) { return String(c || '').trim(); });
+  var ix = {};
+  head.forEach(function (nome, i) { if (nome) ix[nome] = i; });
+  return { head: head, linhas: linhas, ix: ix };
+}
+
+// Camada 1 (LEVE): indice dos resultados ja transmitidos -- so' o suficiente pro
+// painel do tecnico voltar a marcar os locais como testados. Sem o JSON.
+//   req.local_ids : (opcional) array de ids de local; filtra o retorno
+//   req.tecnico   : (opcional) nome do tecnico; casa com a coluna 'tecnico'
+//                   OU com 'enviado_por' (e-mail de quem transmitiu)
+// Devolve { itens:[ {local_id,tipo,zona,municipio_termo,classificacao_final,
+//   recebido_em,enviado_por,tecnico,linha} ], total } -- so' a linha MAIS
+// RECENTE de cada local_id (a planilha e' append-only: linha maior = mais nova).
+function listarResultados(req) {
+  req = req || {};
+  if (!_idResultados()) return { itens: [], total: 0, motivo: 'PLANILHA_RESULTADOS_ID nao configurado' };
+
+  var t = _lerAbaResultados();
+  if (t.linhas.length < 2) return { itens: [], total: 0, atualizado_em: new Date().toISOString() };
+  function cel(row, nome) { var i = t.ix[nome]; return (i == null) ? '' : String(row[i] == null ? '' : row[i]); }
+
+  var filtroIds = null;
+  if (req.local_ids && req.local_ids.length) {
+    filtroIds = {};
+    for (var i = 0; i < req.local_ids.length; i++) filtroIds[String(req.local_ids[i]).trim()] = true;
+  }
+  var filtroTec = req.tecnico ? String(req.tecnico).trim().toLowerCase() : null;
+
+  var porLocal = {};
+  for (var r = 1; r < t.linhas.length; r++) {
+    var row = t.linhas[r];
+    var id = cel(row, 'local_id').trim();
+    if (!id) continue;
+    if (filtroIds && !filtroIds[id]) continue;
+    if (filtroTec) {
+      var nomeTec = cel(row, 'tecnico').trim().toLowerCase();
+      var quem    = cel(row, 'enviado_por').trim().toLowerCase();
+      if (nomeTec !== filtroTec && quem !== filtroTec) continue;
+    }
+    porLocal[id] = {
+      local_id: id,
+      tipo: cel(row, 'tipo'),
+      zona: cel(row, 'zona'),
+      municipio_termo: cel(row, 'municipio_termo'),
+      classificacao_final: cel(row, 'classificacao_final'),
+      recebido_em: cel(row, 'recebido_em'),
+      enviado_por: cel(row, 'enviado_por'),
+      tecnico: cel(row, 'tecnico'),
+      linha: r + 1
+    };
+  }
+
+  var itens = [];
+  for (var k in porLocal) itens.push(porLocal[k]);
+  return { itens: itens, total: itens.length, atualizado_em: new Date().toISOString() };
+}
+
+// Camada 2 (PESADA): o resultado completo de UM local -- o conteudo da coluna
+// 'json', pronto pra virar arquivo em resultados\enviados\ no cliente.
+//   req.local_id : obrigatorio
+//   req.linha    : (opcional) numero da linha (1-based) vindo de listarResultados
+// Devolve { local_id, recebido_em, enviado_por, json } ou { erro }.
+function obterResultado(req) {
+  req = req || {};
+  var id = String(req.local_id || '').trim();
+  if (!id) return { erro: 'local_id obrigatorio' };
+  if (!_idResultados()) return { erro: 'PLANILHA_RESULTADOS_ID nao configurado' };
+
+  var t = _lerAbaResultados();
+  if (t.linhas.length < 2) return { erro: 'planilha de resultados vazia' };
+  var cJson = t.ix['json'], cId = t.ix['local_id'];
+  if (cJson == null || cId == null) return { erro: 'planilha sem coluna json/local_id' };
+  var cReb = t.ix['recebido_em'], cEnv = t.ix['enviado_por'];
+
+  var alvo = -1;
+  if (req.linha && req.linha >= 2 && req.linha <= t.linhas.length) {
+    var cand = t.linhas[req.linha - 1];
+    if (cand && String(cand[cId] || '').trim() === id) alvo = req.linha - 1;
+  }
+  if (alvo < 0) {
+    for (var r = t.linhas.length - 1; r >= 1; r--) {
+      if (String(t.linhas[r][cId] || '').trim() === id) { alvo = r; break; }
+    }
+  }
+  if (alvo < 0) return { erro: 'local nao encontrado: ' + id };
+
+  var row = t.linhas[alvo];
+  return {
+    local_id: id,
+    recebido_em: (cReb == null) ? '' : String(row[cReb] || ''),
+    enviado_por: (cEnv == null) ? '' : String(row[cEnv] || ''),
+    json: String(row[cJson] || '')
+  };
 }
 
 

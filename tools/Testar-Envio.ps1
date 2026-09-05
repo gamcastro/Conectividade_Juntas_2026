@@ -43,19 +43,70 @@ $rs.SessionStateProxy.SetVariable('listener', $listener)
 $rs.SessionStateProxy.SetVariable('modeFile', $modeFile)
 $ps = [powershell]::Create(); $ps.Runspace = $rs
 [void] $ps.AddScript({
+    # "planilha" de Resultados falsa p/ as acoes resultados.listar / resultados.obter
+    $sheet = @(
+        [pscustomobject]@{ local_id = 'ZE99-SYNC-UM-PRINCIPAL'; tipo = 'principal'; zona = 99
+            municipio_termo = 'SyncUm'; classificacao_final = 'viavel'
+            recebido_em = '01/09/2026 09:00:00'; enviado_por = 'george@tre-ma.jus.br'; tecnico = 'SYNC TESTE'; linha = 2 }
+        [pscustomobject]@{ local_id = 'ZE99-SYNC-DOIS-CONTINGENCIA'; tipo = 'contingencia'; zona = 99
+            municipio_termo = 'SyncDois'; classificacao_final = 'inviavel'
+            recebido_em = '02/09/2026 14:30:00'; enviado_por = 'george@tre-ma.jus.br'; tecnico = 'SYNC TESTE'; linha = 3 }
+        [pscustomobject]@{ local_id = 'ZE99-SYNC-VAZIO'; tipo = 'principal'; zona = 99
+            municipio_termo = 'SyncVazio'; classificacao_final = 'viavel'
+            recebido_em = '03/09/2026 08:00:00'; enviado_por = 'george@tre-ma.jus.br'; tecnico = 'SYNC VAZIO'; linha = 4 }
+    )
+    function New-JsonResultado($id) {
+        @{ versao_ferramenta = 'sync'; coletado_em = '2026-09-02T14:30:00'
+           tecnico = @{ nome = 'SYNC TESTE' }
+           local = @{ id = $id; zona_eleitoral = 99; municipio_termo = 'SyncTeste'; tipo = 'principal' }
+           metricas = @{ latencia_ms = 12; jitter_ms = 2; perda_percentual = 0; banda_download_mbps = 40; banda_upload_mbps = 12 }
+           classificacao = @{ automatica = 'viavel'; final = 'viavel'; ajustada = $false }
+        } | ConvertTo-Json -Depth 8 -Compress
+    }
+
     while ($listener.IsListening) {
         try { $ctx = $listener.GetContext() } catch { break }
         try {
             $reader = [IO.StreamReader]::new($ctx.Request.InputStream, $ctx.Request.ContentEncoding)
-            $null = $reader.ReadToEnd(); $reader.Dispose()
-            $mode = if (Test-Path $modeFile) { (Get-Content $modeFile -Raw).Trim() } else { 'ok' }
-            $result = switch ($mode) {
-                'ok'       { '{"status":"ok","recebido_em":"2026-01-01T00:00:00Z"}' }
-                'erro'     { '{"status":"erro","erro":"planilha indisponivel"}' }
-                'ignorado' { '{"status":"ignorado","motivo":"PLANILHA_RESULTADOS_ID nao configurado"}' }
-                default    { '{"status":"ok"}' }
+            $raw = $reader.ReadToEnd(); $reader.Dispose()
+
+            $acao = ''; $p0 = $null
+            try { $p0 = ($raw | ConvertFrom-Json).parameters[0]; $acao = [string] $p0.acao } catch { }
+
+            $resultObj = $null
+            if ($acao -eq 'resultados.listar') {
+                $itens = $sheet
+                if ($p0.tecnico) {
+                    $t = [string] $p0.tecnico
+                    $itens = $itens | Where-Object { $_.tecnico -eq $t -or $_.enviado_por -eq $t }
+                }
+                if ($p0.local_ids) {
+                    $ids = @($p0.local_ids)
+                    $itens = $itens | Where-Object { $ids -contains $_.local_id }
+                }
+                $itens = @($itens)
+                $resultObj = @{ itens = $itens; total = $itens.Count; atualizado_em = '2026-09-05T00:00:00Z' }
             }
-            $body = '{"done":true,"response":{"result":' + $result + '}}'
+            elseif ($acao -eq 'resultados.obter') {
+                $id = [string] $p0.local_id
+                if ($id -eq 'ZE99-SYNC-VAZIO') {
+                    $resultObj = @{ local_id = $id; recebido_em = ''; enviado_por = ''; json = '' }
+                } else {
+                    $resultObj = @{ local_id = $id; recebido_em = '02/09/2026 14:30:00'
+                                    enviado_por = 'george@tre-ma.jus.br'; json = (New-JsonResultado $id) }
+                }
+            }
+            else {
+                $mode = if (Test-Path $modeFile) { (Get-Content $modeFile -Raw).Trim() } else { 'ok' }
+                $resultObj = switch ($mode) {
+                    'ok'       { @{ status = 'ok'; recebido_em = '2026-01-01T00:00:00Z' } }
+                    'erro'     { @{ status = 'erro'; erro = 'planilha indisponivel' } }
+                    'ignorado' { @{ status = 'ignorado'; motivo = 'PLANILHA_RESULTADOS_ID nao configurado' } }
+                    default    { @{ status = 'ok' } }
+                }
+            }
+
+            $body = @{ done = $true; response = @{ result = $resultObj } } | ConvertTo-Json -Depth 12 -Compress
             $buf = [Text.Encoding]::UTF8.GetBytes($body)
             $ctx.Response.ContentType = 'application/json'
             $ctx.Response.OutputStream.Write($buf, 0, $buf.Length)
@@ -118,12 +169,44 @@ try {
     $resumo = Send-ResultadosPendentes
     if ($resumo.Enviados -ge 3 -and $resumo.Falhas -eq 0) { Write-Host "[5] Send-ResultadosPendentes: $($resumo.Enviados) enviado(s)  OK" }
     else { Write-Host "[5] FALHA: resumo T=$($resumo.Total) E=$($resumo.Enviados) F=$($resumo.Falhas)"; $falhas++ }
+
+    # ---- Sync-Resultados (sync de volta, 2 camadas) --------------------------
+    # limpa qualquer resquicio de rodada anterior
+    Get-ChildItem $envDir -Filter 'sync_*ZE99-SYNC-*' -EA SilentlyContinue | Remove-Item -Force -EA SilentlyContinue
+
+    # CASO 6: nenhum resultado local -> baixa os 2 do "servidor" e grava em enviados\
+    $s6 = Sync-Resultados -TecnicoNome 'SYNC TESTE'
+    $arqs6 = @(Get-ChildItem $envDir -Filter 'sync_*ZE99-SYNC-*' -EA SilentlyContinue)
+    if ($s6.NoServidor -eq 2 -and $s6.Baixados -eq 2 -and $s6.JaTinha -eq 0 -and $arqs6.Count -eq 2) {
+        Write-Host "[6] Sync-Resultados: baixou 2 e gravou 2 arquivos em enviados\  OK"
+    } else { Write-Host "[6] FALHA: serv=$($s6.NoServidor) baix=$($s6.Baixados) jatinha=$($s6.JaTinha) arqs=$($arqs6.Count)"; $falhas++ }
+
+    # CASO 7: rodar de novo -> reconhece que ja tem, nao rebaixa
+    $s7 = Sync-Resultados -TecnicoNome 'SYNC TESTE'
+    $arqs7 = @(Get-ChildItem $envDir -Filter 'sync_*ZE99-SYNC-*' -EA SilentlyContinue)
+    if ($s7.Baixados -eq 0 -and $s7.JaTinha -eq 2 -and $arqs7.Count -eq 2) {
+        Write-Host "[7] Sync-Resultados idempotente: 0 baixado, 2 ja no computador  OK"
+    } else { Write-Host "[7] FALHA: baix=$($s7.Baixados) jatinha=$($s7.JaTinha) arqs=$($arqs7.Count)"; $falhas++ }
+
+    # CASO 8: filtro por tecnico que nao existe -> indice vazio, nada baixado
+    $s8 = Sync-Resultados -TecnicoNome 'NINGUEM'
+    if ($s8.NoServidor -eq 0 -and $s8.Baixados -eq 0) { Write-Host "[8] Sync-Resultados: filtro por tecnico sem resultados -> nada baixado  OK" }
+    else { Write-Host "[8] FALHA: serv=$($s8.NoServidor) baix=$($s8.Baixados)"; $falhas++ }
+
+    # CASO 9: camada 2 devolve json vazio -> conta como falha, sem gravar arquivo
+    Get-ChildItem $envDir -Filter 'sync_*ZE99-SYNC-*' -EA SilentlyContinue | Remove-Item -Force -EA SilentlyContinue
+    $s9 = Sync-Resultados -TecnicoNome 'SYNC VAZIO'
+    $arqs9 = @(Get-ChildItem $envDir -Filter 'sync_*ZE99-SYNC-VAZIO*' -EA SilentlyContinue)
+    if ($s9.NoServidor -eq 1 -and $s9.Baixados -eq 0 -and $s9.Falhas -eq 1 -and $arqs9.Count -eq 0) {
+        Write-Host "[9] Sync-Resultados: JSON vazio na camada 2 -> falha contada, nada gravado  OK"
+    } else { Write-Host "[9] FALHA: serv=$($s9.NoServidor) baix=$($s9.Baixados) falhas=$($s9.Falhas) arqs=$($arqs9.Count)"; $falhas++ }
 }
 finally {
     $listener.Stop(); $listener.Close()
     try { $ps.EndInvoke($handle) } catch { }
     $ps.Dispose(); $rs.Dispose()
     if (Test-Path $modeFile) { Remove-Item $modeFile -Force }
+    Get-ChildItem $envDir -Filter 'sync_*ZE99-SYNC-*' -EA SilentlyContinue | Remove-Item -Force -EA SilentlyContinue
     foreach ($n in $criados) {
         foreach ($d in $pendDir, $envDir) {
             $f = Join-Path $d $n

@@ -27,6 +27,7 @@ $ordem = @(
     'saida\Save-ResultadoLocal.ps1'
     'saida\Send-Resultado.ps1'
     'saida\Get-DiagnosticosRealizados.ps1'
+    'saida\Sync-Resultados.ps1'
     'saida\Export-RelatorioPdf.ps1'
     'core\Fluxo.ps1'
     'ui\Janela-Principal.ps1'
@@ -38,6 +39,6 @@ foreach ($rel in $ordem) {
 
 # Versao do DICON. Fonte unica: barra lateral + login da GUI, JSON de resultado
 # e relatorio PDF. Manter em sincronia com ModuleVersion em Conectividade.psd1.
-$Global:VersaoApp = '0.7.16'
+$Global:VersaoApp = '0.7.17'
 
 Export-ModuleMember -Function '*-*'

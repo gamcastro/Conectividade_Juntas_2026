@@ -432,7 +432,22 @@ resultado (`New-ResultadoJson`).
   (clasp) — não implantar sem o admin.**
 - `Send-Resultado` só move para `resultados/enviados/` com resposta
   `{status:'ok'}`; `erro`/`ignorado` mantêm o arquivo em `pendentes/`.
-- Teste: `tools/Testar-Envio.ps1` (HttpListener local simula o Apps Script).
+- **Sincronização de volta (v0.6.117, `src/saida/Sync-Resultados.ps1`)**:
+  `Sync-Resultados` (rodado no "Atualizar dados", junto do reenvio de
+  pendentes; desligável por `config/envio.json > sync_resultados_ao_atualizar`)
+  puxa os resultados **já transmitidos** deste técnico de volta para
+  `resultados/enviados/`, recuperando o "testado" do painel depois de
+  formatar / trocar de notebook. Duas camadas no `Codigo.gs` (lêem a planilha
+  de Resultados pelo token de serviço, como `resultado`): `resultados.listar`
+  = índice leve (`local_id` + data + veredito, sem o `json`), filtrado por
+  técnico; `resultados.obter` = o `json` completo de um local. Só **adiciona**
+  o que falta (nunca toca em `pendentes/`; pula o que já existe local e não é
+  mais novo). **As fotos do GEL não voltam** (só a contagem vai no `json`) —
+  reanexar pelo GEL web. **Exige redeploy manual (clasp)** das duas
+  implantações; até lá `Sync-Resultados` degrada com aviso ("recurso ainda
+  não disponível no servidor").
+- Teste: `tools/Testar-Envio.ps1` (HttpListener local simula o Apps Script;
+  cobre envio + as duas camadas do `Sync-Resultados`).
 - **Transporte: Apps Script Execution API (v0.6.73, `src/core/AppsScriptApi.ps1`)**:
   o DICON chama `POST script.googleapis.com/v1/scripts/{deployment_id}:run`
   (`function:'executar'`, `apps-script/Codigo.gs`) em vez da URL `/exec` do Web
