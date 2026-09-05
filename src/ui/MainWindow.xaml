@@ -1589,8 +1589,6 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
 
@@ -1600,7 +1598,11 @@
                            Text="Vi&#225;vel / ressalva / invi&#225;vel por MEIO (LAN / Wi-Fi do local / Celular) e por cen&#225;rio (SEM VPN / COM VPN). SEM VPN tem como piso os valores de refer&#234;ncia da ANATEL. COM VPN = SEM VPN + or&#231;amento da VPN. O Wi-Fi do local herda da LAN + folga. &quot;Na bateria&quot; &#233; por meio &#215; cen&#225;rio &#215; m&#233;trica. Salvo na planilha de configura&#231;&#227;o e usado por todos os computadores."
                            Style="{DynamicResource SubtituloTela}" Margin="0,6,0,12"/>
 
-                <StackPanel Grid.Row="2">
+              <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto"
+                            HorizontalScrollBarVisibility="Disabled" Padding="0,0,10,0">
+                <StackPanel>
+
+                <StackPanel>
                     <Border Style="{DynamicResource Cartao}" Padding="16,12" Margin="0,0,0,12">
                         <StackPanel>
                             <TextBlock Text="Modo de avalia&#231;&#227;o" Style="{DynamicResource SecaoTela}" Margin="0,0,0,4"/>
@@ -1799,7 +1801,7 @@
                     </Expander>
                 </StackPanel>
 
-                <Grid Grid.Row="3" Margin="0,16,0,0">
+                <Grid Margin="0,16,0,0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="Auto"/>
@@ -1818,7 +1820,7 @@
                                Margin="14,0,0,0" TextWrapping="Wrap" FontSize="12"/>
                 </Grid>
 
-                <StackPanel Grid.Row="4" VerticalAlignment="Top">
+                <StackPanel VerticalAlignment="Top">
                     <Border Style="{DynamicResource Cartao}" Padding="16,14" Margin="0,16,0,0">
                         <StackPanel>
                             <TextBlock Text="Ambiente de teste (an&#225;lise de banda pela VPN)" Style="{DynamicResource SecaoTela}"
@@ -1951,6 +1953,9 @@
                             HorizontalAlignment="Left" Margin="0,16,0,0"
                             Style="{DynamicResource BotaoFantasma}"/>
                 </StackPanel>
+
+                </StackPanel>
+              </ScrollViewer>
             </Grid>
 
         </Grid>
