@@ -3548,14 +3548,24 @@ function Get-OpcoesRecomendacao {
         $meds
     }
     $rotulos = @($cand | ForEach-Object { [string] $_.rotulo } | Select-Object -Unique)
-    return @($rotulos + (Get-RotuloMeio 'nenhuma' ''))
+    return @($rotulos + (Get-RotuloNenhumaConexao))
+}
+
+# Rotulo da opcao "Nenhuma" no combo de conexao recomendada/sugerida. No modo
+# completo explica a consequencia ("local inviavel por qualquer meio"), que
+# faz sentido ali (o modo julga viabilidade); fora dele e' so' informativo,
+# entao fica simples ("Nenhuma"). Usado tanto pra montar as opcoes
+# (Get-OpcoesRecomendacao) quanto pra reconhecer a selecao (Resolve-
+# RecomendacaoSelecionada) -- os dois precisam usar o MESMO texto.
+function Get-RotuloNenhumaConexao {
+    if (Test-ModoCompleto) { Get-RotuloMeio 'nenhuma' '' } else { 'Nenhuma' }
 }
 
 # Reconstroi o objeto de recomendacao a partir do rotulo escolhido no combo.
 function Resolve-RecomendacaoSelecionada {
     param([string] $Rotulo)
     $modoCompleto = Test-ModoCompleto
-    $nenhuma = Get-RotuloMeio 'nenhuma' ''
+    $nenhuma = Get-RotuloNenhumaConexao
     # "nenhuma"/sem medicao correspondente: no modo completo o local fica
     # inviavel; nos outros, e' so a ausencia de sugestao (sem juizo).
     $semCandidato = [pscustomobject]@{
@@ -3651,7 +3661,7 @@ function Update-ContextoRecomendacao {
             $dl = if ($null -ne $obj.download_mbps) {
                 (' - maior download {0:N1} Mbps{1}' -f [double] $obj.download_mbps, $(if ($obj.base -eq 'vpn') { ' pela VPN' } else { ' na rede local' }))
             } else { '' }
-            $lbl.Text = ('Sugest' + [char]0x00E3 + 'o pelo maior download medido{0}. (informativo, sem avalia' + [char]0x00E7 + [char]0x00E3 + 'o de viabilidade)') -f $dl
+            $lbl.Text = ('Sugest' + [char]0x00E3 + 'o pelo maior download medido{0}.') -f $dl
         }
         return
     }

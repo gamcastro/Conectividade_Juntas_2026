@@ -945,10 +945,27 @@ try {
         Write-Host "[m] combo pre-selecionado com a sugestao calculada: '$($cboRec.SelectedItem)'"
     } else { Write-Host "    FALHA: pre-selecao nao bateu com o calculo (sel='$($cboRec.SelectedItem)')"; $falhas++ }
 
-    # frase de contexto sem linguagem de veredito/viabilidade
-    if ("$($w.FindName('lblRecContexto').Text)" -match 'Sugest' -and "$($w.FindName('lblRecContexto').Text)" -notmatch 'Veredito') {
-        Write-Host "[m] frase de contexto do passo de sugestao sem linguagem de veredito"
+    # frase de contexto sem linguagem de veredito/viabilidade, nem o sufixo
+    # "(informativo, sem avaliacao de viabilidade)" -- redundante com o
+    # subtitulo do passo, tirado a pedido do usuario.
+    if ("$($w.FindName('lblRecContexto').Text)" -match 'Sugest' -and
+        "$($w.FindName('lblRecContexto').Text)" -notmatch 'Veredito' -and
+        "$($w.FindName('lblRecContexto').Text)" -notmatch 'informativo') {
+        Write-Host "[m] frase de contexto do passo de sugestao sem linguagem de veredito/informativo"
     } else { Write-Host "    FALHA: frase de contexto (txt='$($w.FindName('lblRecContexto').Text)')"; $falhas++ }
+
+    # opcao "Nenhuma" do combo fica simples fora do modo completo (sem "local
+    # inviavel por qualquer meio", que so faz sentido onde ha juizo de viabilidade)
+    $optsM = @($cboRec.ItemsSource)
+    if ($optsM[-1] -eq 'Nenhuma') {
+        Write-Host "[m] opcao 'Nenhuma' do combo fica simples fora do modo completo"
+    } else { Write-Host "    FALHA: opcao 'Nenhuma' deveria ser so' 'Nenhuma' (veio '$($optsM[-1])')"; $falhas++ }
+    $Global:ModoAvaliacaoOverride = 'completo'
+    $optsCompl = Get-OpcoesRecomendacao
+    $Global:ModoAvaliacaoOverride = 'medicao'
+    if ($optsCompl[-1] -match 'local inviavel por qualquer meio') {
+        Write-Host "[m] modo completo continua explicando a consequencia de 'Nenhuma' (sem regressao)"
+    } else { Write-Host "    FALHA: modo completo deveria manter a explicacao em 'Nenhuma' (veio '$($optsCompl[-1])')"; $falhas++ }
 
     # sem NENHUM meio selecionado, o gate continua bloqueando (isso nao e opcional)
     $cboRec.SelectedItem = $null
