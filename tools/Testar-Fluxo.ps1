@@ -642,6 +642,42 @@ try {
         "$($w.FindName('chkVpnImpossivel').Visibility)" -eq 'Visible') {
         Write-Host "[4g] Fase 2 sem VPN: aparece o gate + checkbox + 'registrar sem a VPN' (mesmo apos meio com VPN ok)"
     } else { Write-Host "    FALHA: gate de VPN nao apareceu completo (gate=$($w.FindName('panelChkVpnGate').Visibility) chk=$($w.FindName('chkVpnImpossivel').Visibility) btn=$($w.FindName('btnChkVpnImpossivel').Visibility))"; $falhas++ }
+
+    # [4g-0] com a VPN OFF apos "Testar a VPN": o botao grande "Testar a VPN"
+    # SOME (o fluxo fica todo no painel: "Abrir o FortiClient" / "Ja conectei -
+    # verificar a VPN") e aparecem os passos. Sem isso o tecnico fica batendo no
+    # botao grande achando que travou (bug de campo).
+    if ($Global:ChkVpnPendente -and "$($w.FindName('btnChkIniciar').Visibility)" -eq 'Collapsed' -and
+        "$($w.FindName('txtChkVpnPassos').Visibility)" -eq 'Visible' -and
+        "$($w.FindName('txtChkVpnRecheck').Visibility)" -eq 'Collapsed') {
+        Write-Host "[4g-0] VPN off: botao grande some, aparecem os passos (Abrir FortiClient / Ja conectei)"
+    } else { Write-Host "    FALHA: 4g-0 (pend=$($Global:ChkVpnPendente) btnGrande=$($w.FindName('btnChkIniciar').Visibility) passos=$($w.FindName('txtChkVpnPassos').Visibility) recheck=$($w.FindName('txtChkVpnRecheck').Visibility))"; $falhas++ }
+
+    # [4g-0b] "Ja conectei - verificar a VPN" com a VPN ainda off -> feedback
+    # visivel ("ainda nao encontrei a VPN..."), sem sumir o painel.
+    Invoke-ReverificarVpn ; Invoke-Pump
+    if ($Global:ChkVpnPendente -and "$($w.FindName('txtChkVpnRecheck').Visibility)" -eq 'Visible' -and
+        "$($w.FindName('btnChkIniciar').Visibility)" -eq 'Collapsed') {
+        Write-Host "[4g-0b] re-verificar com VPN ainda off da feedback visivel ('ainda nao encontrei')"
+    } else { Write-Host "    FALHA: 4g-0b (pend=$($Global:ChkVpnPendente) recheck=$($w.FindName('txtChkVpnRecheck').Visibility) btnGrande=$($w.FindName('btnChkIniciar').Visibility))"; $falhas++ }
+
+    # [4g-0c] VPN sobe -> re-verificar avanca pra "Iniciar diagnostico com a VPN"
+    # (botao grande volta), passos somem, ChkVpnPendente limpa.
+    $Global:VpnSimulada = $true ; Invoke-ReverificarVpn ; Invoke-Pump
+    if (-not $Global:ChkVpnPendente -and $Global:ChkFase -eq 'f2-vpn-ok' -and
+        "$($w.FindName('btnChkIniciar').Visibility)" -eq 'Visible' -and
+        "$($w.FindName('btnChkIniciar').Content)" -match 'Iniciar diagn' -and
+        "$($w.FindName('txtChkVpnPassos').Visibility)" -eq 'Collapsed') {
+        Write-Host "[4g-0c] VPN conectada -> 'Iniciar diagnostico com a VPN' (botao grande volta, passos somem)"
+    } else { Write-Host "    FALHA: 4g-0c (pend=$($Global:ChkVpnPendente) fase='$($Global:ChkFase)' btn='$($w.FindName('btnChkIniciar').Content)'/$($w.FindName('btnChkIniciar').Visibility) passos=$($w.FindName('txtChkVpnPassos').Visibility))"; $falhas++ }
+    # volta a VPN pra off e refaz o gate, pro resto do [4g] (registrar sem a VPN)
+    $Global:VpnSimulada = $false ; Invoke-ReverificarVpn ; Invoke-Pump
+    $deadline = (Get-Date).AddSeconds($TimeoutS)
+    while ((Get-Date) -lt $deadline) {
+        Invoke-Pump ; Start-Sleep -Milliseconds 120
+        if ("$($w.FindName('panelChkVpnGate').Visibility)" -eq 'Visible' -and $null -eq $Global:TarefaRedeState -and $Global:ChkVpnPendente) { break }
+    }
+
     $w.FindName('chkVpnImpossivel').IsChecked = $true ; Update-VpnImpossivel
     # [4g-2] chips de sugestao (+ "Outro") no card "nao consegui a VPN", mesmo
     # padrao do card "nao se aplica" (v0.6.92): 1 botao por Get-SugestoesVpnImpossivel + "Outro".

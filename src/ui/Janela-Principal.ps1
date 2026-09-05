@@ -28,6 +28,7 @@ $Global:FaseLocalTipo      = ''      # meio da checagem em curso: '' | 'lan' | '
 $Global:MeioSelecionado    = ''      # card do passo 3 selecionado p/ testar: '' | 'lan' | 'wifi' | 'celular'
 $Global:CheckMeioAtivo     = $false  # overlay de checagem de um meio esta aberto/rodando
 $Global:ChkFase            = ''      # estado do overlay: ''|f1-pronto|f1-rodando|f2-pronto|f2-rodando|fim
+$Global:ChkVpnPendente     = $false  # overlay Fase 2: ja tentou verificar a VPN e ela NAO estava conectada
 $Global:NaMeioPendente     = ''      # meio com "nao se aplica" marcado, aguardando a justificativa
 $Global:Fase1Tentativas    = @()     # payloads brutos de Invoke-FaseLocal desta sessao de overlay ("Refazer")
 $Global:Fase2Tentativas    = @()     # payloads brutos de Invoke-DiagnosticoCompleto desta sessao de overlay
@@ -2870,7 +2871,18 @@ function Set-ChkBotao {
     $jeDir = Test-RedeJeDireta
     switch ($Global:ChkFase) {
         'f1-pronto'  { $b.Content = 'Iniciar checagem da rede local';   $b.Visibility = 'Visible'; $b.IsEnabled = $true }
-        'f2-pronto'  { $b.Content = if ($jeDir) { 'Checar rede interna' } else { 'Testar a VPN (Fase 2)' }; $b.Visibility = 'Visible'; $b.IsEnabled = $true }
+        'f2-pronto'  {
+            # ja tentou verificar e a VPN nao estava conectada: o botao grande some
+            # e o fluxo fica todo dentro do painel da VPN (Abrir o FortiClient ->
+            # "Ja conectei - verificar a VPN"), pra o tecnico nao ficar batendo
+            # neste botao aqui em cima achando que travou.
+            if ($Global:ChkVpnPendente -and -not $jeDir) {
+                $b.Visibility = 'Collapsed'
+            } else {
+                $b.Content = if ($jeDir) { 'Checar rede interna' } else { 'Testar a VPN (Fase 2)' }
+                $b.Visibility = 'Visible'; $b.IsEnabled = $true
+            }
+        }
         'f2-vpn-ok'  { $b.Content = if ($jeDir) { 'Iniciar checagem da rede interna' } else { 'Iniciar diagnostico com a VPN' }; $b.Visibility = 'Visible'; $b.IsEnabled = $true }
         default      { $b.Visibility = 'Collapsed' }
     }
@@ -2975,7 +2987,9 @@ function Reset-OverlayCheck {
     $r1 = $w.FindName('rowChkS1'); if ($r1) { $r1.Visibility = if ($passosVis.rede_local)  { 'Visible' } else { 'Collapsed' } }
     $r2 = $w.FindName('rowChkS2'); if ($r2) { $r2.Visibility = if ($passosVis.vpn)         { 'Visible' } else { 'Collapsed' } }
     $r3 = $w.FindName('rowChkS3'); if ($r3) { $r3.Visibility = if ($passosVis.totalizacao) { 'Visible' } else { 'Collapsed' } }
+    $Global:ChkVpnPendente = $false
     $w.FindName('panelChkVpnGate').Visibility = 'Collapsed'
+    foreach ($n in 'txtChkVpnPassos', 'txtChkVpnRecheck') { $c = $w.FindName($n); if ($c) { $c.Visibility = 'Collapsed' } }
     $w.FindName('chkVpnImpossivel').IsChecked = $false
     $w.FindName('txtVpnMotivo').Text = ''
     $w.FindName('txtVpnMotivo').Visibility = 'Collapsed'
@@ -3275,24 +3289,41 @@ function Start-CheckFase2 {
     $w.FindName('txtChkResultadoVazio').Visibility = 'Visible'
     Update-EstadoVpn
     if (Test-VpnAtiva) {
+        $Global:ChkVpnPendente = $false
         $Global:ChkFase = 'f2-vpn-ok'
         $w.FindName('panelChkVpnGate').Visibility = 'Visible'
+        foreach ($n in 'txtChkVpnPassos', 'txtChkVpnRecheck') { $c = $w.FindName($n); if ($c) { $c.Visibility = 'Collapsed' } }
         Set-ChkStep 2 'rodando' 'VPN conectada - clique em Iniciar'
         Set-ChkBotao
         Write-Log 'VPN da JE conectada. Confira o IP e clique em "Iniciar diagnostico com a VPN".' -Nivel Ok
     } elseif ($jeDir) {
+        $Global:ChkVpnPendente = $false
         $Global:ChkFase = 'f2-vpn-ok'
         $w.FindName('panelChkVpnGate').Visibility = 'Visible'
+        foreach ($n in 'txtChkVpnPassos', 'txtChkVpnRecheck') { $c = $w.FindName($n); if ($c) { $c.Visibility = 'Collapsed' } }
         Set-ChkStep 2 'rodando' 'clique em "Iniciar checagem da rede interna"' -Base '2. Rede interna (JE)'
         Set-ChkBotao
         Write-Log 'Local ja na rede interna da Justica Eleitoral (LAN) - sem VPN necessaria. Clique em "Iniciar checagem da rede interna".' -Nivel Ok
     } else {
+        # ja estava pendente = e' uma RE-verificacao que de novo nao achou a VPN.
+        $reVerifica = [bool] $Global:ChkVpnPendente
+        $Global:ChkVpnPendente = $true
         $Global:ChkFase = 'f2-pronto'
         Set-ChkBotao
-        Write-Log 'Fase 2 aguardando a VPN da JE. Abra o FortiClient e conecte, depois "Verificar novamente".' -Nivel Aviso
         $w.FindName('panelChkVpnGate').Visibility = 'Visible'
         $w.FindName('btnChkVpnImpossivel').Visibility = 'Visible'
+        $pp = $w.FindName('txtChkVpnPassos'); if ($pp) { $pp.Visibility = 'Visible' }
+        $rc = $w.FindName('txtChkVpnRecheck')
+        if ($rc) {
+            if ($reVerifica) {
+                $rc.Text = 'Ainda nao encontrei a VPN da Justica Eleitoral. No FortiClient tem que aparecer "VPN Conectada" com um IP 10.x - confira e clique de novo em "2. Ja conectei - verificar a VPN".'
+                $rc.Visibility = 'Visible'
+            } else {
+                $rc.Visibility = 'Collapsed'
+            }
+        }
         Set-ChkStep 2 'rodando' 'aguardando a VPN'
+        Write-Log 'Fase 2 aguardando a VPN da JE. Abra o FortiClient, conecte e clique em "Ja conectei - verificar a VPN".' -Nivel Aviso
     }
 }
 
@@ -4812,8 +4843,9 @@ function Update-EstadoVpn {
     # Antes so' escondia e nunca remostrava -> depois de um meio com a VPN ok, o
     # checkbox sumia pros meios seguintes e o tecnico nao conseguia registrar sem VPN.
     if ($ok) {
+        $Global:ChkVpnPendente = $false
         $ci = $w.FindName('chkVpnImpossivel'); if ($ci) { $ci.IsChecked = $false }
-        foreach ($n in 'chkVpnImpossivel', 'txtVpnMotivo', 'txtVpnMotivoDica', 'btnChkVpnImpossivel', 'wrapVpnSugestoes', 'txtVpnSugestoesDica') {
+        foreach ($n in 'chkVpnImpossivel', 'txtVpnMotivo', 'txtVpnMotivoDica', 'btnChkVpnImpossivel', 'wrapVpnSugestoes', 'txtVpnSugestoesDica', 'txtChkVpnPassos', 'txtChkVpnRecheck') {
             $c = $w.FindName($n); if ($c) { $c.Visibility = 'Collapsed' }
         }
     } else {
@@ -4853,11 +4885,19 @@ function Set-DiagnosticoVpnImpossivel {
 }
 
 function Invoke-ReverificarVpn {
-    Update-EstadoVpn
-    # no overlay: se a VPN subiu agora, mostra a confirmacao (IP da VPN etc.) e
-    # troca o botao para "Iniciar diagnostico" - NAO dispara o teste sozinho.
-    if ($Global:CheckMeioAtivo -and -not $Global:DiagRunState -and -not $Global:DiagPayload -and (Test-VpnAtiva)) {
-        Start-CheckFase2
+    $w = $Global:JanelaPrincipal
+    $rr = if ($w) { $w.FindName('ringReverVpn') } else { $null }
+    if ($rr) { $rr.IsActive = $true; $rr.Visibility = 'Visible' }
+    try {
+        Update-EstadoVpn
+        # SEMPRE re-roda a checagem da Fase 2: se a VPN subiu, avanca pro
+        # "Iniciar diagnostico"; se ainda nao, o proprio Start-CheckFase2 mostra
+        # o aviso "ainda nao encontrei a VPN" (feedback visivel do clique).
+        if ($Global:CheckMeioAtivo -and -not $Global:DiagRunState -and -not $Global:DiagPayload) {
+            Start-CheckFase2
+        }
+    } finally {
+        if ($rr) { $rr.IsActive = $false; $rr.Visibility = 'Collapsed' }
     }
 }
 
