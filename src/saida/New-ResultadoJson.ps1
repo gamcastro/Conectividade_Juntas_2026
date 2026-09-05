@@ -74,6 +74,9 @@ function New-ResultadoJson {
         # Precisa passar cabo de rede ate o ponto (so' faz sentido quando a
         # conexao escolhida e' a LAN). {necessario;metros}. Opcional.
         $CaboLan,
+        # Anotacoes livres do tecnico (o que o painel nao mede: switch antigo
+        # segurando a placa LAN, ponto solto, acesso dificil...). Opcional.
+        [string]   $ObservacoesTecnico,
         # Anexo do formulario GEL (coordenadas / suporte / eletrica). Opcional.
         $VistoriaGel
     )
@@ -280,6 +283,7 @@ function New-ResultadoJson {
         rede_local        = $redeLocal
         vistoria_gel       = (New-BlocoVistoriaGel -VistoriaGel $VistoriaGel -LocalId ([string] (Get-Prop $Local 'id')))
         vpn               = [pscustomobject]@{ impossivel = [bool] $VpnImpossivel; motivo = [string] $VpnMotivo }
+        observacoes_tecnico = [string] $ObservacoesTecnico
         cabo_lan          = $(if ($CaboLan) {
             $nec = Get-Prop $CaboLan 'necessario'
             [pscustomobject]@{

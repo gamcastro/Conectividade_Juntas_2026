@@ -43,6 +43,7 @@ $Global:RecomendacaoLocal  = $null   # {meio;operadora;rotulo;veredito;provisori
 $Global:LocalMedicoesId    = ''      # id do local a que as medicoes atuais pertencem
 $Global:MotivoRecomendacao = ''      # justificativa da conexao recomendada (passo 6)
 $Global:CaboLan            = $null   # {necessario;metros} - so' quando a conexao escolhida e' LAN
+$Global:ObservacoesTecnico = ''      # anotacoes livres do tecnico no passo 6 (vao no relatorio)
 $Global:AtualizandoRecomendacao = $false  # guarda: set programatico do combo de recomendacao
 $Global:MedicoesPasso5     = @()     # [{idx;med}] das medicoes testaveis no seletor do passo 5
 $Global:MedicaoPasso5Idx   = -1      # indice em $Global:Medicoes da medicao aberta no passo 5 (-1 = ultima)
@@ -372,6 +373,9 @@ function New-JanelaPrincipal {
                 $Global:CaboLan.metros = if ([double]::TryParse($t, [ref] $v) -and $v -gt 0) { $v } else { $null }
                 Update-CaboLanResumo
             }
+        })
+    $window.FindName('txtObsTecnico').Add_TextChanged({
+            $Global:ObservacoesTecnico = [string] $Global:JanelaPrincipal.FindName('txtObsTecnico').Text
         })
 
     # "Detalhes da execucao" (lstLog) rola sozinho pro final a cada evento novo.
@@ -3915,6 +3919,7 @@ function Reset-Medicoes {
     $Global:RecomendacaoLocal  = $null
     $Global:MotivoRecomendacao = ''
     $Global:CaboLan            = $null
+    $Global:ObservacoesTecnico = ''
     $Global:MedicoesPasso5     = @()
     $Global:MedicaoPasso5Idx   = -1
 }
@@ -4017,6 +4022,8 @@ function Update-ResumoFim {
         $ver.Text       = 'MEDICAO CONCLUIDA'
         $ver.Foreground = Get-PincelVeredito 'medido'
     }
+    $to = $w.FindName('txtObsTecnico')
+    if ($to -and $to.Text -ne [string] $Global:ObservacoesTecnico) { $to.Text = [string] $Global:ObservacoesTecnico }
     $w.FindName('btnSalvarResultado').IsEnabled     = $true
     $w.FindName('btnExportarPdf').IsEnabled         = $true
     $w.FindName('btnTransmitirResultado').IsEnabled = ($Global:FeitoSalvar -and -not $Global:FeitoTransmitir)
@@ -4137,6 +4144,7 @@ function Invoke-ExportarRelatorio {
             -Medicoes $Global:Medicoes -ConexaoRecomendada $rec `
             -MotivoRecomendacao ([string] $Global:MotivoRecomendacao) `
             -CaboLan $Global:CaboLan `
+            -ObservacoesTecnico ([string] $Global:ObservacoesTecnico) `
             -VistoriaGel $Global:VistoriaGel
     } catch {
         $st.Text = "Falha ao montar o relatorio: $_"
@@ -5191,6 +5199,7 @@ function Invoke-SalvarResultado {
             -Medicoes $Global:Medicoes -ConexaoRecomendada $rec `
             -MotivoRecomendacao ([string] $Global:MotivoRecomendacao) `
             -CaboLan $Global:CaboLan `
+            -ObservacoesTecnico ([string] $Global:ObservacoesTecnico) `
             -VistoriaGel $Global:VistoriaGel
         Write-Log "Resultado salvo: $caminho" -Nivel Ok
         $Global:FeitoSalvar          = $true

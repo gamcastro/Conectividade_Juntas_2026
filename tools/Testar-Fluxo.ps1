@@ -848,7 +848,9 @@ try {
     if ($Global:WizardStep -ne 6) { Write-Host "    FALHA: nao foi para o passo 6 com o motivo"; $falhas++ }
     else { Write-Host "[5c] passos 5->6->7 (com justificativa + motivo da recomendacao)" }
 
-    # 5d. passo 6: salva o resultado -> checklist "Salvar" fica verde, "Transmitir" habilita
+    # 5d. passo 6: campo "Observacoes do tecnico" (livre) + salva o resultado
+    $w.FindName('txtObsTecnico').Text = 'Placa LAN negociou 100 Mbps porque o cabo passa por um switch antigo; trocar por switch Gigabit.'
+    Invoke-Pump
     $antesJson = @(Get-ChildItem (Join-Path $Global:RaizApp 'resultados\pendentes') -Filter *.json -EA SilentlyContinue).Count
     Invoke-SalvarResultado
     $novos = @(Get-ChildItem (Join-Path $Global:RaizApp 'resultados\pendentes') -Filter *.json -EA SilentlyContinue)
@@ -882,6 +884,9 @@ try {
             $htmlRel -match 'Conex&atilde;o recomendada' -and $htmlRel -match 'Conclus&atilde;o do diagn&oacute;stico') {
             Write-Host "[5d] relatorio HTML: painel de viabilidade (paisagem) + testes por meio + conclusao"
         } else { Write-Host "    FALHA: relatorio HTML sem o painel/estrutura nova"; $falhas++ }
+        if ("$($doc.observacoes_tecnico)" -match 'switch antigo' -and $htmlRel -match 'Observa&ccedil;&otilde;es do t&eacute;cnico' -and $htmlRel -match 'switch antigo') {
+            Write-Host "[5d] JSON + relatorio trazem as 'Observacoes do tecnico' (texto livre do passo 6)"
+        } else { Write-Host "    FALHA: observacoes_tecnico no JSON/relatorio (json='$($doc.observacoes_tecnico)' htmlOk=$($htmlRel -match 'Observa&ccedil;&otilde;es do t&eacute;cnico'))"; $falhas++ }
     }
     $vok = [char]0x2713
     if ($Global:FeitoSalvar -and "$($w.FindName('chkFimSalvar').Text)" -eq $vok -and $w.FindName('btnTransmitirResultado').IsEnabled -and "$($w.FindName('chkFimTransmitir').Text)" -ne $vok) {

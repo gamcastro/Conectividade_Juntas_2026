@@ -638,8 +638,11 @@ function Get-PainelMedicoesHtml {
         "      <tr><td>$(ConvertTo-HtmlSafe ([string] $m.rotulo))</td><td class=""mono"">$vpnTxt</td><td class=""mono"">$rl</td><td class=""mono"">$ul</td><td class=""mono"">$lt</td><td class=""mono"">$pd</td></tr>"
     }
 
-    # observacoes: so pendencias de fato (VPN impossivel, meios NA)
+    # observacoes: a anotacao livre do tecnico (se houver) + pendencias de fato
+    # (VPN impossivel, meios NA)
     $obs = @()
+    $obsTec = if ($R.PSObject.Properties['observacoes_tecnico']) { [string] $R.observacoes_tecnico } else { '' }
+    if ($obsTec.Trim()) { $obs += 'T' + [char]0x00E9 + 'cnico: ' + $obsTec.Trim() }
     $vpnObj = if ($R.PSObject.Properties['vpn']) { $R.vpn } else { $null }
     if ($vpnObj -and $vpnObj.impossivel) {
         $mm = if ($vpnObj.motivo) { ' (' + [string] $vpnObj.motivo + ')' } else { '' }
@@ -764,6 +767,10 @@ function Get-PainelHtml {
     $caboTxt = Get-CaboLanTextoRelatorio $R
     if ($caboTxt) { $concRows += '<tr><td class="k">Cabo de rede (LAN)</td><td>{0}</td></tr>' -f $caboTxt }
     if ($aju) { $concRows += '<tr><td class="k">Ajuste da recomenda&ccedil;&atilde;o</td><td>{0}</td></tr>' -f $aju }
+    $obsTec = if ($R.PSObject.Properties['observacoes_tecnico']) { [string] $R.observacoes_tecnico } else { '' }
+    if ($obsTec.Trim()) {
+        $concRows += '<tr><td class="k">Observa&ccedil;&otilde;es do t&eacute;cnico</td><td>{0}</td></tr>' -f (ConvertTo-HtmlSafe ($obsTec.Trim()))
+    }
     $concRows += '<tr><td class="k">Condicionantes / pend&ecirc;ncias</td><td>{0}</td></tr>' -f $condHtml
     $concRows += '<tr><td class="k">Observa&ccedil;&otilde;es finais</td><td>{0}</td></tr>' -f $obs
     $grafComparacao = Get-GraficoComparacaoMeiosHtml -Meds $meds
