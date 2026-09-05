@@ -987,6 +987,36 @@ try {
         $falhas++
     }
 
+    # m-2. bug real de campo: 2+ medicoes em modo medicao, uma delas FECHADA
+    # (nao e' a "aberta" no seletor do passo 4) com metricas reprovadas pelo
+    # motor e ja salvas (Save-AjustesPasso5 grava ClasseFinal em branco fora
+    # do modo completo -- a classe automatica do motor continua sendo
+    # calculada por baixo). Antes da correcao, Get-JustificativasFaltando
+    # comparava esse branco contra a classe automatica real e reportava
+    # "falta justificar" pra TODA metrica da medicao fechada, travando o
+    # "Salvar resultado" mesmo sem nenhum ajuste manual de verdade.
+    $detFalhou = @($Global:MetricasInfo | Where-Object { $_.cenarios -contains 'com_vpn' } | ForEach-Object {
+        [pscustomobject]@{ metrica = $_.metrica; classe = 'inviavel' }
+    })
+    $Global:Medicoes[0].decisao    = [pscustomobject]@{ Detalhes = $detFalhou }
+    $Global:Medicoes[0].avaliacoes = @($detFalhou | ForEach-Object {
+        [pscustomobject]@{ metrica = $_.metrica; classe_final = ''; justificativa = '' }
+    })
+    $Global:MedicaoPasso5Idx = 1   # a medicao "aberta" agora e' a Wi-Fi ([1]), nao a LAN ([0])
+    $faltaBug = Get-JustificativasFaltando
+    if (-not $faltaBug.Count) {
+        Write-Host "[m-2] modo medicao: 'falta justificar' nao dispara por medicoes fechadas com metricas reprovadas"
+    } else { Write-Host "    FALHA: bug de justificativa falsa no modo medicao (falta=$($faltaBug -join '; '))"; $falhas++ }
+
+    # a MESMA situacao, no modo completo, precisa continuar detectando de verdade
+    $Global:ModoAvaliacaoOverride = 'completo'
+    $faltaCompleto = Get-JustificativasFaltando
+    $Global:ModoAvaliacaoOverride = 'medicao'
+    if ($faltaCompleto.Count -ge 1) {
+        Write-Host "[m-2] modo completo: a mesma checagem continua pegando a divergencia de verdade (sem regressao)"
+    } else { Write-Host "    FALHA: modo completo deveria continuar detectando a divergencia"; $falhas++ }
+    $Global:MedicaoPasso5Idx = -1   # devolve ao padrao (ultima)
+
     $Global:ModoAvaliacaoOverride = 'completo'   # [6]..[9] cobrem o modo completo
     Reset-Medicoes
     Clear-PainelResultado

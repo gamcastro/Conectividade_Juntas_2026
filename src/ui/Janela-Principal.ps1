@@ -1225,27 +1225,35 @@ function Get-IndiceMedicaoAberta {
 
 # Lista de itens sem justificativa obrigatoria (metricas ajustadas + decisao).
 # No multi-meio, tambem confere os ajustes ja salvos nas outras medicoes.
+# Sobrescrever a classificacao de uma metrica so' existe no modo completo --
+# fora dele a coluna de classificacao fica oculta e New-AvaliacaoRow sempre
+# forca ClasseFinal/ClasseAutomatica em branco (sem juizo de viabilidade), mas
+# a classe AUTOMATICA continua sendo calculada por baixo (o motor de decisao
+# roda igual); comparar o branco salvo contra essa classe real dava falso
+# positivo em TODA metrica de TODA medicao que nao fosse a aberta no momento.
 function Get-JustificativasFaltando {
     param([switch] $MetricasApenas)
     $w = $Global:JanelaPrincipal
     $falta = @()
-    foreach ($r in @($Global:AvaliacaoRows)) {
-        if (($r.ClasseFinal -ne $r.ClasseAutomatica) -and [string]::IsNullOrWhiteSpace($r.Justificativa)) {
-            $falta += $r.Rotulo
+    if (Test-ModoCompleto) {
+        foreach ($r in @($Global:AvaliacaoRows)) {
+            if (($r.ClasseFinal -ne $r.ClasseAutomatica) -and [string]::IsNullOrWhiteSpace($r.Justificativa)) {
+                $falta += $r.Rotulo
+            }
         }
-    }
-    $idxAberta = Get-IndiceMedicaoAberta
-    for ($i = 0; $i -lt @($Global:Medicoes).Count; $i++) {
-        if ($i -eq $idxAberta) { continue }   # essa esta no grid, ja conferida acima
-        $m = $Global:Medicoes[$i]
-        if (-not $m -or $m.nao_aplicavel -or -not $m.decisao) { continue }
-        $auto = @{}
-        foreach ($d in @($m.decisao.Detalhes)) { $auto[[string] $d.metrica] = [string] $d.classe }
-        foreach ($a in @($m.avaliacoes)) {
-            $mk = [string] $a.metrica
-            if ($auto.ContainsKey($mk) -and ([string] $a.classe_final -ne $auto[$mk]) -and
-                [string]::IsNullOrWhiteSpace([string] $a.justificativa)) {
-                $falta += ('{0} / {1}' -f $m.rotulo, (Get-RotuloMetrica $mk))
+        $idxAberta = Get-IndiceMedicaoAberta
+        for ($i = 0; $i -lt @($Global:Medicoes).Count; $i++) {
+            if ($i -eq $idxAberta) { continue }   # essa esta no grid, ja conferida acima
+            $m = $Global:Medicoes[$i]
+            if (-not $m -or $m.nao_aplicavel -or -not $m.decisao) { continue }
+            $auto = @{}
+            foreach ($d in @($m.decisao.Detalhes)) { $auto[[string] $d.metrica] = [string] $d.classe }
+            foreach ($a in @($m.avaliacoes)) {
+                $mk = [string] $a.metrica
+                if ($auto.ContainsKey($mk) -and ([string] $a.classe_final -ne $auto[$mk]) -and
+                    [string]::IsNullOrWhiteSpace([string] $a.justificativa)) {
+                    $falta += ('{0} / {1}' -f $m.rotulo, (Get-RotuloMetrica $mk))
+                }
             }
         }
     }
