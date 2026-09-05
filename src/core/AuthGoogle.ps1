@@ -176,8 +176,24 @@ function Get-TokenGoogle {
             grant_type    = 'refresh_token'
         }
     } catch {
-        Clear-RefreshTokenGoogle          # refresh token revogado/expirado
-        throw 'CONECTAR_GOOGLE'
+        # So' apaga o refresh token se o Google REALMENTE recusou (invalid_grant =
+        # revogado/expirado). Falha de rede/timeout (sem internet no local, DNS,
+        # proxy) NAO deve apagar a credencial -- senao uma queda momentanea de
+        # conexao no meio de um "Transmitir" forcava reconectar tudo de novo.
+        $corpo = ''
+        try {
+            $r = $_.Exception.Response
+            if ($r) {
+                $sr = [IO.StreamReader]::new($r.GetResponseStream())
+                $corpo = $sr.ReadToEnd(); $sr.Dispose()
+            }
+        } catch { }
+        if ($corpo -match 'invalid_grant' -or "$_" -match 'invalid_grant') {
+            Clear-RefreshTokenGoogle       # revogado/expirado de verdade
+            throw 'CONECTAR_GOOGLE'
+        }
+        # rede: mantem o refresh token; tenta de novo quando a internet voltar
+        throw 'Sem conexao para renovar o acesso do Google (a credencial foi mantida; tente com internet).'
     }
     if (-not $Global:GoogleToken) { $Global:GoogleToken = @{ email = [string] $rt.email } }
     (Set-TokenGoogle $resp).access

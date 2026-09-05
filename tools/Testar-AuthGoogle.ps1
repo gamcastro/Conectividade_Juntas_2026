@@ -67,7 +67,9 @@ $ps = [powershell]::Create(); $ps.Runspace = $rs
                 for ($try = 0; $try -lt 20; $try++) { try { $n = [int] ([IO.File]::ReadAllText($cntFile).Trim()); break } catch { Start-Sleep -Milliseconds 25 } }
                 $n++
                 for ($try = 0; $try -lt 20; $try++) { try { [IO.File]::WriteAllText($cntFile, "$n"); break } catch { Start-Sleep -Milliseconds 25 } }
-                if ($body -match 'grant_type=refresh_token') {
+                if ($body -match 'grant_type=refresh_token' -and $body -match 'refresh_token=RT-REVOGADO') {
+                    $code = 400; $out = '{"error":"invalid_grant","error_description":"Token has been expired or revoked."}'
+                } elseif ($body -match 'grant_type=refresh_token') {
                     $out = "{`"access_token`":`"AT-refresh-$n`",`"expires_in`":3600,`"id_token`":`"$jwt`"}"
                 } elseif ($body -match 'grant_type=authorization_code' -and $body -match 'code=FAKECODE') {
                     $out = "{`"access_token`":`"AT-code`",`"expires_in`":3600,`"refresh_token`":`"RT-code`",`"id_token`":`"$jwt`"}"
@@ -144,6 +146,25 @@ try {
     $comAuth = try { Invoke-RestMethod -Uri "$base/recurso" -Headers (Get-CabecalhoAuthWebApp) } catch { $null }
     if ($semAuth -match '(?i)<html|accounts\.google\.com' -and $comAuth.ok) { Write-Host "[7] mock: sem Bearer -> HTML de login; com Bearer -> JSON" }
     else { Write-Host "    FALHA: recurso auth (sem='$($semAuth.Substring(0,[Math]::Min(40,$semAuth.Length)))' com.ok=$($comAuth.ok))"; $falhas++ }
+
+    # [9] refresh recusado pelo Google (invalid_grant) -> APAGA a credencial + CONECTAR_GOOGLE
+    Save-RefreshTokenGoogle -Token 'RT-REVOGADO' -Email 'tecnico@tre-ma.jus.br'
+    $Global:GoogleToken = $null
+    $err9 = try { $null = Get-CabecalhoAuthWebApp; '(sem erro)' } catch { "$_" }
+    $rt9  = Get-RefreshTokenGoogle
+    if ($err9 -match 'CONECTAR_GOOGLE' -and -not $rt9) { Write-Host "[9] refresh invalid_grant -> apaga a credencial + CONECTAR_GOOGLE" }
+    else { Write-Host "    FALHA: invalid_grant (err='$err9' rt=$($rt9.rt))"; $falhas++ }
+
+    # [10] refresh falhou por REDE (endpoint fora do ar) -> MANTEM a credencial
+    Save-RefreshTokenGoogle -Token 'RT-REDE-OK' -Email 'tecnico@tre-ma.jus.br'
+    $Global:GoogleToken = $null
+    $tokUriBom = $Global:OAuthConfigOverride.token_uri
+    $Global:OAuthConfigOverride.token_uri = 'http://127.0.0.1:1/token'   # porta morta -> connection refused
+    $err10 = try { $null = Get-CabecalhoAuthWebApp; '(sem erro)' } catch { "$_" }
+    $Global:OAuthConfigOverride.token_uri = $tokUriBom
+    $rt10 = Get-RefreshTokenGoogle
+    if ($err10 -notmatch 'CONECTAR_GOOGLE' -and $rt10 -and $rt10.rt -eq 'RT-REDE-OK') { Write-Host "[10] refresh sem internet -> credencial mantida (nao apaga)" }
+    else { Write-Host "    FALHA: rede nao devia apagar (err='$err10' rt=$($rt10.rt))"; $falhas++ }
 
     # [8] Disconnect limpa
     Disconnect-GoogleConta
