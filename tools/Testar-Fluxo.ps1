@@ -659,7 +659,64 @@ try {
         Write-Host "[4g] meio Wi-Fi registrado sem a VPN -> inviavel"
     } else { Write-Host "    FALHA: medicao Wi-Fi sem VPN (med=$([bool]$medWifi) vpn=$($medWifi.vpn_conectou) ver=$($medWifi.veredito))"; $falhas++ }
     Close-OverlayCheck
+    # "Concluir" (o Wi-Fi acabou de ser registrado): LAN ja e' NA e o Celular
+    # ja tinha sido testado la no 4d, entao nao sobra nenhum meio pendente --
+    # a selecao esvazia (nenhum card fica com a borda azul de "meio da vez").
+    # O caso de avancar pra um meio REALMENTE pendente (ex.: Celular) esta no
+    # cenario isolado [4i], mais abaixo.
+    if (-not $Global:MeioSelecionado) {
+        Write-Host "[4g] 'Concluir' com todos os meios resolvidos esvazia a selecao (nada mais pendente)"
+    } else { Write-Host "    FALHA: selecao deveria esvaziar apos Concluir (sel='$($Global:MeioSelecionado)')"; $falhas++ }
+    # card do Wi-Fi ja testado mostra "Registrada" (dado congelado do teste),
+    # nao "Conectada" (que sugeriria conexao ao vivo agora mesmo)
+    if ("$($w.FindName('txtLocWifi').Text)" -match '^Registrada a') {
+        Write-Host "[4g] card Wi-Fi ja testado mostra 'Registrada a ...' (nao 'Conectada')"
+    } else { Write-Host "    FALHA: card Wi-Fi deveria dizer 'Registrada' (txt='$($w.FindName('txtLocWifi').Text)')"; $falhas++ }
     $w.FindName('chkVpnImpossivel').IsChecked = $false ; Update-VpnImpossivel
+
+    # 4i. fechar o overlay: "Concluir" avanca a selecao pro proximo meio
+    # pendente de verdade (cenario do usuario: testou o Wi-Fi, o Celular
+    # continua pendente -> a vez passa pra ele sozinho); "Cancelar" (meio
+    # ainda nao concluido) preserva a selecao no card que abriu o overlay.
+    # Isolado (backup/restore completo dos globais) pra nao interferir no
+    # resto do fluxo, que precisa do estado real (LAN+Wi-Fi NA, so' Celular
+    # medido) montado logo em seguida.
+    $medBak = $Global:Medicoes; $naBak = $Global:MeiosNaoAplicaveis.Clone()
+    $selBak = $Global:MeioSelecionado; $faseBak = $Global:ChkFase
+    $ativoBak = $Global:CheckMeioAtivo; $caboBak = $Global:AvisarRetirarCaboLan
+    try {
+        $Global:MeiosNaoAplicaveis = @{ lan = 'sem ponto de rede' }   # LAN resolvido (NA)
+        $Global:Medicoes = @([pscustomobject]@{ meio = 'wifi_local'; operadora = ''; rotulo = 'Wi-Fi do proprio local'; nao_aplicavel = $false; veredito = 'medido' })
+        $Global:AvisarRetirarCaboLan = $false
+        # "Concluir": Wi-Fi acabou de ser testado (unico medido); Celular continua pendente
+        $Global:MeioSelecionado = 'wifi'
+        $Global:CheckMeioAtivo = $true
+        $Global:ChkFase = 'fim'
+        Close-OverlayCheck
+        if ($Global:MeioSelecionado -eq 'celular') {
+            Write-Host "[4i] 'Concluir' avanca a selecao pro proximo meio pendente de verdade (Celular)"
+        } else { Write-Host "    FALHA: 'Concluir' nao avancou pro Celular (sel='$($Global:MeioSelecionado)')"; $falhas++ }
+
+        # "Cancelar": Wi-Fi ainda NAO foi testado (nenhuma medicao) -> continua
+        # sendo o "meio da vez" -> a selecao fica no mesmo card que abriu o overlay.
+        $Global:Medicoes = @()
+        $Global:MeioSelecionado = 'wifi'
+        $Global:CheckMeioAtivo = $true
+        $Global:ChkFase = 'f2-vpn-ok'   # em andamento, ainda nao concluido
+        Close-OverlayCheck
+        if ($Global:MeioSelecionado -eq 'wifi') {
+            Write-Host "[4i] 'Cancelar' mantem a selecao no card que abriu o overlay (Wi-Fi)"
+        } else { Write-Host "    FALHA: 'Cancelar' mudou a selecao (sel='$($Global:MeioSelecionado)')"; $falhas++ }
+    } finally {
+        $Global:Medicoes = $medBak
+        $Global:MeiosNaoAplicaveis = $naBak
+        $Global:MeioSelecionado = $selBak
+        $Global:ChkFase = $faseBak
+        $Global:CheckMeioAtivo = $ativoBak
+        $Global:AvisarRetirarCaboLan = $caboBak
+        Update-PainelMeios
+    }
+
     $Global:VpnSimulada = $true
     # volta ao meio unico (celular) p/ o restante do teste seguir igual: solta os NA
     # de LAN/Wi-Fi (marcados no 4d/4f) e descarta as medicoes que nao sao do celular

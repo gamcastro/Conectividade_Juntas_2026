@@ -2106,13 +2106,16 @@ function Update-PainelMeios {
     }
 
     $wifiUp = [bool] $wf.conectado
-    $notaWifi = if ($medWifi) { ' (dados do teste)' } else { '' }
     $tw = $w.FindName('txtLocWifi'); $dw = $w.FindName('dotWifi')
     if ($naWifi) {
         $tw.Text = 'Nao se aplica a este local'
         $tw.Foreground = $cinza ; $dw.Fill = $cinza
     } elseif ($wifiUp) {
-        $tw.Text = ('Conectada a "{0}" ({1}%)' -f $wf.ssid, $wf.sinal_pct) + $notaWifi
+        # depois de testado, o card mostra dado CONGELADO do momento do teste
+        # (snapshot), nao a conexao ao vivo -- "Registrada" deixa isso claro
+        # (evita parecer que a rede ainda esta conectada agora mesmo).
+        $verboWifi = if ($medWifi) { 'Registrada' } else { 'Conectada' }
+        $tw.Text = '{0} a "{1}" ({2}%)' -f $verboWifi, $wf.ssid, $wf.sinal_pct
         $tw.Foreground = $verde ; $dw.Fill = $verde
     } elseif ($wf.presente) {
         $n = (@($wf.redes_disponiveis)).Count
@@ -2141,11 +2144,13 @@ function Update-PainelMeios {
     }
 
     $wifiUpCel = [bool] $wfCel.conectado
-    $notaCel = if ($medCel) { ' (dados do teste)' } else { '' }
+    # depois de testado, "Registrado" (em vez de "Conectado") deixa claro que
+    # e' o dado congelado do momento do teste, nao a conexao ao vivo agora.
+    $verboCel = if ($medCel) { 'Registrado' } else { 'Conectado' }
     $tcel = $w.FindName('txtLocCel')
     if ($tcel) {
         $tcel.Text = if ($naCel) { 'Nao se aplica a este local' }
-                     elseif ($wifiUpCel) { ('Conectado a "{0}" ({1}%)' -f $wfCel.ssid, $wfCel.sinal_pct) + $notaCel }
+                     elseif ($wifiUpCel) { '{0} a "{1}" ({2}%)' -f $verboCel, $wfCel.ssid, $wfCel.sinal_pct }
                      elseif ($wfCel.presente) { 'Placa Wi-Fi ativa, nao conectada. Conecte a rede do celular.' }
                      else { 'Sem placa Wi-Fi neste computador.' }
         $tcel.Foreground = if ($naCel) { $cinza } elseif ($wifiUpCel) { $verde } else { $cinza }
@@ -3420,9 +3425,21 @@ function Close-OverlayCheck {
         return
     }
     $Global:CheckMeioAtivo = $false
+    # "Concluir" (meio recem-testado, ChkFase='fim') avanca a selecao pro
+    # proximo meio pendente na ordem -- senao Update-PainelMeios preservaria a
+    # selecao no card que acabou de ser testado (regra pensada pra reabertura
+    # manual de um meio JA testado, ver Select-MeioParaChecar). "Cancelar"
+    # (meio ainda pendente) nao precisa de nada especial aqui: o card que abriu
+    # o overlay continua sendo o "meio da vez" e Update-PainelMeios ja mantem
+    # a selecao nele sozinho.
+    $foiConcluido = ($Global:ChkFase -eq 'fim')
     $Global:ChkFase = ''
     $w = $Global:JanelaPrincipal
     if ($w) { $w.FindName('overlayCheck').Visibility = 'Collapsed' }
+    if ($foiConcluido) {
+        $prox = Get-MeioAtualPasso3
+        $Global:MeioSelecionado = if ($prox -eq 'wifi_local') { 'wifi' } else { $prox }
+    }
 
     # Depois do teste da rede cabeada: avisar o tecnico a retirar o cabo antes de
     # partir para o Wi-Fi (o cabo conectado atrapalha a medicao do proximo meio).
