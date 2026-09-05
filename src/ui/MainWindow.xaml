@@ -2024,13 +2024,24 @@
                                     <TextBlock x:Name="txtDiagVpn" TextWrapping="Wrap" VerticalAlignment="Center"
                                                FontSize="12" LineHeight="17" Foreground="{DynamicResource Dicon.Text2}"/>
                                 </StackPanel>
-                                <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                                    <Button x:Name="btnAbrirFortiClient" Content="Abrir o FortiClient"
-                                            Style="{DynamicResource BotaoSecundario}"/>
-                                    <Button x:Name="btnReverificarVpn" Content="Verificar novamente"
-                                            Style="{DynamicResource BotaoFantasma}" Margin="8,0,0,0"/>
+                                <TextBlock x:Name="txtChkVpnPassos" TextWrapping="Wrap" FontSize="12.5"
+                                           LineHeight="19" Foreground="{DynamicResource Dicon.Text2}"
+                                           Margin="18,10,0,0" Visibility="Collapsed"
+                                           Text="Para continuar o teste com a VPN:&#10;1.  Abra o FortiClient e conecte (login da Justi&#231;a Eleitoral).&#10;2.  Volte aqui e clique em &#171;J&#225; conectei &#8212; verificar a VPN&#187;."/>
+                                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                                    <Button x:Name="btnAbrirFortiClient" Content="1. Abrir o FortiClient"
+                                            Style="{DynamicResource BotaoSecundario}" Padding="18,9"/>
+                                    <Button x:Name="btnReverificarVpn" Content="2. J&#225; conectei &#8212; verificar a VPN"
+                                            Style="{DynamicResource BotaoPrimario}" Margin="10,0,0,0" Padding="18,9"/>
+                                    <mah:ProgressRing x:Name="ringReverVpn" Width="16" Height="16" Margin="12,0,0,0"
+                                                      IsActive="False" Visibility="Collapsed"
+                                                      Foreground="{DynamicResource Dicon.Accent}"/>
                                 </StackPanel>
-                                <CheckBox x:Name="chkVpnImpossivel" Margin="0,14,0,0"
+                                <TextBlock x:Name="txtChkVpnRecheck" Visibility="Collapsed" TextWrapping="Wrap"
+                                           FontSize="12" LineHeight="17" Margin="0,10,0,0"
+                                           Foreground="{DynamicResource Dicon.Ressalva}"/>
+                                <Border Height="1" Background="{DynamicResource Dicon.Hair}" Margin="0,16,0,12"/>
+                                <CheckBox x:Name="chkVpnImpossivel"
                                           Content="N&#227;o foi poss&#237;vel conectar a VPN da JE neste local"/>
                                 <TextBlock x:Name="txtVpnSugestoesDica"
                                            Text="Motivo mais comum? Escolha uma sugest&#227;o ou use &#171;Outro&#187; pra digitar:"
