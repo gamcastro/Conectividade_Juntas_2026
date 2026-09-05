@@ -877,7 +877,7 @@ function Start-TrabalhoHome {
     $rs.ApartmentState = 'MTA'
     $rs.ThreadOptions  = 'ReuseThread'
     $rs.Open()
-    foreach ($v in 'RaizApp', 'LogEntries', 'LogHome', 'LogHomeMax', 'JanelaPrincipal', 'ArquivoLog', 'PastaDadosOverride') {
+    foreach ($v in 'RaizApp', 'LogEntries', 'LogHome', 'LogHomeMax', 'JanelaPrincipal', 'ArquivoLog', 'PastaDadosOverride', 'SessaoAtual') {
         $rs.SessionStateProxy.SetVariable($v, (Get-Variable -Name $v -Scope Global -ValueOnly -ErrorAction SilentlyContinue))
     }
 
@@ -925,6 +925,18 @@ function Invoke-AtualizarDados {
         Write-Log ("Dados atualizados: {0} juntas, {1} tecnicos, {2} roteiros." -f $r.juntas, $r.tecnicos, $r.roteiros) -Nivel Ok
         $cfg = $null
         try { $cfg = Get-Config 'envio' } catch { }
+
+        # puxa de volta os resultados ja transmitidos deste tecnico (recupera o
+        # "testado" do painel depois de formatar / trocar de notebook)
+        if (-not $cfg -or $cfg.sync_resultados_ao_atualizar -ne $false) {
+            try {
+                $tec = if ($Global:SessaoAtual) { [string] $Global:SessaoAtual.tecnico_nome } else { '' }
+                Sync-Resultados -TecnicoNome $tec | Out-Null
+            } catch {
+                Write-Log "Sincronizacao de resultados anteriores nao concluida: $_" -Nivel Aviso
+            }
+        }
+
         if (-not $cfg -or $cfg.reenvio_ao_atualizar -ne $false) {
             Send-ResultadosPendentes -Endpoint $cfg.endpoint_apps_script | Out-Null
         }
