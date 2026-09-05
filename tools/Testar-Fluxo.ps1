@@ -511,10 +511,28 @@ try {
     $Global:BandaVpnSimulada.DownloadMbps = 20
     $Global:BandaVpnSimulada.UploadMbps = 5
     Invoke-RefazerFase2
+    # enquanto a re-execucao roda (speedtest/iperf3), "Testar a VPN"/"Refazer
+    # Fase 1/2" ficam desabilitados e aparece "Testando... Aguarde." -- antes
+    # ficavam clicaveis a checagem inteira, porque Set-ChkBotao so olhava
+    # $Global:ChkFase, que o fluxo de "Refazer" nao muda de proposito.
+    if (-not $w.FindName('btnChkIniciar').IsEnabled -and -not $w.FindName('btnChkRefazerFase1').IsEnabled -and
+        -not $w.FindName('btnChkRefazerFase2').IsEnabled -and "$($w.FindName('txtChkRodando').Visibility)" -eq 'Visible') {
+        Write-Host "[4d-4b] botoes ficam desabilitados (+ 'Testando... Aguarde') durante o Refazer Fase 2"
+    } else {
+        Write-Host ("    FALHA: botoes deveriam estar desabilitados durante o Refazer Fase 2 (iniciar.en={0} ref1.en={1} ref2.en={2} rodando.vis={3})" -f `
+            $w.FindName('btnChkIniciar').IsEnabled, $w.FindName('btnChkRefazerFase1').IsEnabled, $w.FindName('btnChkRefazerFase2').IsEnabled, $w.FindName('txtChkRodando').Visibility)
+        $falhas++
+    }
     $deadline = (Get-Date).AddSeconds($TimeoutS)
     while ((Get-Date) -lt $deadline) {
         Invoke-Pump ; Start-Sleep -Milliseconds 120
         if ($null -eq $Global:DiagRunState -and @($Global:Fase2Tentativas).Count -ge 2) { break }
+    }
+    if ($w.FindName('btnChkRefazerFase2').IsEnabled -and "$($w.FindName('txtChkRodando').Visibility)" -eq 'Collapsed') {
+        Write-Host "[4d-4c] botoes voltam a ficar habilitados e 'Testando...' some ao terminar"
+    } else {
+        Write-Host "    FALHA: botoes/texto nao voltaram ao normal apos o Refazer Fase 2 (ref2.en=$($w.FindName('btnChkRefazerFase2').IsEnabled) rodando.vis=$($w.FindName('txtChkRodando').Visibility))"
+        $falhas++
     }
     $Global:BandaVpnSimulada.iperf_ok = $false   # devolve aos defaults p/ nao afetar cenarios seguintes
     $Global:BandaVpnSimulada.DownloadMbps = $null

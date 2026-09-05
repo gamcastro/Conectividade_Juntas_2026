@@ -2841,18 +2841,32 @@ function Set-ChkBotao {
         'f2-vpn-ok'  { $b.Content = if ($jeDir) { 'Iniciar checagem da rede interna' } else { 'Iniciar diagnostico com a VPN' }; $b.Visibility = 'Visible'; $b.IsEnabled = $true }
         default      { $b.Visibility = 'Collapsed' }
     }
-    $rod = $Global:ChkFase -in @('f1-rodando', 'f2-rodando')
+    # "rodando" = uma bateria esta em execucao AGORA -- tanto pelo fluxo normal
+    # ($Global:ChkFase 'f1-rodando'/'f2-rodando') quanto por um "Refazer Fase
+    # 1/2" (que roda o mesmo speedtest/iperf3 num runspace SEM mexer no
+    # ChkFase de proposito -- ver Invoke-RefazerFase1/2 -- por isso confere os
+    # runspaces tambem, senao os botoes ficavam clicaveis durante a re-execucao).
+    $rod = ($Global:ChkFase -in @('f1-rodando', 'f2-rodando')) -or [bool] $Global:TarefaRedeState -or [bool] $Global:DiagRunState
+    if ($rod) { $b.IsEnabled = $false }
     $r = $w.FindName('ringChk')
     if ($r) {
         $r.IsActive = $rod ; $r.Visibility = if ($rod) { 'Visible' } else { 'Collapsed' }
     }
+    $txtRod = $w.FindName('txtChkRodando')
+    if ($txtRod) { $txtRod.Visibility = if ($rod) { 'Visible' } else { 'Collapsed' } }
     # "Refazer Fase 1/2": aparecem depois que a fase correspondente completou
-    # pelo menos 1 vez nesta sessao de overlay (Fase1Tentativas/Fase2Tentativas),
-    # escondidos enquanto alguma tarefa esta rodando.
+    # pelo menos 1 vez nesta sessao de overlay (Fase1Tentativas/Fase2Tentativas);
+    # ficam desabilitados (sem sumir) enquanto alguma tarefa esta rodando.
     $b1 = $w.FindName('btnChkRefazerFase1')
-    if ($b1) { $b1.Visibility = if (@($Global:Fase1Tentativas).Count -and -not $rod) { 'Visible' } else { 'Collapsed' } }
+    if ($b1) {
+        $b1.Visibility = if (@($Global:Fase1Tentativas).Count) { 'Visible' } else { 'Collapsed' }
+        $b1.IsEnabled  = -not $rod
+    }
     $b2 = $w.FindName('btnChkRefazerFase2')
-    if ($b2) { $b2.Visibility = if (@($Global:Fase2Tentativas).Count -and -not $rod) { 'Visible' } else { 'Collapsed' } }
+    if ($b2) {
+        $b2.Visibility = if (@($Global:Fase2Tentativas).Count) { 'Visible' } else { 'Collapsed' }
+        $b2.IsEnabled  = -not $rod
+    }
 }
 
 # Alterna as 3 colunas do corpo entre Fase 1 (Ookla) e Fase 2 (iperf3).
@@ -3180,11 +3194,11 @@ function Invoke-RefazerFase1 {
     $w.FindName('txtChkResultadoVazio').Visibility = 'Visible'
     Reset-Velocimetro
     $w.FindName('txtVeloFase').Text = 'iniciando...'
-    Set-ChkBotao   # esconde os botoes de refazer enquanto esta rodando
     Write-Log 'Refazendo a Fase 1 (rede local, sem VPN)...' -Nivel Info
     if ($Global:FaseLocalSimulada) { Complete-RefazerFase1 $Global:FaseLocalSimulada $null; return }
     Set-FaseLocalOcupado $true
     Start-TarefaRede -Script 'Invoke-FaseLocal' -AoConcluir { param($res, $erro) Complete-RefazerFase1 $res $erro }
+    Set-ChkBotao   # $Global:TarefaRedeState ja esta setado aqui -> desabilita "Testar a VPN"/"Refazer Fase 1/2"
 }
 
 function Complete-RefazerFase1 {
@@ -3355,7 +3369,6 @@ function Invoke-RefazerFase2 {
     Reset-Velocimetro -Suf 'Vpn'
     $w.FindName('txtVeloFaseVpn').Text = 'iniciando...'
     $rd = $w.FindName('ringDiag'); if ($rd) { $rd.IsActive = $true; $rd.Visibility = 'Visible' }
-    Set-ChkBotao   # esconde os botoes de refazer enquanto esta rodando
     $jeDir = Test-RedeJeDireta
     Write-Log $(if ($jeDir) { 'Refazendo a checagem da rede interna...' } else { 'Refazendo a Fase 2 (diagnostico com a VPN)...' }) -Nivel Info
     Set-ChkStep 2 'rodando' '' $(if ($jeDir) { '2. Rede interna (JE)' } else { '' })
@@ -3364,6 +3377,7 @@ function Invoke-RefazerFase2 {
     $selD = if ($sel) { $sel.Dados } else { $null }
     $meio = (Get-MeioDoPasso3).meio
     Start-DiagnosticoAssincrono -Local $selD -Meio $meio -AoConcluir { param($res, $erro) Complete-RefazerFase2 $res $erro }
+    Set-ChkBotao   # $Global:DiagRunState ja esta setado aqui -> desabilita "Testar a VPN"/"Refazer Fase 1/2"
 }
 
 function Complete-RefazerFase2 {

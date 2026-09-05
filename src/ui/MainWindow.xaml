@@ -1972,6 +1972,10 @@
                             <mah:ProgressRing x:Name="ringChk" Width="18" Height="18" Margin="12,0,0,0"
                                               IsActive="False" Visibility="Collapsed"
                                               Foreground="{DynamicResource Dicon.Accent}"/>
+                            <TextBlock x:Name="txtChkRodando" Text="Testando... Aguarde."
+                                       VerticalAlignment="Center" Margin="8,0,0,0" FontSize="12.5"
+                                       FontWeight="SemiBold" Foreground="{DynamicResource Dicon.Accent}"
+                                       Visibility="Collapsed"/>
                         </StackPanel>
 
                         <!-- gate da VPN (Fase 2 sem VPN ativa) -->
