@@ -331,13 +331,12 @@ function Get-PainelMedicoesHtml {
             "      <tr><td>$(ConvertTo-HtmlSafe ([string] $m.rotulo))</td><td colspan=""5"" class=""small"">n&atilde;o se aplica$mot</td></tr>"
             continue
         }
+        $vpnTxt = if ($m.vpn_conectou) { 'Sim' } else { 'N&atilde;o' }
         $rl  = if ($null -ne $m.rede_local_download) { '{0:N1} Mbps' -f [double] $m.rede_local_download } elseif ($m.rede_local_ok) { 'ok' } else { 'n&atilde;o rodou' }
-        $dl  = if ($null -ne $m.vpn_download_mbps) { '{0:N1} Mbps' -f [double] $m.vpn_download_mbps } else { '&mdash;' }
-        $up  = if ($null -ne $m.vpn_upload_mbps) { '{0:N1} Mbps' -f [double] $m.vpn_upload_mbps } else { '&mdash;' }
+        $ul  = if ($null -ne $m.rede_local_upload_mbps) { '{0:N1} Mbps' -f [double] $m.rede_local_upload_mbps } elseif ($m.rede_local_ok) { 'ok' } else { 'n&atilde;o rodou' }
         $lt  = if ($null -ne $m.latencia_ms) { '{0} ms' -f $m.latencia_ms } else { '&mdash;' }
-        $jt  = if ($null -ne $m.jitter_ms) { '{0} ms' -f $m.jitter_ms } else { '&mdash;' }
         $pd  = if ($null -ne $m.perda_percentual) { '{0} %' -f $m.perda_percentual } else { '&mdash;' }
-        "      <tr><td>$(ConvertTo-HtmlSafe ([string] $m.rotulo))</td><td class=""mono"">$rl</td><td class=""mono"">$dl</td><td class=""mono"">$up</td><td class=""mono"">$lt</td><td class=""mono"">$jt / $pd</td></tr>"
+        "      <tr><td>$(ConvertTo-HtmlSafe ([string] $m.rotulo))</td><td class=""mono"">$vpnTxt</td><td class=""mono"">$rl</td><td class=""mono"">$ul</td><td class=""mono"">$lt</td><td class=""mono"">$pd</td></tr>"
     }
 
     # observacoes: so pendencias de fato (VPN impossivel, meios NA)
@@ -370,7 +369,7 @@ $($resumoRows -join "`n")
         </tbody></table>
         <div class="ptit" style="margin-top:12px">Medi&ccedil;&otilde;es por meio</div>
         <table>
-          <thead><tr><th>Meio</th><th>Download s/ VPN</th><th>Download VPN</th><th>Upload VPN</th><th>Lat&ecirc;ncia VPN</th><th>Jitter / Perda VPN</th></tr></thead>
+          <thead><tr><th>Meio</th><th>VPN</th><th>Download s/ VPN</th><th>Upload s/ VPN</th><th>Lat&ecirc;ncia VPN</th><th>Perda VPN</th></tr></thead>
           <tbody>
 $($medRows -join "`n")
           </tbody>

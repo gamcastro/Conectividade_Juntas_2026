@@ -883,9 +883,13 @@ try {
     Show-WizardPasso ($Global:WizardPassos.IndexOf('stepResultado') + 1)
     $met = [pscustomobject]@{ LatenciaMediaMs = 12; JitterMs = 1; PerdaPercentual = 0; BandaDownloadMbps = 90; BandaUploadMbps = 30; CarregamentoWebS = 3 }
     $dec = Invoke-MotorDecisao -Metricas $met -Limiares (Get-PerfilLimiares -Meio lan -Cenario com_vpn)
+    # Open-DiagnosticoLimpo zerou $Global:FaseLocalPayload (assistente abriu
+    # limpo, sem probe) -- monta um "fase_local" proprio pra medicao sintetica
+    # em vez de depender do global, pra exercitar rede_local_upload_mbps no JSON.
+    $faseLocalLanMock = [pscustomobject]@{ Internet = [pscustomobject]@{ upload_mbps = 42.5 } }
     $Global:Medicoes = @([pscustomobject]@{
             meio = 'lan'; operadora = ''; rotulo = 'Rede cabeada (LAN)'; nao_aplicavel = $false
-            fase_local = $Global:FaseLocalPayload; rede_local_ok = $true; rede_local_download = 850
+            fase_local = $faseLocalLanMock; rede_local_ok = $true; rede_local_download = 850
             vpn_conectou = $true; vpn_motivo = ''; vpn_download = 90; metricas = $met; fase2_ok = $true
             decisao = $dec; avaliacoes = @(); veredito = 'medido'; quando = (Get-Date).ToString('o') })
     Show-PainelResultado -Payload ([pscustomobject]@{ Ambiente = (Get-EstadoAmbiente); Metricas = $met; Decisao = $dec; Local = $cboLm.SelectedItem.Dados })
@@ -997,6 +1001,18 @@ try {
     if ($docM.modo_avaliacao -eq 'medicao' -and $htmlM -match 'Painel de Medi' -and $htmlM -notmatch 'Painel de Viabilidade') {
         Write-Host "[m] JSON traz modo_avaliacao='medicao'; relatorio = Painel de Medicoes (sem Painel de Viabilidade)"
     } else { Write-Host "    FALHA: json/relatorio modo medicao (modo=$($docM.modo_avaliacao))"; $falhas++ }
+
+    # colunas da tabela "Medicoes por meio" do relatorio: VPN (conectou sim/nao) +
+    # Download/Upload s/ VPN + Latencia/Perda VPN -- sem Download VPN/Upload VPN/Jitter
+    $medLan = @($docM.medicoes | Where-Object { $_.meio -eq 'lan' } | Select-Object -First 1)
+    if ($htmlM -match '<th>VPN</th>' -and $htmlM -match 'Upload s/ VPN' -and $htmlM -match 'Perda VPN' -and
+        $htmlM -notmatch 'Download VPN<' -and $htmlM -notmatch 'Jitter / Perda' -and
+        $medLan -and $medLan.rede_local_upload_mbps -eq 42.5) {
+        Write-Host "[m] tabela 'Medicoes por meio': colunas VPN/Download s-VPN/Upload s-VPN/Latencia/Perda (JSON traz rede_local_upload_mbps=$($medLan.rede_local_upload_mbps))"
+    } else {
+        Write-Host "    FALHA: colunas da tabela de medicoes (upload=$($medLan.rede_local_upload_mbps) htmlOk=$($htmlM -match '<th>VPN</th>'))"
+        $falhas++
+    }
     if ($docM.conexao_recomendada.meio -eq 'lan' -and $docM.conexao_recomendada.veredito -eq 'medido' -and -not $docM.conexao_recomendada.motivo) {
         Write-Host "[m] JSON.conexao_recomendada reflete o ajuste manual do tecnico (LAN, sem juizo de viabilidade, motivo vazio)"
     } else {

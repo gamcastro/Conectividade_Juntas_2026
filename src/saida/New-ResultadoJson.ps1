@@ -194,6 +194,7 @@ function New-ResultadoJson {
             motivo_nao_aplicavel = [string] (Get-Prop $m 'motivo_na')
             rede_local_ok        = [bool] (Get-Prop $m 'rede_local_ok')
             rede_local_download  = (Get-Prop $m 'rede_local_download')
+            rede_local_upload_mbps = (Get-Prop $mIt 'upload_mbps')
             rede_local_provedor  = [string] (Get-Prop $mIt 'isp')
             rede_local_falha_tipo  = [string] (Get-Prop $mIt 'speedtest_falha_tipo')
             rede_local_diagnostico = [string] (Get-Prop $mIt 'speedtest_diagnostico')
