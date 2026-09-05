@@ -43,6 +43,7 @@ $Global:RecomendacaoLocal  = $null   # {meio;operadora;rotulo;veredito;provisori
 $Global:LocalMedicoesId    = ''      # id do local a que as medicoes atuais pertencem
 $Global:MotivoRecomendacao = ''      # justificativa da conexao recomendada (passo 6)
 $Global:CaboLan            = $null   # {necessario;metros} - so' quando a conexao escolhida e' LAN
+$Global:ObservacoesTecnico = ''      # anotacoes livres do tecnico no passo 6 (vao no relatorio)
 $Global:AtualizandoRecomendacao = $false  # guarda: set programatico do combo de recomendacao
 $Global:MedicoesPasso5     = @()     # [{idx;med}] das medicoes testaveis no seletor do passo 5
 $Global:MedicaoPasso5Idx   = -1      # indice em $Global:Medicoes da medicao aberta no passo 5 (-1 = ultima)
@@ -372,6 +373,9 @@ function New-JanelaPrincipal {
                 $Global:CaboLan.metros = if ([double]::TryParse($t, [ref] $v) -and $v -gt 0) { $v } else { $null }
                 Update-CaboLanResumo
             }
+        })
+    $window.FindName('txtObsTecnico').Add_TextChanged({
+            $Global:ObservacoesTecnico = [string] $Global:JanelaPrincipal.FindName('txtObsTecnico').Text
         })
 
     # "Detalhes da execucao" (lstLog) rola sozinho pro final a cada evento novo.
@@ -2286,16 +2290,16 @@ function Update-PainelMeios {
     $selKey = $selCanon
     if ($selKey -eq 'lan') {
         if ($wifiLive) {
-            $aviso = "Para testar a LAN, desconecte a rede Wi-Fi pela bandeja do Windows - so o cabo de rede deve estar conectado. Depois clique no $seta do card LAN."
+            $aviso = "Para testar a LAN, desconecte a rede Wi-Fi pela bandeja do Windows - so o cabo de rede deve estar conectado. Depois clique em qualquer $seta para reler as placas."
         } elseif (-not $lanLive) {
-            $aviso = "Sem conexao na LAN. Verifique o cabo de rede e clique no $seta do card LAN para reler so a placa cabeada."
+            $aviso = "Sem conexao na LAN. Verifique o cabo de rede e clique em qualquer $seta para reler as placas."
         }
     } elseif ($selKey -eq 'wifi_local' -or $selKey -eq 'celular') {
         $qual = if ($selKey -eq 'celular') { 'o roteamento do celular' } else { 'o Wi-Fi do local' }
         if ($lanLive) {
-            $aviso = "Para testar $qual, retire o cabo de rede - so a placa Wi-Fi deve estar conectada. Depois clique no $seta do card LAN para atualiza-la."
+            $aviso = "Para testar $qual, retire o cabo de rede - so a placa Wi-Fi deve estar conectada. Depois clique em qualquer $seta para reler as placas."
         } elseif (-not $wifiLive) {
-            $aviso = "Conecte a placa Wi-Fi a rede que vai testar (bandeja do Windows) e clique no $seta do card Wi-Fi."
+            $aviso = "Conecte a placa Wi-Fi a rede que vai testar (bandeja do Windows) e clique em qualquer $seta para reler as placas."
         }
     }
     $cma = $w.FindName('cardMeioAviso'); $tma = $w.FindName('txtMeioAviso')
@@ -2409,11 +2413,16 @@ function Set-RelerAdaptadorOcupado {
     }
 }
 
-# Botao (do card) para reler SO uma placa - preserva o que ja foi coletado da
-# outra. Ex.: ja testei a LAN, tirei o cabo e liguei o Wi-Fi -> releio so o
-# Wi-Fi e o card LAN mantem o IP/gateway/... da coleta anterior.
+# Botao (do card) para reler as placas de rede. Rele SEMPRE as duas (LAN +
+# Wi-Fi): o card de um meio JA TESTADO mostra o snapshot congelado, entao
+# reler a placa "ao vivo" da outra nao muda o que aparece -- so' atualiza o
+# estado real que libera/trava o "Rodar checagem" (isolamento de rede por
+# etapa). Antes relia so uma placa, e o tecnico clicava no ↻ do Wi-Fi
+# esperando destravar depois de tirar o cabo -- mas a LAN "ao vivo" continuava
+# conectada e o botao seguia travado. O $Tipo agora so' escolhe em qual ↻ o
+# spinner aparece.
 function Invoke-RelerAdaptador {
-    param([string] $Tipo)   # 'lan' | 'wifi'
+    param([string] $Tipo)   # 'lan' | 'wifi' -- so' pro spinner
     if ($Global:TarefaRedeState -or $Global:CheckMeioAtivo) {
         Write-Log 'Aguarde a checagem em andamento terminar.' -Nivel Aviso
         return
@@ -2422,18 +2431,16 @@ function Invoke-RelerAdaptador {
 
     if ($Global:FaseLocalSimulada) {
         $s = $Global:FaseLocalSimulada
-        if ($Tipo -eq 'lan') { $Global:FaseLocalPayload.Lan = $s.Lan }
-        else { $Global:FaseLocalPayload.Wireless = $s.Wireless }
+        $Global:FaseLocalPayload.Lan      = $s.Lan
+        $Global:FaseLocalPayload.Wireless = $s.Wireless
         Update-PainelMeios
         return
     }
 
     $Global:RelerAdaptadorTipo = $Tipo
     Set-RelerAdaptadorOcupado $Tipo $true
-    $rot = if ($Tipo -eq 'lan') { 'cabeada (LAN)' } else { 'Wi-Fi' }
-    $script = if ($Tipo -eq 'lan') { 'Get-AdaptadorLan' } else { 'Get-AdaptadorWireless' }
-    Write-Log ("Relendo so a placa {0} (o outro card fica como esta)..." -f $rot) -Nivel Info
-    Start-TarefaRede -Script $script -AoConcluir { param($res, $erro) Complete-RelerAdaptador $res $erro }
+    Write-Log 'Relendo as placas de rede (LAN + Wi-Fi)...' -Nivel Info
+    Start-TarefaRede -Script 'Invoke-FaseLocal -SemInternet' -AoConcluir { param($res, $erro) Complete-RelerAdaptador $res $erro }
 }
 
 function Complete-RelerAdaptador {
@@ -2442,16 +2449,16 @@ function Complete-RelerAdaptador {
     $Global:RelerAdaptadorTipo = ''
     Set-RelerAdaptadorOcupado $tipo $false
 
-    if ($Erro) { Write-Log ("Nao consegui reler a placa: {0}" -f $Erro) -Nivel Aviso; Update-PainelMeios; return }
-    if (-not $Novo -or -not $Global:FaseLocalPayload) { Write-Log 'Releitura da placa nao retornou dados.' -Nivel Aviso; Update-PainelMeios; return }
-
-    if ($tipo -eq 'lan') {
-        $Global:FaseLocalPayload.Lan = $Novo
-        Write-Log ('Placa LAN relida: {0}' -f $(if ($Novo.conectado) { "conectada - IP $($Novo.ipv4)" } else { 'sem conexao' })) -Nivel Info
-    } else {
-        $Global:FaseLocalPayload.Wireless = $Novo
-        Write-Log ('Placa Wi-Fi relida: {0}' -f $(if ($Novo.conectado) { "conectada a `"$($Novo.ssid)`"" } else { 'sem conexao' })) -Nivel Info
+    if ($Erro) { Write-Log ("Nao consegui reler as placas: {0}" -f $Erro) -Nivel Aviso; Update-PainelMeios; return }
+    if (-not $Novo -or -not $Global:FaseLocalPayload -or -not $Novo.Lan -or -not $Novo.Wireless) {
+        Write-Log 'Releitura das placas nao retornou dados.' -Nivel Aviso; Update-PainelMeios; return
     }
+
+    $Global:FaseLocalPayload.Lan      = $Novo.Lan
+    $Global:FaseLocalPayload.Wireless = $Novo.Wireless
+    $txtLan  = if ($Novo.Lan.conectado)      { "LAN conectada - IP $($Novo.Lan.ipv4)" } else { 'LAN sem conexao' }
+    $txtWifi = if ($Novo.Wireless.conectado) { "Wi-Fi em `"$($Novo.Wireless.ssid)`"" }   else { 'Wi-Fi sem conexao' }
+    Write-Log ("Placas relidas: {0}; {1}." -f $txtLan, $txtWifi) -Nivel Info
     Update-PainelMeios
 }
 
@@ -3028,8 +3035,8 @@ function Invoke-CheckMeio {
     if ($Meio -eq 'lan') {
         if (-not $lanOn) {
             $m = 'A placa cabeada (LAN) nao esta conectada.' + [Environment]::NewLine + [Environment]::NewLine +
-                 'Verifique o cabo de rede (no notebook e no ponto de rede/switch) e clique no botao de reler do card LAN (o simbolo de atualizar no canto) para atualizar apenas a placa LAN.'
-            Write-Log 'LAN sem conexao - verifique o cabo de rede e releia apenas a placa LAN.' -Nivel Aviso
+                 'Verifique o cabo de rede (no notebook e no ponto de rede/switch) e clique em qualquer botao de reler (o simbolo de atualizar no canto de um card ou no topo do painel) para reler as placas.'
+            Write-Log 'LAN sem conexao - verifique o cabo de rede e releia as placas.' -Nivel Aviso
             if (-not $Global:ModoTeste -and $w) { try { [System.Windows.MessageBox]::Show($w, $m, 'Rede cabeada (LAN) sem conexao', [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Warning) | Out-Null } catch { } }
             return
         }
@@ -3912,6 +3919,7 @@ function Reset-Medicoes {
     $Global:RecomendacaoLocal  = $null
     $Global:MotivoRecomendacao = ''
     $Global:CaboLan            = $null
+    $Global:ObservacoesTecnico = ''
     $Global:MedicoesPasso5     = @()
     $Global:MedicaoPasso5Idx   = -1
 }
@@ -4014,6 +4022,8 @@ function Update-ResumoFim {
         $ver.Text       = 'MEDICAO CONCLUIDA'
         $ver.Foreground = Get-PincelVeredito 'medido'
     }
+    $to = $w.FindName('txtObsTecnico')
+    if ($to -and $to.Text -ne [string] $Global:ObservacoesTecnico) { $to.Text = [string] $Global:ObservacoesTecnico }
     $w.FindName('btnSalvarResultado').IsEnabled     = $true
     $w.FindName('btnExportarPdf').IsEnabled         = $true
     $w.FindName('btnTransmitirResultado').IsEnabled = ($Global:FeitoSalvar -and -not $Global:FeitoTransmitir)
@@ -4134,6 +4144,7 @@ function Invoke-ExportarRelatorio {
             -Medicoes $Global:Medicoes -ConexaoRecomendada $rec `
             -MotivoRecomendacao ([string] $Global:MotivoRecomendacao) `
             -CaboLan $Global:CaboLan `
+            -ObservacoesTecnico ([string] $Global:ObservacoesTecnico) `
             -VistoriaGel $Global:VistoriaGel
     } catch {
         $st.Text = "Falha ao montar o relatorio: $_"
@@ -4783,12 +4794,20 @@ function Update-EstadoVpn {
     }
     $bf = $w.FindName('btnAbrirFortiClient'); if ($bf) { $bf.Visibility = if ($ok) { 'Collapsed' } else { 'Visible' } }
     $bv = $w.FindName('btnReverificarVpn');   if ($bv) { $bv.Visibility = if ($ok) { 'Collapsed' } else { 'Visible' } }
-    # VPN conectada (ou ja na rede interna) -> some a saida de escape "nao consegui a VPN"
+    # VPN conectada (ou ja na rede interna) -> some a saida de escape "nao consegui
+    # a VPN". Sem VPN -> ela tem que VOLTAR: o checkbox + o botao "Registrar sem a
+    # VPN" (o campo de motivo/chips seguem presos ao checkbox, via Update-VpnImpossivel).
+    # Antes so' escondia e nunca remostrava -> depois de um meio com a VPN ok, o
+    # checkbox sumia pros meios seguintes e o tecnico nao conseguia registrar sem VPN.
     if ($ok) {
         $ci = $w.FindName('chkVpnImpossivel'); if ($ci) { $ci.IsChecked = $false }
         foreach ($n in 'chkVpnImpossivel', 'txtVpnMotivo', 'txtVpnMotivoDica', 'btnChkVpnImpossivel', 'wrapVpnSugestoes', 'txtVpnSugestoesDica') {
             $c = $w.FindName($n); if ($c) { $c.Visibility = 'Collapsed' }
         }
+    } else {
+        $ci = $w.FindName('chkVpnImpossivel');    if ($ci) { $ci.Visibility = 'Visible' }
+        $bi = $w.FindName('btnChkVpnImpossivel'); if ($bi) { $bi.Visibility = 'Visible' }
+        Update-VpnImpossivel   # respeita o estado do checkbox p/ motivo/chips
     }
 }
 
@@ -5188,6 +5207,7 @@ function Invoke-SalvarResultado {
             -Medicoes $Global:Medicoes -ConexaoRecomendada $rec `
             -MotivoRecomendacao ([string] $Global:MotivoRecomendacao) `
             -CaboLan $Global:CaboLan `
+            -ObservacoesTecnico ([string] $Global:ObservacoesTecnico) `
             -VistoriaGel $Global:VistoriaGel
         Write-Log "Resultado salvo: $caminho" -Nivel Ok
         $Global:FeitoSalvar          = $true

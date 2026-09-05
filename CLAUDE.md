@@ -362,7 +362,12 @@ conexão escolhida no combo é a **LAN**, aparece o card `cardCaboLan`
 JSON (`cabo_lan`, via `-CaboLan` em `New-ResultadoJson`/`Save-Diagnostico`)
 e vira uma linha "Cabo de rede (LAN)" no relatório
 (`Get-CaboLanTextoRelatorio`) →
-6. conclusão: **Salvar** / **Transmitir** / **Exportar relatório (PDF)** + checklist.
+6. conclusão: caixa livre **"Observações do técnico"** (`txtObsTecnico` →
+`$Global:ObservacoesTecnico`, opcional — o que o painel não mede: switch antigo
+segurando a placa LAN, ponto solto, tomada sem terra, acesso difícil…) → vai pro
+JSON (`observacoes_tecnico`, via `-ObservacoesTecnico`) e pro relatório
+("Observações do técnico" na conclusão / no bloco "Observações" do Painel de
+Medições). Depois: **Salvar** / **Transmitir** / **Exportar relatório (PDF)** + checklist.
 Os runspaces são `Start-TarefaRede` (`$Global:TarefaRedeState`, Fase 1/probe) e
 `Start-DiagnosticoAssincrono` (`$Global:DiagRunState`, Fase 2, com `-AoConcluir`).
 O `rede_local` entra no JSON de resultado (`New-ResultadoJson -FaseLocal`) e numa

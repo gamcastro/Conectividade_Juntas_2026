@@ -1509,6 +1509,15 @@
                                 <TextBlock x:Name="txtFimStatus" Margin="0,12,0,0" TextWrapping="Wrap"
                                            FontSize="12" Foreground="{DynamicResource Dicon.Text2}"/>
 
+                                <TextBlock Text="OBSERVA&#199;&#213;ES DO T&#201;CNICO (opcional)" FontFamily="Consolas"
+                                           FontSize="9" Foreground="{DynamicResource Dicon.Text3}" Margin="0,20,0,4"/>
+                                <TextBlock Text="Anote aqui o que o painel n&#227;o mede: ex.: a placa LAN ficou em 100 Mbps porque o cabo passa por um switch antigo; ponto de rede solto; tomada sem aterramento; acesso dif&#237;cil ao local; etc. Vai no relat&#243;rio."
+                                           TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource Dicon.Text3}"
+                                           Margin="0,0,0,4"/>
+                                <TextBox x:Name="txtObsTecnico" MinHeight="70" TextWrapping="Wrap"
+                                         AcceptsReturn="True" VerticalContentAlignment="Top"
+                                         VerticalScrollBarVisibility="Auto"/>
+
                                 <Border Style="{DynamicResource Faixa}" Margin="0,20,0,0">
                                     <StackPanel>
                                         <TextBlock Text="A&#199;&#213;ES" FontFamily="Consolas" FontSize="9"

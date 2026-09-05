@@ -323,16 +323,20 @@ try {
     if ($jeOn -and $jeOff) { Write-Host "[4c] selo 'rede da JE' aparece com IP 10.11.* e some fora dela" }
     else { Write-Host "    FALHA: selo rede JE (on=$jeOn off=$jeOff)"; $falhas++ }
 
-    # 4c-0d. reler SO o Wi-Fi (por card) preserva os dados ja coletados da LAN
-    $Global:FaseLocalPayload.Lan.ipv4 = '10.11.5.20' ; $Global:FaseLocalPayload.Lan.conectado = $true
-    $wifiConectadoAntes = $Global:FaseLocalSimulada.Wireless.conectado
+    # 4c-0d. QUALQUER ↻ de card rele as DUAS placas (LAN + Wi-Fi): o tecnico
+    # tira o cabo e clica no ↻ do card Wi-Fi -> a LAN "ao vivo" tem que
+    # atualizar tambem (senao o gate do Wi-Fi seguia travado -- bug de campo).
+    $lanOnAntes  = $Global:FaseLocalSimulada.Lan.conectado
+    $wifiOnAntes = $Global:FaseLocalSimulada.Wireless.conectado
+    $Global:FaseLocalSimulada.Lan.conectado      = $false   # cabo fora
     $Global:FaseLocalSimulada.Wireless.conectado = $true
-    Invoke-RelerAdaptador 'wifi'
+    Invoke-RelerAdaptador 'wifi'   # ↻ do card Wi-Fi
     Invoke-Pump
-    if ($Global:FaseLocalPayload.Lan.ipv4 -eq '10.11.5.20' -and [bool] $Global:FaseLocalPayload.Wireless.conectado) {
-        Write-Host "[4c] reler so o Wi-Fi por card: LAN mantem o IP coletado, Wi-Fi atualiza"
-    } else { Write-Host "    FALHA: reler Wi-Fi mexeu na LAN (lan.ip='$($Global:FaseLocalPayload.Lan.ipv4)' wifi.on=$($Global:FaseLocalPayload.Wireless.conectado))"; $falhas++ }
-    $Global:FaseLocalSimulada.Wireless.conectado = $wifiConectadoAntes
+    if (-not [bool] $Global:FaseLocalPayload.Lan.conectado -and [bool] $Global:FaseLocalPayload.Wireless.conectado) {
+        Write-Host "[4c] ↻ do card Wi-Fi rele as duas placas (LAN 'ao vivo' vira 'sem cabo')"
+    } else { Write-Host "    FALHA: ↻ do card Wi-Fi nao releu a LAN (lan.on=$($Global:FaseLocalPayload.Lan.conectado) wifi.on=$($Global:FaseLocalPayload.Wireless.conectado))"; $falhas++ }
+    $Global:FaseLocalSimulada.Lan.conectado      = $lanOnAntes
+    $Global:FaseLocalSimulada.Wireless.conectado = $wifiOnAntes
     $Global:FaseLocalPayload.Lan.ipv4 = $ipLanOrig
     Update-PainelMeios
 
@@ -630,9 +634,14 @@ try {
         Invoke-Pump ; Start-Sleep -Milliseconds 120
         if ("$($w.FindName('panelChkVpnGate').Visibility)" -eq 'Visible' -and $null -eq $Global:TarefaRedeState) { break }
     }
-    if ("$($w.FindName('panelChkVpnGate').Visibility)" -eq 'Visible' -and "$($w.FindName('btnChkVpnImpossivel').Visibility)" -eq 'Visible') {
-        Write-Host "[4g] Fase 2 sem VPN: aparece o gate + 'registrar sem a VPN'"
-    } else { Write-Host "    FALHA: gate de VPN nao apareceu (gate=$($w.FindName('panelChkVpnGate').Visibility))"; $falhas++ }
+    # chkVpnImpossivel TEM que reaparecer mesmo depois de um meio anterior com a
+    # VPN OK (que o esconde) -- senao o tecnico ve o botao "Registrar sem a VPN"
+    # mas nao tem o checkbox pra habilitar (bug de campo do James).
+    if ("$($w.FindName('panelChkVpnGate').Visibility)" -eq 'Visible' -and
+        "$($w.FindName('btnChkVpnImpossivel').Visibility)" -eq 'Visible' -and
+        "$($w.FindName('chkVpnImpossivel').Visibility)" -eq 'Visible') {
+        Write-Host "[4g] Fase 2 sem VPN: aparece o gate + checkbox + 'registrar sem a VPN' (mesmo apos meio com VPN ok)"
+    } else { Write-Host "    FALHA: gate de VPN nao apareceu completo (gate=$($w.FindName('panelChkVpnGate').Visibility) chk=$($w.FindName('chkVpnImpossivel').Visibility) btn=$($w.FindName('btnChkVpnImpossivel').Visibility))"; $falhas++ }
     $w.FindName('chkVpnImpossivel').IsChecked = $true ; Update-VpnImpossivel
     # [4g-2] chips de sugestao (+ "Outro") no card "nao consegui a VPN", mesmo
     # padrao do card "nao se aplica" (v0.6.92): 1 botao por Get-SugestoesVpnImpossivel + "Outro".
@@ -844,7 +853,9 @@ try {
     if ($Global:WizardStep -ne 6) { Write-Host "    FALHA: nao foi para o passo 6 com o motivo"; $falhas++ }
     else { Write-Host "[5c] passos 5->6->7 (com justificativa + motivo da recomendacao)" }
 
-    # 5d. passo 6: salva o resultado -> checklist "Salvar" fica verde, "Transmitir" habilita
+    # 5d. passo 6: campo "Observacoes do tecnico" (livre) + salva o resultado
+    $w.FindName('txtObsTecnico').Text = 'Placa LAN negociou 100 Mbps porque o cabo passa por um switch antigo; trocar por switch Gigabit.'
+    Invoke-Pump
     $antesJson = @(Get-ChildItem (Join-Path $Global:RaizApp 'resultados\pendentes') -Filter *.json -EA SilentlyContinue).Count
     Invoke-SalvarResultado
     $novos = @(Get-ChildItem (Join-Path $Global:RaizApp 'resultados\pendentes') -Filter *.json -EA SilentlyContinue)
@@ -878,6 +889,9 @@ try {
             $htmlRel -match 'Conex&atilde;o recomendada' -and $htmlRel -match 'Conclus&atilde;o do diagn&oacute;stico') {
             Write-Host "[5d] relatorio HTML: painel de viabilidade (paisagem) + testes por meio + conclusao"
         } else { Write-Host "    FALHA: relatorio HTML sem o painel/estrutura nova"; $falhas++ }
+        if ("$($doc.observacoes_tecnico)" -match 'switch antigo' -and $htmlRel -match 'Observa&ccedil;&otilde;es do t&eacute;cnico' -and $htmlRel -match 'switch antigo') {
+            Write-Host "[5d] JSON + relatorio trazem as 'Observacoes do tecnico' (texto livre do passo 6)"
+        } else { Write-Host "    FALHA: observacoes_tecnico no JSON/relatorio (json='$($doc.observacoes_tecnico)' htmlOk=$($htmlRel -match 'Observa&ccedil;&otilde;es do t&eacute;cnico'))"; $falhas++ }
     }
     $vok = [char]0x2713
     if ($Global:FeitoSalvar -and "$($w.FindName('chkFimSalvar').Text)" -eq $vok -and $w.FindName('btnTransmitirResultado').IsEnabled -and "$($w.FindName('chkFimTransmitir').Text)" -ne $vok) {

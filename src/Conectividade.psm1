@@ -38,6 +38,6 @@ foreach ($rel in $ordem) {
 
 # Versao do DICON. Fonte unica: barra lateral + login da GUI, JSON de resultado
 # e relatorio PDF. Manter em sincronia com ModuleVersion em Conectividade.psd1.
-$Global:VersaoApp = '0.7.12'
+$Global:VersaoApp = '0.7.13'
 
 Export-ModuleMember -Function '*-*'
