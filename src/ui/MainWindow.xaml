@@ -1257,59 +1257,6 @@
                                        FontFamily="Consolas" FontSize="11" Visibility="Collapsed"
                                        Foreground="{DynamicResource Dicon.Ressalva}"/>
 
-                            <Border Style="{DynamicResource Cartao}" Padding="14,12" Margin="0,0,0,12">
-                                <StackPanel>
-                                    <TextBlock Text="COM A VPN (bateria da JE)" FontFamily="Consolas" FontSize="10"
-                                               FontWeight="Bold" Foreground="{DynamicResource Dicon.Text2}" Margin="0,0,0,8"/>
-                                    <DataGrid x:Name="dgAvaliacaoVpn" Style="{DynamicResource GridMetricas}"
-                                              MaxHeight="300" RowHeight="40" BorderThickness="0"
-                                              VerticalScrollBarVisibility="Auto">
-                                        <DataGrid.Columns>
-                                            <DataGridTemplateColumn Header="" Width="6" CanUserResize="False" IsReadOnly="True">
-                                                <DataGridTemplateColumn.CellTemplate>
-                                                    <DataTemplate>
-                                                        <Border Background="{Binding CorFinal}" CornerRadius="2" Margin="0,3"/>
-                                                    </DataTemplate>
-                                                </DataGridTemplateColumn.CellTemplate>
-                                            </DataGridTemplateColumn>
-                                            <DataGridTextColumn Header="M&#233;trica" Binding="{Binding Rotulo}"
-                                                                IsReadOnly="True" Width="140"/>
-                                            <DataGridTextColumn Header="Valor medido" Binding="{Binding ValorTexto}"
-                                                                IsReadOnly="True" Width="110" FontFamily="Consolas"/>
-                                            <DataGridTextColumn x:Name="colVpnFaixa" Header="Faixa aceit&#225;vel" Binding="{Binding Regra}"
-                                                                IsReadOnly="True" Width="250" FontFamily="Consolas"/>
-                                            <DataGridTemplateColumn x:Name="colVpnSugerida" Header="Sugerida" Width="90" IsReadOnly="True">
-                                                <DataGridTemplateColumn.CellTemplate>
-                                                    <DataTemplate>
-                                                        <TextBlock Text="{Binding ClasseAutomatica}"
-                                                                   Style="{DynamicResource ChipVeredito}"/>
-                                                    </DataTemplate>
-                                                </DataGridTemplateColumn.CellTemplate>
-                                            </DataGridTemplateColumn>
-                                            <DataGridTemplateColumn x:Name="colVpnClasse" Header="Classifica&#231;&#227;o" Width="150">
-                                                <DataGridTemplateColumn.CellTemplate>
-                                                    <DataTemplate>
-                                                        <ComboBox Margin="2" VerticalContentAlignment="Center"
-                                                                  ItemsSource="{StaticResource classesMetrica}"
-                                                                  SelectedItem="{Binding ClasseFinal, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
-                                                    </DataTemplate>
-                                                </DataGridTemplateColumn.CellTemplate>
-                                            </DataGridTemplateColumn>
-                                            <DataGridTemplateColumn x:Name="colVpnMotivo" Header="Motivo do ajuste" Width="*">
-                                                <DataGridTemplateColumn.CellTemplate>
-                                                    <DataTemplate>
-                                                        <TextBox Margin="2" TextWrapping="Wrap" AcceptsReturn="True"
-                                                                 VerticalContentAlignment="Center"
-                                                                 Visibility="{Binding Ajustada, Converter={StaticResource boolVis}}"
-                                                                 Text="{Binding Justificativa, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
-                                                    </DataTemplate>
-                                                </DataGridTemplateColumn.CellTemplate>
-                                            </DataGridTemplateColumn>
-                                        </DataGrid.Columns>
-                                    </DataGrid>
-                                </StackPanel>
-                            </Border>
-
                             <Border x:Name="cardAvaliacaoRl" Style="{DynamicResource Cartao}" Padding="14,12"
                                     Margin="0,0,0,12" Visibility="Collapsed">
                                 <StackPanel>
@@ -1366,14 +1313,67 @@
                                     </DataGrid>
                                 </StackPanel>
                             </Border>
+
+                            <Border Style="{DynamicResource Cartao}" Padding="14,12" Margin="0,0,0,12">
+                                <StackPanel>
+                                    <TextBlock Text="COM A VPN (bateria da JE)" FontFamily="Consolas" FontSize="10"
+                                               FontWeight="Bold" Foreground="{DynamicResource Dicon.Text2}" Margin="0,0,0,8"/>
+                                    <DataGrid x:Name="dgAvaliacaoVpn" Style="{DynamicResource GridMetricas}"
+                                              MaxHeight="300" RowHeight="40" BorderThickness="0"
+                                              VerticalScrollBarVisibility="Auto">
+                                        <DataGrid.Columns>
+                                            <DataGridTemplateColumn Header="" Width="6" CanUserResize="False" IsReadOnly="True">
+                                                <DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <Border Background="{Binding CorFinal}" CornerRadius="2" Margin="0,3"/>
+                                                    </DataTemplate>
+                                                </DataGridTemplateColumn.CellTemplate>
+                                            </DataGridTemplateColumn>
+                                            <DataGridTextColumn Header="M&#233;trica" Binding="{Binding Rotulo}"
+                                                                IsReadOnly="True" Width="140"/>
+                                            <DataGridTextColumn Header="Valor medido" Binding="{Binding ValorTexto}"
+                                                                IsReadOnly="True" Width="110" FontFamily="Consolas"/>
+                                            <DataGridTextColumn x:Name="colVpnFaixa" Header="Faixa aceit&#225;vel" Binding="{Binding Regra}"
+                                                                IsReadOnly="True" Width="250" FontFamily="Consolas"/>
+                                            <DataGridTemplateColumn x:Name="colVpnSugerida" Header="Sugerida" Width="90" IsReadOnly="True">
+                                                <DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock Text="{Binding ClasseAutomatica}"
+                                                                   Style="{DynamicResource ChipVeredito}"/>
+                                                    </DataTemplate>
+                                                </DataGridTemplateColumn.CellTemplate>
+                                            </DataGridTemplateColumn>
+                                            <DataGridTemplateColumn x:Name="colVpnClasse" Header="Classifica&#231;&#227;o" Width="150">
+                                                <DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <ComboBox Margin="2" VerticalContentAlignment="Center"
+                                                                  ItemsSource="{StaticResource classesMetrica}"
+                                                                  SelectedItem="{Binding ClasseFinal, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                                    </DataTemplate>
+                                                </DataGridTemplateColumn.CellTemplate>
+                                            </DataGridTemplateColumn>
+                                            <DataGridTemplateColumn x:Name="colVpnMotivo" Header="Motivo do ajuste" Width="*">
+                                                <DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <TextBox Margin="2" TextWrapping="Wrap" AcceptsReturn="True"
+                                                                 VerticalContentAlignment="Center"
+                                                                 Visibility="{Binding Ajustada, Converter={StaticResource boolVis}}"
+                                                                 Text="{Binding Justificativa, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                                    </DataTemplate>
+                                                </DataGridTemplateColumn.CellTemplate>
+                                            </DataGridTemplateColumn>
+                                        </DataGrid.Columns>
+                                    </DataGrid>
+                                </StackPanel>
+                            </Border>
                         </StackPanel>
                     </ScrollViewer>
 
-                    <!-- PASSO 5: recomendacao final -->
+                    <!-- PASSO 5: recomendacao final (completo) / sugestao de conexao (medicao|referencia) -->
                     <ScrollViewer x:Name="stepDecisao" Visibility="Collapsed"
                                   VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">
                         <StackPanel>
-                            <Border Style="{DynamicResource Cartao}" Padding="16,14">
+                            <Border x:Name="cardDecisaoViavel" Style="{DynamicResource Cartao}" Padding="16,14">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto"/>
@@ -1409,13 +1409,13 @@
                                              Visibility="Collapsed"/>
                                 </Grid>
                             </Border>
-                            <TextBlock Style="{DynamicResource SubtituloTela}" Margin="0,12,0,0"
+                            <TextBlock x:Name="txtDecisaoFinalSub" Style="{DynamicResource SubtituloTela}" Margin="0,12,0,0"
                                        Text="A recomenda&#231;&#227;o final vem do pior caso entre as m&#233;tricas. Voc&#234; pode sobrescrev&#234;-la aqui &#8212; nesse caso, informe o motivo."/>
 
                             <!-- conexao recomendada para o local (multi-meio) -->
                             <Border Style="{DynamicResource Cartao}" Padding="16,14" Margin="0,16,0,0">
                                 <StackPanel>
-                                    <TextBlock Text="CONEX&#195;O RECOMENDADA PARA ESTE LOCAL"
+                                    <TextBlock x:Name="txtTituloConexaoRec" Text="CONEX&#195;O RECOMENDADA PARA ESTE LOCAL"
                                                FontFamily="Consolas" FontSize="9"
                                                Foreground="{DynamicResource Dicon.Text3}"/>
                                     <ComboBox x:Name="cboConexaoRec" Width="380" MinHeight="32" Margin="0,6,0,0"
@@ -1423,7 +1423,7 @@
                                     <TextBlock x:Name="lblRecContexto" Margin="0,8,0,0" TextWrapping="Wrap"
                                                FontFamily="Consolas" FontSize="11"
                                                Foreground="{DynamicResource Dicon.Text2}"/>
-                                    <TextBlock Text="Motivo da recomenda&#231;&#227;o (obrigat&#243;rio):" Margin="0,12,0,4"
+                                    <TextBlock x:Name="lblMotivoRec" Text="Motivo da recomenda&#231;&#227;o (obrigat&#243;rio):" Margin="0,12,0,4"
                                                Foreground="{DynamicResource Dicon.Text3}" FontSize="12"/>
                                     <TextBox x:Name="txtMotivoRec" MinHeight="60" TextWrapping="Wrap"
                                              AcceptsReturn="True" VerticalContentAlignment="Top"

@@ -867,13 +867,15 @@ try {
     Remove-VistoriaGel -LocalId 'ZE99-TESTE-PRINCIPAL'
     $Global:LocalDetalheAtual = $null
 
-    # m. modo de avaliacao 'medicao' (padrao de fabrica): assistente de 5 passos,
-    #    sem veredito/faixa/classificacao; relatorio = "Painel de Medicoes".
+    # m. modo de avaliacao 'medicao' (padrao de fabrica): assistente de 6 passos
+    #    (agora inclui o passo exclusivo "Sugestao de conexao", so' sem
+    #    veredito/faixa/classificacao no passo 4; relatorio = "Painel de Medicoes".
     $Global:ModoAvaliacaoOverride = 'medicao'
     Set-ModoAssistente
-    $passo5 = ($Global:WizardNPassos -eq 5) -and ($Global:WizardPassos -notcontains 'stepDecisao')
-    if ($passo5) { Write-Host "[m] modo medicao: assistente de 5 passos (pula a decisao)" }
-    else { Write-Host "    FALHA: assistente deveria ter 5 passos (n=$($Global:WizardNPassos) passos=$($Global:WizardPassos -join ','))"; $falhas++ }
+    $passo6 = ($Global:WizardNPassos -eq 6) -and ($Global:WizardPassos -contains 'stepDecisao') -and
+              ($Global:WizardTitulos[4] -match 'Sugest')
+    if ($passo6) { Write-Host "[m] modo medicao: assistente de 6 passos, passo 5 = '$($Global:WizardTitulos[4])'" }
+    else { Write-Host "    FALHA: assistente deveria ter 6 passos com 'Sugestao...' no passo 5 (n=$($Global:WizardNPassos) titulos=$($Global:WizardTitulos -join ','))"; $falhas++ }
 
     Open-DiagnosticoLimpo
     $cboJm = $w.FindName('cboJunta'); if ($cboJm.Items.Count) { $cboJm.SelectedIndex = 0 }
@@ -894,29 +896,96 @@ try {
     if ($colClasse -eq 'Collapsed' -and $colFaixaM -eq 'Collapsed' -and $ver0 -eq '') {
         Write-Host "[m] passo 4: sem colunas de faixa/classificacao, sem veredito na linha"
     } else { Write-Host "    FALHA: passo 4 (colClasse=$colClasse colFaixa=$colFaixaM ver='$ver0')"; $falhas++ }
-    # avanca do stepResultado -> deve cair no stepFim (nao stepDecisao)
-    Invoke-WizardProximo
-    if ($Global:WizardPassos[$Global:WizardStep - 1] -eq 'stepFim') { Write-Host "[m] passo 4 -> conclusao (pula a decisao)" }
-    else { Write-Host "    FALHA: nao pulou a decisao (step=$($Global:WizardStep) painel=$($Global:WizardPassos[$Global:WizardStep-1]))"; $falhas++ }
 
-    # modo 'referencia': aparece a faixa, mas nao a classificacao
+    # modo 'referencia': aparece a faixa, mas nao a classificacao. Feito AQUI
+    # (ainda no passo 4, antes de avancar pro passo de sugestao) porque
+    # Show-PainelResultado recalcula o banner informativo do passo 4 chamando
+    # Get-RecomendacaoLocal, que reescreve $Global:RecomendacaoLocal com o
+    # calculo automatico -- se rodasse depois do ajuste manual do tecnico
+    # (mais abaixo), apagaria a escolha dele antes do JSON ser montado.
     $Global:ModoAvaliacaoOverride = 'referencia'
     Show-PainelResultado -Payload ([pscustomobject]@{ Ambiente = (Get-EstadoAmbiente); Metricas = $met; Decisao = $dec; Local = $cboLm.SelectedItem.Dados })
     Invoke-Pump
     if ("$($w.FindName('colVpnFaixa').Visibility)" -eq 'Visible' -and "$($w.FindName('colVpnClasse').Visibility)" -eq 'Collapsed') {
         Write-Host "[m] modo referencia: faixa visivel, classificacao oculta"
     } else { Write-Host "    FALHA: modo referencia (faixa=$($w.FindName('colVpnFaixa').Visibility) classe=$($w.FindName('colVpnClasse').Visibility))"; $falhas++ }
-
-    # JSON + relatorio no modo medicao
     $Global:ModoAvaliacaoOverride = 'medicao'
-    $recM = Get-ConexaoRecomendada @($Global:Medicoes) -Modo medicao
+
+    # 2o meio (Wi-Fi, download maior que o da LAN) para testar o ajuste manual
+    # do combo no novo passo "Sugestao de conexao".
+    $Global:Medicoes += [pscustomobject]@{
+        meio = 'wifi_local'; operadora = ''; rotulo = 'Wi-Fi do proprio local'; nao_aplicavel = $false
+        fase_local = $Global:FaseLocalPayload; rede_local_ok = $true; rede_local_download = 700
+        vpn_conectou = $true; vpn_motivo = ''; vpn_download = 120; metricas = $met; fase2_ok = $true
+        decisao = $dec; avaliacoes = @(); veredito = 'medido'; quando = (Get-Date).ToString('o')
+    }
+
+    # avanca do stepResultado -> agora vai sempre para stepDecisao, mesmo fora
+    # do modo completo (o passo "pula a decisao" deixou de existir).
+    Invoke-WizardProximo
+    if ($Global:WizardPassos[$Global:WizardStep - 1] -eq 'stepDecisao') {
+        Write-Host "[m] passo 4 -> passo exclusivo de sugestao de conexao (nao pula mais)"
+    } else { Write-Host "    FALHA: nao chegou no passo de sugestao (step=$($Global:WizardStep) painel=$($Global:WizardPassos[$Global:WizardStep-1]))"; $falhas++ }
+
+    # cartao de viabilidade (RECOMENDACAO FINAL / cboDecisaoFinal) fica
+    # escondido fora do modo completo; so o cartao de sugestao aparece, com
+    # titulo/rotulo do motivo adaptados (motivo vira opcional).
+    if ("$($w.FindName('cardDecisaoViavel').Visibility)" -eq 'Collapsed' -and
+        "$($w.FindName('txtTituloConexaoRec').Text)" -match 'SUGEST' -and
+        "$($w.FindName('lblMotivoRec').Text)" -match 'opcional') {
+        Write-Host "[m] passo de sugestao: sem cartao de viabilidade; titulo/rotulo do motivo adaptados"
+    } else {
+        Write-Host "    FALHA: passo de sugestao nao adaptou o visual (cardViavel=$($w.FindName('cardDecisaoViavel').Visibility) titulo='$($w.FindName('txtTituloConexaoRec').Text)' motivo='$($w.FindName('lblMotivoRec').Text)')"
+        $falhas++
+    }
+
+    # combo ja vem pre-selecionado com a sugestao CALCULADA (maior download: Wi-Fi 120 > LAN 90)
+    $cboRec = $w.FindName('cboConexaoRec')
+    if ("$($cboRec.SelectedItem)" -match 'Wi-Fi') {
+        Write-Host "[m] combo pre-selecionado com a sugestao calculada: '$($cboRec.SelectedItem)'"
+    } else { Write-Host "    FALHA: pre-selecao nao bateu com o calculo (sel='$($cboRec.SelectedItem)')"; $falhas++ }
+
+    # frase de contexto sem linguagem de veredito/viabilidade
+    if ("$($w.FindName('lblRecContexto').Text)" -match 'Sugest' -and "$($w.FindName('lblRecContexto').Text)" -notmatch 'Veredito') {
+        Write-Host "[m] frase de contexto do passo de sugestao sem linguagem de veredito"
+    } else { Write-Host "    FALHA: frase de contexto (txt='$($w.FindName('lblRecContexto').Text)')"; $falhas++ }
+
+    # sem NENHUM meio selecionado, o gate continua bloqueando (isso nao e opcional)
+    $cboRec.SelectedItem = $null
+    if (-not (Test-RecomendacaoValida)) { Write-Host "[m] sem selecionar um meio, o gate continua bloqueando (motivo opcional, selecao nao)" }
+    else { Write-Host "    FALHA: gate deveria bloquear sem nenhum meio selecionado"; $falhas++ }
+
+    # tecnico AJUSTA manualmente para a LAN (download menor, mas decide usar
+    # mesmo assim) -- exatamente o pedido: "calculado pela ferramenta, mas
+    # pode ser ajustado pelo tecnico". Avanca SEM motivo -- opcional fora do
+    # modo completo, nao deve bloquear.
+    $cboRec.SelectedItem = 'Rede cabeada (LAN)'
+    Update-ContextoRecomendacao
+    $w.FindName('txtMotivoRec').Text = ''
+    Invoke-WizardProximo
+    if ($Global:WizardPassos[$Global:WizardStep - 1] -eq 'stepFim' -and $Global:RecomendacaoLocal.meio -eq 'lan') {
+        Write-Host "[m] avancou sem motivo (opcional) e gravou o ajuste manual (LAN, nao a sugestao automatica)"
+    } else {
+        Write-Host "    FALHA: ajuste manual nao avancou/gravou (step=$($Global:WizardStep) rec=$($Global:RecomendacaoLocal.meio))"
+        $falhas++
+    }
+
+    # JSON + relatorio no modo medicao -- usa o AJUSTE MANUAL do tecnico
+    # ($Global:RecomendacaoLocal = LAN, gravado pelo passo de sugestao acima),
+    # nao o calculo automatico (que teria escolhido o Wi-Fi, maior download).
     $docM = New-ResultadoJson -Ambiente (Get-EstadoAmbiente) -Metricas $met -Decisao $dec `
         -Local $cboLm.SelectedItem.Dados -TecnicoNome 'TESTE' -FaseLocal $Global:FaseLocalPayload `
-        -Medicoes $Global:Medicoes -ConexaoRecomendada $recM
+        -Medicoes $Global:Medicoes -ConexaoRecomendada $Global:RecomendacaoLocal -MotivoRecomendacao ([string] $Global:MotivoRecomendacao)
     $htmlM = New-RelatorioHtml -Resultado $docM
     if ($docM.modo_avaliacao -eq 'medicao' -and $htmlM -match 'Painel de Medi' -and $htmlM -notmatch 'Painel de Viabilidade') {
         Write-Host "[m] JSON traz modo_avaliacao='medicao'; relatorio = Painel de Medicoes (sem Painel de Viabilidade)"
     } else { Write-Host "    FALHA: json/relatorio modo medicao (modo=$($docM.modo_avaliacao))"; $falhas++ }
+    if ($docM.conexao_recomendada.meio -eq 'lan' -and $docM.conexao_recomendada.veredito -eq 'medido' -and -not $docM.conexao_recomendada.motivo) {
+        Write-Host "[m] JSON.conexao_recomendada reflete o ajuste manual do tecnico (LAN, sem juizo de viabilidade, motivo vazio)"
+    } else {
+        Write-Host "    FALHA: conexao_recomendada no JSON (meio=$($docM.conexao_recomendada.meio) veredito=$($docM.conexao_recomendada.veredito) motivo='$($docM.conexao_recomendada.motivo)')"
+        $falhas++
+    }
 
     $Global:ModoAvaliacaoOverride = 'completo'   # [6]..[9] cobrem o modo completo
     Reset-Medicoes

@@ -95,30 +95,22 @@ $Global:WizardTitulos = @(
 )
 $Global:WizardNPassos = $Global:WizardPassos.Count
 
-# Ajusta o assistente ao modo de avaliacao: 'completo' = 6 passos (com o passo de
-# decisao / recomendacao); 'medicao'/'referencia' = 5 passos (pula a decisao).
+# Ajusta o assistente ao modo de avaliacao: todos os modos tem os mesmos 6
+# passos agora (inclui sempre o passo de conexao recomendada/sugerida -- so
+# o titulo e o conteudo do passo mudam por modo, ver Update-Passo6Recomendacao).
 # Chamado ao abrir o assistente.
 function Set-ModoAssistente {
-    if (Test-ModoCompleto) {
-        $Global:WizardPassos  = @('stepInfo', 'stepJunta', 'stepLocal', 'stepResultado', 'stepDecisao', 'stepFim')
-        $Global:WizardTitulos = @(
-            ('Informa' + [char]0x00E7 + [char]0x00E3 + 'o do teste')
-            'Junta Especial'
-            'Meios de conex' + [char]0x00E3 + 'o'
-            ('Resultado por m' + [char]0x00E9 + 'trica')
-            ('Recomenda' + [char]0x00E7 + [char]0x00E3 + 'o final')
-            ('Conclus' + [char]0x00E3 + 'o')
-        )
-    } else {
-        $Global:WizardPassos  = @('stepInfo', 'stepJunta', 'stepLocal', 'stepResultado', 'stepFim')
-        $Global:WizardTitulos = @(
-            ('Informa' + [char]0x00E7 + [char]0x00E3 + 'o do teste')
-            'Junta Especial'
-            'Meios de conex' + [char]0x00E3 + 'o'
-            ('Medi' + [char]0x00E7 + [char]0x00F5 + 'es por meio')
-            ('Conclus' + [char]0x00E3 + 'o')
-        )
-    }
+    $Global:WizardPassos = @('stepInfo', 'stepJunta', 'stepLocal', 'stepResultado', 'stepDecisao', 'stepFim')
+    $passo4 = if (Test-ModoCompleto) { 'Resultado por m' + [char]0x00E9 + 'trica' } else { 'Medi' + [char]0x00E7 + [char]0x00F5 + 'es por meio' }
+    $passo5 = if (Test-ModoCompleto) { 'Recomenda' + [char]0x00E7 + [char]0x00E3 + 'o final' } else { 'Sugest' + [char]0x00E3 + 'o de conex' + [char]0x00E3 + 'o' }
+    $Global:WizardTitulos = @(
+        ('Informa' + [char]0x00E7 + [char]0x00E3 + 'o do teste')
+        'Junta Especial'
+        'Meios de conex' + [char]0x00E3 + 'o'
+        $passo4
+        $passo5
+        ('Conclus' + [char]0x00E3 + 'o')
+    )
     $Global:WizardNPassos = $Global:WizardPassos.Count
 }
 
@@ -1212,7 +1204,7 @@ function Invoke-WizardProximo {
                 $falta = Get-JustificativasFaltando -MetricasApenas
                 if ($falta.Count) { Write-Log ('Justificativa obrigatoria em: {0}' -f ($falta -join ', ')) -Nivel Erro; return }
             }
-            & $ir   # completo -> stepDecisao; medicao/referencia -> stepFim
+            & $ir   # sempre vai para stepDecisao (conexao recomendada/sugerida)
         }
         'stepDecisao' {
             $falta = Get-JustificativasFaltando
@@ -1257,7 +1249,10 @@ function Get-JustificativasFaltando {
             }
         }
     }
-    if (-not $MetricasApenas) {
+    # o cartao "RECOMENDACAO FINAL" (cboDecisaoFinal) so existe no modo
+    # completo -- fora dele fica escondido e pode reter selecao de uma
+    # rodada anterior em modo completo; nao deixa isso bloquear o avanco aqui.
+    if (-not $MetricasApenas -and (Test-ModoCompleto)) {
         $decFinal = [string] $w.FindName('cboDecisaoFinal').SelectedItem
         $justDec  = [string] $w.FindName('txtJustDecisao').Text
         if ($decFinal -and $decFinal -ne $Global:DecisaoRecalculada -and [string]::IsNullOrWhiteSpace($justDec)) {
@@ -3529,13 +3524,21 @@ function Get-TextoMbps {
     try { return ('{0:N1} Mbps' -f [double] $Valor) } catch { return "$Valor" }
 }
 
-# Itens do combo "Conexao recomendada" (passo 6): os meios que passaram nas
-# duas checagens (Rede Local + VPN + Fase 2); no fallback, os que ao menos
-# rodaram a Rede Local. Sempre com a opcao "Nenhuma" ao final.
+# Itens do combo "Conexao recomendada/sugerida" (passo 6). Modo completo: os
+# meios que passaram nas duas checagens (Rede Local + VPN + Fase 2); no
+# fallback, os que ao menos rodaram a Rede Local. Nos outros modos, qualquer
+# meio testado entra na comparacao (mesmo universo que Get-ConexaoRecomendada
+# usa pro calculo automatico -- sem exigir bateria fechada, senao a propria
+# sugestao calculada podia nem aparecer como opcao). Sempre com "Nenhuma" ao final.
 function Get-OpcoesRecomendacao {
     $meds = @($Global:Medicoes | Where-Object { $_ -and -not $_.nao_aplicavel -and $_.veredito -ne 'nao_testado' })
-    $cand = @($meds | Where-Object { $_.rede_local_ok -and $_.vpn_conectou -and $_.fase2_ok })
-    if (-not $cand.Count) { $cand = @($meds | Where-Object { $_.rede_local_ok }) }
+    $cand = if (Test-ModoCompleto) {
+        $c = @($meds | Where-Object { $_.rede_local_ok -and $_.vpn_conectou -and $_.fase2_ok })
+        if (-not $c.Count) { $c = @($meds | Where-Object { $_.rede_local_ok }) }
+        $c
+    } else {
+        $meds
+    }
     $rotulos = @($cand | ForEach-Object { [string] $_.rotulo } | Select-Object -Unique)
     return @($rotulos + (Get-RotuloMeio 'nenhuma' ''))
 }
@@ -3543,19 +3546,38 @@ function Get-OpcoesRecomendacao {
 # Reconstroi o objeto de recomendacao a partir do rotulo escolhido no combo.
 function Resolve-RecomendacaoSelecionada {
     param([string] $Rotulo)
+    $modoCompleto = Test-ModoCompleto
     $nenhuma = Get-RotuloMeio 'nenhuma' ''
-    if (-not $Rotulo -or $Rotulo -eq $nenhuma) {
-        return [pscustomobject]@{
-            meio = 'nenhuma'; operadora = ''; rotulo = $nenhuma
-            veredito = 'inviavel'; provisoria = $false; base = 'nenhuma'
-        }
+    # "nenhuma"/sem medicao correspondente: no modo completo o local fica
+    # inviavel; nos outros, e' so a ausencia de sugestao (sem juizo).
+    $semCandidato = [pscustomobject]@{
+        meio = 'nenhuma'; operadora = ''; rotulo = $nenhuma
+        veredito   = if ($modoCompleto) { 'inviavel' } else { 'medido' }
+        provisoria = $false; base = 'nenhuma'
+        download_mbps = $null; informativo = (-not $modoCompleto)
     }
+    if (-not $Rotulo -or $Rotulo -eq $nenhuma) { return $semCandidato }
     $med = @($Global:Medicoes | Where-Object { $_ -and -not $_.nao_aplicavel -and [string] $_.rotulo -eq $Rotulo }) |
         Select-Object -First 1
     if (-not $med) {
         if ($Global:RecomendacaoLocal) { return $Global:RecomendacaoLocal }
-        return [pscustomobject]@{ meio = 'nenhuma'; operadora = ''; rotulo = $nenhuma
-            veredito = 'inviavel'; provisoria = $false; base = 'nenhuma' }
+        return $semCandidato
+    }
+    if (-not $modoCompleto) {
+        # mesmo shape que Get-ConexaoRecomendada -Modo medicao|referencia ja
+        # produz para o calculo automatico (New-ResultadoJson espera esses
+        # mesmos campos) -- sem juizo de viabilidade.
+        $comVpn = ($null -ne $med.vpn_download)
+        return [pscustomobject]@{
+            meio          = [string] $med.meio
+            operadora     = [string] $med.operadora
+            rotulo        = [string] $med.rotulo
+            veredito      = 'medido'
+            provisoria    = $false
+            base          = if ($comVpn) { 'vpn' } else { 'rede_local' }
+            download_mbps = if ($comVpn) { $med.vpn_download } else { $med.rede_local_download }
+            informativo   = $true
+        }
     }
     $fechouVpn = [bool] $med.vpn_conectou -and [bool] $med.fase2_ok
     [pscustomobject]@{
@@ -3573,6 +3595,18 @@ function Resolve-RecomendacaoSelecionada {
 function Update-Passo6Recomendacao {
     $w = $Global:JanelaPrincipal
     if (-not $w) { return }
+
+    # cartao de viabilidade (RECOMENDACAO FINAL / cboDecisaoFinal) so existe no
+    # modo completo; nos outros, so o cartao de conexao recomendada/sugerida
+    # aparece, com titulo e rotulo do motivo adaptados (motivo vira opcional).
+    $modoCompleto = Test-ModoCompleto
+    foreach ($n in 'cardDecisaoViavel', 'txtDecisaoFinalSub') {
+        $c = $w.FindName($n); if ($c) { $c.Visibility = if ($modoCompleto) { 'Visible' } else { 'Collapsed' } }
+    }
+    $tt = $w.FindName('txtTituloConexaoRec')
+    if ($tt) { $tt.Text = if ($modoCompleto) { 'CONEX' + [char]0x00C3 + 'O RECOMENDADA PARA ESTE LOCAL' } else { 'SUGEST' + [char]0x00C3 + 'O DE CONEX' + [char]0x00C3 + 'O PARA ESTE LOCAL' } }
+    $lm = $w.FindName('lblMotivoRec')
+    if ($lm) { $lm.Text = if ($modoCompleto) { 'Motivo da recomenda' + [char]0x00E7 + [char]0x00E3 + 'o (obrigat' + [char]0x00F3 + 'rio):' } else { 'Motivo do ajuste (opcional):' } }
 
     Get-RecomendacaoLocal | Out-Null
     $rec  = $Global:RecomendacaoLocal
@@ -3592,7 +3626,9 @@ function Update-Passo6Recomendacao {
     Update-TabelaMedicoes
 }
 
-# Frase abaixo do combo: de onde veio a sugestao e qual o veredito resultante.
+# Frase abaixo do combo: de onde veio a sugestao. No modo completo, tambem o
+# veredito de viabilidade resultante; nos outros modos, so o download que
+# embasou a sugestao (sem juizo de viabilidade).
 function Update-ContextoRecomendacao {
     $w = $Global:JanelaPrincipal
     if (-not $w) { return }
@@ -3600,6 +3636,17 @@ function Update-ContextoRecomendacao {
     $obj = Resolve-RecomendacaoSelecionada -Rotulo $sel
     $lbl = $w.FindName('lblRecContexto')
     if (-not $lbl) { return }
+    if (-not (Test-ModoCompleto)) {
+        if (-not $obj -or $obj.meio -eq 'nenhuma') {
+            $lbl.Text = ('Nenhuma medi' + [char]0x00E7 + [char]0x00E3 + 'o v' + [char]0x00E1 + 'lida para comparar ainda.')
+        } else {
+            $dl = if ($null -ne $obj.download_mbps) {
+                (' - maior download {0:N1} Mbps{1}' -f [double] $obj.download_mbps, $(if ($obj.base -eq 'vpn') { ' pela VPN' } else { ' na rede local' }))
+            } else { '' }
+            $lbl.Text = ('Sugest' + [char]0x00E3 + 'o pelo maior download medido{0}. (informativo, sem avalia' + [char]0x00E7 + [char]0x00E3 + 'o de viabilidade)') -f $dl
+        }
+        return
+    }
     $base = switch ($obj.base) {
         'vpn'        { 'passou na checagem de Rede Local e na VPN' }
         'rede_local' { 'PROVISORIA - nenhum meio fechou a VPN; baseada so no teste de Rede Local (local fica INVIAVEL)' }
@@ -3630,8 +3677,10 @@ function Update-TabelaMedicoes {
     $w.FindName('dgMedicoes').ItemsSource = $linhas
 }
 
-# Gate do passo 6 -> 7: exige a escolha da conexao recomendada e o motivo
-# (obrigatorio por enquanto). Grava a escolha em $Global:RecomendacaoLocal.
+# Gate do passo 6 -> 7: exige a escolha da conexao recomendada/sugerida
+# sempre; o motivo so e' obrigatorio no modo completo (nos outros e' so uma
+# sugestao informativa, sem juizo de viabilidade que precise ser justificado).
+# Grava a escolha em $Global:RecomendacaoLocal.
 function Test-RecomendacaoValida {
     $w = $Global:JanelaPrincipal
     if (-not @($Global:Medicoes | Where-Object { $_ }).Count) {
@@ -3644,7 +3693,7 @@ function Test-RecomendacaoValida {
         return $false
     }
     $motivo = ([string] $w.FindName('txtMotivoRec').Text).Trim()
-    if (-not $motivo) {
+    if (-not $motivo -and (Test-ModoCompleto)) {
         Write-Log 'Informe o motivo da recomendacao (obrigatorio).' -Nivel Erro
         return $false
     }
@@ -3772,7 +3821,7 @@ function Update-ResumoFim {
         $txt += "`n" + $rot + [string] $rec.rotulo
         if ($modoCompleto -and $rec.provisoria) { $txt += '  (provisoria - nenhum meio fechou a VPN)' }
         if (-not $modoCompleto) { $txt += '  (informativo - sem avaliacao de viabilidade)' }
-        if ($modoCompleto -and $Global:MotivoRecomendacao) { $txt += "`nMotivo: " + [string] $Global:MotivoRecomendacao }
+        if ($Global:MotivoRecomendacao) { $txt += "`nMotivo: " + [string] $Global:MotivoRecomendacao }
     }
     $w.FindName('txtFimLocal').Text = $txt
     $ver = $w.FindName('txtFimVeredito')

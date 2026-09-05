@@ -208,19 +208,22 @@ com link e imagem do Google Maps; a chave da **Maps Static API** fica em
 e embutida como `data:` URI, então a chave não vai no HTML/PDF.
 
 ## Assistente de diagnóstico (GUI)
-A tela de Diagnóstico é um **assistente de 5 ou 6 passos** (`viewDiag` com os
-painéis `stepInfo/stepJunta/stepLocal/stepResultado/stepDecisao/stepFim` alternados
-por `Visibility`; `$Global:WizardPassos`/`$Global:WizardNPassos` — montados por
-`Set-ModoAssistente` ao abrir o assistente conforme o **modo de avaliação**;
+A tela de Diagnóstico é um **assistente de 6 passos, em todos os modos**
+(`viewDiag` com os painéis `stepInfo/stepJunta/stepLocal/stepResultado/
+stepDecisao/stepFim` alternados por `Visibility`; `$Global:WizardPassos`/
+`$Global:WizardNPassos` — montados por `Set-ModoAssistente` ao abrir o
+assistente conforme o **modo de avaliação** (só os títulos mudam por modo);
 navegação por `Show-WizardPasso` / `Invoke-WizardProximo` / `Invoke-WizardVoltar`,
 que operam por **nome de painel**, com gates de justificativa só no modo completo).
 **Modo de avaliação** (`modo_avaliacao` no doc de limiares, radio no topo da tela
 de Administração; padrão **`medicao`** — ver `docs/modo-avaliacao.md`): `medicao` e
-`referencia` = **5 passos** (pula `stepDecisao`), sem juízo de viabilidade (badges
-"MEDIDO" neutros, passo 4 só com os valores — `referencia` acrescenta a faixa —,
-recomendação vira **sugestão informativa** pelo maior download, relatório =
-"Painel de Medições"); `completo` = **6 passos**, comportamento clássico (classifica,
-recomenda o meio, "Painel de Viabilidade").
+`referencia` = sem juízo de viabilidade (badges "MEDIDO" neutros, passo 4 só com
+os valores — `referencia` acrescenta a faixa —, passo 5 vira **"Sugestão de
+conexão"**: mesmo `stepDecisao`, mas sem o cartão de viabilidade/`cboDecisaoFinal`
+— o técnico ajusta o combo pré-selecionado pelo maior download e o motivo é
+**opcional**; relatório = "Painel de Medições"); `completo` = passo 5 vira
+"Recomendação final", comportamento clássico (classifica, recomenda o meio,
+motivo **obrigatório**, "Painel de Viabilidade").
 **Multi-meio (hub-and-spoke):** um Local pode ser medido por até 3 **meios** de
 conexão — `lan` (rede cabeada), `wifi_local` (Wi-Fi do próprio local),
 `celular` (Wi-Fi roteada de celular). Como a placa Wi-Fi só fica numa rede por
@@ -327,10 +330,10 @@ testado** no `TabControl` `tabsMedicoes` (styles `TabsMedicao`/`TabMedicao` em
 Tema.xaml — aba selada em azul, header = bolinha na cor do veredito + rótulo +
 palavra do veredito em cinza); `Show-MedicaoNoPasso5`/`Invoke-TrocarMedicaoPasso5`
 trocam qual medição os grids mostram; `Save-AjustesPasso5` grava classe final +
-justificativa na medição **aberta**. Dois cards, cada um com sua tabela: **"Com a
-VPN"** (`dgAvaliacaoVpn`, linhas da Fase 2) e **"Rede local — Speedtest da Ookla
-(sem VPN)"** (`cardAvaliacaoRl`/`dgAvaliacaoRl`, linhas da Fase 1 —
-`Get-DetalhesRedeLocal` classifica o teste de velocidade contra o perfil
+justificativa na medição **aberta**. Dois cards, cada um com sua tabela, nesta
+ordem: **"Rede local — Speedtest da Ookla (sem VPN)"** (`cardAvaliacaoRl`/
+`dgAvaliacaoRl`, linhas da Fase 1) primeiro, depois **"Com a VPN"**
+(`dgAvaliacaoVpn`, linhas da Fase 2) — `Get-DetalhesRedeLocal` classifica o teste de velocidade contra o perfil
 **`sem_vpn` do meio da vez** (`Get-PerfilLimiares`; a Fase 2 usa o `com_vpn`),
 métricas `rl_*`, sem carregamento_web). As duas famílias entram no pior caso
 (`$Global:AvaliacaoRows` = união; `Update-DecisaoRecalculada`). `txtRedeLocalNota`
@@ -340,12 +343,18 @@ métricas `rl_*`, sem carregamento_web). As duas famílias entram no pior caso
 VPN)". `cardNaResumo`/`txtNaResumo` lista os meios
 marcados "não aplicável" (rótulo — motivo); se nenhum meio foi testado (todos
 "não aplicável"), `txtSemMedicoes` avisa que o local fica inviável →
-5. **conexão recomendada**:
-combo `cboConexaoRec` (candidatos + "nenhuma") pré-selecionado por
-`Get-ConexaoRecomendada`, `txtMotivoRec` (**motivo obrigatório**,
-`Test-RecomendacaoValida` é o gate 5→6) e a tabela read-only `dgMedicoes` de
-todas as medições do Local; o card da recomendação final (rótulo "RECOMENDAÇÃO
-FINAL", override manual do veredito) continua acima →
+5. **conexão recomendada / sugestão de conexão** (`stepDecisao`, passo
+exclusivo em **todos os modos** — v0.6.99+): combo `cboConexaoRec`
+(candidatos + "nenhuma") pré-selecionado por `Get-ConexaoRecomendada`,
+`txtMotivoRec` e a tabela read-only `dgMedicoes` de todas as medições do
+Local; `Test-RecomendacaoValida` é o gate 5→6, sempre exige a seleção do
+combo. No modo `completo`, o cartão "RECOMENDAÇÃO FINAL" (`cboDecisaoFinal`,
+override manual do veredito) continua acima e o motivo é **obrigatório**;
+nos modos `medicao`/`referencia` esse cartão fica escondido
+(`cardDecisaoViavel`), o título/rótulo do motivo mudam para "SUGESTÃO DE
+CONEXÃO PARA ESTE LOCAL"/"Motivo do ajuste (opcional)" e o motivo é
+**opcional** — o técnico pode trocar a conexão sugerida (calculada pelo
+maior download) sem precisar justificar, já que é só informativo →
 6. conclusão: **Salvar** / **Transmitir** / **Exportar relatório (PDF)** + checklist.
 Os runspaces são `Start-TarefaRede` (`$Global:TarefaRedeState`, Fase 1/probe) e
 `Start-DiagnosticoAssincrono` (`$Global:DiagRunState`, Fase 2, com `-AoConcluir`).
