@@ -654,6 +654,13 @@ try {
     $w.FindName('txtVpnMotivo').Text = 'FortiClient corrompido; sem internet no local para reinstalar.'
     Invoke-CheckVpnImpossivel
     Invoke-Pump
+    # 4g-3. registrar "sem a VPN" e' um desfecho valido do tecnico, nao falha
+    # tecnica: o passo 2 do semaforo fica VERDE ("testado (registrado sem VPN)"),
+    # nao vermelho. A inviabilidade por falta de VPN e' juizo do painel/relatorio.
+    $corS2 = "$($w.FindName('dotChkS2').Fill.Color)"; $txtS2 = "$($w.FindName('txtChkS2').Text)"
+    if ($corS2 -match '4FC177' -and $txtS2 -match 'registrado sem VPN') {
+        Write-Host "[4g-3] passo 2 do semaforo fica verde/'registrado sem VPN' (nao vermelho)"
+    } else { Write-Host "    FALHA: passo 2 nao ficou verde/registrado sem VPN (cor=$corS2 txt='$txtS2')"; $falhas++ }
     $medWifi = @($Global:Medicoes | Where-Object { $_.meio -eq 'wifi_local' -and -not $_.nao_aplicavel } | Select-Object -First 1)
     if ($medWifi -and $medWifi.vpn_conectou -eq $false -and $medWifi.veredito -eq 'inviavel') {
         Write-Host "[4g] meio Wi-Fi registrado sem a VPN -> inviavel"

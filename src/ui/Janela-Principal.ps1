@@ -2901,14 +2901,18 @@ function Set-ChkStep {
     # resultado (viavel/ressalva/inviavel) fica pro painel/relatorio, nao pro
     # semaforo rapido do overlay (por isso nao ha mais um estado de "qualidade
     # baixa" aqui: 'ok' e' testado, ponto).
+    # 'semvpn' e' verde: a etapa FOI resolvida pelo tecnico (registrou o meio
+    # sem a VPN de proposito) -- nao e' falha tecnica de execucao. O fato de o
+    # meio ficar inviavel por nao ter VPN e' juizo do painel/relatorio, nao do
+    # semaforo. So' 'erro' (falha real ao rodar) fica vermelho.
     $cor = switch ($Estado) {
-        'rodando' { '#E8B93E' } 'ok' { '#4FC177' }
-        'erro'    { '#E8695C' } 'semvpn' { '#E8695C' }
+        'rodando' { '#E8B93E' } 'ok' { '#4FC177' } 'semvpn' { '#4FC177' }
+        'erro'    { '#E8695C' }
         default   { '#7D8698' }
     }
     $palavra = switch ($Estado) {
         'rodando' { 'rodando...' } 'ok' { 'testado' } 'erro' { 'erro' }
-        'semvpn'  { 'sem VPN' }
+        'semvpn'  { 'testado (registrado sem VPN)' }
         default   { 'pendente' }
     }
     $b = [Windows.Media.SolidColorBrush]::new([Windows.Media.ColorConverter]::ConvertFromString($cor)); $b.Freeze()
