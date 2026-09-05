@@ -4794,12 +4794,20 @@ function Update-EstadoVpn {
     }
     $bf = $w.FindName('btnAbrirFortiClient'); if ($bf) { $bf.Visibility = if ($ok) { 'Collapsed' } else { 'Visible' } }
     $bv = $w.FindName('btnReverificarVpn');   if ($bv) { $bv.Visibility = if ($ok) { 'Collapsed' } else { 'Visible' } }
-    # VPN conectada (ou ja na rede interna) -> some a saida de escape "nao consegui a VPN"
+    # VPN conectada (ou ja na rede interna) -> some a saida de escape "nao consegui
+    # a VPN". Sem VPN -> ela tem que VOLTAR: o checkbox + o botao "Registrar sem a
+    # VPN" (o campo de motivo/chips seguem presos ao checkbox, via Update-VpnImpossivel).
+    # Antes so' escondia e nunca remostrava -> depois de um meio com a VPN ok, o
+    # checkbox sumia pros meios seguintes e o tecnico nao conseguia registrar sem VPN.
     if ($ok) {
         $ci = $w.FindName('chkVpnImpossivel'); if ($ci) { $ci.IsChecked = $false }
         foreach ($n in 'chkVpnImpossivel', 'txtVpnMotivo', 'txtVpnMotivoDica', 'btnChkVpnImpossivel', 'wrapVpnSugestoes', 'txtVpnSugestoesDica') {
             $c = $w.FindName($n); if ($c) { $c.Visibility = 'Collapsed' }
         }
+    } else {
+        $ci = $w.FindName('chkVpnImpossivel');    if ($ci) { $ci.Visibility = 'Visible' }
+        $bi = $w.FindName('btnChkVpnImpossivel'); if ($bi) { $bi.Visibility = 'Visible' }
+        Update-VpnImpossivel   # respeita o estado do checkbox p/ motivo/chips
     }
 }
 

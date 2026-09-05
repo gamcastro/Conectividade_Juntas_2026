@@ -634,9 +634,14 @@ try {
         Invoke-Pump ; Start-Sleep -Milliseconds 120
         if ("$($w.FindName('panelChkVpnGate').Visibility)" -eq 'Visible' -and $null -eq $Global:TarefaRedeState) { break }
     }
-    if ("$($w.FindName('panelChkVpnGate').Visibility)" -eq 'Visible' -and "$($w.FindName('btnChkVpnImpossivel').Visibility)" -eq 'Visible') {
-        Write-Host "[4g] Fase 2 sem VPN: aparece o gate + 'registrar sem a VPN'"
-    } else { Write-Host "    FALHA: gate de VPN nao apareceu (gate=$($w.FindName('panelChkVpnGate').Visibility))"; $falhas++ }
+    # chkVpnImpossivel TEM que reaparecer mesmo depois de um meio anterior com a
+    # VPN OK (que o esconde) -- senao o tecnico ve o botao "Registrar sem a VPN"
+    # mas nao tem o checkbox pra habilitar (bug de campo do James).
+    if ("$($w.FindName('panelChkVpnGate').Visibility)" -eq 'Visible' -and
+        "$($w.FindName('btnChkVpnImpossivel').Visibility)" -eq 'Visible' -and
+        "$($w.FindName('chkVpnImpossivel').Visibility)" -eq 'Visible') {
+        Write-Host "[4g] Fase 2 sem VPN: aparece o gate + checkbox + 'registrar sem a VPN' (mesmo apos meio com VPN ok)"
+    } else { Write-Host "    FALHA: gate de VPN nao apareceu completo (gate=$($w.FindName('panelChkVpnGate').Visibility) chk=$($w.FindName('chkVpnImpossivel').Visibility) btn=$($w.FindName('btnChkVpnImpossivel').Visibility))"; $falhas++ }
     $w.FindName('chkVpnImpossivel').IsChecked = $true ; Update-VpnImpossivel
     # [4g-2] chips de sugestao (+ "Outro") no card "nao consegui a VPN", mesmo
     # padrao do card "nao se aplica" (v0.6.92): 1 botao por Get-SugestoesVpnImpossivel + "Outro".
