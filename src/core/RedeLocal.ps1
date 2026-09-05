@@ -102,9 +102,13 @@ function Invoke-SpeedtestStreaming {
 # em vez de segundos: e' o unico campo de tempo confiavel no JSONL do Ookla
 # CLI pra progresso (ja usado em Update-Speedtest); um "elapsed" em ms nao e'
 # garantido em toda versao do CLI.
+# OBS: NAO usar @($Eventos) aqui -- $Eventos e' um [Collections.Generic.List[object]]
+# (Invoke-SpeedtestStreaming) e o operador @() sobre uma List[object] estoura
+# "Os tipos de argumento nao correspondem" no Windows PowerShell 5.1 recente
+# (build 26100.8875+). foreach direto sobre a List funciona; $null -> 0 voltas.
 function ConvertTo-SerieVelocidadeSpeedtest {
     param($Eventos)
-    $serie = foreach ($e in @($Eventos)) {
+    $serie = foreach ($e in $Eventos) {
         if ($e.type -eq 'download' -and $e.PSObject.Properties['download'] -and $e.download) {
             [pscustomobject]@{ T = [math]::Round([double] $e.download.progress * 100, 1); Fase = 'download'; Mbps = (ConvertTo-Mbps $e.download.bandwidth) }
         } elseif ($e.type -eq 'upload' -and $e.PSObject.Properties['upload'] -and $e.upload) {

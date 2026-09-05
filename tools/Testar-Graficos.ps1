@@ -47,6 +47,53 @@ Checar 'Get-GraficoLinhaHtml: svg com 2 trechos (buraco separa a linha)' `
 Checar 'Get-GraficoLinhaHtml: legenda sem bug de parsing ([string] literal)' ($htmlLinha -notmatch '\[string\]')
 Checar 'Get-GraficoLinhaHtml: vazio sem pontos validos' (-not (Get-GraficoLinhaHtml -Series @([pscustomobject]@{ Nome='X'; Cor='#000'; Pontos=@() })))
 
+# ------------------------------------------ 1b) captura das series (campo real)
+# ConvertTo-SerieVelocidadeSpeedtest recebe a lista de eventos JSONL do Ookla
+# EXATAMENTE como Invoke-SpeedtestStreaming devolve: um [Generic.List[object]].
+# No PowerShell 5.1 recente (build 26100.8875+), @($umaList[object]) estoura
+# "Os tipos de argumento nao correspondem" -- por isso a funcao NAO pode usar
+# @() sobre a lista. Este teste guarda contra a regressao (v0.6.105 quebrou
+# a Fase 1 em campo por causa disso; os outros suites nao pegam porque usam
+# $Global:FaseLocalSimulada e nunca chegam no speedtest real).
+$evtList = New-Object System.Collections.Generic.List[object]
+$evtList.Add(([pscustomobject]@{ type = 'testStart'; server = [pscustomobject]@{ name = 'X' } }))
+foreach ($p in 0.0, 0.2, 0.55, 0.8, 1) {
+    $evtList.Add(([pscustomobject]@{ type = 'download'; download = [pscustomobject]@{ bandwidth = [int64]3700000; progress = $p } }))
+}
+foreach ($p in 0.0, 0.5, 1) {
+    $evtList.Add(([pscustomobject]@{ type = 'upload'; upload = [pscustomobject]@{ bandwidth = [int64]3250000; progress = $p } }))
+}
+$evtList.Add(([pscustomobject]@{ type = 'result'; download = [pscustomobject]@{ bandwidth = 3730000 } }))
+$serieOk = $true
+try { $sv = ConvertTo-SerieVelocidadeSpeedtest $evtList } catch { $serieOk = $false; $svErr = "$_" }
+Checar 'ConvertTo-SerieVelocidadeSpeedtest: aceita List[object] sem estourar' $serieOk $svErr
+Checar 'ConvertTo-SerieVelocidadeSpeedtest: 8 pontos (5 download + 3 upload)' ($serieOk -and @($sv).Count -eq 8) "(count=$(@($sv).Count))"
+Checar 'ConvertTo-SerieVelocidadeSpeedtest: T em 0-100 e Fase preenchida' `
+    ($serieOk -and -not (@($sv) | Where-Object { $_.T -lt 0 -or $_.T -gt 100 -or -not $_.Fase }))
+$svNull = $true
+try { $x = ConvertTo-SerieVelocidadeSpeedtest $null } catch { $svNull = $false }
+Checar 'ConvertTo-SerieVelocidadeSpeedtest: null -> vazio, sem estourar' ($svNull -and @($x).Count -eq 0)
+
+# Invoke-IperfStreaming acumula Serie num [Generic.List[object]] tambem -- mesma
+# armadilha do @(). Stub que imita a saida de intervalo + resumo do iperf3.
+$stub = Join-Path $env:TEMP ("dicon-iperf-stub-{0}.cmd" -f ([guid]::NewGuid().ToString('N')))
+@(
+    '@echo off'
+    'echo [  5]   0.00-1.00   sec  11.2 MBytes  94.1 Mbits/sec'
+    'echo [  5]   1.00-2.00   sec  11.5 MBytes  96.4 Mbits/sec'
+    'echo [  5]   0.00-2.00   sec  22.7 MBytes  95.2 Mbits/sec    0             receiver'
+) | Set-Content -Path $stub -Encoding Ascii
+try {
+    $ip = Invoke-IperfStreaming -Iperf $stub -Argumentos '' -Fase 'download' -Duracao 2
+    Checar 'Invoke-IperfStreaming: Serie e array com 2 intervalos' (@($ip.Serie).Count -eq 2) "(count=$(@($ip.Serie).Count))"
+    Checar 'Invoke-IperfStreaming: cada ponto tem T/Fase/Mbps' `
+        (-not (@($ip.Serie) | Where-Object { $null -eq $_.T -or -not $_.Fase -or $null -eq $_.Mbps }))
+} catch {
+    Checar 'Invoke-IperfStreaming: nao estoura montando a Serie' $false "$_"
+} finally {
+    Remove-Item $stub -Force -ErrorAction SilentlyContinue
+}
+
 # ------------------------------------------------ 2) pipeline completo (com dado)
 # Monta 2 medicoes com TODOS os campos novos preenchidos, pra exercitar os
 # itens 1 (comparacao entre meios), 2 (sem/com VPN), 5 (curva speedtest),

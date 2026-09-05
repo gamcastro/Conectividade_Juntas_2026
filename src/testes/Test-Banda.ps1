@@ -47,7 +47,10 @@ function Invoke-IperfStreaming {
         }
     } catch { if (-not $r.erro) { $r.erro = "$_" } }
     if ($null -ne $r.mbps) { $r.ok = $true }
-    $r.Serie = @($serie)
+    # .ToArray() e' de proposito: @($serie) sobre uma List[object] estoura
+    # "Os tipos de argumento nao correspondem" no PowerShell 5.1 recente
+    # (build 26100.8875+); ToArray() sempre devolve um object[] limpo.
+    $r.Serie = $serie.ToArray()
     $r
 }
 
