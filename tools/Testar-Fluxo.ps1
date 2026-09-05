@@ -323,16 +323,20 @@ try {
     if ($jeOn -and $jeOff) { Write-Host "[4c] selo 'rede da JE' aparece com IP 10.11.* e some fora dela" }
     else { Write-Host "    FALHA: selo rede JE (on=$jeOn off=$jeOff)"; $falhas++ }
 
-    # 4c-0d. reler SO o Wi-Fi (por card) preserva os dados ja coletados da LAN
-    $Global:FaseLocalPayload.Lan.ipv4 = '10.11.5.20' ; $Global:FaseLocalPayload.Lan.conectado = $true
-    $wifiConectadoAntes = $Global:FaseLocalSimulada.Wireless.conectado
+    # 4c-0d. QUALQUER ↻ de card rele as DUAS placas (LAN + Wi-Fi): o tecnico
+    # tira o cabo e clica no ↻ do card Wi-Fi -> a LAN "ao vivo" tem que
+    # atualizar tambem (senao o gate do Wi-Fi seguia travado -- bug de campo).
+    $lanOnAntes  = $Global:FaseLocalSimulada.Lan.conectado
+    $wifiOnAntes = $Global:FaseLocalSimulada.Wireless.conectado
+    $Global:FaseLocalSimulada.Lan.conectado      = $false   # cabo fora
     $Global:FaseLocalSimulada.Wireless.conectado = $true
-    Invoke-RelerAdaptador 'wifi'
+    Invoke-RelerAdaptador 'wifi'   # ↻ do card Wi-Fi
     Invoke-Pump
-    if ($Global:FaseLocalPayload.Lan.ipv4 -eq '10.11.5.20' -and [bool] $Global:FaseLocalPayload.Wireless.conectado) {
-        Write-Host "[4c] reler so o Wi-Fi por card: LAN mantem o IP coletado, Wi-Fi atualiza"
-    } else { Write-Host "    FALHA: reler Wi-Fi mexeu na LAN (lan.ip='$($Global:FaseLocalPayload.Lan.ipv4)' wifi.on=$($Global:FaseLocalPayload.Wireless.conectado))"; $falhas++ }
-    $Global:FaseLocalSimulada.Wireless.conectado = $wifiConectadoAntes
+    if (-not [bool] $Global:FaseLocalPayload.Lan.conectado -and [bool] $Global:FaseLocalPayload.Wireless.conectado) {
+        Write-Host "[4c] ↻ do card Wi-Fi rele as duas placas (LAN 'ao vivo' vira 'sem cabo')"
+    } else { Write-Host "    FALHA: ↻ do card Wi-Fi nao releu a LAN (lan.on=$($Global:FaseLocalPayload.Lan.conectado) wifi.on=$($Global:FaseLocalPayload.Wireless.conectado))"; $falhas++ }
+    $Global:FaseLocalSimulada.Lan.conectado      = $lanOnAntes
+    $Global:FaseLocalSimulada.Wireless.conectado = $wifiOnAntes
     $Global:FaseLocalPayload.Lan.ipv4 = $ipLanOrig
     Update-PainelMeios
 
