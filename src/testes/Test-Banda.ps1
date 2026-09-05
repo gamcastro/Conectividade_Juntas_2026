@@ -20,7 +20,8 @@ function Write-EventoIperf {
 #   -Fase: 'download' (com -R) ou 'upload'
 function Invoke-IperfStreaming {
     param([string] $Iperf, [string] $Argumentos, [string] $Fase, [int] $Duracao = 10)
-    $r = [pscustomobject]@{ ok = $false; mbps = $null; retrans = $null; erro = '' }
+    $r = [pscustomobject]@{ ok = $false; mbps = $null; retrans = $null; erro = ''; Serie = @() }
+    $serie = New-Object System.Collections.Generic.List[object]
 
     $reSum = '^\[\s*\d+\]\s+[\d.]+-[\d.]+\s+sec\s+[\d.]+\s+\wBytes\s+([\d.]+)\s+Mbits/sec(?:\s+(\d+))?\s+(sender|receiver)\s*$'
     $reInt = '^\[\s*\d+\]\s+[\d.]+-\s*([\d.]+)\s+sec\s+[\d.]+\s+\wBytes\s+([\d.]+)\s+Mbits/sec'
@@ -38,12 +39,18 @@ function Invoke-IperfStreaming {
                 elseif ($Matches[2]) { $r.retrans = [int] $Matches[2] }
             }
             elseif ($t -match $reInt) {
-                Write-EventoIperf @{ fase = $Fase; estado = 'andamento'; mbps = [double] $Matches[2]; t = [double] $Matches[1]; dur = $Duracao }
+                $tSeg = [double] $Matches[1]; $mbpsInt = [double] $Matches[2]
+                $serie.Add([pscustomobject]@{ T = $tSeg; Fase = $Fase; Mbps = $mbpsInt })
+                Write-EventoIperf @{ fase = $Fase; estado = 'andamento'; mbps = $mbpsInt; t = $tSeg; dur = $Duracao }
             }
             elseif ($t -match 'iperf3:\s*error\s*-\s*(.+)$') { $r.erro = $Matches[1].Trim() }
         }
     } catch { if (-not $r.erro) { $r.erro = "$_" } }
     if ($null -ne $r.mbps) { $r.ok = $true }
+    # .ToArray() e' de proposito: @($serie) sobre uma List[object] estoura
+    # "Os tipos de argumento nao correspondem" no PowerShell 5.1 recente
+    # (build 26100.8875+); ToArray() sempre devolve um object[] limpo.
+    $r.Serie = $serie.ToArray()
     $r
 }
 
@@ -70,6 +77,11 @@ function Test-BandaVpn {
         servidor = ('{0}:{1}' -f $Servidor, $Porta)
         DownloadMbps = $null; UploadMbps = $null
         retrans_down = $null; retrans_up = $null
+        # Curva de banda ao longo do teste, pro grafico do relatorio: download
+        # primeiro, upload em seguida na MESMA linha do tempo (T do upload
+        # deslocado pela duracao do download, ja que sao duas passadas
+        # separadas do iperf3, uma apos a outra).
+        SerieBanda = @()
     }
     $iperf = Join-Path $Global:RaizApp 'bin\iperf3\iperf3.exe'
     if (-not (Test-Path $iperf)) {
@@ -95,6 +107,7 @@ function Test-BandaVpn {
     $out.retrans_up   = $ul.retrans
     $out.iperf_ok     = ($dl.ok -or $ul.ok)
     $out.iperf_erro   = @($dl.erro, $ul.erro | Where-Object { $_ }) | Select-Object -First 1
+    $out.SerieBanda   = @(@($dl.Serie) + @($ul.Serie | ForEach-Object { [pscustomobject]@{ T = $_.T + $Duracao; Fase = $_.Fase; Mbps = $_.Mbps } }))
 
     Write-EventoIperf @{
         fase = 'fim'; estado = 'fim'

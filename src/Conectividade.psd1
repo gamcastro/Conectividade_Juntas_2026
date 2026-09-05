@@ -1,6 +1,6 @@
 ﻿@{
     RootModule        = 'Conectividade.psm1'
-    ModuleVersion     = '0.7.11'
+    ModuleVersion     = '0.7.12'
     GUID              = 'b3f1c2a4-5d6e-4f70-8a91-0c2d3e4f5a6b'
     Author            = 'TRE-MA / STI'
     CompanyName       = 'Tribunal Regional Eleitoral do Maranhao'

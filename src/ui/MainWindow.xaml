@@ -99,6 +99,15 @@
                     <TextBlock x:Name="lblNavSecao" Text="NAVEGA&#199;&#195;O" Margin="22,0,0,6"
                                FontFamily="Consolas" FontSize="9" Foreground="{DynamicResource Dicon.Text3}"/>
 
+                    <RadioButton x:Name="navInicio" Style="{DynamicResource NavBotao}">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Width="18" Height="18" Stretch="Uniform"
+                                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
+                                  Data="M10,2 L18,9 L16,9 L16,17 L4,17 L4,9 L2,9 Z M7.5,17 L7.5,11.5 L12.5,11.5 L12.5,17 Z"/>
+                            <TextBlock x:Name="lblNavInicio" Text="In&#237;cio" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </RadioButton>
+
                     <RadioButton x:Name="navGuia" Style="{DynamicResource NavBotao}">
                         <StackPanel Orientation="Horizontal">
                             <Path Width="18" Height="18" Stretch="Uniform"
@@ -1091,6 +1100,10 @@
                                                    FontSize="11" Foreground="{DynamicResource Dicon.Text3}" Visibility="Collapsed"/>
                                         <TextBlock x:Name="txtLocWifiMac" Margin="18,2,0,0" FontFamily="Consolas"
                                                    FontSize="11" Foreground="{DynamicResource Dicon.Text3}" Visibility="Collapsed"/>
+                                        <TextBlock x:Name="txtLocWifiVel" Margin="18,2,0,0" FontFamily="Consolas"
+                                                   FontSize="11" Foreground="{DynamicResource Dicon.Text3}" Visibility="Collapsed"/>
+                                        <TextBlock x:Name="txtLocWifiBanda" Margin="18,2,0,0" FontFamily="Consolas"
+                                                   FontSize="11" Foreground="{DynamicResource Dicon.Text3}" Visibility="Collapsed"/>
                                         <TextBlock x:Name="txtLocWifiOrigem" Margin="18,2,0,0" FontFamily="Consolas"
                                                    FontSize="11" Foreground="{DynamicResource Dicon.Text3}" Visibility="Collapsed"/>
                                         <TextBlock x:Name="txtLocWifiDet" Margin="18,4,0,0" FontFamily="Consolas"
@@ -1168,6 +1181,9 @@
                                                Margin="0,0,0,6"/>
                                     <TextBlock x:Name="txtNaJustifMeio" FontFamily="Consolas" FontSize="11"
                                                Foreground="{DynamicResource Dicon.Text3}" Margin="0,0,0,8"/>
+                                    <TextBlock Text="Motivo mais comum? Escolha uma sugest&#227;o ou use &#171;Outro&#187; pra digitar:"
+                                               FontSize="12" Foreground="{DynamicResource Dicon.Text2}" Margin="0,0,0,6"/>
+                                    <WrapPanel x:Name="wrapNaSugestoes" Margin="0,0,0,10"/>
                                     <TextBlock Text="Justificativa (obrigat&#243;ria &#8212; vai no relat&#243;rio; o meio fica INVI&#193;VEL):"
                                                FontSize="12" Foreground="{DynamicResource Dicon.Text2}" Margin="0,0,0,4"/>
                                     <TextBox x:Name="txtNaJustif" MinHeight="70" TextWrapping="Wrap" AcceptsReturn="True"
@@ -1241,59 +1257,6 @@
                                        FontFamily="Consolas" FontSize="11" Visibility="Collapsed"
                                        Foreground="{DynamicResource Dicon.Ressalva}"/>
 
-                            <Border Style="{DynamicResource Cartao}" Padding="14,12" Margin="0,0,0,12">
-                                <StackPanel>
-                                    <TextBlock Text="COM A VPN (bateria da JE)" FontFamily="Consolas" FontSize="10"
-                                               FontWeight="Bold" Foreground="{DynamicResource Dicon.Text2}" Margin="0,0,0,8"/>
-                                    <DataGrid x:Name="dgAvaliacaoVpn" Style="{DynamicResource GridMetricas}"
-                                              MaxHeight="300" RowHeight="40" BorderThickness="0"
-                                              VerticalScrollBarVisibility="Auto">
-                                        <DataGrid.Columns>
-                                            <DataGridTemplateColumn Header="" Width="6" CanUserResize="False" IsReadOnly="True">
-                                                <DataGridTemplateColumn.CellTemplate>
-                                                    <DataTemplate>
-                                                        <Border Background="{Binding CorFinal}" CornerRadius="2" Margin="0,3"/>
-                                                    </DataTemplate>
-                                                </DataGridTemplateColumn.CellTemplate>
-                                            </DataGridTemplateColumn>
-                                            <DataGridTextColumn Header="M&#233;trica" Binding="{Binding Rotulo}"
-                                                                IsReadOnly="True" Width="140"/>
-                                            <DataGridTextColumn Header="Valor medido" Binding="{Binding ValorTexto}"
-                                                                IsReadOnly="True" Width="110" FontFamily="Consolas"/>
-                                            <DataGridTextColumn x:Name="colVpnFaixa" Header="Faixa aceit&#225;vel" Binding="{Binding Regra}"
-                                                                IsReadOnly="True" Width="250" FontFamily="Consolas"/>
-                                            <DataGridTemplateColumn x:Name="colVpnSugerida" Header="Sugerida" Width="90" IsReadOnly="True">
-                                                <DataGridTemplateColumn.CellTemplate>
-                                                    <DataTemplate>
-                                                        <TextBlock Text="{Binding ClasseAutomatica}"
-                                                                   Style="{DynamicResource ChipVeredito}"/>
-                                                    </DataTemplate>
-                                                </DataGridTemplateColumn.CellTemplate>
-                                            </DataGridTemplateColumn>
-                                            <DataGridTemplateColumn x:Name="colVpnClasse" Header="Classifica&#231;&#227;o" Width="150">
-                                                <DataGridTemplateColumn.CellTemplate>
-                                                    <DataTemplate>
-                                                        <ComboBox Margin="2" VerticalContentAlignment="Center"
-                                                                  ItemsSource="{StaticResource classesMetrica}"
-                                                                  SelectedItem="{Binding ClasseFinal, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
-                                                    </DataTemplate>
-                                                </DataGridTemplateColumn.CellTemplate>
-                                            </DataGridTemplateColumn>
-                                            <DataGridTemplateColumn x:Name="colVpnMotivo" Header="Motivo do ajuste" Width="*">
-                                                <DataGridTemplateColumn.CellTemplate>
-                                                    <DataTemplate>
-                                                        <TextBox Margin="2" TextWrapping="Wrap" AcceptsReturn="True"
-                                                                 VerticalContentAlignment="Center"
-                                                                 Visibility="{Binding Ajustada, Converter={StaticResource boolVis}}"
-                                                                 Text="{Binding Justificativa, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
-                                                    </DataTemplate>
-                                                </DataGridTemplateColumn.CellTemplate>
-                                            </DataGridTemplateColumn>
-                                        </DataGrid.Columns>
-                                    </DataGrid>
-                                </StackPanel>
-                            </Border>
-
                             <Border x:Name="cardAvaliacaoRl" Style="{DynamicResource Cartao}" Padding="14,12"
                                     Margin="0,0,0,12" Visibility="Collapsed">
                                 <StackPanel>
@@ -1350,14 +1313,67 @@
                                     </DataGrid>
                                 </StackPanel>
                             </Border>
+
+                            <Border Style="{DynamicResource Cartao}" Padding="14,12" Margin="0,0,0,12">
+                                <StackPanel>
+                                    <TextBlock Text="COM A VPN (bateria da JE)" FontFamily="Consolas" FontSize="10"
+                                               FontWeight="Bold" Foreground="{DynamicResource Dicon.Text2}" Margin="0,0,0,8"/>
+                                    <DataGrid x:Name="dgAvaliacaoVpn" Style="{DynamicResource GridMetricas}"
+                                              MaxHeight="300" RowHeight="40" BorderThickness="0"
+                                              VerticalScrollBarVisibility="Auto">
+                                        <DataGrid.Columns>
+                                            <DataGridTemplateColumn Header="" Width="6" CanUserResize="False" IsReadOnly="True">
+                                                <DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <Border Background="{Binding CorFinal}" CornerRadius="2" Margin="0,3"/>
+                                                    </DataTemplate>
+                                                </DataGridTemplateColumn.CellTemplate>
+                                            </DataGridTemplateColumn>
+                                            <DataGridTextColumn Header="M&#233;trica" Binding="{Binding Rotulo}"
+                                                                IsReadOnly="True" Width="140"/>
+                                            <DataGridTextColumn Header="Valor medido" Binding="{Binding ValorTexto}"
+                                                                IsReadOnly="True" Width="110" FontFamily="Consolas"/>
+                                            <DataGridTextColumn x:Name="colVpnFaixa" Header="Faixa aceit&#225;vel" Binding="{Binding Regra}"
+                                                                IsReadOnly="True" Width="250" FontFamily="Consolas"/>
+                                            <DataGridTemplateColumn x:Name="colVpnSugerida" Header="Sugerida" Width="90" IsReadOnly="True">
+                                                <DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock Text="{Binding ClasseAutomatica}"
+                                                                   Style="{DynamicResource ChipVeredito}"/>
+                                                    </DataTemplate>
+                                                </DataGridTemplateColumn.CellTemplate>
+                                            </DataGridTemplateColumn>
+                                            <DataGridTemplateColumn x:Name="colVpnClasse" Header="Classifica&#231;&#227;o" Width="150">
+                                                <DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <ComboBox Margin="2" VerticalContentAlignment="Center"
+                                                                  ItemsSource="{StaticResource classesMetrica}"
+                                                                  SelectedItem="{Binding ClasseFinal, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                                    </DataTemplate>
+                                                </DataGridTemplateColumn.CellTemplate>
+                                            </DataGridTemplateColumn>
+                                            <DataGridTemplateColumn x:Name="colVpnMotivo" Header="Motivo do ajuste" Width="*">
+                                                <DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <TextBox Margin="2" TextWrapping="Wrap" AcceptsReturn="True"
+                                                                 VerticalContentAlignment="Center"
+                                                                 Visibility="{Binding Ajustada, Converter={StaticResource boolVis}}"
+                                                                 Text="{Binding Justificativa, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                                    </DataTemplate>
+                                                </DataGridTemplateColumn.CellTemplate>
+                                            </DataGridTemplateColumn>
+                                        </DataGrid.Columns>
+                                    </DataGrid>
+                                </StackPanel>
+                            </Border>
                         </StackPanel>
                     </ScrollViewer>
 
-                    <!-- PASSO 5: recomendacao final -->
+                    <!-- PASSO 5: recomendacao final (completo) / sugestao de conexao (medicao|referencia) -->
                     <ScrollViewer x:Name="stepDecisao" Visibility="Collapsed"
                                   VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">
                         <StackPanel>
-                            <Border Style="{DynamicResource Cartao}" Padding="16,14">
+                            <Border x:Name="cardDecisaoViavel" Style="{DynamicResource Cartao}" Padding="16,14">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto"/>
@@ -1393,13 +1409,13 @@
                                              Visibility="Collapsed"/>
                                 </Grid>
                             </Border>
-                            <TextBlock Style="{DynamicResource SubtituloTela}" Margin="0,12,0,0"
+                            <TextBlock x:Name="txtDecisaoFinalSub" Style="{DynamicResource SubtituloTela}" Margin="0,12,0,0"
                                        Text="A recomenda&#231;&#227;o final vem do pior caso entre as m&#233;tricas. Voc&#234; pode sobrescrev&#234;-la aqui &#8212; nesse caso, informe o motivo."/>
 
                             <!-- conexao recomendada para o local (multi-meio) -->
                             <Border Style="{DynamicResource Cartao}" Padding="16,14" Margin="0,16,0,0">
                                 <StackPanel>
-                                    <TextBlock Text="CONEX&#195;O RECOMENDADA PARA ESTE LOCAL"
+                                    <TextBlock x:Name="txtTituloConexaoRec" Text="CONEX&#195;O RECOMENDADA PARA ESTE LOCAL"
                                                FontFamily="Consolas" FontSize="9"
                                                Foreground="{DynamicResource Dicon.Text3}"/>
                                     <ComboBox x:Name="cboConexaoRec" Width="380" MinHeight="32" Margin="0,6,0,0"
@@ -1407,11 +1423,33 @@
                                     <TextBlock x:Name="lblRecContexto" Margin="0,8,0,0" TextWrapping="Wrap"
                                                FontFamily="Consolas" FontSize="11"
                                                Foreground="{DynamicResource Dicon.Text2}"/>
-                                    <TextBlock Text="Motivo da recomenda&#231;&#227;o (obrigat&#243;rio):" Margin="0,12,0,4"
+                                    <TextBlock x:Name="lblMotivoRec" Text="Motivo da recomenda&#231;&#227;o (obrigat&#243;rio):" Margin="0,12,0,4"
                                                Foreground="{DynamicResource Dicon.Text3}" FontSize="12"/>
                                     <TextBox x:Name="txtMotivoRec" MinHeight="60" TextWrapping="Wrap"
                                              AcceptsReturn="True" VerticalContentAlignment="Top"
                                              VerticalScrollBarVisibility="Auto"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- cabo de rede: so' aparece quando a conexao escolhida for a LAN -->
+                            <Border x:Name="cardCaboLan" Style="{DynamicResource Cartao}" Padding="16,14"
+                                    Margin="0,16,0,0" Visibility="Collapsed">
+                                <StackPanel>
+                                    <TextBlock Text="CABO DE REDE (LAN)" FontFamily="Consolas" FontSize="9"
+                                               Foreground="{DynamicResource Dicon.Text3}"/>
+                                    <TextBlock Text="A conex&#227;o escolhida &#233; a rede cabeada. &#201; preciso passar cabo de rede at&#233; o ponto? De quantos metros?"
+                                               Margin="0,4,0,8" TextWrapping="Wrap"
+                                               Foreground="{DynamicResource Dicon.Text2}" FontSize="12"/>
+                                    <WrapPanel x:Name="wrapCaboLan"/>
+                                    <StackPanel x:Name="panelCaboLanOutro" Orientation="Horizontal"
+                                                Margin="0,2,0,0" Visibility="Collapsed">
+                                        <TextBox x:Name="txtCaboLanOutro" Width="80" MinHeight="30"
+                                                 VerticalContentAlignment="Center"/>
+                                        <TextBlock Text="metros" VerticalAlignment="Center" Margin="6,0,0,0"
+                                                   Foreground="{DynamicResource Dicon.Text3}" FontSize="12"/>
+                                    </StackPanel>
+                                    <TextBlock x:Name="txtCaboLanResumo" Margin="0,8,0,0" FontFamily="Consolas"
+                                               FontSize="11" Foreground="{DynamicResource Dicon.Text2}"/>
                                 </StackPanel>
                             </Border>
 
@@ -1802,6 +1840,46 @@
                                          FontFamily="Consolas" VerticalContentAlignment="Center"/>
                             </Grid>
 
+                            <TextBlock Text="Sem&#225;foro do assistente de diagn&#243;stico" Style="{DynamicResource Rotulo}"
+                                       Margin="0,14,0,4"/>
+                            <TextBlock Text="Quais dos 3 itens aparecem no sem&#225;foro do overlay de checagem (so' informa se rodou, nao a qualidade do resultado)."
+                                       FontSize="11" Foreground="{DynamicResource Dicon.Text3}" TextWrapping="Wrap"
+                                       Margin="0,0,0,6"/>
+                            <StackPanel Orientation="Horizontal">
+                                <CheckBox x:Name="chkOverlayRedeLocal" Content="Rede local (sem VPN)" IsChecked="True" Margin="0,0,20,0"/>
+                                <CheckBox x:Name="chkOverlayVpn" Content="Diagn&#243;stico com a VPN" IsChecked="True" Margin="0,0,20,0"/>
+                                <CheckBox x:Name="chkOverlayTotalizacao" Content="Sistema de totaliza&#231;&#227;o" IsChecked="True"/>
+                            </StackPanel>
+
+                            <TextBlock Text="Sugest&#245;es de motivo (chips)" Style="{DynamicResource Rotulo}"
+                                       Margin="0,14,0,4"/>
+                            <TextBlock Text="Uma sugest&#227;o por linha; aparecem como bot&#245;es no card 'n&#227;o se aplica' de cada meio e no card 'n&#227;o consegui a VPN'. Deixe em branco pra usar a lista padr&#227;o do DICON."
+                                       FontSize="11" Foreground="{DynamicResource Dicon.Text3}" TextWrapping="Wrap"
+                                       Margin="0,0,0,8"/>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="12"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="LAN n&#227;o se aplica" FontSize="11" Foreground="{DynamicResource Dicon.Text3}" Margin="0,0,0,3"/>
+                                    <TextBox x:Name="txtSugNaLan" MinHeight="82" TextWrapping="Wrap" AcceptsReturn="True"
+                                             VerticalScrollBarVisibility="Auto" Padding="6,5" FontSize="12" Margin="0,0,0,10"/>
+                                    <TextBlock Text="Wi-Fi do local n&#227;o se aplica" FontSize="11" Foreground="{DynamicResource Dicon.Text3}" Margin="0,0,0,3"/>
+                                    <TextBox x:Name="txtSugNaWifi" MinHeight="82" TextWrapping="Wrap" AcceptsReturn="True"
+                                             VerticalScrollBarVisibility="Auto" Padding="6,5" FontSize="12"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Text="Celular n&#227;o se aplica" FontSize="11" Foreground="{DynamicResource Dicon.Text3}" Margin="0,0,0,3"/>
+                                    <TextBox x:Name="txtSugNaCelular" MinHeight="82" TextWrapping="Wrap" AcceptsReturn="True"
+                                             VerticalScrollBarVisibility="Auto" Padding="6,5" FontSize="12" Margin="0,0,0,10"/>
+                                    <TextBlock Text="N&#227;o consegui a VPN" FontSize="11" Foreground="{DynamicResource Dicon.Text3}" Margin="0,0,0,3"/>
+                                    <TextBox x:Name="txtSugVpnImpossivel" MinHeight="82" TextWrapping="Wrap" AcceptsReturn="True"
+                                             VerticalScrollBarVisibility="Auto" Padding="6,5" FontSize="12"/>
+                                </StackPanel>
+                            </Grid>
+
                             <TextBlock Text="Chave da API do Google Maps (Static)" Style="{DynamicResource Rotulo}"
                                        Margin="0,14,0,4"/>
                             <TextBlock Text="Restrita s&#243; &#224; Maps Static API. Usada no anexo do formul&#225;rio GEL para gerar a imagem do mapa no relat&#243;rio. Vazio = s&#243; o link, sem imagem."
@@ -1884,19 +1962,19 @@
                                    FontSize="11" Foreground="{DynamicResource Dicon.Text3}" Margin="0,2,0,12"/>
 
                         <StackPanel Margin="0,0,0,12">
-                            <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                            <StackPanel x:Name="rowChkS1" Orientation="Horizontal" Margin="0,2,0,0">
                                 <Ellipse x:Name="dotChkS1" Width="10" Height="10" VerticalAlignment="Center"
                                          Margin="0,0,8,0" Fill="{DynamicResource Dicon.Text3}"/>
                                 <TextBlock x:Name="txtChkS1" FontSize="12" Foreground="{DynamicResource Dicon.Text2}"
                                            Text="1. Rede local (sem VPN) - pendente"/>
                             </StackPanel>
-                            <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                            <StackPanel x:Name="rowChkS2" Orientation="Horizontal" Margin="0,4,0,0">
                                 <Ellipse x:Name="dotChkS2" Width="10" Height="10" VerticalAlignment="Center"
                                          Margin="0,0,8,0" Fill="{DynamicResource Dicon.Text3}"/>
                                 <TextBlock x:Name="txtChkS2" FontSize="12" Foreground="{DynamicResource Dicon.Text2}"
                                            Text="2. Diagnostico com a VPN - pendente"/>
                             </StackPanel>
-                            <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                            <StackPanel x:Name="rowChkS3" Orientation="Horizontal" Margin="0,4,0,0">
                                 <Ellipse x:Name="dotChkS3" Width="10" Height="10" VerticalAlignment="Center"
                                          Margin="0,0,8,0" Fill="{DynamicResource Dicon.Text3}"/>
                                 <TextBlock x:Name="txtChkS3" FontSize="12" Foreground="{DynamicResource Dicon.Text3}"
@@ -1907,9 +1985,19 @@
                         <StackPanel x:Name="rowChkAcao" Orientation="Horizontal" Margin="0,0,0,6">
                             <Button x:Name="btnChkIniciar" Content="Iniciar checagem da rede local"
                                     Style="{DynamicResource BotaoPrimario}" Padding="22,9"/>
+                            <Button x:Name="btnChkRefazerFase1" Content="Refazer Fase 1" Margin="10,0,0,0"
+                                    Style="{DynamicResource BotaoSecundario}" Padding="16,9" Visibility="Collapsed"
+                                    ToolTip="Reroda a rede local (sem VPN); o resultado passa a ser a media com a(s) tentativa(s) anterior(es)"/>
+                            <Button x:Name="btnChkRefazerFase2" Content="Refazer Fase 2 (VPN)" Margin="10,0,0,0"
+                                    Style="{DynamicResource BotaoSecundario}" Padding="16,9" Visibility="Collapsed"
+                                    ToolTip="Reroda o diagnostico com a VPN; o resultado passa a ser a media com a(s) tentativa(s) anterior(es)"/>
                             <mah:ProgressRing x:Name="ringChk" Width="18" Height="18" Margin="12,0,0,0"
                                               IsActive="False" Visibility="Collapsed"
                                               Foreground="{DynamicResource Dicon.Accent}"/>
+                            <TextBlock x:Name="txtChkRodando" Text="Testando... Aguarde."
+                                       VerticalAlignment="Center" Margin="8,0,0,0" FontSize="12.5"
+                                       FontWeight="SemiBold" Foreground="{DynamicResource Dicon.Accent}"
+                                       Visibility="Collapsed"/>
                         </StackPanel>
 
                         <!-- gate da VPN (Fase 2 sem VPN ativa) -->
@@ -1930,6 +2018,11 @@
                                 </StackPanel>
                                 <CheckBox x:Name="chkVpnImpossivel" Margin="0,14,0,0"
                                           Content="N&#227;o foi poss&#237;vel conectar a VPN da JE neste local"/>
+                                <TextBlock x:Name="txtVpnSugestoesDica"
+                                           Text="Motivo mais comum? Escolha uma sugest&#227;o ou use &#171;Outro&#187; pra digitar:"
+                                           FontSize="12" Foreground="{DynamicResource Dicon.Text2}" Margin="0,8,0,6"
+                                           Visibility="Collapsed"/>
+                                <WrapPanel x:Name="wrapVpnSugestoes" Margin="0,0,0,4" Visibility="Collapsed"/>
                                 <TextBox x:Name="txtVpnMotivo" Margin="0,8,0,0" MinHeight="72"
                                          TextWrapping="Wrap" AcceptsReturn="True" AcceptsTab="False"
                                          VerticalContentAlignment="Top" VerticalScrollBarVisibility="Auto"

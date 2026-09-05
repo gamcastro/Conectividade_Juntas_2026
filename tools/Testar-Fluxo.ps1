@@ -39,7 +39,7 @@ $Global:FaseLocalSimulada = [pscustomobject]@{
     }
     Wireless = [pscustomobject]@{
         presente = $true; nome = 'Wi-Fi'; status = 'Disconnected'; conectado = $false
-        ssid = ''; sinal_pct = $null; redes_disponiveis = @('JE-CAMPO', 'VIVO-2G')
+        ssid = 'JE-CAMPO'; sinal_pct = 78; banda_ghz = '5 GHz'; redes_disponiveis = @('JE-CAMPO', 'VIVO-2G')
         ipv4 = '192.168.15.42'; prefixo = 24; mascara = '255.255.255.0'; gateway = '192.168.15.1'
         dns = @('192.168.15.1'); ip_origem = 'DHCP'; mac = '11-22-33-44-55-66'; velocidade_mbps = 300
     }
@@ -125,6 +125,20 @@ try {
     Enter-Sessao
     if ($w.FindName('viewHome').Visibility -ne 'Visible') { Write-Host "[2] FALHA: nao foi para a home"; $falhas++ }
     else { Write-Host "[2] Login OK -> home ($($w.FindName('txtSaudacao').Text))" }
+
+    # 2a-inicio. "Inicio" no rail: marcado ao chegar na home, e sempre volta pra
+    # la (item unico e fixo de "voltar ao inicio", pedido depois de nao ter
+    # nenhum jeito direto de fazer isso pelo rail).
+    if ($w.FindName('navInicio').IsChecked -eq $true) { Write-Host "[2a] 'Inicio' marcado ao chegar na home" }
+    else { Write-Host "    FALHA: 'Inicio' nao ficou marcado na home"; $falhas++ }
+    Show-Locais
+    Invoke-Pump
+    $foiPraLocais = "$($w.FindName('viewLocais').Visibility)" -eq 'Visible'
+    $w.FindName('navInicio').IsChecked = $true
+    Invoke-Pump
+    if ($foiPraLocais -and "$($w.FindName('viewHome').Visibility)" -eq 'Visible') {
+        Write-Host "[2a] 'Inicio' volta pra home de qualquer outra tela (Locais)"
+    } else { Write-Host "    FALHA: 'Inicio' nao voltou pra home (viewHome=$($w.FindName('viewHome').Visibility))"; $falhas++ }
 
     # 2c-versao. aviso de versao nova no rodape do rail
     Update-AvisoVersao '99.99.99'
@@ -253,6 +267,13 @@ try {
     if (-not $selL) { Write-Host "[4] FALHA: local nao pre-selecionado"; $falhas++ }
     else { Write-Host "[4] Assistente passo 1, local pre-selecionado: $($selL.Rotulo)" }
 
+    # 4a-2. rail travado enquanto o assistente esta aberto (nao pode navegar pra
+    # fora sem querer e perder o fio do diagnostico)
+    $railPreso = -not $w.FindName('navLocais').IsEnabled -and -not $w.FindName('navDiag').IsEnabled -and
+                 -not $w.FindName('navAjuda').IsEnabled -and -not $w.FindName('btnTrocarUsuario').IsEnabled
+    if ($railPreso -and $Global:RailTravadoDiag) { Write-Host "[4a] rail travado ao entrar no assistente" }
+    else { Write-Host "    FALHA: rail nao travou ao abrir o assistente (RailTravadoDiag=$Global:RailTravadoDiag)"; $falhas++ }
+
     # 4b. passo 1 -> 2: cartao de detalhe do local aparece com os campos extras
     Invoke-WizardProximo
     if ($Global:WizardStep -ne 2) { Write-Host "[4b] FALHA: nao foi para o passo 2"; $falhas++ }
@@ -341,6 +362,14 @@ try {
     # Wi-Fi e Celular tambem NA -> todos resolvidos -> "Proximo" aparece
     $w.FindName('chkNaWifi').IsChecked = $true ; Update-NaoAplicavelMeio
     $w.FindName('txtNaJustif').Text = 'x' ; Invoke-NaRegistrar ; Invoke-Pump
+    # 4c-3. Wi-Fi marcado NA some a info de conexao ao vivo do card (a placa
+    # continua conectada -- $FaseLocalPayload.Wireless.conectado ainda e' true
+    # aqui -- mas o card nao pode mais mostrar isso como se fosse a rede do
+    # local; ficaria mostrando a rede que vai virar o roteamento do celular).
+    $naWifiTexto = $w.FindName('txtLocWifi').Text -eq 'Nao se aplica a este local'
+    $naWifiSemIp = "$($w.FindName('txtLocWifiIp').Visibility)" -eq 'Collapsed'
+    if ($naWifiTexto -and $naWifiSemIp) { Write-Host "[4c] Wi-Fi NA esconde a conexao ao vivo do card (nao mostra a rede que virou celular)" }
+    else { Write-Host "    FALHA: Wi-Fi NA ainda mostra conexao (texto='$($w.FindName('txtLocWifi').Text)' ipVis=$($w.FindName('txtLocWifiIp').Visibility))"; $falhas++ }
     $w.FindName('chkNaCelular').IsChecked = $true ; Update-NaoAplicavelMeio
     $w.FindName('txtNaJustif').Text = 'x' ; Invoke-NaRegistrar ; Invoke-Pump
     $proxAll = "$($w.FindName('btnWizProximo').Visibility)" -eq 'Visible'
@@ -432,6 +461,101 @@ try {
     if ($medCel -and "$($w.FindName('btnChkFechar').Content)" -eq 'Concluir') {
         Write-Host "[4d] checagem do meio concluida -> medicao 'celular' registrada (veredito $($medCel.veredito))"
     } else { Write-Host "    FALHA: checagem do meio nao concluiu (btn='$($w.FindName('btnChkFechar').Content)' med=$([bool]$medCel))"; $falhas++ }
+
+    # 4d-2. semaforo do overlay so' informa se rodou (verde), nao a qualidade --
+    # mesmo com veredito 'inviavel' (limiar de celular e' apertado, este cenario
+    # simulado reprova), os passos 1 e 2 ficam verdes/"testado".
+    $cor1 = "$($w.FindName('dotChkS1').Fill.Color)"; $cor2 = "$($w.FindName('dotChkS2').Fill.Color)"
+    $txt1 = "$($w.FindName('txtChkS1').Text)"; $txt2 = "$($w.FindName('txtChkS2').Text)"
+    if ($cor1 -match '4FC177' -and $cor2 -match '4FC177' -and $txt1 -match 'testado' -and $txt2 -match 'testado') {
+        Write-Host "[4d] semaforo (1 e 2) fica verde/'testado' mesmo com veredito '$($medCel.veredito)' -- so informa que rodou"
+    } else { Write-Host "    FALHA: semaforo nao ficou verde/testado (cor1=$cor1 cor2=$cor2 txt1='$txt1' txt2='$txt2' veredito=$($medCel.veredito))"; $falhas++ }
+
+    # 4d-3. "Refazer Fase 1" dentro do mesmo overlay -- so aparece depois de 1
+    # tentativa, acumula em Fase1Tentativas e o resultado exibido/gravado vira
+    # a MEDIA (nao so a ultima tentativa). O medio ja existe (ChkFase='fim'),
+    # entao Complete-RefazerFase1 tem que atualiza-lo tambem.
+    # Guarda o estado pre-"refazer" p/ devolver depois -- os cenarios seguintes
+    # ([5] passo 4 etc.) esperam os numeros originais (855.63 Mbps) do meio
+    # Celular, nao a media que este teste do "Refazer" produz de proposito.
+    $preFase1Tentativas = $Global:Fase1Tentativas
+    $preFase1Payload    = $Global:FaseLocalPayload
+    $preFase2Tentativas = $Global:Fase2Tentativas
+    $preFase2Payload    = $Global:DiagPayload
+    if ("$($w.FindName('btnChkRefazerFase1').Visibility)" -eq 'Visible' -and "$($w.FindName('btnChkRefazerFase2').Visibility)" -eq 'Visible') {
+        Write-Host "[4d-3] botoes 'Refazer Fase 1/2' aparecem apos a 1a tentativa de cada fase"
+    } else { Write-Host "    FALHA: botoes de refazer nao apareceram (f1=$($w.FindName('btnChkRefazerFase1').Visibility) f2=$($w.FindName('btnChkRefazerFase2').Visibility))"; $falhas++ }
+    $downloadOriginal = $Global:FaseLocalSimulada.Internet.download_mbps
+    $downloadEsperadoMedia = [math]::Round((($downloadOriginal + ($downloadOriginal + 100)) / 2), 2)
+    $Global:FaseLocalSimulada.Internet.download_mbps = $downloadOriginal + 100
+    Invoke-RefazerFase1
+    $deadline = (Get-Date).AddSeconds($TimeoutS)
+    while ((Get-Date) -lt $deadline) {
+        Invoke-Pump ; Start-Sleep -Milliseconds 120
+        if ($null -eq $Global:TarefaRedeState -and @($Global:Fase1Tentativas).Count -ge 2) { break }
+    }
+    $Global:FaseLocalSimulada.Internet.download_mbps = $downloadOriginal   # devolve p/ nao afetar cenarios seguintes
+    $medCelPos1 = @($Global:Medicoes | Where-Object { $_.meio -eq 'celular' -and -not $_.nao_aplicavel } | Select-Object -First 1)
+    if (@($Global:Fase1Tentativas).Count -eq 2 -and $Global:FaseLocalPayload.Internet.download_mbps -eq $downloadEsperadoMedia -and
+        $medCelPos1 -and $medCelPos1.fase1_tentativas -eq 2) {
+        Write-Host "[4d-3] 'Refazer Fase 1' acumulou 2 tentativas e gravou a media ($($Global:FaseLocalPayload.Internet.download_mbps) Mbps) no medio"
+    } else {
+        Write-Host "    FALHA: refazer Fase 1 nao mediou certo (tentativas=$(@($Global:Fase1Tentativas).Count) download=$($Global:FaseLocalPayload.Internet.download_mbps) esperado=$downloadEsperadoMedia medio.fase1_tentativas=$($medCelPos1.fase1_tentativas))"
+        $falhas++
+    }
+
+    # 4d-4. "Refazer Fase 2" (VPN): mesma ideia, mas agora com um valor real de
+    # banda (a 1a tentativa simulada tem DownloadMbps=$null -- Get-MediaSegura
+    # ignora nulos, entao a media so' considera as tentativas com numero).
+    $Global:BandaVpnSimulada.iperf_ok = $true
+    $Global:BandaVpnSimulada.DownloadMbps = 20
+    $Global:BandaVpnSimulada.UploadMbps = 5
+    Invoke-RefazerFase2
+    # enquanto a re-execucao roda (speedtest/iperf3), "Testar a VPN"/"Refazer
+    # Fase 1/2" ficam desabilitados e aparece "Testando... Aguarde." -- antes
+    # ficavam clicaveis a checagem inteira, porque Set-ChkBotao so olhava
+    # $Global:ChkFase, que o fluxo de "Refazer" nao muda de proposito.
+    if (-not $w.FindName('btnChkIniciar').IsEnabled -and -not $w.FindName('btnChkRefazerFase1').IsEnabled -and
+        -not $w.FindName('btnChkRefazerFase2').IsEnabled -and "$($w.FindName('txtChkRodando').Visibility)" -eq 'Visible') {
+        Write-Host "[4d-4b] botoes ficam desabilitados (+ 'Testando... Aguarde') durante o Refazer Fase 2"
+    } else {
+        Write-Host ("    FALHA: botoes deveriam estar desabilitados durante o Refazer Fase 2 (iniciar.en={0} ref1.en={1} ref2.en={2} rodando.vis={3})" -f `
+            $w.FindName('btnChkIniciar').IsEnabled, $w.FindName('btnChkRefazerFase1').IsEnabled, $w.FindName('btnChkRefazerFase2').IsEnabled, $w.FindName('txtChkRodando').Visibility)
+        $falhas++
+    }
+    $deadline = (Get-Date).AddSeconds($TimeoutS)
+    while ((Get-Date) -lt $deadline) {
+        Invoke-Pump ; Start-Sleep -Milliseconds 120
+        if ($null -eq $Global:DiagRunState -and @($Global:Fase2Tentativas).Count -ge 2) { break }
+    }
+    if ($w.FindName('btnChkRefazerFase2').IsEnabled -and "$($w.FindName('txtChkRodando').Visibility)" -eq 'Collapsed') {
+        Write-Host "[4d-4c] botoes voltam a ficar habilitados e 'Testando...' some ao terminar"
+    } else {
+        Write-Host "    FALHA: botoes/texto nao voltaram ao normal apos o Refazer Fase 2 (ref2.en=$($w.FindName('btnChkRefazerFase2').IsEnabled) rodando.vis=$($w.FindName('txtChkRodando').Visibility))"
+        $falhas++
+    }
+    $Global:BandaVpnSimulada.iperf_ok = $false   # devolve aos defaults p/ nao afetar cenarios seguintes
+    $Global:BandaVpnSimulada.DownloadMbps = $null
+    $Global:BandaVpnSimulada.UploadMbps = $null
+    $medCelPos2 = @($Global:Medicoes | Where-Object { $_.meio -eq 'celular' -and -not $_.nao_aplicavel } | Select-Object -First 1)
+    if (@($Global:Fase2Tentativas).Count -eq 2 -and $Global:DiagPayload.Metricas.BandaDownloadMbps -eq 20 -and
+        $medCelPos2 -and $medCelPos2.fase2_tentativas -eq 2) {
+        Write-Host "[4d-4] 'Refazer Fase 2' acumulou 2 tentativas e gravou a media (banda=$($Global:DiagPayload.Metricas.BandaDownloadMbps) Mbps) no medio"
+    } else {
+        Write-Host "    FALHA: refazer Fase 2 nao mediou certo (tentativas=$(@($Global:Fase2Tentativas).Count) banda=$($Global:DiagPayload.Metricas.BandaDownloadMbps) medio.fase2_tentativas=$($medCelPos2.fase2_tentativas))"
+        $falhas++
+    }
+
+    # devolve o estado do meio Celular como estava antes do teste do "Refazer"
+    # (uma so' tentativa por fase, numeros originais) -- os cenarios seguintes
+    # dependem dos numeros exatos da 1a rodada, nao da media que este teste gerou.
+    $Global:Fase1Tentativas = $preFase1Tentativas
+    $Global:FaseLocalPayload = $preFase1Payload
+    $Global:Fase2Tentativas = $preFase2Tentativas
+    $Global:DiagPayload = $preFase2Payload
+    Add-MedicaoAtual
+    Set-ChkBotao
+
     Close-OverlayCheck
     Invoke-Pump
     if ("$($w.FindName('overlayCheck').Visibility)" -eq 'Collapsed' -and -not $Global:CheckMeioAtivo) {
@@ -456,6 +580,23 @@ try {
     if ("$($w.FindName('cardNaJustif').Visibility)" -eq 'Visible' -and $Global:NaMeioPendente -eq 'lan') {
         Write-Host "[4f] marcar 'nao se aplica' abre o card de justificativa"
     } else { Write-Host "    FALHA: card de justificativa nao abriu (vis=$($w.FindName('cardNaJustif').Visibility) pend='$($Global:NaMeioPendente)')"; $falhas++ }
+
+    # 4f-2. chips de sugestao de motivo (por meio) + "Outro" pra digitar
+    $wrapSug = $w.FindName('wrapNaSugestoes')
+    $sugEsperado = (@(Get-SugestoesNaMeio 'lan')).Count + 1   # + "Outro (digitar)"
+    if ($wrapSug.Children.Count -eq $sugEsperado) { Write-Host "[4f] chips de sugestao da LAN: $($wrapSug.Children.Count) (incl. Outro)" }
+    else { Write-Host "    FALHA: chips de sugestao (esperado=$sugEsperado obtido=$($wrapSug.Children.Count))"; $falhas++ }
+    $chip1 = $wrapSug.Children[0]
+    $chip1.RaiseEvent([Windows.RoutedEventArgs]::new([Windows.Controls.Button]::ClickEvent))
+    Invoke-Pump
+    if ($w.FindName('txtNaJustif').Text -eq [string] $chip1.Tag) { Write-Host "[4f] clicar num chip preenche a justificativa ('$($chip1.Tag)')" }
+    else { Write-Host "    FALHA: clique no chip nao preencheu (txt='$($w.FindName('txtNaJustif').Text)')"; $falhas++ }
+    $chipOutro = @($wrapSug.Children) | Where-Object { $_.Tag -eq 'Outro (digitar)' } | Select-Object -First 1
+    $chipOutro.RaiseEvent([Windows.RoutedEventArgs]::new([Windows.Controls.Button]::ClickEvent))
+    Invoke-Pump
+    if ("$($w.FindName('txtNaJustif').Text)" -eq '') { Write-Host "[4f] chip 'Outro' limpa o campo pra digitar do zero" }
+    else { Write-Host "    FALHA: 'Outro' nao limpou o campo (txt='$($w.FindName('txtNaJustif').Text)')"; $falhas++ }
+
     Invoke-NaRegistrar   # sem texto -> nao registra
     if (-not $Global:MeiosNaoAplicaveis.ContainsKey('lan')) { Write-Host "[4f] 'Registrar' sem justificativa nao grava" }
     else { Write-Host "    FALHA: registrou sem justificativa"; $falhas++ }
@@ -493,15 +634,96 @@ try {
         Write-Host "[4g] Fase 2 sem VPN: aparece o gate + 'registrar sem a VPN'"
     } else { Write-Host "    FALHA: gate de VPN nao apareceu (gate=$($w.FindName('panelChkVpnGate').Visibility))"; $falhas++ }
     $w.FindName('chkVpnImpossivel').IsChecked = $true ; Update-VpnImpossivel
+    # [4g-2] chips de sugestao (+ "Outro") no card "nao consegui a VPN", mesmo
+    # padrao do card "nao se aplica" (v0.6.92): 1 botao por Get-SugestoesVpnImpossivel + "Outro".
+    $wrapVpn = $w.FindName('wrapVpnSugestoes')
+    $chipsVpnEsperados = @(Get-SugestoesVpnImpossivel).Count + 1
+    if ("$($wrapVpn.Visibility)" -eq 'Visible' -and $wrapVpn.Children.Count -eq $chipsVpnEsperados) {
+        Write-Host "[4g-2] chips de motivo da VPN aparecem ($($wrapVpn.Children.Count), esperado $chipsVpnEsperados)"
+    } else { Write-Host "    FALHA: chips da VPN (vis=$($wrapVpn.Visibility) n=$($wrapVpn.Children.Count) esperado=$chipsVpnEsperados)"; $falhas++ }
+    $chipVpn1 = $wrapVpn.Children[0]
+    $chipVpn1.RaiseEvent([Windows.RoutedEventArgs]::new([Windows.Controls.Button]::ClickEvent))
+    if ($w.FindName('txtVpnMotivo').Text -eq [string] $chipVpn1.Tag) {
+        Write-Host "[4g-2] clicar num chip preenche o motivo da VPN ('$($chipVpn1.Tag)')"
+    } else { Write-Host "    FALHA: chip da VPN nao preencheu (txt='$($w.FindName('txtVpnMotivo').Text)')"; $falhas++ }
+    $chipVpnOutro = $wrapVpn.Children[$wrapVpn.Children.Count - 1]
+    $chipVpnOutro.RaiseEvent([Windows.RoutedEventArgs]::new([Windows.Controls.Button]::ClickEvent))
+    if (-not $w.FindName('txtVpnMotivo').Text) {
+        Write-Host "[4g-2] 'Outro' limpa o motivo da VPN pra digitar"
+    } else { Write-Host "    FALHA: 'Outro' da VPN nao limpou (txt='$($w.FindName('txtVpnMotivo').Text)')"; $falhas++ }
     $w.FindName('txtVpnMotivo').Text = 'FortiClient corrompido; sem internet no local para reinstalar.'
     Invoke-CheckVpnImpossivel
     Invoke-Pump
+    # 4g-3. registrar "sem a VPN" e' um desfecho valido do tecnico, nao falha
+    # tecnica: o passo 2 do semaforo fica VERDE ("testado (registrado sem VPN)"),
+    # nao vermelho. A inviabilidade por falta de VPN e' juizo do painel/relatorio.
+    $corS2 = "$($w.FindName('dotChkS2').Fill.Color)"; $txtS2 = "$($w.FindName('txtChkS2').Text)"
+    if ($corS2 -match '4FC177' -and $txtS2 -match 'registrado sem VPN') {
+        Write-Host "[4g-3] passo 2 do semaforo fica verde/'registrado sem VPN' (nao vermelho)"
+    } else { Write-Host "    FALHA: passo 2 nao ficou verde/registrado sem VPN (cor=$corS2 txt='$txtS2')"; $falhas++ }
     $medWifi = @($Global:Medicoes | Where-Object { $_.meio -eq 'wifi_local' -and -not $_.nao_aplicavel } | Select-Object -First 1)
     if ($medWifi -and $medWifi.vpn_conectou -eq $false -and $medWifi.veredito -eq 'inviavel') {
         Write-Host "[4g] meio Wi-Fi registrado sem a VPN -> inviavel"
     } else { Write-Host "    FALHA: medicao Wi-Fi sem VPN (med=$([bool]$medWifi) vpn=$($medWifi.vpn_conectou) ver=$($medWifi.veredito))"; $falhas++ }
     Close-OverlayCheck
+    # "Concluir" (o Wi-Fi acabou de ser registrado): LAN ja e' NA e o Celular
+    # ja tinha sido testado la no 4d, entao nao sobra nenhum meio pendente --
+    # a selecao esvazia (nenhum card fica com a borda azul de "meio da vez").
+    # O caso de avancar pra um meio REALMENTE pendente (ex.: Celular) esta no
+    # cenario isolado [4i], mais abaixo.
+    if (-not $Global:MeioSelecionado) {
+        Write-Host "[4g] 'Concluir' com todos os meios resolvidos esvazia a selecao (nada mais pendente)"
+    } else { Write-Host "    FALHA: selecao deveria esvaziar apos Concluir (sel='$($Global:MeioSelecionado)')"; $falhas++ }
+    # card do Wi-Fi ja testado mostra "Registrada" (dado congelado do teste),
+    # nao "Conectada" (que sugeriria conexao ao vivo agora mesmo)
+    if ("$($w.FindName('txtLocWifi').Text)" -match '^Registrada a') {
+        Write-Host "[4g] card Wi-Fi ja testado mostra 'Registrada a ...' (nao 'Conectada')"
+    } else { Write-Host "    FALHA: card Wi-Fi deveria dizer 'Registrada' (txt='$($w.FindName('txtLocWifi').Text)')"; $falhas++ }
     $w.FindName('chkVpnImpossivel').IsChecked = $false ; Update-VpnImpossivel
+
+    # 4i. fechar o overlay: "Concluir" avanca a selecao pro proximo meio
+    # pendente de verdade (cenario do usuario: testou o Wi-Fi, o Celular
+    # continua pendente -> a vez passa pra ele sozinho); "Cancelar" (meio
+    # ainda nao concluido) preserva a selecao no card que abriu o overlay.
+    # Isolado (backup/restore completo dos globais) pra nao interferir no
+    # resto do fluxo, que precisa do estado real (LAN+Wi-Fi NA, so' Celular
+    # medido) montado logo em seguida.
+    $medBak = $Global:Medicoes; $naBak = $Global:MeiosNaoAplicaveis.Clone()
+    $selBak = $Global:MeioSelecionado; $faseBak = $Global:ChkFase
+    $ativoBak = $Global:CheckMeioAtivo; $caboBak = $Global:AvisarRetirarCaboLan
+    try {
+        $Global:MeiosNaoAplicaveis = @{ lan = 'sem ponto de rede' }   # LAN resolvido (NA)
+        $Global:Medicoes = @([pscustomobject]@{ meio = 'wifi_local'; operadora = ''; rotulo = 'Wi-Fi do proprio local'; nao_aplicavel = $false; veredito = 'medido' })
+        $Global:AvisarRetirarCaboLan = $false
+        # "Concluir": Wi-Fi acabou de ser testado (unico medido); Celular continua pendente
+        $Global:MeioSelecionado = 'wifi'
+        $Global:CheckMeioAtivo = $true
+        $Global:ChkFase = 'fim'
+        Close-OverlayCheck
+        if ($Global:MeioSelecionado -eq 'celular') {
+            Write-Host "[4i] 'Concluir' avanca a selecao pro proximo meio pendente de verdade (Celular)"
+        } else { Write-Host "    FALHA: 'Concluir' nao avancou pro Celular (sel='$($Global:MeioSelecionado)')"; $falhas++ }
+
+        # "Cancelar": Wi-Fi ainda NAO foi testado (nenhuma medicao) -> continua
+        # sendo o "meio da vez" -> a selecao fica no mesmo card que abriu o overlay.
+        $Global:Medicoes = @()
+        $Global:MeioSelecionado = 'wifi'
+        $Global:CheckMeioAtivo = $true
+        $Global:ChkFase = 'f2-vpn-ok'   # em andamento, ainda nao concluido
+        Close-OverlayCheck
+        if ($Global:MeioSelecionado -eq 'wifi') {
+            Write-Host "[4i] 'Cancelar' mantem a selecao no card que abriu o overlay (Wi-Fi)"
+        } else { Write-Host "    FALHA: 'Cancelar' mudou a selecao (sel='$($Global:MeioSelecionado)')"; $falhas++ }
+    } finally {
+        $Global:Medicoes = $medBak
+        $Global:MeiosNaoAplicaveis = $naBak
+        $Global:MeioSelecionado = $selBak
+        $Global:ChkFase = $faseBak
+        $Global:CheckMeioAtivo = $ativoBak
+        $Global:AvisarRetirarCaboLan = $caboBak
+        Update-PainelMeios
+    }
+
     $Global:VpnSimulada = $true
     # volta ao meio unico (celular) p/ o restante do teste seguir igual: solta os NA
     # de LAN/Wi-Fi (marcados no 4d/4f) e descarta as medicoes que nao sao do celular
@@ -676,6 +898,10 @@ try {
     Invoke-FinalizarDiagnostico
     if ("$($w.FindName('viewHome').Visibility)" -eq 'Visible') { Write-Host "[5d] 'Finalizar' -> volta para a tela inicial" }
     else { Write-Host "    FALHA: 'Finalizar' nao voltou para a home (viewHome=$($w.FindName('viewHome').Visibility))"; $falhas++ }
+    # 5d-4. 'Finalizar' tambem destrava o rail (saiu do assistente)
+    if ($w.FindName('navLocais').IsEnabled -and $w.FindName('btnTrocarUsuario').IsEnabled -and -not $Global:RailTravadoDiag) {
+        Write-Host "[5d] rail destravado depois de 'Finalizar'"
+    } else { Write-Host "    FALHA: rail continuou travado apos 'Finalizar' (RailTravadoDiag=$Global:RailTravadoDiag)"; $falhas++ }
     Show-WizardPasso 6   # volta ao passo 6 (conclusao) para os proximos testes seguirem
 
     # 5e. acompanhamento: guia marca o local como testado; home mostra progresso
@@ -723,13 +949,15 @@ try {
     Remove-VistoriaGel -LocalId 'ZE99-TESTE-PRINCIPAL'
     $Global:LocalDetalheAtual = $null
 
-    # m. modo de avaliacao 'medicao' (padrao de fabrica): assistente de 5 passos,
-    #    sem veredito/faixa/classificacao; relatorio = "Painel de Medicoes".
+    # m. modo de avaliacao 'medicao' (padrao de fabrica): assistente de 6 passos
+    #    (agora inclui o passo exclusivo "Sugestao de conexao", so' sem
+    #    veredito/faixa/classificacao no passo 4; relatorio = "Painel de Medicoes".
     $Global:ModoAvaliacaoOverride = 'medicao'
     Set-ModoAssistente
-    $passo5 = ($Global:WizardNPassos -eq 5) -and ($Global:WizardPassos -notcontains 'stepDecisao')
-    if ($passo5) { Write-Host "[m] modo medicao: assistente de 5 passos (pula a decisao)" }
-    else { Write-Host "    FALHA: assistente deveria ter 5 passos (n=$($Global:WizardNPassos) passos=$($Global:WizardPassos -join ','))"; $falhas++ }
+    $passo6 = ($Global:WizardNPassos -eq 6) -and ($Global:WizardPassos -contains 'stepDecisao') -and
+              ($Global:WizardTitulos[4] -match 'Sugest')
+    if ($passo6) { Write-Host "[m] modo medicao: assistente de 6 passos, passo 5 = '$($Global:WizardTitulos[4])'" }
+    else { Write-Host "    FALHA: assistente deveria ter 6 passos com 'Sugestao...' no passo 5 (n=$($Global:WizardNPassos) titulos=$($Global:WizardTitulos -join ','))"; $falhas++ }
 
     Open-DiagnosticoLimpo
     $cboJm = $w.FindName('cboJunta'); if ($cboJm.Items.Count) { $cboJm.SelectedIndex = 0 }
@@ -737,9 +965,13 @@ try {
     Show-WizardPasso ($Global:WizardPassos.IndexOf('stepResultado') + 1)
     $met = [pscustomobject]@{ LatenciaMediaMs = 12; JitterMs = 1; PerdaPercentual = 0; BandaDownloadMbps = 90; BandaUploadMbps = 30; CarregamentoWebS = 3 }
     $dec = Invoke-MotorDecisao -Metricas $met -Limiares (Get-PerfilLimiares -Meio lan -Cenario com_vpn)
+    # Open-DiagnosticoLimpo zerou $Global:FaseLocalPayload (assistente abriu
+    # limpo, sem probe) -- monta um "fase_local" proprio pra medicao sintetica
+    # em vez de depender do global, pra exercitar rede_local_upload_mbps no JSON.
+    $faseLocalLanMock = [pscustomobject]@{ Internet = [pscustomobject]@{ upload_mbps = 42.5 } }
     $Global:Medicoes = @([pscustomobject]@{
             meio = 'lan'; operadora = ''; rotulo = 'Rede cabeada (LAN)'; nao_aplicavel = $false
-            fase_local = $Global:FaseLocalPayload; rede_local_ok = $true; rede_local_download = 850
+            fase_local = $faseLocalLanMock; rede_local_ok = $true; rede_local_download = 850
             vpn_conectou = $true; vpn_motivo = ''; vpn_download = 90; metricas = $met; fase2_ok = $true
             decisao = $dec; avaliacoes = @(); veredito = 'medido'; quando = (Get-Date).ToString('o') })
     Show-PainelResultado -Payload ([pscustomobject]@{ Ambiente = (Get-EstadoAmbiente); Metricas = $met; Decisao = $dec; Local = $cboLm.SelectedItem.Dados })
@@ -750,29 +982,174 @@ try {
     if ($colClasse -eq 'Collapsed' -and $colFaixaM -eq 'Collapsed' -and $ver0 -eq '') {
         Write-Host "[m] passo 4: sem colunas de faixa/classificacao, sem veredito na linha"
     } else { Write-Host "    FALHA: passo 4 (colClasse=$colClasse colFaixa=$colFaixaM ver='$ver0')"; $falhas++ }
-    # avanca do stepResultado -> deve cair no stepFim (nao stepDecisao)
-    Invoke-WizardProximo
-    if ($Global:WizardPassos[$Global:WizardStep - 1] -eq 'stepFim') { Write-Host "[m] passo 4 -> conclusao (pula a decisao)" }
-    else { Write-Host "    FALHA: nao pulou a decisao (step=$($Global:WizardStep) painel=$($Global:WizardPassos[$Global:WizardStep-1]))"; $falhas++ }
 
-    # modo 'referencia': aparece a faixa, mas nao a classificacao
+    # modo 'referencia': aparece a faixa, mas nao a classificacao. Feito AQUI
+    # (ainda no passo 4, antes de avancar pro passo de sugestao) porque
+    # Show-PainelResultado recalcula o banner informativo do passo 4 chamando
+    # Get-RecomendacaoLocal, que reescreve $Global:RecomendacaoLocal com o
+    # calculo automatico -- se rodasse depois do ajuste manual do tecnico
+    # (mais abaixo), apagaria a escolha dele antes do JSON ser montado.
     $Global:ModoAvaliacaoOverride = 'referencia'
     Show-PainelResultado -Payload ([pscustomobject]@{ Ambiente = (Get-EstadoAmbiente); Metricas = $met; Decisao = $dec; Local = $cboLm.SelectedItem.Dados })
     Invoke-Pump
     if ("$($w.FindName('colVpnFaixa').Visibility)" -eq 'Visible' -and "$($w.FindName('colVpnClasse').Visibility)" -eq 'Collapsed') {
         Write-Host "[m] modo referencia: faixa visivel, classificacao oculta"
     } else { Write-Host "    FALHA: modo referencia (faixa=$($w.FindName('colVpnFaixa').Visibility) classe=$($w.FindName('colVpnClasse').Visibility))"; $falhas++ }
-
-    # JSON + relatorio no modo medicao
     $Global:ModoAvaliacaoOverride = 'medicao'
-    $recM = Get-ConexaoRecomendada @($Global:Medicoes) -Modo medicao
+
+    # 2o meio (Wi-Fi, download maior que o da LAN) para testar o ajuste manual
+    # do combo no novo passo "Sugestao de conexao".
+    $Global:Medicoes += [pscustomobject]@{
+        meio = 'wifi_local'; operadora = ''; rotulo = 'Wi-Fi do proprio local'; nao_aplicavel = $false
+        fase_local = $Global:FaseLocalPayload; rede_local_ok = $true; rede_local_download = 700
+        vpn_conectou = $true; vpn_motivo = ''; vpn_download = 120; metricas = $met; fase2_ok = $true
+        decisao = $dec; avaliacoes = @(); veredito = 'medido'; quando = (Get-Date).ToString('o')
+    }
+
+    # avanca do stepResultado -> agora vai sempre para stepDecisao, mesmo fora
+    # do modo completo (o passo "pula a decisao" deixou de existir).
+    Invoke-WizardProximo
+    if ($Global:WizardPassos[$Global:WizardStep - 1] -eq 'stepDecisao') {
+        Write-Host "[m] passo 4 -> passo exclusivo de sugestao de conexao (nao pula mais)"
+    } else { Write-Host "    FALHA: nao chegou no passo de sugestao (step=$($Global:WizardStep) painel=$($Global:WizardPassos[$Global:WizardStep-1]))"; $falhas++ }
+
+    # cartao de viabilidade (RECOMENDACAO FINAL / cboDecisaoFinal) fica
+    # escondido fora do modo completo; so o cartao de sugestao aparece, com
+    # titulo/rotulo do motivo adaptados (motivo vira opcional).
+    if ("$($w.FindName('cardDecisaoViavel').Visibility)" -eq 'Collapsed' -and
+        "$($w.FindName('txtTituloConexaoRec').Text)" -match 'SUGEST' -and
+        "$($w.FindName('lblMotivoRec').Text)" -match 'opcional') {
+        Write-Host "[m] passo de sugestao: sem cartao de viabilidade; titulo/rotulo do motivo adaptados"
+    } else {
+        Write-Host "    FALHA: passo de sugestao nao adaptou o visual (cardViavel=$($w.FindName('cardDecisaoViavel').Visibility) titulo='$($w.FindName('txtTituloConexaoRec').Text)' motivo='$($w.FindName('lblMotivoRec').Text)')"
+        $falhas++
+    }
+
+    # combo ja vem pre-selecionado com a sugestao CALCULADA (maior download: Wi-Fi 120 > LAN 90)
+    $cboRec = $w.FindName('cboConexaoRec')
+    if ("$($cboRec.SelectedItem)" -match 'Wi-Fi') {
+        Write-Host "[m] combo pre-selecionado com a sugestao calculada: '$($cboRec.SelectedItem)'"
+    } else { Write-Host "    FALHA: pre-selecao nao bateu com o calculo (sel='$($cboRec.SelectedItem)')"; $falhas++ }
+
+    # frase de contexto sem linguagem de veredito/viabilidade, nem o sufixo
+    # "(informativo, sem avaliacao de viabilidade)" -- redundante com o
+    # subtitulo do passo, tirado a pedido do usuario.
+    if ("$($w.FindName('lblRecContexto').Text)" -match 'Sugest' -and
+        "$($w.FindName('lblRecContexto').Text)" -notmatch 'Veredito' -and
+        "$($w.FindName('lblRecContexto').Text)" -notmatch 'informativo') {
+        Write-Host "[m] frase de contexto do passo de sugestao sem linguagem de veredito/informativo"
+    } else { Write-Host "    FALHA: frase de contexto (txt='$($w.FindName('lblRecContexto').Text)')"; $falhas++ }
+
+    # opcao "Nenhuma" do combo fica simples fora do modo completo (sem "local
+    # inviavel por qualquer meio", que so faz sentido onde ha juizo de viabilidade)
+    $optsM = @($cboRec.ItemsSource)
+    if ($optsM[-1] -eq 'Nenhuma') {
+        Write-Host "[m] opcao 'Nenhuma' do combo fica simples fora do modo completo"
+    } else { Write-Host "    FALHA: opcao 'Nenhuma' deveria ser so' 'Nenhuma' (veio '$($optsM[-1])')"; $falhas++ }
+    $Global:ModoAvaliacaoOverride = 'completo'
+    $optsCompl = Get-OpcoesRecomendacao
+    $Global:ModoAvaliacaoOverride = 'medicao'
+    if ($optsCompl[-1] -match 'local inviavel por qualquer meio') {
+        Write-Host "[m] modo completo continua explicando a consequencia de 'Nenhuma' (sem regressao)"
+    } else { Write-Host "    FALHA: modo completo deveria manter a explicacao em 'Nenhuma' (veio '$($optsCompl[-1])')"; $falhas++ }
+
+    # sem NENHUM meio selecionado, o gate continua bloqueando (isso nao e opcional)
+    $cboRec.SelectedItem = $null
+    if (-not (Test-RecomendacaoValida)) { Write-Host "[m] sem selecionar um meio, o gate continua bloqueando (motivo opcional, selecao nao)" }
+    else { Write-Host "    FALHA: gate deveria bloquear sem nenhum meio selecionado"; $falhas++ }
+
+    # tecnico AJUSTA manualmente para a LAN (download menor, mas decide usar
+    # mesmo assim) -- exatamente o pedido: "calculado pela ferramenta, mas
+    # pode ser ajustado pelo tecnico". Avanca SEM motivo -- opcional fora do
+    # modo completo, nao deve bloquear.
+    # card "cabo de rede (LAN)": so' aparece quando a conexao escolhida e' a LAN.
+    $cboRec.SelectedItem = @($optsM | Where-Object { $_ -match 'Wi-Fi' } | Select-Object -First 1)
+    Update-ContextoRecomendacao
+    $caboEscondidoWifi = "$($w.FindName('cardCaboLan').Visibility)" -eq 'Collapsed'
+    $cboRec.SelectedItem = 'Rede cabeada (LAN)'
+    Update-ContextoRecomendacao
+    $wrapCabo = $w.FindName('wrapCaboLan')
+    if ($caboEscondidoWifi -and "$($w.FindName('cardCaboLan').Visibility)" -eq 'Visible' -and $wrapCabo.Children.Count -eq 5) {
+        Write-Host "[m-cabo] card do cabo de rede: escondido no Wi-Fi, visivel na LAN com 5 chips"
+    } else { Write-Host "    FALHA: card do cabo (wifiHid=$caboEscondidoWifi lanVis=$($w.FindName('cardCaboLan').Visibility) chips=$($wrapCabo.Children.Count))"; $falhas++ }
+    # clica no chip "10 m"
+    $chip10 = @($wrapCabo.Children | Where-Object { "$($_.Tag)" -eq '10 m' } | Select-Object -First 1)
+    $chip10.RaiseEvent([Windows.RoutedEventArgs]::new([Windows.Controls.Button]::ClickEvent))
+    if ($Global:CaboLan -and $Global:CaboLan.necessario -eq $true -and $Global:CaboLan.metros -eq 10) {
+        Write-Host "[m-cabo] chip '10 m' grava necessario=true / metros=10"
+    } else { Write-Host "    FALHA: chip 10 m (cabo=$($Global:CaboLan | ConvertTo-Json -Compress))"; $falhas++ }
+
+    $w.FindName('txtMotivoRec').Text = ''
+    Invoke-WizardProximo
+    if ($Global:WizardPassos[$Global:WizardStep - 1] -eq 'stepFim' -and $Global:RecomendacaoLocal.meio -eq 'lan') {
+        Write-Host "[m] avancou sem motivo (opcional) e gravou o ajuste manual (LAN, nao a sugestao automatica)"
+    } else {
+        Write-Host "    FALHA: ajuste manual nao avancou/gravou (step=$($Global:WizardStep) rec=$($Global:RecomendacaoLocal.meio))"
+        $falhas++
+    }
+
+    # JSON + relatorio no modo medicao -- usa o AJUSTE MANUAL do tecnico
+    # ($Global:RecomendacaoLocal = LAN, gravado pelo passo de sugestao acima),
+    # nao o calculo automatico (que teria escolhido o Wi-Fi, maior download).
     $docM = New-ResultadoJson -Ambiente (Get-EstadoAmbiente) -Metricas $met -Decisao $dec `
         -Local $cboLm.SelectedItem.Dados -TecnicoNome 'TESTE' -FaseLocal $Global:FaseLocalPayload `
-        -Medicoes $Global:Medicoes -ConexaoRecomendada $recM
+        -Medicoes $Global:Medicoes -ConexaoRecomendada $Global:RecomendacaoLocal -MotivoRecomendacao ([string] $Global:MotivoRecomendacao) `
+        -CaboLan $Global:CaboLan
     $htmlM = New-RelatorioHtml -Resultado $docM
+    if ($docM.cabo_lan -and $docM.cabo_lan.necessario -eq $true -and $docM.cabo_lan.metros -eq 10 -and $htmlM -match 'Cabo de rede') {
+        Write-Host "[m-cabo] JSON traz cabo_lan (necessario/metros) e o relatorio mostra a linha 'Cabo de rede'"
+    } else { Write-Host "    FALHA: cabo_lan no JSON/relatorio (cabo=$($docM.cabo_lan | ConvertTo-Json -Compress) htmlOk=$($htmlM -match 'Cabo de rede'))"; $falhas++ }
     if ($docM.modo_avaliacao -eq 'medicao' -and $htmlM -match 'Painel de Medi' -and $htmlM -notmatch 'Painel de Viabilidade') {
         Write-Host "[m] JSON traz modo_avaliacao='medicao'; relatorio = Painel de Medicoes (sem Painel de Viabilidade)"
     } else { Write-Host "    FALHA: json/relatorio modo medicao (modo=$($docM.modo_avaliacao))"; $falhas++ }
+
+    # colunas da tabela "Medicoes por meio" do relatorio: VPN (conectou sim/nao) +
+    # Download/Upload s/ VPN + Latencia/Perda VPN -- sem Download VPN/Upload VPN/Jitter
+    $medLan = @($docM.medicoes | Where-Object { $_.meio -eq 'lan' } | Select-Object -First 1)
+    if ($htmlM -match '<th>VPN</th>' -and $htmlM -match 'Upload s/ VPN' -and $htmlM -match 'Perda VPN' -and
+        $htmlM -notmatch 'Download VPN<' -and $htmlM -notmatch 'Jitter / Perda' -and
+        $medLan -and $medLan.rede_local_upload_mbps -eq 42.5) {
+        Write-Host "[m] tabela 'Medicoes por meio': colunas VPN/Download s-VPN/Upload s-VPN/Latencia/Perda (JSON traz rede_local_upload_mbps=$($medLan.rede_local_upload_mbps))"
+    } else {
+        Write-Host "    FALHA: colunas da tabela de medicoes (upload=$($medLan.rede_local_upload_mbps) htmlOk=$($htmlM -match '<th>VPN</th>'))"
+        $falhas++
+    }
+    if ($docM.conexao_recomendada.meio -eq 'lan' -and $docM.conexao_recomendada.veredito -eq 'medido' -and -not $docM.conexao_recomendada.motivo) {
+        Write-Host "[m] JSON.conexao_recomendada reflete o ajuste manual do tecnico (LAN, sem juizo de viabilidade, motivo vazio)"
+    } else {
+        Write-Host "    FALHA: conexao_recomendada no JSON (meio=$($docM.conexao_recomendada.meio) veredito=$($docM.conexao_recomendada.veredito) motivo='$($docM.conexao_recomendada.motivo)')"
+        $falhas++
+    }
+
+    # m-2. bug real de campo: 2+ medicoes em modo medicao, uma delas FECHADA
+    # (nao e' a "aberta" no seletor do passo 4) com metricas reprovadas pelo
+    # motor e ja salvas (Save-AjustesPasso5 grava ClasseFinal em branco fora
+    # do modo completo -- a classe automatica do motor continua sendo
+    # calculada por baixo). Antes da correcao, Get-JustificativasFaltando
+    # comparava esse branco contra a classe automatica real e reportava
+    # "falta justificar" pra TODA metrica da medicao fechada, travando o
+    # "Salvar resultado" mesmo sem nenhum ajuste manual de verdade.
+    $detFalhou = @($Global:MetricasInfo | Where-Object { $_.cenarios -contains 'com_vpn' } | ForEach-Object {
+        [pscustomobject]@{ metrica = $_.metrica; classe = 'inviavel' }
+    })
+    $Global:Medicoes[0].decisao    = [pscustomobject]@{ Detalhes = $detFalhou }
+    $Global:Medicoes[0].avaliacoes = @($detFalhou | ForEach-Object {
+        [pscustomobject]@{ metrica = $_.metrica; classe_final = ''; justificativa = '' }
+    })
+    $Global:MedicaoPasso5Idx = 1   # a medicao "aberta" agora e' a Wi-Fi ([1]), nao a LAN ([0])
+    $faltaBug = Get-JustificativasFaltando
+    if (-not $faltaBug.Count) {
+        Write-Host "[m-2] modo medicao: 'falta justificar' nao dispara por medicoes fechadas com metricas reprovadas"
+    } else { Write-Host "    FALHA: bug de justificativa falsa no modo medicao (falta=$($faltaBug -join '; '))"; $falhas++ }
+
+    # a MESMA situacao, no modo completo, precisa continuar detectando de verdade
+    $Global:ModoAvaliacaoOverride = 'completo'
+    $faltaCompleto = Get-JustificativasFaltando
+    $Global:ModoAvaliacaoOverride = 'medicao'
+    if ($faltaCompleto.Count -ge 1) {
+        Write-Host "[m-2] modo completo: a mesma checagem continua pegando a divergencia de verdade (sem regressao)"
+    } else { Write-Host "    FALHA: modo completo deveria continuar detectando a divergencia"; $falhas++ }
+    $Global:MedicaoPasso5Idx = -1   # devolve ao padrao (ultima)
 
     $Global:ModoAvaliacaoOverride = 'completo'   # [6]..[9] cobrem o modo completo
     Reset-Medicoes
@@ -893,10 +1270,62 @@ try {
     if ($srvCfg -and "$($w.FindName('txtIperfPortaCfg').Text)" -match '\d') {
         Write-Host "[8b] admin carrega servidor iperf3: $srvCfg`:$($w.FindName('txtIperfPortaCfg').Text)"
     } else { Write-Host "    FALHA: campos do servidor iperf3 nao carregaram (srv='$srvCfg')"; $falhas++ }
+    # 8b-2. campos de sugestao de motivo tambem carregam (uma por linha)
+    $sugLanTela = "$($w.FindName('txtSugNaLan').Text)" -split "`r?`n"
+    if (@(Compare-Object $sugLanTela (Get-SugestoesNaMeio 'lan')).Count -eq 0) {
+        Write-Host "[8b] admin carrega sugestoes de motivo (LAN: $($sugLanTela.Count) linha(s))"
+    } else { Write-Host "    FALHA: campo de sugestoes LAN nao carregou certo (tela='$sugLanTela')"; $falhas++ }
     $w.FindName('txtPinAdmin').Password = ''
     Invoke-SalvarAmbiente
     if ("$($w.FindName('lblAmbienteMsg').Text)" -match 'PIN') { Write-Host "[8b] salvar ambiente sem PIN bloqueado" }
     else { Write-Host "    FALHA: salvou ambiente sem PIN ('$($w.FindName('lblAmbienteMsg').Text)')"; $falhas++ }
+
+    # 8c. semaforo do overlay: quais itens aparecem e' configuravel (admin) --
+    # roda numa pasta temporaria (troca $Global:RaizApp por um instante) pra
+    # nao tocar no config/ambiente.json real desta maquina.
+    $tmpCfgDir = Join-Path ([IO.Path]::GetTempPath()) ('dicon-cfgtest-' + [guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path (Join-Path $tmpCfgDir 'config') -Force | Out-Null
+    $raizOrig = $Global:RaizApp
+    $Global:RaizApp = $tmpCfgDir
+    try {
+        $arqSalvo = Save-ConfigAmbiente -Servidor '10.0.0.1' -OverlayRedeLocal $true -OverlayVpn $false -OverlayTotalizacao $true
+        $salvo = Get-Content $arqSalvo -Raw | ConvertFrom-Json
+        if ($salvo.overlay_passos.rede_local -eq $true -and $salvo.overlay_passos.vpn -eq $false -and $salvo.overlay_passos.totalizacao -eq $true) {
+            Write-Host "[8c] Save-ConfigAmbiente grava overlay_passos (rede_local=true, vpn=false, totalizacao=true)"
+        } else { Write-Host "    FALHA: overlay_passos gravado errado ($($salvo.overlay_passos | ConvertTo-Json -Compress))"; $falhas++ }
+
+        $vis = Get-OverlayPassosVisiveis
+        if ($vis.rede_local -eq $true -and $vis.vpn -eq $false -and $vis.totalizacao -eq $true) {
+            Write-Host "[8c] Get-OverlayPassosVisiveis le de volta certo"
+        } else { Write-Host "    FALHA: Get-OverlayPassosVisiveis (rede_local=$($vis.rede_local) vpn=$($vis.vpn) totalizacao=$($vis.totalizacao))"; $falhas++ }
+
+        Reset-OverlayCheck
+        Invoke-Pump
+        $visS1 = "$($w.FindName('rowChkS1').Visibility)"; $visS2 = "$($w.FindName('rowChkS2').Visibility)"; $visS3 = "$($w.FindName('rowChkS3').Visibility)"
+        if ($visS1 -eq 'Visible' -and $visS2 -eq 'Collapsed' -and $visS3 -eq 'Visible') {
+            Write-Host "[8c] overlay esconde so' a linha desmarcada (VPN) e mostra as outras 2"
+        } else { Write-Host "    FALHA: visibilidade das linhas do semaforo (1=$visS1 2=$visS2 3=$visS3)"; $falhas++ }
+
+        # 8d. sugestoes de motivo (chips) sao configuraveis pelo admin -- mesma
+        # pasta temporaria, sem tocar no config/ambiente.json real.
+        $sugLanCustom = @('Motivo customizado LAN 1', 'Motivo customizado LAN 2')
+        $sugVpnCustom = @('Motivo customizado VPN 1')
+        Save-ConfigAmbiente -Servidor '10.0.0.1' -SugNaLan $sugLanCustom -SugNaWifi @() -SugNaCelular @() -SugVpnImpossivel $sugVpnCustom | Out-Null
+        $lanLida = @(Get-SugestoesNaMeio 'lan')
+        $vpnLida = @(Get-SugestoesVpnImpossivel)
+        if (@(Compare-Object $lanLida $sugLanCustom).Count -eq 0 -and @(Compare-Object $vpnLida $sugVpnCustom).Count -eq 0) {
+            Write-Host "[8d] Get-SugestoesNaMeio/Get-SugestoesVpnImpossivel leem a lista customizada do admin"
+        } else { Write-Host "    FALHA: sugestoes customizadas (lan=$($lanLida -join '|') vpn=$($vpnLida -join '|'))"; $falhas++ }
+        $wifiLidaVazia = @(Get-SugestoesNaMeio 'wifi_local')
+        if (@(Compare-Object $wifiLidaVazia (Get-SugestoesNaMeioPadrao 'wifi_local')).Count -eq 0) {
+            Write-Host "[8d] lista vazia no admin volta a usar a sugestao padrao embutida"
+        } else { Write-Host "    FALHA: fallback p/ padrao nao ocorreu (wifi=$($wifiLidaVazia -join '|'))"; $falhas++ }
+    } finally {
+        $Global:RaizApp = $raizOrig
+        Remove-Item $tmpCfgDir -Recurse -Force -ErrorAction SilentlyContinue
+        Reset-OverlayCheck   # volta a config real (config/ambiente.json desta maquina, se houver)
+        Invoke-Pump
+    }
 
     # 9. metrica desativada sai da bateria (motor)
     $limTest = [pscustomobject]@{

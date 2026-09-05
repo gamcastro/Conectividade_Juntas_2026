@@ -71,6 +71,9 @@ function New-ResultadoJson {
         $Medicoes,
         $ConexaoRecomendada,
         [string]   $MotivoRecomendacao,
+        # Precisa passar cabo de rede ate o ponto (so' faz sentido quando a
+        # conexao escolhida e' a LAN). {necessario;metros}. Opcional.
+        $CaboLan,
         # Anexo do formulario GEL (coordenadas / suporte / eletrica). Opcional.
         $VistoriaGel
     )
@@ -168,23 +171,45 @@ function New-ResultadoJson {
     $medicoesJson = @()
     foreach ($m in @($Medicoes)) {
         if (-not $m) { continue }
-        $mIt  = Get-Prop (Get-Prop $m 'fase_local') 'Internet'
-        $mMet = Get-Prop $m 'metricas'
+        $mIt   = Get-Prop (Get-Prop $m 'fase_local') 'Internet'
+        $mMet  = Get-Prop $m 'metricas'
+        $mMeio = [string] (Get-Prop $m 'meio')
         $mOvr = @{}
         foreach ($a in @(Get-Prop $m 'avaliacoes')) { if ($a -and $a.metrica) { $mOvr[[string] $a.metrica] = $a } }
+        # Dados da placa usada neste meio, do snapshot congelado no momento do
+        # teste (nao do inventario ao vivo, que pode ter mudado depois com
+        # outro meio ja testado ou um probe geral). Velocidade do link entra
+        # para LAN e Wi-Fi do local; banda/sinal/SSID so' para Wi-Fi do local
+        # (no roteamento de celular nao faz sentido informar isso).
+        $mSnap = Get-Prop $m 'snapshot_adaptador'
+        $mVelocidadeLink = if ($mMeio -in @('lan', 'wifi_local')) { Get-Prop $mSnap 'velocidade_mbps' } else { $null }
+        $mWifiBanda = ''; $mWifiSinal = $null; $mWifiSsid = ''
+        if ($mMeio -eq 'wifi_local') {
+            $mWifiBanda = [string] (Get-Prop $mSnap 'banda_ghz')
+            $mWifiSinal = Get-Prop $mSnap 'sinal_pct'
+            $mWifiSsid  = [string] (Get-Prop $mSnap 'ssid')
+        }
         $medicoesJson += [pscustomobject]@{
-            meio                 = [string] (Get-Prop $m 'meio')
+            meio                 = $mMeio
             operadora            = [string] (Get-Prop $m 'operadora')
             rotulo               = [string] (Get-Prop $m 'rotulo')
             nao_aplicavel        = [bool] (Get-Prop $m 'nao_aplicavel')
             motivo_nao_aplicavel = [string] (Get-Prop $m 'motivo_na')
             rede_local_ok        = [bool] (Get-Prop $m 'rede_local_ok')
             rede_local_download  = (Get-Prop $m 'rede_local_download')
+            rede_local_upload_mbps = (Get-Prop $mIt 'upload_mbps')
             rede_local_provedor  = [string] (Get-Prop $mIt 'isp')
             rede_local_falha_tipo  = [string] (Get-Prop $mIt 'speedtest_falha_tipo')
             rede_local_diagnostico = [string] (Get-Prop $mIt 'speedtest_diagnostico')
-            limiares_meio          = [string] (Get-Prop $m 'meio')
-            rede_local_avaliacao   = @(Get-AvaliacaoRedeLocalJson $mIt $mOvr ([string] (Get-Prop $m 'meio')))
+            rede_local_velocidade_link_mbps = $mVelocidadeLink
+            rede_local_wifi_banda           = $mWifiBanda
+            rede_local_wifi_sinal_pct       = $mWifiSinal
+            rede_local_wifi_ssid            = $mWifiSsid
+            limiares_meio          = $mMeio
+            rede_local_avaliacao   = @(Get-AvaliacaoRedeLocalJson $mIt $mOvr $mMeio)
+            # curva de velocidade do teste (sem VPN), pro grafico do relatorio
+            # -- ver ConvertTo-SerieVelocidadeSpeedtest em src/core/RedeLocal.ps1.
+            rede_local_serie_velocidade = @(Get-Prop $mIt 'serie_velocidade')
             vpn_conectou         = [bool] (Get-Prop $m 'vpn_conectou')
             vpn_motivo           = [string] (Get-Prop $m 'vpn_motivo')
             vpn_download_mbps     = (Get-Prop $mMet 'BandaDownloadMbps')
@@ -192,8 +217,22 @@ function New-ResultadoJson {
             latencia_ms           = (Get-Prop $mMet 'LatenciaMediaMs')
             jitter_ms             = (Get-Prop $mMet 'JitterMs')
             perda_percentual      = (Get-Prop $mMet 'PerdaPercentual')
+            # curva de banda do iperf3 (download+upload) e amostras de
+            # latencia do ping (com VPN), pros graficos do relatorio -- ver
+            # Test-BandaVpn (src/testes/Test-Banda.ps1) e Test-Latencia
+            # (src/testes/Test-Latencia.ps1).
+            vpn_serie_banda       = @(Get-Prop (Get-Prop $m 'iperf') 'SerieBanda')
+            vpn_serie_latencia    = @(Get-Prop $mMet 'SerieLatenciaMs')
             veredito             = [string] (Get-Prop $m 'veredito')
             quando               = [string] (Get-Prop $m 'quando')
+            # Quantas tentativas foram combinadas na media (0/1 = tecnico nao
+            # usou "Refazer Fase 1/2" no overlay; ver Get-Fase1Media/Get-Fase2Media
+            # em src/ui/Janela-Principal.ps1) + o resumo de CADA tentativa (pro
+            # grafico "tentativas do Refazer" do relatorio).
+            rede_local_tentativas = (Get-Prop $m 'fase1_tentativas')
+            vpn_tentativas        = (Get-Prop $m 'fase2_tentativas')
+            rede_local_tentativas_detalhe = @(Get-Prop $m 'fase1_tentativas_detalhe')
+            vpn_tentativas_detalhe        = @(Get-Prop $m 'fase2_tentativas_detalhe')
         }
     }
 
@@ -241,6 +280,13 @@ function New-ResultadoJson {
         rede_local        = $redeLocal
         vistoria_gel       = (New-BlocoVistoriaGel -VistoriaGel $VistoriaGel -LocalId ([string] (Get-Prop $Local 'id')))
         vpn               = [pscustomobject]@{ impossivel = [bool] $VpnImpossivel; motivo = [string] $VpnMotivo }
+        cabo_lan          = $(if ($CaboLan) {
+            $nec = Get-Prop $CaboLan 'necessario'
+            [pscustomobject]@{
+                necessario = $(if ($null -ne $nec) { [bool] $nec } else { $null })
+                metros     = (Get-Prop $CaboLan 'metros')
+            }
+        } else { $null })
         medicoes          = @($medicoesJson)
         conexao_recomendada = $recJson
         ambiente          = $Ambiente

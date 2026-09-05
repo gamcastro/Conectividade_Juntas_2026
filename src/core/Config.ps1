@@ -47,7 +47,21 @@ function Save-ConfigAmbiente {
         [Parameter(Mandatory)] [string] $Servidor,
         [int] $Porta   = 5201,
         [int] $Duracao = 10,
-        [string] $MapsKey                 # chave da Maps Static API (opcional)
+        [string] $MapsKey,                 # chave da Maps Static API (opcional)
+        # Quais dos 3 itens do semaforo do overlay de checagem aparecem (so'
+        # visibilidade -- nao desliga a medicao em si, ver Reset-OverlayCheck).
+        [bool] $OverlayRedeLocal  = $true,
+        [bool] $OverlayVpn        = $true,
+        [bool] $OverlayTotalizacao = $true,
+        # Sugestoes de motivo (chips + "Outro") oferecidas no card "nao se
+        # aplica" de cada meio e no card "nao consegui a VPN"; $null = nao
+        # mexe no bloco salvo (Initialize-Admin sempre manda a lista atual,
+        # entao na pratica isso so' importa se algum outro chamador nao
+        # passar o parametro).
+        [string[]] $SugNaLan,
+        [string[]] $SugNaWifi,
+        [string[]] $SugNaCelular,
+        [string[]] $SugVpnImpossivel
     )
     $dir  = Join-Path $Global:RaizApp 'config'
     $alvo = Join-Path $dir 'ambiente.json'
@@ -68,6 +82,48 @@ function Save-ConfigAmbiente {
         $gm = [pscustomobject]@{ static_key = ([string] $MapsKey).Trim() }
         if ($base.PSObject.Properties['google_maps']) { $base.google_maps = $gm }
         else { $base | Add-Member -NotePropertyName google_maps -NotePropertyValue $gm -Force }
+    }
+
+    $novoOverlay = [pscustomobject]@{
+        rede_local  = [bool] $OverlayRedeLocal
+        vpn         = [bool] $OverlayVpn
+        totalizacao = [bool] $OverlayTotalizacao
+    }
+    if ($base.PSObject.Properties['overlay_passos']) { $base.overlay_passos = $novoOverlay }
+    else { $base | Add-Member -NotePropertyName overlay_passos -NotePropertyValue $novoOverlay -Force }
+
+    if ($PSBoundParameters.ContainsKey('SugNaLan') -or $PSBoundParameters.ContainsKey('SugNaWifi') -or
+        $PSBoundParameters.ContainsKey('SugNaCelular') -or $PSBoundParameters.ContainsKey('SugVpnImpossivel')) {
+        $atual = if ($base.PSObject.Properties['sugestoes_motivo']) { $base.sugestoes_motivo } else { $null }
+        # Resolve cada lista numa VARIAVEL antes de montar o objeto -- atribuir
+        # o resultado de um if/elseif direto como valor de chave num literal
+        # @{} sofre o "unroll" classico do PowerShell (o pipeline de saida do
+        # if enumera o array: 0 itens vira $null, 1 item perde o array e vira
+        # so' o escalar). Uma variavel comum nao sofre esse enumeration.
+        $rNaLan = @()
+        if ($PSBoundParameters.ContainsKey('SugNaLan')) { $rNaLan = @($SugNaLan) }
+        elseif ($atual -and $atual.PSObject.Properties['na_lan']) { $rNaLan = @($atual.na_lan) }
+        $rNaWifi = @()
+        if ($PSBoundParameters.ContainsKey('SugNaWifi')) { $rNaWifi = @($SugNaWifi) }
+        elseif ($atual -and $atual.PSObject.Properties['na_wifi_local']) { $rNaWifi = @($atual.na_wifi_local) }
+        $rNaCelular = @()
+        if ($PSBoundParameters.ContainsKey('SugNaCelular')) { $rNaCelular = @($SugNaCelular) }
+        elseif ($atual -and $atual.PSObject.Properties['na_celular']) { $rNaCelular = @($atual.na_celular) }
+        $rVpnImpossivel = @()
+        if ($PSBoundParameters.ContainsKey('SugVpnImpossivel')) { $rVpnImpossivel = @($SugVpnImpossivel) }
+        elseif ($atual -and $atual.PSObject.Properties['vpn_impossivel']) { $rVpnImpossivel = @($atual.vpn_impossivel) }
+        $rNaLan         = @($rNaLan | Where-Object { $_ })
+        $rNaWifi        = @($rNaWifi | Where-Object { $_ })
+        $rNaCelular     = @($rNaCelular | Where-Object { $_ })
+        $rVpnImpossivel = @($rVpnImpossivel | Where-Object { $_ })
+        $novoSug = [pscustomobject]@{
+            na_lan         = $rNaLan
+            na_wifi_local  = $rNaWifi
+            na_celular     = $rNaCelular
+            vpn_impossivel = $rVpnImpossivel
+        }
+        if ($base.PSObject.Properties['sugestoes_motivo']) { $base.sugestoes_motivo = $novoSug }
+        else { $base | Add-Member -NotePropertyName sugestoes_motivo -NotePropertyValue $novoSug -Force }
     }
 
     # nao persiste google_oauth em ambiente.json: e camada do exemplo/pacote (a

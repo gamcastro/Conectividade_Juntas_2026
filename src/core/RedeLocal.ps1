@@ -96,6 +96,62 @@ function Invoke-SpeedtestStreaming {
     [pscustomobject]@{ Eventos = $eventos; Erro = ($errBuf -join "`n") }
 }
 
+# Curva de velocidade (download/upload) pro grafico do relatorio -- puro
+# (recebe a lista de eventos ja capturada por Invoke-SpeedtestStreaming),
+# devolve [{T;Fase;Mbps}] ORDENADO e REAMOSTRADO em ate $Baldes pontos por
+# fase (media da banda por faixa de progresso). Sem a reamostragem, um link
+# instavel (celular) gera centenas de eventos oscilando muito -> o grafico
+# vira um rabisco ilegivel e o JSON transmitido incha. T = progresso 0..100
+# na fase de download, 100..200 na de upload (linha do tempo continua, como
+# a SerieBanda do iperf3); ".progress" e' o unico campo de tempo confiavel no
+# JSONL do Ookla CLI (ja usado em Update-Speedtest).
+# OBS: NAO usar @($Eventos) aqui -- $Eventos e' um [Collections.Generic.List[object]]
+# (Invoke-SpeedtestStreaming) e o operador @() sobre uma List[object] estoura
+# "Os tipos de argumento nao correspondem" no Windows PowerShell 5.1 recente
+# (build 26100.8875+). foreach direto sobre a List funciona; $null -> 0 voltas.
+function ConvertTo-SerieVelocidadeSpeedtest {
+    param($Eventos, [int] $Baldes = 20)
+
+    $bruto = @{
+        download = (New-Object System.Collections.Generic.List[object])
+        upload   = (New-Object System.Collections.Generic.List[object])
+    }
+    foreach ($e in $Eventos) {
+        $fase = [string] $e.type
+        if ($fase -ne 'download' -and $fase -ne 'upload') { continue }
+        if (-not $e.PSObject.Properties[$fase] -or -not $e.$fase) { continue }
+        $sub  = $e.$fase
+        $prog = $null
+        if ($sub.PSObject.Properties['progress'] -and $null -ne $sub.progress) { $prog = [double] $sub.progress }
+        elseif ($e.PSObject.Properties['progress'] -and $null -ne $e.progress)  { $prog = [double] $e.progress }
+        $bw = $null
+        if ($sub.PSObject.Properties['bandwidth'] -and $null -ne $sub.bandwidth) { $bw = ConvertTo-Mbps $sub.bandwidth }
+        if ($null -eq $prog -or $null -eq $bw) { continue }
+        if ($prog -lt 0) { $prog = 0 } elseif ($prog -gt 1) { $prog = 1 }
+        $bruto[$fase].Add([pscustomobject]@{ prog = $prog; mbps = [double] $bw })
+    }
+
+    $serie = New-Object System.Collections.Generic.List[object]
+    foreach ($fase in 'download', 'upload') {
+        $pts = @($bruto[$fase] | Sort-Object prog)
+        if (-not $pts.Count) { continue }
+        $n = [math]::Max(1, [math]::Min($Baldes, $pts.Count))
+        $desloc = if ($fase -eq 'upload') { 100 } else { 0 }
+        for ($b = 0; $b -lt $n; $b++) {
+            $lo = $b / $n; $hi = ($b + 1) / $n
+            $nesta = @($pts | Where-Object { $_.prog -ge $lo -and ($_.prog -lt $hi -or ($b -eq $n - 1)) })
+            if (-not $nesta.Count) { continue }
+            $media = ($nesta | Measure-Object -Property mbps -Average).Average
+            $serie.Add([pscustomobject]@{
+                T    = [math]::Round($desloc + (($lo + $hi) / 2) * 100, 1)
+                Fase = $fase
+                Mbps = [math]::Round([double] $media, 2)
+            })
+        }
+    }
+    $serie.ToArray()
+}
+
 # Extrai os IDs de servidor da saida de "speedtest.exe --servers" (tabela ou
 # jsonl). Puro (recebe texto) para ser testavel sem o binario.
 function ConvertFrom-ListaServidoresSpeedtest {
@@ -256,7 +312,7 @@ function Test-TemPlacaWireless {
 function Get-AdaptadorWireless {
     $o = [pscustomobject]@{
         presente = $false; nome = ''; status = ''; conectado = $false
-        ssid = ''; sinal_pct = $null; redes_disponiveis = @()
+        ssid = ''; sinal_pct = $null; banda_ghz = ''; redes_disponiveis = @()
         ipv4 = ''; prefixo = $null; mascara = ''; gateway = ''; dns = @()
         ip_origem = ''; mac = ''; velocidade_mbps = $null
     }
@@ -279,15 +335,26 @@ function Get-AdaptadorWireless {
         if ($prof -and $prof.Name) { $o.ssid = [string] $prof.Name }
     } catch { }
 
-    # 2) netsh so refina (sinal %, estado textual, e a lista de redes por perto).
+    # 2) netsh so refina (sinal %, estado textual, canal/banda, e a lista de
+    #    redes por perto).
+    $canalWifi = $null
     try {
         $txt = Invoke-Netsh -Argumentos @('wlan', 'show', 'interfaces')
         foreach ($ln in ($txt -split "`r?`n")) {
             if     ($ln -match '^\s*SSID\s*:\s*(.+?)\s*$')            { $o.ssid = $Matches[1] }
             elseif ($ln -match '^\s*(Estado|State)\s*:\s*(.+?)\s*$')  { $o.status = $Matches[2] }
             elseif ($ln -match '^\s*(Sinal|Signal)\s*:\s*(\d+)\s*%')  { $o.sinal_pct = [int] $Matches[2] }
+            elseif ($ln -match '^\s*(Canal|Channel)\s*:\s*(\d+)')     { $canalWifi = [int] $Matches[2] }
         }
     } catch { }
+    # Banda (2,4/5/6 GHz) pelo numero do canal -- o Windows nem sempre informa a
+    # banda explicitamente, mas o canal sempre vem. 2,4 GHz e 5 GHz nao tem
+    # ambiguidade (faixas de canal distintas); 6 GHz (Wi-Fi 6E) reusa numeros de
+    # canal que colidem com 5 GHz em alguns valores -- caso raro em campo, fica
+    # classificado como 5 GHz (mesma faixa "alta") em vez de tentar adivinhar.
+    if ($null -ne $canalWifi) {
+        $o.banda_ghz = if ($canalWifi -le 14) { '2,4 GHz' } elseif ($canalWifi -ge 32) { '5 GHz' } else { '' }
+    }
     # 'conectado': placa Up com um SSID (abrir a ferramenta ja conectado conta),
     # ou o estado textual do netsh dizendo conectado.
     $o.conectado = ($o.ssid -ne '') -and (($wa.Status -eq 'Up') -or ($o.status -match 'conect|connected'))
@@ -404,6 +471,11 @@ function Test-InternetLocal {
         upload_lat_ms   = $null
         resultado_url   = ''
         resultado_id    = ''
+        # Curva de velocidade ao longo do teste, pro grafico do relatorio (ver
+        # ConvertTo-SerieVelocidadeSpeedtest) -- [{T;Fase;Mbps}], T = 0-100
+        # ("% daquela fase", nao segundos: o unico campo confiavel do JSONL do
+        # Ookla CLI pra isso e' .progress, ja usado em Update-Speedtest).
+        serie_velocidade = @()
         quando          = (Get-Date).ToString('o')
     }
 
@@ -545,6 +617,7 @@ function Test-InternetLocal {
         $r.resultado_url = [string] $res.result.url
         $r.resultado_id  = [string] $res.result.id
     }
+    $r.serie_velocidade = @(ConvertTo-SerieVelocidadeSpeedtest $saida.Eventos)
     Write-Log ("Teste de velocidade OK: down {0} Mbps / up {1} Mbps / ping {2} ms ({3})" -f $r.download_mbps, $r.upload_mbps, $r.ping_ms, $r.isp) -Nivel Ok
     [pscustomobject] $r
 }

@@ -52,6 +52,14 @@ function Invoke-DiagnosticoCompleto {
                              -TimeoutS $cfgAmbiente.totalizacao.timeout_s
     } else { Write-Log 'Teste de carregamento web desativado pela configuracao (admin).' -Nivel Aviso; [pscustomobject]@{ TempoMedioS = $null } }
 
+    # Calculado em variavel separada (nao inline no literal @{} abaixo) de
+    # proposito: um if/pipeline direto como valor de chave sofre o "unroll"
+    # classico do PowerShell (0 itens vira um objeto vazio, 1 item perde o
+    # array) -- ver Save-ConfigAmbiente (src/core/Config.ps1) e New-MedicaoAtual
+    # (src/ui/Janela-Principal.ps1) pro mesmo bug ja corrigido nesta sessao.
+    $serieLatencia = @()
+    if ($lat.PSObject.Properties['AmostrasMs']) { $serieLatencia = @($lat.AmostrasMs) }
+
     $metricas = [pscustomobject]@{
         LatenciaMediaMs   = $lat.LatenciaMediaMs
         JitterMs          = $lat.JitterMs
@@ -59,6 +67,9 @@ function Invoke-DiagnosticoCompleto {
         BandaDownloadMbps = $band.DownloadMbps
         BandaUploadMbps   = $band.UploadMbps
         CarregamentoWebS  = $web.TempoMedioS
+        # amostras de ping em ordem (com $null nas perdidas), pro grafico
+        # "latencia por amostra" do relatorio -- ver Get-GraficoLinhaHtml.
+        SerieLatenciaMs   = $serieLatencia
     }
 
     $decisao = Invoke-MotorDecisao -Metricas $metricas -Limiares $limiares
@@ -94,6 +105,7 @@ function Save-Diagnostico {
         $Medicoes,
         $ConexaoRecomendada,
         [string] $MotivoRecomendacao,
+        $CaboLan,
         $VistoriaGel
     )
 
@@ -105,7 +117,7 @@ function Save-Diagnostico {
         -FaseLocal $FaseLocal -Tethering $Tethering -Operadora $Operadora `
         -VpnImpossivel $VpnImpossivel -VpnMotivo $VpnMotivo `
         -Medicoes $Medicoes -ConexaoRecomendada $ConexaoRecomendada -MotivoRecomendacao $MotivoRecomendacao `
-        -VistoriaGel $VistoriaGel
+        -CaboLan $CaboLan -VistoriaGel $VistoriaGel
     $caminho = Save-ResultadoLocal -Resultado $resultado
 
     if ($cfgEnvio.modo -eq 'na-hora') {

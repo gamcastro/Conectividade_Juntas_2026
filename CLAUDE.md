@@ -30,7 +30,20 @@ Script), em vez de criar um BI/dashboard separado.
   licenças em `bin/iperf3/LICENSES.md`; `Atualizar-DICON.ps1` espelha essa pasta)
   — banda real pela VPN contra servidor iperf3 num Ubuntu no CPD (endereço/porta/duração
   editáveis na tela de **Administração** → `Save-ConfigAmbiente` grava o bloco
-  `iperf3` em `config/ambiente.json` local, PIN do admin). `Test-BandaVpn`
+  `iperf3` em `config/ambiente.json` local, PIN do admin — o mesmo card também
+  tem 3 checkboxes pra escolher quais dos 3 itens do semáforo do overlay
+  aparecem (`overlay_passos.rede_local/vpn/totalizacao`, `Get-OverlayPassosVisiveis`
+  aplicado em `Reset-OverlayCheck`; só visibilidade, não desliga a medição) e 4
+  caixas de texto (uma sugestão por linha) para as **sugestões de motivo**
+  (chips + "Outro") oferecidas ao técnico: no card "não se aplica" de cada meio
+  (`sugestoes_motivo.na_lan/na_wifi_local/na_celular`) e no card "não consegui
+  a VPN" da Fase 2 (`sugestoes_motivo.vpn_impossivel`) — `Get-SugestoesNaMeio`/
+  `Get-SugestoesVpnImpossivel` leem de `config/ambiente.json`, caindo na lista
+  padrão embutida (`Get-SugestoesNaMeioPadrao`/`Get-SugestoesVpnImpossivelPadrao`)
+  se a caixa ficar vazia; os chips em si são montados por
+  `Update-SugestoesNaMeio`/`Update-SugestoesVpnImpossivel` (um `Button` por
+  sugestão + "Outro (digitar)", que só limpa o campo).
+  `Test-BandaVpn`
   (`src/testes/Test-Banda.ps1`) roda download (`-R`) e upload (`-f m`), lê a
   saída linha a linha e transmite cada intervalo (`Write-EventoIperf` →
   `Update-IperfGauge`) para um **velocímetro** no passo 4, igual ao do Speedtest.
@@ -38,7 +51,9 @@ Script), em vez de criar um BI/dashboard separado.
 - **Fase 1 — rede local (ANTES da VPN do TRE)** (`src/core/RedeLocal.ps1`,
   `Invoke-FaseLocal`): inventário da placa cabeada (LAN conectada? **IP local**,
   máscara, gateway, DNS, MAC, velocidade — o IP vai no relatório), detecção da
-  placa Wi-Fi + redes por perto (`netsh wlan`), e **teste de velocidade Ookla**
+  placa Wi-Fi + redes por perto (`netsh wlan`, incluindo SSID/sinal %/banda
+  2,4|5 GHz — banda inferida do canal, sem distinguir 6 GHz Wi-Fi 6E), e
+  **teste de velocidade Ookla**
   (`Test-InternetLocal` roda `speedtest.exe --format=jsonl`; `Invoke-SpeedtestStreaming`
   lê cada evento JSONL e `Write-EventoSpeedtest` → `Update-Speedtest` move o
   velocímetro ao vivo; resultado com provedor/servidor/IP/ping/jitter/perda/
@@ -193,19 +208,22 @@ com link e imagem do Google Maps; a chave da **Maps Static API** fica em
 e embutida como `data:` URI, então a chave não vai no HTML/PDF.
 
 ## Assistente de diagnóstico (GUI)
-A tela de Diagnóstico é um **assistente de 5 ou 6 passos** (`viewDiag` com os
-painéis `stepInfo/stepJunta/stepLocal/stepResultado/stepDecisao/stepFim` alternados
-por `Visibility`; `$Global:WizardPassos`/`$Global:WizardNPassos` — montados por
-`Set-ModoAssistente` ao abrir o assistente conforme o **modo de avaliação**;
+A tela de Diagnóstico é um **assistente de 6 passos, em todos os modos**
+(`viewDiag` com os painéis `stepInfo/stepJunta/stepLocal/stepResultado/
+stepDecisao/stepFim` alternados por `Visibility`; `$Global:WizardPassos`/
+`$Global:WizardNPassos` — montados por `Set-ModoAssistente` ao abrir o
+assistente conforme o **modo de avaliação** (só os títulos mudam por modo);
 navegação por `Show-WizardPasso` / `Invoke-WizardProximo` / `Invoke-WizardVoltar`,
 que operam por **nome de painel**, com gates de justificativa só no modo completo).
 **Modo de avaliação** (`modo_avaliacao` no doc de limiares, radio no topo da tela
 de Administração; padrão **`medicao`** — ver `docs/modo-avaliacao.md`): `medicao` e
-`referencia` = **5 passos** (pula `stepDecisao`), sem juízo de viabilidade (badges
-"MEDIDO" neutros, passo 4 só com os valores — `referencia` acrescenta a faixa —,
-recomendação vira **sugestão informativa** pelo maior download, relatório =
-"Painel de Medições"); `completo` = **6 passos**, comportamento clássico (classifica,
-recomenda o meio, "Painel de Viabilidade").
+`referencia` = sem juízo de viabilidade (badges "MEDIDO" neutros, passo 4 só com
+os valores — `referencia` acrescenta a faixa —, passo 5 vira **"Sugestão de
+conexão"**: mesmo `stepDecisao`, mas sem o cartão de viabilidade/`cboDecisaoFinal`
+— o técnico ajusta o combo pré-selecionado pelo maior download e o motivo é
+**opcional**; relatório = "Painel de Medições"); `completo` = passo 5 vira
+"Recomendação final", comportamento clássico (classifica, recomenda o meio,
+motivo **obrigatório**, "Painel de Viabilidade").
 **Multi-meio (hub-and-spoke):** um Local pode ser medido por até 3 **meios** de
 conexão — `lan` (rede cabeada), `wifi_local` (Wi-Fi do próprio local),
 `celular` (Wi-Fi roteada de celular). Como a placa Wi-Fi só fica numa rede por
@@ -296,7 +314,10 @@ mostra IP da VPN/interface/DNS em verde e o estado vira `f2-vpn-ok` com o botão
 `Set-DiagnosticoVpnImpossivel`, meio inviável → **Fase 3** (Selenium, "em
 implementação"). `Complete-CheckMeio` → `Add-MedicaoAtual`; `Close-OverlayCheck`
 (`btnChkFechar`) fecha. O corpo tem um stepper de 3 linhas
-(`txtChkS1/S2/S3`+`dotChkS1/S2/S3`) e **3 colunas** — Origem (Servidor/IP,
+(`txtChkS1/S2/S3`+`dotChkS1/S2/S3`, linhas `rowChkS1/S2/S3`) — **só informa se
+a etapa rodou** (verde/"testado"; vermelho só numa falha técnica real de
+execução, não por qualidade do resultado — isso fica pro painel/relatório) —
+e **3 colunas** — Origem (Servidor/IP,
 `grpF1Conn`/`grpF2Conn`) · Medição (velocímetro, `Set-ChkFaseView` alterna
 Fase 1 ↔ Fase 2) · Resultado — e abaixo o log (`lstLog`) em coluna única. Ao
 concluir, o card fica **verde/amarelo/vermelho**
@@ -309,10 +330,10 @@ testado** no `TabControl` `tabsMedicoes` (styles `TabsMedicao`/`TabMedicao` em
 Tema.xaml — aba selada em azul, header = bolinha na cor do veredito + rótulo +
 palavra do veredito em cinza); `Show-MedicaoNoPasso5`/`Invoke-TrocarMedicaoPasso5`
 trocam qual medição os grids mostram; `Save-AjustesPasso5` grava classe final +
-justificativa na medição **aberta**. Dois cards, cada um com sua tabela: **"Com a
-VPN"** (`dgAvaliacaoVpn`, linhas da Fase 2) e **"Rede local — Speedtest da Ookla
-(sem VPN)"** (`cardAvaliacaoRl`/`dgAvaliacaoRl`, linhas da Fase 1 —
-`Get-DetalhesRedeLocal` classifica o teste de velocidade contra o perfil
+justificativa na medição **aberta**. Dois cards, cada um com sua tabela, nesta
+ordem: **"Rede local — Speedtest da Ookla (sem VPN)"** (`cardAvaliacaoRl`/
+`dgAvaliacaoRl`, linhas da Fase 1) primeiro, depois **"Com a VPN"**
+(`dgAvaliacaoVpn`, linhas da Fase 2) — `Get-DetalhesRedeLocal` classifica o teste de velocidade contra o perfil
 **`sem_vpn` do meio da vez** (`Get-PerfilLimiares`; a Fase 2 usa o `com_vpn`),
 métricas `rl_*`, sem carregamento_web). As duas famílias entram no pior caso
 (`$Global:AvaliacaoRows` = união; `Update-DecisaoRecalculada`). `txtRedeLocalNota`
@@ -322,12 +343,25 @@ métricas `rl_*`, sem carregamento_web). As duas famílias entram no pior caso
 VPN)". `cardNaResumo`/`txtNaResumo` lista os meios
 marcados "não aplicável" (rótulo — motivo); se nenhum meio foi testado (todos
 "não aplicável"), `txtSemMedicoes` avisa que o local fica inviável →
-5. **conexão recomendada**:
-combo `cboConexaoRec` (candidatos + "nenhuma") pré-selecionado por
-`Get-ConexaoRecomendada`, `txtMotivoRec` (**motivo obrigatório**,
-`Test-RecomendacaoValida` é o gate 5→6) e a tabela read-only `dgMedicoes` de
-todas as medições do Local; o card da recomendação final (rótulo "RECOMENDAÇÃO
-FINAL", override manual do veredito) continua acima →
+5. **conexão recomendada / sugestão de conexão** (`stepDecisao`, passo
+exclusivo em **todos os modos** — v0.6.99+): combo `cboConexaoRec`
+(candidatos + "nenhuma") pré-selecionado por `Get-ConexaoRecomendada`,
+`txtMotivoRec` e a tabela read-only `dgMedicoes` de todas as medições do
+Local; `Test-RecomendacaoValida` é o gate 5→6, sempre exige a seleção do
+combo. No modo `completo`, o cartão "RECOMENDAÇÃO FINAL" (`cboDecisaoFinal`,
+override manual do veredito) continua acima e o motivo é **obrigatório**;
+nos modos `medicao`/`referencia` esse cartão fica escondido
+(`cardDecisaoViavel`), o título/rótulo do motivo mudam para "SUGESTÃO DE
+CONEXÃO PARA ESTE LOCAL"/"Motivo do ajuste (opcional)" e o motivo é
+**opcional** — o técnico pode trocar a conexão sugerida (calculada pelo
+maior download) sem precisar justificar, já que é só informativo. Quando a
+conexão escolhida no combo é a **LAN**, aparece o card `cardCaboLan`
+(`Update-CardCaboLan`, chamado do `Update-ContextoRecomendacao`): chips
+"Não precisa / 5 m / 10 m / 15 m / Outro (digitar)" (`wrapCaboLan` +
+`txtCaboLanOutro`) → `$Global:CaboLan` = `{necessario;metros}`, que vai pro
+JSON (`cabo_lan`, via `-CaboLan` em `New-ResultadoJson`/`Save-Diagnostico`)
+e vira uma linha "Cabo de rede (LAN)" no relatório
+(`Get-CaboLanTextoRelatorio`) →
 6. conclusão: **Salvar** / **Transmitir** / **Exportar relatório (PDF)** + checklist.
 Os runspaces são `Start-TarefaRede` (`$Global:TarefaRedeState`, Fase 1/probe) e
 `Start-DiagnosticoAssincrono` (`$Global:DiagRunState`, Fase 2, com `-AoConcluir`).
@@ -361,7 +395,12 @@ veredito do título fora do `completo`.
    local / Celular): por meio, "Sem VPN conectada — teste de velocidade"
    (`rede_local_avaliacao[]`) + "Com VPN conectada — diagnóstico pela VPN da JE"
    (o meio recomendado usa `avaliacao[]` com faixa+motivo; os demais, os números
-   crus). Meios "não aplicável" viram uma linha só com o motivo.
+   crus). Meios "não aplicável" viram uma linha só com o motivo. Logo abaixo do
+   provedor, uma linha com os dados da placa usada no teste (congelados no
+   `snapshot_adaptador` da medição, ver "Congelamento" no passo 3): **LAN** só
+   velocidade do link; **Wi-Fi do local** velocidade + SSID + banda (2,4/5 GHz)
+   + sinal; **Celular** nenhum desses (a rede de interesse ali é a do celular,
+   não a placa Wi-Fi que a recebe).
    **Nomes de produto** (speedtest/Ookla/iperf3/Selenium) não aparecem em texto
    visível — só "teste de velocidade", "banda pela VPN", "análise de banda",
    "sistema de totalização"; chaves de config (`speedtest_server_id`), nomes de
