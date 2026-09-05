@@ -853,6 +853,15 @@ try {
     if ($Global:WizardStep -ne 6) { Write-Host "    FALHA: nao foi para o passo 6 com o motivo"; $falhas++ }
     else { Write-Host "[5c] passos 5->6->7 (com justificativa + motivo da recomendacao)" }
 
+    # 5d-0. quando NENHUM meio rodou uma Fase 2 de verdade (todos "nao se aplica"
+    # / "sem a VPN"), $Global:DiagPayload.Local fica nulo e o Salvar estourava
+    # "parametro 'Local' e' nulo" (bug de campo do James). Get-LocalDoAssistente
+    # tem que cair no combo do passo 2.
+    if ($Global:DiagPayload) { $Global:DiagPayload.Local = $null }
+    $locFb = Get-LocalDoAssistente
+    if ($locFb -and $locFb.id) { Write-Host "[5d-0] Get-LocalDoAssistente cai no combo do passo 2 quando o payload nao tem Local (id=$($locFb.id))" }
+    else { Write-Host "    FALHA: Get-LocalDoAssistente nao achou o Local no fallback (loc=$($locFb | ConvertTo-Json -Compress))"; $falhas++ }
+
     # 5d. passo 6: campo "Observacoes do tecnico" (livre) + salva o resultado
     $w.FindName('txtObsTecnico').Text = 'Placa LAN negociou 100 Mbps porque o cabo passa por um switch antigo; trocar por switch Gigabit.'
     Invoke-Pump
