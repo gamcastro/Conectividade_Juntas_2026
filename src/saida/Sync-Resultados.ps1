@@ -1,4 +1,4 @@
-# Sincroniza de VOLTA os resultados ja transmitidos (planilha de Resultados) para
+﻿# Sincroniza de VOLTA os resultados ja transmitidos (planilha de Resultados) para
 # resultados\enviados\ deste computador -- pra recuperar o "verdinho" do painel
 # depois de formatar / trocar de notebook.
 #
