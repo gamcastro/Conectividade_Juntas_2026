@@ -4134,7 +4134,7 @@ function Invoke-ExportarRelatorio {
         $justDec  = [string] $w.FindName('txtJustDecisao').Text
         $p = $Global:DiagPayload
         $rec = if ($Global:RecomendacaoLocal) { $Global:RecomendacaoLocal } else { Get-RecomendacaoLocal }
-        $res = New-ResultadoJson -Ambiente $p.Ambiente -Metricas $p.Metricas -Decisao $p.Decisao -Local $p.Local `
+        $res = New-ResultadoJson -Ambiente $p.Ambiente -Metricas $p.Metricas -Decisao $p.Decisao -Local (Get-LocalDoAssistente) `
             -Avaliacoes $avaliacoes -ClassificacaoFinal @{ final = $decFinal; justificativa = $justDec } `
             -TecnicoNome ($Global:SessaoAtual.tecnico_nome) -FaseLocal $Global:FaseLocalPayload `
             -Tethering ($rec -and $rec.meio -eq 'celular') `
@@ -5120,7 +5120,7 @@ function Show-MedicaoNoPasso5 {
     $m = $Par.med
     $Global:MedicaoPasso5Idx = $Par.idx
 
-    $localRef = if ($Global:DiagPayload) { $Global:DiagPayload.Local } else { $null }
+    $localRef = Get-LocalDoAssistente
     $payload = [pscustomobject]@{
         Ambiente          = $m.ambiente
         Metricas          = $m.metricas
@@ -5168,10 +5168,29 @@ function Update-DecisaoRecalculada {
     Update-VisibilidadeJustDecisao
 }
 
+# O local que o assistente esta diagnosticando. Prioriza o payload da bateria
+# (objeto completo), mas cai no combo do passo 2 quando NENHUM meio chegou a
+# rodar uma Fase 2 de verdade -- ex.: todos os meios viraram "nao se aplica"
+# ou "registrado sem a VPN" -- caso em que $Global:DiagPayload.Local fica nulo
+# e o Salvar/Exportar estourava "parametro 'Local' e' nulo".
+function Get-LocalDoAssistente {
+    if ($Global:DiagPayload -and $Global:DiagPayload.Local) { return $Global:DiagPayload.Local }
+    $w = $Global:JanelaPrincipal
+    $sel = if ($w) { $w.FindName('cboLocal').SelectedItem } else { $null }
+    if ($sel -and $sel.PSObject.Properties['Dados'] -and $sel.Dados) { return $sel.Dados }
+    return $null
+}
+
 function Invoke-SalvarResultado {
     $w = $Global:JanelaPrincipal
     if (-not $Global:DiagPayload -or -not $Global:AvaliacaoRows) {
         Write-Log 'Rode o diagnostico antes de salvar.' -Nivel Aviso
+        return
+    }
+    $localSalvar = Get-LocalDoAssistente
+    if (-not $localSalvar) {
+        Write-Log 'Nao consegui identificar o Local do diagnostico. Volte ao passo 2, selecione o Local e tente de novo.' -Nivel Erro
+        $st = $w.FindName('txtFimStatus'); if ($st) { $st.Text = 'Local do diagnostico nao identificado - volte ao passo 2.' }
         return
     }
 
@@ -5195,7 +5214,7 @@ function Invoke-SalvarResultado {
     try {
         $p = $Global:DiagPayload
         $rec = if ($Global:RecomendacaoLocal) { $Global:RecomendacaoLocal } else { Get-RecomendacaoLocal }
-        $caminho = Save-Diagnostico -Ambiente $p.Ambiente -Metricas $p.Metricas -Decisao $p.Decisao -Local $p.Local `
+        $caminho = Save-Diagnostico -Ambiente $p.Ambiente -Metricas $p.Metricas -Decisao $p.Decisao -Local $localSalvar `
             -Avaliacoes $avaliacoes `
             -ClassificacaoFinal @{ final = $decFinal; justificativa = $justDec } `
             -TecnicoNome ($Global:SessaoAtual.tecnico_nome) `
