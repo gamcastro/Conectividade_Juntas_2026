@@ -331,8 +331,27 @@
         deles. Antes de cada um, o DICON avisa o que plugar ou desconectar (ex.: tirar o cabo de rede antes do
         Wi&#8209;Fi). Se um meio não existir no local, marque <b>"não se aplica"</b> e diga o motivo. Um meio já
         testado pode ser reaberto e refeito a qualquer momento — clique de novo no card dele.</p>
+      <div class="note info">
+        <span class="dot"></span>
+        <div><b>Trocou a conexão física (tirou o cabo, ligou o Wi&#8209;Fi)?</b> Clique em <b>qualquer botão
+          &#8635;</b> (o de atualizar, no canto de um card ou no topo do painel) — ele relê as <b>duas placas</b>
+          (LAN e Wi&#8209;Fi) e libera o "Rodar checagem" do meio da vez. O que já foi medido nos meios anteriores
+          não muda.</div>
+      </div>
+      <div class="note warn">
+        <span class="dot"></span>
+        <div><b>A VPN da JE não conecta neste local?</b> No passo da Fase 2, marque
+          <b>"Não foi possível conectar a VPN da JE neste local"</b>, escolha o motivo (chips prontos ou "Outro"
+          pra digitar) e clique em <b>"Registrar este meio sem a VPN"</b>. O meio entra como inviável, com o motivo,
+          e o diagnóstico segue.</div>
+      </div>
       <ol class="sub-steps">
         <li>Confira os valores medidos de cada meio testado.</li>
+        <li>Se a conexão sugerida for a <b>rede cabeada (LAN)</b>, o passo 5 pergunta se <b>precisa passar cabo de
+          rede</b> até o ponto e de quantos metros (5 / 10 / 15 / Outro). Responda — vai no relatório.</li>
+        <li>No passo 6 há uma caixa <b>"Observações do técnico"</b> (opcional): anote ali o que o painel não mede —
+          ex.: a placa LAN ficou em 100&nbsp;Mbps por causa de um switch antigo; ponto de rede solto; tomada sem
+          aterramento; acesso difícil ao local.</li>
         <li><b>Salve</b>, <b>transmita</b> e <b>exporte o PDF</b> pra fechar o atendimento.</li>
       </ol>
     </div>
@@ -402,7 +421,30 @@
         <details>
           <summary>O que acontece se eu marcar um meio como "não se aplica"?</summary>
           <div class="a">Ele entra no relatório como não aplicável, com o motivo que você escreveu — não trava o
-            andamento do diagnóstico nem conta como erro.</div>
+            andamento do diagnóstico nem conta como erro. Vale também quando o meio existe mas <b>a VPN não conecta
+            de jeito nenhum</b>: pode usar "não se aplica" com o motivo "VPN da JE não conecta neste local", ou o
+            botão <b>"Registrar este meio sem a VPN"</b> (que tem o mesmo efeito, mas registra como inviável por
+            falta de VPN).</div>
+        </details>
+        <details>
+          <summary>Terminei um meio, troquei o cabo/Wi&#8209;Fi, mas o botão do próximo meio não libera.</summary>
+          <div class="a">Clique em <b>qualquer botão &#8635;</b> (atualizar) — no canto de um card ou no topo do
+            painel de meios. Ele relê a LAN <b>e</b> o Wi&#8209;Fi ao mesmo tempo e atualiza o que trava/libera o
+            "Rodar checagem". Não precisa achar o &#8635; "certo" — qualquer um serve, e nada do que já foi medido
+            se perde.</div>
+        </details>
+        <details>
+          <summary>O passo 5 perguntou se precisa de cabo de rede — pra que serve?</summary>
+          <div class="a">Só aparece quando a conexão que você escolheu é a <b>rede cabeada (LAN)</b>. É pra registrar,
+            pro planejamento, se o local vai precisar que alguém <b>passe cabo até o ponto</b> e de quantos metros
+            (5 / 10 / 15, ou "Outro" pra digitar). Se não precisa de cabo, é só marcar essa opção. Vai no JSON e
+            no relatório.</div>
+        </details>
+        <details>
+          <summary>Onde eu anoto uma coisa que o DICON não mede (switch velho, ponto solto, acesso difícil…)?</summary>
+          <div class="a">Na caixa <b>"Observações do técnico"</b>, no passo 6 (conclusão). É texto livre e opcional —
+            escreva o que for útil pro laudo (ex.: "a placa LAN negociou 100&nbsp;Mbps porque o cabo passa por um
+            switch antigo; trocar por switch Gigabit"). Entra no relatório e no que é transmitido.</div>
         </details>
         <details>
           <summary>Marquei um meio como "não se aplica" e depois descobri que ele existe (ex.: achei um ponto de
