@@ -2042,6 +2042,19 @@ function Get-MeioAtualPasso3 {
     ''
 }
 
+# SSID guardado no snapshot da medicao (nao NA) daquele meio; '' se nao houver.
+# Usado para pegar o tecnico que passou do "Wi-Fi do local" pro "Celular" SEM
+# trocar a rede (o notebook continua no Wi-Fi do local -> a medicao de celular
+# sairia medindo a rede errada).
+function Get-SsidTestadoMeio {
+    param([string] $Meio)
+    $m = $Global:Medicoes | Where-Object { $_ -and $_.meio -eq $Meio -and -not $_.nao_aplicavel } | Select-Object -Last 1
+    if (-not $m) { return '' }
+    $snap = if ($m.PSObject.Properties['snapshot_adaptador']) { $m.snapshot_adaptador } else { $null }
+    if ($snap -and $snap.PSObject.Properties['ssid'] -and $snap.ssid) { return [string] $snap.ssid }
+    ''
+}
+
 function Update-PainelMeios {
     $w = $Global:JanelaPrincipal
     if (-not $w) { return }
@@ -2208,7 +2221,12 @@ function Update-PainelMeios {
         } elseif (-not $wifiLive) {
             'Ligue o roteamento no celular, conecte a rede dele pela bandeja do Windows, clique neste card e informe a operadora.'
         } elseif ($sel -eq 'celular') {
-            'Rede "{0}" sera testada como roteamento de celular. Informe a operadora e rode a checagem.' -f $p.Wireless.ssid
+            $ssidWl = Get-SsidTestadoMeio 'wifi_local'
+            if ($ssidWl -and $p.Wireless.ssid -and $ssidWl -ieq [string] $p.Wireless.ssid) {
+                'ATENCAO: "{0}" e a rede que voce ja testou como Wi-Fi do local. Troque para o roteamento do seu celular antes de rodar a checagem.' -f $p.Wireless.ssid
+            } else {
+                'Rede "{0}" sera testada como roteamento de celular. Informe a operadora e rode a checagem.' -f $p.Wireless.ssid
+            }
         } else {
             'Se "{0}" e o roteamento do seu celular, clique neste card para seleciona-lo e informe a operadora.' -f $p.Wireless.ssid
         }
@@ -2313,6 +2331,16 @@ function Update-PainelMeios {
             $aviso = "Para testar $qual, retire o cabo de rede - so a placa Wi-Fi deve estar conectada. Depois clique em qualquer $seta para reler as placas."
         } elseif (-not $wifiLive) {
             $aviso = "Conecte a placa Wi-Fi a rede que vai testar (bandeja do Windows) e clique em qualquer $seta para reler as placas."
+        }
+        # Passou do "Wi-Fi do local" pro "Celular" sem trocar a rede: o notebook
+        # ainda esta no MESMO Wi-Fi ja testado -> a medicao de celular mediria a
+        # rede errada. Aviso forte, sobrepondo o generico (que aqui esta vazio).
+        if ($selKey -eq 'celular' -and $wifiLive -and -not $lanLive -and -not $aviso) {
+            $ssidWifiLocal = Get-SsidTestadoMeio 'wifi_local'
+            $ssidAgora     = [string] $p.Wireless.ssid
+            if ($ssidWifiLocal -and $ssidAgora -and $ssidWifiLocal -ieq $ssidAgora) {
+                $aviso = "ATENCAO: o notebook ainda esta na rede `"$ssidAgora`" - a MESMA do teste de `"Wi-Fi do local`". O teste de CELULAR e' da rede do SEU CELULAR: ligue o roteamento no celular e, pela bandeja do Windows (icone de rede perto do relogio), troque para o ponto de acesso dele. Depois clique em qualquer $seta para reler."
+            }
         }
     }
     $cma = $w.FindName('cardMeioAviso'); $tma = $w.FindName('txtMeioAviso')
@@ -3085,6 +3113,29 @@ function Invoke-CheckMeio {
             Write-Log 'Retire o cabo de rede antes de testar o Wi-Fi/Celular (so a placa Wi-Fi pode estar conectada).' -Nivel Aviso
             if (-not $Global:ModoTeste -and $w) { try { [System.Windows.MessageBox]::Show($w, $m, 'Retire o cabo de rede', [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Warning) | Out-Null } catch { } }
             return
+        }
+        # Cenario que embanana o tecnico: terminou o "Wi-Fi do local" e passou pro
+        # "Celular" SEM trocar a rede -- o notebook segue no Wi-Fi do local e a
+        # medicao de celular sairia medindo a rede errada. Se a rede de agora e' a
+        # MESMA que o meio "Wi-Fi do local" ja testou, confirma antes (padrao =
+        # NAO, "trocar a rede primeiro").
+        if ($Meio -eq 'celular') {
+            $ssidWifiLocal = Get-SsidTestadoMeio 'wifi_local'
+            $ssidAgora     = [string] $p.Wireless.ssid
+            if ($ssidWifiLocal -and $ssidAgora -and $ssidWifiLocal -ieq $ssidAgora) {
+                Write-Log ("Rede atual `"{0}`" e' a mesma do teste de Wi-Fi do local - confirme se e' mesmo o roteamento do celular." -f $ssidAgora) -Nivel Aviso
+                if (-not $Global:ModoTeste -and $w) {
+                    $m = ('O notebook esta na rede "{0}", a MESMA usada no teste de "Wi-Fi do local".' -f $ssidAgora) + [Environment]::NewLine + [Environment]::NewLine +
+                         'O teste de CELULAR e da rede do SEU CELULAR (roteamento / ponto de acesso).' + [Environment]::NewLine + [Environment]::NewLine +
+                         'NAO  = trocar a rede primeiro (ligar o roteamento no celular, trocar a rede Wi-Fi pela bandeja do Windows, reler as placas). Recomendado.' + [Environment]::NewLine +
+                         ('SIM  = testar assim mesmo (so se "{0}" for realmente o roteamento do seu celular).' -f $ssidAgora)
+                    $r = $null
+                    try { $r = [System.Windows.MessageBox]::Show($w, $m, 'Trocar a rede Wi-Fi para o roteamento do celular?', [System.Windows.MessageBoxButton]::YesNo, [System.Windows.MessageBoxImage]::Warning, [System.Windows.MessageBoxResult]::No) } catch { }
+                    if ("$r" -ne 'Yes') { return }
+                } else {
+                    return
+                }
+            }
         }
     }
     if ($Meio -eq 'celular' -and -not ([string] $w.FindName('cboOperadoraCel').Text).Trim()) {

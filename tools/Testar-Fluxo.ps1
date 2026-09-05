@@ -726,6 +726,48 @@ try {
     } else { Write-Host "    FALHA: card Wi-Fi deveria dizer 'Registrada' (txt='$($w.FindName('txtLocWifi').Text)')"; $falhas++ }
     $w.FindName('chkVpnImpossivel').IsChecked = $false ; Update-VpnImpossivel
 
+    # 4j. passou do "Wi-Fi do local" pro "Celular" SEM trocar a rede: o notebook
+    # continua no MESMO Wi-Fi ja testado -> Invoke-CheckMeio 'celular' NAO abre o
+    # overlay (bloqueia). Trocando a rede, libera. Isolado (backup/restore).
+    $medBak4j = $Global:Medicoes; $selBak4j = $Global:MeioSelecionado
+    $ativoBak4j = $Global:CheckMeioAtivo; $naBak4j = $Global:MeiosNaoAplicaveis.Clone()
+    $ssidBak4j  = $Global:FaseLocalPayload.Wireless.ssid
+    try {
+        $Global:CheckMeioAtivo = $false
+        $Global:MeiosNaoAplicaveis = @{ lan = 'sem ponto de rede' }
+        $Global:Medicoes = @([pscustomobject]@{
+            meio = 'wifi_local'; operadora = ''; rotulo = 'Wi-Fi do proprio local'
+            nao_aplicavel = $false; veredito = 'medido'
+            snapshot_adaptador = [pscustomobject]@{ conectado = $true; ssid = 'JE-CAMPO' }
+        })
+        $Global:FaseLocalPayload.Lan.conectado      = $false
+        $Global:FaseLocalPayload.Wireless.conectado = $true
+        $Global:FaseLocalPayload.Wireless.ssid      = 'JE-CAMPO'   # AINDA no Wi-Fi do local
+        $w.FindName('cboOperadoraCel').Text = 'Claro'
+        Select-MeioParaChecar 'celular'
+        Invoke-CheckMeio 'celular'
+        Invoke-Pump
+        $bloqueou = (-not $Global:CheckMeioAtivo) -and "$($w.FindName('overlayCheck').Visibility)" -ne 'Visible'
+        if ($bloqueou) {
+            Write-Host "[4j] 'Celular' na mesma rede do Wi-Fi do local: bloqueia o 'Rodar checagem'"
+        } else { Write-Host "    FALHA: 4j deveria ter bloqueado (ativo=$($Global:CheckMeioAtivo) overlay=$($w.FindName('overlayCheck').Visibility))"; $falhas++ }
+
+        $Global:FaseLocalPayload.Wireless.ssid = 'CLARO-JAMES'   # trocou pro roteamento do celular
+        Select-MeioParaChecar 'celular'
+        Invoke-CheckMeio 'celular'
+        Invoke-Pump
+        if ($Global:CheckMeioAtivo -and "$($w.FindName('overlayCheck').Visibility)" -eq 'Visible') {
+            Write-Host "[4j] rede trocada (SSID diferente): 'Rodar checagem' do celular libera"
+        } else { Write-Host "    FALHA: 4j deveria ter liberado apos trocar a rede (ativo=$($Global:CheckMeioAtivo) overlay=$($w.FindName('overlayCheck').Visibility))"; $falhas++ }
+        Close-OverlayCheck
+    } finally {
+        $Global:Medicoes = $medBak4j; $Global:MeioSelecionado = $selBak4j
+        $Global:CheckMeioAtivo = $ativoBak4j; $Global:MeiosNaoAplicaveis = $naBak4j
+        $Global:FaseLocalPayload.Wireless.ssid = $ssidBak4j
+        $w.FindName('cboOperadoraCel').Text = ''
+        Update-PainelMeios
+    }
+
     # 4i. fechar o overlay: "Concluir" avanca a selecao pro proximo meio
     # pendente de verdade (cenario do usuario: testou o Wi-Fi, o Celular
     # continua pendente -> a vez passa pra ele sozinho); "Cancelar" (meio
