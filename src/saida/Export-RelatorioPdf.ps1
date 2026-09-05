@@ -87,6 +87,15 @@ function Get-CorVeredito {
 # deste arquivo. As duas funcoes sao puras (recebem dado pronto, sem tocar em
 # $Global:*), pra serem faceis de testar isoladas.
 
+# Numero para atributo/coordenada SVG: SEMPRE com ponto decimal. Sem isto, no
+# Windows em pt-BR o "{0}" -f 38.7 vira "38,7" e o parser de SVG le a virgula
+# como separador de coordenada -> a <polyline> vira um rabisco (bug de campo
+# no relatorio de "velocidade ao longo do teste").
+function Format-NumSvg {
+    param($N)
+    ([double] $N).ToString('0.###', [System.Globalization.CultureInfo]::InvariantCulture)
+}
+
 # Grafico de barras horizontais. $Barras: lista de {Rotulo; Valor; Cor?} --
 # Valor $null vira uma linha "sem medida" (sem barra). Devolve '' se nao
 # houver nenhuma barra (o chamador so' inclui o grafico se vier algo).
@@ -114,7 +123,7 @@ function Get-GraficoBarrasHtml {
     $y = $EspacoBarra
     $partes = foreach ($b in $itens) {
         $rotulo = ConvertTo-HtmlSafe ([string] $b.Rotulo)
-        $meioY  = [math]::Round($y + $AlturaBarra * 0.72, 1)
+        $meioY  = Format-NumSvg ([math]::Round($y + $AlturaBarra * 0.72, 1))
         if ($null -eq $b.Valor -or "$($b.Valor)" -eq '') {
             @"
 <text x="0" y="$meioY" font-size="9" fill="#8891A0">$rotulo</text>
@@ -124,6 +133,7 @@ function Get-GraficoBarrasHtml {
             $cor = if ($b.PSObject.Properties['Cor'] -and $b.Cor) { [string] $b.Cor } else { '#123FA8' }
             $w = [math]::Round(($areaBarra * ([math]::Min(1.0, [double] $b.Valor / $max))), 1)
             if ($w -lt 1) { $w = 1 }
+            $w = Format-NumSvg $w
             $valTxt = ConvertTo-HtmlSafe (('{0:N1} {1}' -f [double] $b.Valor, $Unidade).Trim())
             @"
 <text x="0" y="$meioY" font-size="9" fill="#14181F">$rotulo</text>
@@ -167,14 +177,22 @@ function Get-GraficoLinhaHtml {
     if ($tMax -le $tMin) { $tMax = $tMin + 1 }
     $vMax = ($comPonto | ForEach-Object { [double] $_.V } | Measure-Object -Maximum).Maximum
     if ($vMax -le 0) { $vMax = 1 }
-    $escX = { param($t) [math]::Round($margemEsq + ((([double] $t - $tMin) / ($tMax - $tMin)) * $areaW), 1) }
-    $escY = { param($v) [math]::Round($margemTopo + $areaH - (([double] $v / $vMax) * $areaH), 1) }
+    $escX = { param($t) Format-NumSvg ([math]::Round($margemEsq + ((([double] $t - $tMin) / ($tMax - $tMin)) * $areaW), 1)) }
+    $escY = { param($v) Format-NumSvg ([math]::Round($margemTopo + $areaH - (([double] $v / $vMax) * $areaH), 1)) }
 
     $linhas = foreach ($s in @($Series | Where-Object { $_ -and $_.Pontos })) {
         $cor = if ($s.Cor) { [string] $s.Cor } else { '#123FA8' }
+        # ordena por T (a serie pode vir fora de ordem) e, se for muito densa
+        # (JSON antigo sem reamostragem), decima pra no maximo ~40 pontos --
+        # senao o traco vira um rabisco no SVG pequeno.
+        $ptsOrd = @($s.Pontos | Where-Object { $_ } | Sort-Object { [double] $_.T })
+        if ($ptsOrd.Count -gt 40) {
+            $passoDec = [math]::Ceiling($ptsOrd.Count / 40)
+            $ptsOrd = @(for ($k = 0; $k -lt $ptsOrd.Count; $k += $passoDec) { $ptsOrd[$k] }) + @($ptsOrd[-1])
+        }
         $trechoAtual = New-Object System.Collections.Generic.List[string]
         $trechos = New-Object System.Collections.Generic.List[string]
-        foreach ($p in @($s.Pontos)) {
+        foreach ($p in $ptsOrd) {
             if (-not $p -or $null -eq $p.V -or $null -eq $p.T) {
                 if ($trechoAtual.Count -gt 1) { $trechos.Add(($trechoAtual -join ' ')) }
                 $trechoAtual = New-Object System.Collections.Generic.List[string]
@@ -300,7 +318,7 @@ function Get-GraficoCurvaVelocidadeHtml {
         [pscustomobject]@{ Nome = 'Download'; Cor = '#123FA8'; Pontos = @(& $mk 'download') }
         [pscustomobject]@{ Nome = 'Upload';   Cor = '#1B7F3B'; Pontos = @(& $mk 'upload') }
     )
-    Get-GraficoLinhaHtml -Series $series -Titulo ('Velocidade ao longo do teste (% da fase)') -EixoY 'Mbps' -Largura 300 -Altura 100
+    Get-GraficoLinhaHtml -Series $series -Titulo 'Velocidade ao longo do teste (download, depois upload)' -EixoY 'Mbps' -Largura 360 -Altura 120
 }
 
 # Item 6a: curva de banda do iperf3 (Fase 2, com VPN) -- download e upload em
@@ -314,7 +332,7 @@ function Get-GraficoCurvaBandaVpnHtml {
         [pscustomobject]@{ Nome = 'Download'; Cor = '#123FA8'; Pontos = @(& $mk 'download') }
         [pscustomobject]@{ Nome = 'Upload';   Cor = '#1B7F3B'; Pontos = @(& $mk 'upload') }
     )
-    Get-GraficoLinhaHtml -Series $series -Titulo 'Banda pela VPN ao longo do teste (s)' -EixoY 'Mbps' -Largura 300 -Altura 100
+    Get-GraficoLinhaHtml -Series $series -Titulo 'Banda pela VPN ao longo do teste (segundos)' -EixoY 'Mbps' -Largura 360 -Altura 120
 }
 
 # Item 6b: latencia por amostra do ping (Fase 2, com VPN) -- uma amostra sem
@@ -328,7 +346,7 @@ function Get-GraficoLatenciaAmostraHtml {
     }
     $series = @([pscustomobject]@{ Nome = 'Lat' + [char]0x00EA + 'ncia'; Cor = '#B77F00'; Pontos = @($pontos) })
     $titulo = 'Lat' + [char]0x00EA + 'ncia por amostra do ping (falha = buraco na linha)'
-    Get-GraficoLinhaHtml -Series $series -Titulo $titulo -EixoY 'ms' -Largura 300 -Altura 100
+    Get-GraficoLinhaHtml -Series $series -Titulo $titulo -EixoY 'ms' -Largura 360 -Altura 120
 }
 
 # Item 7: comparacao entre as tentativas do "Refazer" (so' aparece quando o

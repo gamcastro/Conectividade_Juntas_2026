@@ -98,24 +98,58 @@ function Invoke-SpeedtestStreaming {
 
 # Curva de velocidade (download/upload) pro grafico do relatorio -- puro
 # (recebe a lista de eventos ja capturada por Invoke-SpeedtestStreaming),
-# devolve [{T;Fase;Mbps}] em ordem. T = progress (0-100, "% daquela fase")
-# em vez de segundos: e' o unico campo de tempo confiavel no JSONL do Ookla
-# CLI pra progresso (ja usado em Update-Speedtest); um "elapsed" em ms nao e'
-# garantido em toda versao do CLI.
+# devolve [{T;Fase;Mbps}] ORDENADO e REAMOSTRADO em ate $Baldes pontos por
+# fase (media da banda por faixa de progresso). Sem a reamostragem, um link
+# instavel (celular) gera centenas de eventos oscilando muito -> o grafico
+# vira um rabisco ilegivel e o JSON transmitido incha. T = progresso 0..100
+# na fase de download, 100..200 na de upload (linha do tempo continua, como
+# a SerieBanda do iperf3); ".progress" e' o unico campo de tempo confiavel no
+# JSONL do Ookla CLI (ja usado em Update-Speedtest).
 # OBS: NAO usar @($Eventos) aqui -- $Eventos e' um [Collections.Generic.List[object]]
 # (Invoke-SpeedtestStreaming) e o operador @() sobre uma List[object] estoura
 # "Os tipos de argumento nao correspondem" no Windows PowerShell 5.1 recente
 # (build 26100.8875+). foreach direto sobre a List funciona; $null -> 0 voltas.
 function ConvertTo-SerieVelocidadeSpeedtest {
-    param($Eventos)
-    $serie = foreach ($e in $Eventos) {
-        if ($e.type -eq 'download' -and $e.PSObject.Properties['download'] -and $e.download) {
-            [pscustomobject]@{ T = [math]::Round([double] $e.download.progress * 100, 1); Fase = 'download'; Mbps = (ConvertTo-Mbps $e.download.bandwidth) }
-        } elseif ($e.type -eq 'upload' -and $e.PSObject.Properties['upload'] -and $e.upload) {
-            [pscustomobject]@{ T = [math]::Round([double] $e.upload.progress * 100, 1); Fase = 'upload'; Mbps = (ConvertTo-Mbps $e.upload.bandwidth) }
+    param($Eventos, [int] $Baldes = 20)
+
+    $bruto = @{
+        download = (New-Object System.Collections.Generic.List[object])
+        upload   = (New-Object System.Collections.Generic.List[object])
+    }
+    foreach ($e in $Eventos) {
+        $fase = [string] $e.type
+        if ($fase -ne 'download' -and $fase -ne 'upload') { continue }
+        if (-not $e.PSObject.Properties[$fase] -or -not $e.$fase) { continue }
+        $sub  = $e.$fase
+        $prog = $null
+        if ($sub.PSObject.Properties['progress'] -and $null -ne $sub.progress) { $prog = [double] $sub.progress }
+        elseif ($e.PSObject.Properties['progress'] -and $null -ne $e.progress)  { $prog = [double] $e.progress }
+        $bw = $null
+        if ($sub.PSObject.Properties['bandwidth'] -and $null -ne $sub.bandwidth) { $bw = ConvertTo-Mbps $sub.bandwidth }
+        if ($null -eq $prog -or $null -eq $bw) { continue }
+        if ($prog -lt 0) { $prog = 0 } elseif ($prog -gt 1) { $prog = 1 }
+        $bruto[$fase].Add([pscustomobject]@{ prog = $prog; mbps = [double] $bw })
+    }
+
+    $serie = New-Object System.Collections.Generic.List[object]
+    foreach ($fase in 'download', 'upload') {
+        $pts = @($bruto[$fase] | Sort-Object prog)
+        if (-not $pts.Count) { continue }
+        $n = [math]::Max(1, [math]::Min($Baldes, $pts.Count))
+        $desloc = if ($fase -eq 'upload') { 100 } else { 0 }
+        for ($b = 0; $b -lt $n; $b++) {
+            $lo = $b / $n; $hi = ($b + 1) / $n
+            $nesta = @($pts | Where-Object { $_.prog -ge $lo -and ($_.prog -lt $hi -or ($b -eq $n - 1)) })
+            if (-not $nesta.Count) { continue }
+            $media = ($nesta | Measure-Object -Property mbps -Average).Average
+            $serie.Add([pscustomobject]@{
+                T    = [math]::Round($desloc + (($lo + $hi) / 2) * 100, 1)
+                Fase = $fase
+                Mbps = [math]::Round([double] $media, 2)
+            })
         }
     }
-    @($serie | Where-Object { $_ })
+    $serie.ToArray()
 }
 
 # Extrai os IDs de servidor da saida de "speedtest.exe --servers" (tabela ou

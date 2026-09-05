@@ -46,6 +46,20 @@ Checar 'Get-GraficoLinhaHtml: svg com 2 trechos (buraco separa a linha)' `
     (([regex]::Matches($htmlLinha, '<polyline')).Count -eq 2) "(html=$htmlLinha)"
 Checar 'Get-GraficoLinhaHtml: legenda sem bug de parsing ([string] literal)' ($htmlLinha -notmatch '\[string\]')
 Checar 'Get-GraficoLinhaHtml: vazio sem pontos validos' (-not (Get-GraficoLinhaHtml -Series @([pscustomobject]@{ Nome='X'; Cor='#000'; Pontos=@() })))
+# regressao: coordenadas da <polyline> tem que usar PONTO decimal, nao a
+# virgula do pt-BR (senao o parser de SVG le a virgula como separador de
+# coordenada e o grafico vira um rabisco -- bug de campo no relatorio).
+$serieFrac = [pscustomobject]@{ Nome='D'; Cor='#123FA8'; Pontos=@(
+    [pscustomobject]@{ T=0.5; V=12.3 }; [pscustomobject]@{ T=1.7; V=48.9 }; [pscustomobject]@{ T=3.3; V=7.1 }
+) }
+$htmlFrac = Get-GraficoLinhaHtml -Series @($serieFrac) -Titulo 'x' -EixoY 'Mbps'
+$ptsOk = $true
+foreach ($mm in [regex]::Matches($htmlFrac, 'points="([^"]+)"')) {
+    foreach ($tok in ($mm.Groups[1].Value -split '\s+')) {
+        if ($tok -and (($tok -split ',').Count -ne 2)) { $ptsOk = $false }
+    }
+}
+Checar 'Get-GraficoLinhaHtml: <polyline> com pares x,y validos (ponto decimal, nao virgula)' $ptsOk "($htmlFrac)"
 
 # ------------------------------------------ 1b) captura das series (campo real)
 # ConvertTo-SerieVelocidadeSpeedtest recebe a lista de eventos JSONL do Ookla
@@ -57,8 +71,13 @@ Checar 'Get-GraficoLinhaHtml: vazio sem pontos validos' (-not (Get-GraficoLinhaH
 # $Global:FaseLocalSimulada e nunca chegam no speedtest real).
 $evtList = New-Object System.Collections.Generic.List[object]
 $evtList.Add(([pscustomobject]@{ type = 'testStart'; server = [pscustomobject]@{ name = 'X' } }))
-foreach ($p in 0.0, 0.2, 0.55, 0.8, 1) {
-    $evtList.Add(([pscustomobject]@{ type = 'download'; download = [pscustomobject]@{ bandwidth = [int64]3700000; progress = $p } }))
+# 60 eventos de download com banda bem oscilante (link instavel) + progresso
+# fora de ordem de proposito -- a funcao tem que ordenar e reamostrar.
+$rnd = [Random]::new(7)
+foreach ($i in 0..59) {
+    $p = [math]::Round((60 - $i) / 60.0, 3)   # decrescente: exige Sort-Object
+    $bw = [int64](2e6 + $rnd.Next(0, 40) * 1e6)
+    $evtList.Add(([pscustomobject]@{ type = 'download'; download = [pscustomobject]@{ bandwidth = $bw; progress = $p } }))
 }
 foreach ($p in 0.0, 0.5, 1) {
     $evtList.Add(([pscustomobject]@{ type = 'upload'; upload = [pscustomobject]@{ bandwidth = [int64]3250000; progress = $p } }))
@@ -66,10 +85,17 @@ foreach ($p in 0.0, 0.5, 1) {
 $evtList.Add(([pscustomobject]@{ type = 'result'; download = [pscustomobject]@{ bandwidth = 3730000 } }))
 $serieOk = $true
 try { $sv = ConvertTo-SerieVelocidadeSpeedtest $evtList } catch { $serieOk = $false; $svErr = "$_" }
+$sv = @($sv)
+$dlPts = @($sv | Where-Object { $_.Fase -eq 'download' })
+$ulPts = @($sv | Where-Object { $_.Fase -eq 'upload' })
+$tOrdenado = $true
+for ($i = 1; $i -lt $dlPts.Count; $i++) { if ([double] $dlPts[$i].T -le [double] $dlPts[$i - 1].T) { $tOrdenado = $false } }
 Checar 'ConvertTo-SerieVelocidadeSpeedtest: aceita List[object] sem estourar' $serieOk $svErr
-Checar 'ConvertTo-SerieVelocidadeSpeedtest: 8 pontos (5 download + 3 upload)' ($serieOk -and @($sv).Count -eq 8) "(count=$(@($sv).Count))"
-Checar 'ConvertTo-SerieVelocidadeSpeedtest: T em 0-100 e Fase preenchida' `
-    ($serieOk -and -not (@($sv) | Where-Object { $_.T -lt 0 -or $_.T -gt 100 -or -not $_.Fase }))
+Checar 'ConvertTo-SerieVelocidadeSpeedtest: reamostra (<=20 pontos por fase, nao 60)' `
+    ($serieOk -and $dlPts.Count -ge 2 -and $dlPts.Count -le 20 -and $ulPts.Count -ge 1 -and $ulPts.Count -le 20) "(dl=$($dlPts.Count) ul=$($ulPts.Count))"
+Checar 'ConvertTo-SerieVelocidadeSpeedtest: T do download em ordem crescente (ordenou apesar do progresso invertido)' $tOrdenado
+Checar 'ConvertTo-SerieVelocidadeSpeedtest: download em 0-100, upload deslocado p/ 100-200' `
+    ($serieOk -and -not ($dlPts | Where-Object { [double] $_.T -lt 0 -or [double] $_.T -gt 100 }) -and -not ($ulPts | Where-Object { [double] $_.T -lt 100 -or [double] $_.T -gt 200 }))
 $svNull = $true
 try { $x = ConvertTo-SerieVelocidadeSpeedtest $null } catch { $svNull = $false }
 Checar 'ConvertTo-SerieVelocidadeSpeedtest: null -> vazio, sem estourar' ($svNull -and @($x).Count -eq 0)
