@@ -11,6 +11,23 @@
 # Regras: nunca toca em resultados\pendentes\; so' ADICIONA em resultados\enviados\
 # o que ainda nao existe localmente. As fotos da vistoria do GEL NAO voltam (so' a
 # contagem vai no JSON) -- reanexar pelo GEL web depois, se precisar.
+#
+# RECONCILIACAO (opcional, config/envio.json > reconciliar_resultados = true;
+# DESLIGADA por padrao): quando ligada e a chamada a planilha teve SUCESSO,
+# arquivos em resultados\enviados\ deste tecnico cujo local_id NAO existe mais na
+# planilha sao MOVIDOS para resultados\enviados\obsoletos\ (nao apagados) -- o
+# painel para de conta-los. Util no ambiente de homologacao, onde a planilha e'
+# zerada entre rodadas de teste. Nunca toca em pendentes\; nunca roda se a
+# chamada falhou ou se -LocalIds foi passado.
+
+function Test-ReconciliarResultadosLigado {
+    if ($null -ne $Global:ReconciliarResultadosOverride) { return [bool] $Global:ReconciliarResultadosOverride }
+    try {
+        $cfg = Get-Config 'envio'
+        if ($cfg -and $cfg.PSObject.Properties['reconciliar_resultados']) { return [bool] $cfg.reconciliar_resultados }
+    } catch { }
+    return $false   # padrao: DESLIGADA (seguro p/ producao)
+}
 
 # "dd/MM/yyyy HH:mm:ss" (formato de recebido_em do Codigo.gs) -> datetime. $null se nao der.
 function ConvertFrom-DataResultado {
@@ -30,7 +47,7 @@ function Sync-Resultados {
         [switch]   $Force        # rebaixa tudo, mesmo o que ja existe local
     )
 
-    $resumo = [pscustomobject]@{ NoServidor = 0; Baixados = 0; JaTinha = 0; Falhas = 0 }
+    $resumo = [pscustomobject]@{ NoServidor = 0; Baixados = 0; JaTinha = 0; Falhas = 0; Obsoletos = 0 }
 
     $payload = @{}
     if (-not [string]::IsNullOrWhiteSpace($TecnicoNome)) { $payload['tecnico'] = [string] $TecnicoNome }
@@ -50,16 +67,18 @@ function Sync-Resultados {
         throw
     }
 
+    # Chegar aqui = a chamada 'resultados.listar' teve SUCESSO (o catch acima
+    # trata "recurso ausente" e re-lanca o resto). Base para a reconciliacao.
     $itens = @($idx.itens)
     $resumo.NoServidor = $itens.Count
-    if (-not $itens.Count) {
-        Write-Log 'Nenhum resultado transmitido encontrado para este roteiro.' -Nivel Info
-        return $resumo
-    }
 
     $locais  = Get-DiagnosticosRealizados     # hashtable local_id -> { Quando; ... }
     $destino = Join-Path $Global:RaizApp 'resultados\enviados'
     if (-not (Test-Path $destino)) { New-Item -ItemType Directory -Path $destino -Force | Out-Null }
+
+    if (-not $itens.Count) {
+        Write-Log 'Nenhum resultado transmitido encontrado para este roteiro.' -Nivel Info
+    }
 
     foreach ($it in $itens) {
         $id = [string] $it.local_id
@@ -93,8 +112,47 @@ function Sync-Resultados {
         }
     }
 
-    Write-Log ("Sync de resultados: {0} baixado(s), {1} ja no computador, {2} falha(s)." -f `
-               $resumo.Baixados, $resumo.JaTinha, $resumo.Falhas) `
+    # --- Reconciliacao (opcional, ver cabecalho) --------------------------------
+    # So' roda com o toggle ligado, sem -LocalIds (senao a lista viria filtrada) e
+    # depois de um 'resultados.listar' que SUCEDEU (garantido: chegamos ate aqui).
+    if ((Test-ReconciliarResultadosLigado) -and -not $LocalIds) {
+        try {
+            $noServidor = @{}
+            foreach ($it in $itens) {
+                $sid = [string] $it.local_id
+                if ($sid) { $noServidor[$sid.Trim().ToLower()] = $true }
+            }
+            $alvoTec = ([string] $TecnicoNome).Trim().ToLower()
+            $obsDir  = Join-Path $destino 'obsoletos'
+
+            foreach ($f in @(Get-ChildItem -Path $destino -Filter '*.json' -File -ErrorAction SilentlyContinue)) {
+                $o = $null
+                try { $o = Get-Content $f.FullName -Raw -Encoding UTF8 | ConvertFrom-Json } catch { continue }
+                $fid = ([string] $o.local.id).Trim()
+                if (-not $fid) { continue }
+                # so' julga arquivos DESTE tecnico (a lista do servidor veio filtrada por ele);
+                # sem -TecnicoNome, julga todos.
+                if ($alvoTec) {
+                    $ftec = ([string] $o.tecnico.nome).Trim().ToLower()
+                    if ($ftec -and $ftec -ne $alvoTec) { continue }
+                }
+                if ($noServidor.ContainsKey($fid.ToLower())) { continue }   # ainda existe na planilha
+
+                if (-not (Test-Path $obsDir)) { New-Item -ItemType Directory -Path $obsDir -Force | Out-Null }
+                Move-Item -Path $f.FullName -Destination (Join-Path $obsDir $f.Name) -Force
+                $resumo.Obsoletos++
+            }
+            if ($resumo.Obsoletos) {
+                Write-Log ("Reconciliacao: {0} resultado(s) local(is) sem correspondencia na planilha movido(s) para enviados\obsoletos\." -f $resumo.Obsoletos) -Nivel Aviso
+            }
+        } catch {
+            Write-Log ("Reconciliacao de resultados nao concluida: {0}" -f $_) -Nivel Aviso
+        }
+    }
+
+    $extra = if ($resumo.Obsoletos) { ", $($resumo.Obsoletos) obsoleto(s) arquivado(s)" } else { '' }
+    Write-Log ("Sync de resultados: {0} baixado(s), {1} ja no computador, {2} falha(s){3}." -f `
+               $resumo.Baixados, $resumo.JaTinha, $resumo.Falhas, $extra) `
               -Nivel $(if ($resumo.Falhas) { 'Aviso' } else { 'Ok' })
     return $resumo
 }

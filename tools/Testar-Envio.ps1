@@ -229,8 +229,48 @@ try {
     if (-not (Test-Path $e3)) {
         Write-Host "[11] Send-EventosWebPendentes: evento com +7 dias e' descartado  OK"
     } else { Write-Host "[11] FALHA: e3 ainda existe (n=$n11)"; $falhas++ }
+
+    # ---- Sync-Resultados: reconciliacao (arquiva o que sumiu da planilha) -----
+    Get-ChildItem $envDir -Filter 'recon_*' -Recurse -EA SilentlyContinue | Remove-Item -Force -EA SilentlyContinue
+    function New-EnviadoFalso($id, $tec) {
+        $p = Join-Path $envDir ('recon_{0}.json' -f ($id -replace '[^\w\-]', '_'))
+        @{ versao_ferramenta = 'recon'; coletado_em = (Get-Date).ToString('o')
+           tecnico = @{ nome = $tec }; local = @{ id = $id; zona_eleitoral = 99; municipio_termo = 'X'; tipo = 'principal' }
+           classificacao = @{ automatica = 'medido'; final = 'medido'; ajustada = $false }
+        } | ConvertTo-Json -Depth 6 | Set-Content -Path $p -Encoding UTF8
+        return $p
+    }
+    Set-Content $modeFile 'ok'
+    $Global:ReconciliarResultadosOverride = $true
+    $rMantem   = New-EnviadoFalso 'ZE99-SYNC-UM-PRINCIPAL'        'SYNC TESTE'   # existe na planilha -> fica
+    $rFantasma = New-EnviadoFalso 'ZE99-SYNC-FANTASMA-PRINCIPAL'  'SYNC TESTE'   # sumiu -> vai p/ obsoletos
+    $rOutro    = New-EnviadoFalso 'ZE99-SYNC-FANTASMA2-PRINCIPAL' 'OUTRO TEC'    # outro tecnico -> intocado
+    $s12 = Sync-Resultados -TecnicoNome 'SYNC TESTE'
+    $obsDir = Join-Path $envDir 'obsoletos'
+    $fantasmaArquivado = -not (Test-Path $rFantasma) -and (Test-Path (Join-Path $obsDir (Split-Path $rFantasma -Leaf)))
+    if ($s12.Obsoletos -eq 1 -and $fantasmaArquivado -and (Test-Path $rMantem) -and (Test-Path $rOutro)) {
+        Write-Host "[12] Sync-Resultados reconciliacao: 1 obsoleto arquivado; o que ainda existe e o de outro tecnico ficam  OK"
+    } else {
+        Write-Host "[12] FALHA: obs=$($s12.Obsoletos) fantasmaArq=$fantasmaArquivado mantem=$([bool](Test-Path $rMantem)) outro=$([bool](Test-Path $rOutro))"; $falhas++
+    }
+
+    # CASO 13: toggle DESLIGADO -> nao arquiva nada
+    Get-ChildItem $obsDir -EA SilentlyContinue | Remove-Item -Force -EA SilentlyContinue
+    $rFantasma2 = New-EnviadoFalso 'ZE99-SYNC-FANTASMA-PRINCIPAL' 'SYNC TESTE'
+    $Global:ReconciliarResultadosOverride = $false
+    $s13 = Sync-Resultados -TecnicoNome 'SYNC TESTE'
+    if ($s13.Obsoletos -eq 0 -and (Test-Path $rFantasma2)) {
+        Write-Host "[13] reconciliar_resultados desligado -> nao arquiva nada  OK"
+    } else { Write-Host "[13] FALHA: obs=$($s13.Obsoletos) fantasma2=$([bool](Test-Path $rFantasma2))"; $falhas++ }
+    $Global:ReconciliarResultadosOverride = $null
 }
 finally {
+    try {
+        $env2 = Join-Path $Global:RaizApp 'resultados\enviados'
+        Get-ChildItem $env2 -Filter 'recon_*' -Recurse -EA SilentlyContinue | Remove-Item -Force -EA SilentlyContinue
+        $ob = Join-Path $env2 'obsoletos'; if (Test-Path $ob) { Remove-Item $ob -Recurse -Force -EA SilentlyContinue }
+    } catch { }
+    $Global:ReconciliarResultadosOverride = $null
     try { $ev = Join-Path $Global:RaizApp 'eventos\pendentes'; if (Test-Path $ev) { Get-ChildItem $ev -Filter '*ZEWEB-TESTE*' -EA SilentlyContinue | Remove-Item -Force -EA SilentlyContinue } } catch { }
     $listener.Stop(); $listener.Close()
     try { $ps.EndInvoke($handle) } catch { }
