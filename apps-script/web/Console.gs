@@ -28,6 +28,19 @@ function _webDriveRoot() {
   return '1ZaV3-VYAgwXJ6knuODCK6lw9FCPDjZJf';
 }
 
+// 'homologacao' | 'producao' -- o Index.html (mesmo arquivo nos dois projetos)
+// usa isso pro selo e o rodape. Automatico pela planilha de Resultados; a
+// Script Property DICON_AMBIENTE forca, se preciso.
+var WEB_SHEET_HOMOLOG = '1aihOABaGSnHNIP5BHisR-iI1-OpQWHALLt5jvsUzpWE';
+function _webAmbiente() {
+  try {
+    var p = PropertiesService.getScriptProperties().getProperty('DICON_AMBIENTE');
+    if (p && String(p).trim()) return String(p).trim().toLowerCase();
+  } catch (e) { /* ok */ }
+  try { if (_idResultados() === WEB_SHEET_HOMOLOG) return 'homologacao'; } catch (e) { /* ok */ }
+  return 'producao';
+}
+
 /* ============================ PAGINA ============================ */
 
 function webConsolePagina(e) {
@@ -256,6 +269,7 @@ function carregarPainel(forcar) {
     } catch (e) { /* cache e' opcional */ }
   }
   corpo.acesso = acesso;
+  corpo.ambiente = _webAmbiente();
   return corpo;
 }
 

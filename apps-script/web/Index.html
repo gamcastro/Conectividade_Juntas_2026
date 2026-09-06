@@ -90,7 +90,7 @@
 
 <header>
   <span class="wm">DICON&nbsp;Web</span>
-  <span class="badge">Homologação</span>
+  <span class="badge" id="envBadge" hidden>Homologação</span>
   <span class="sp"></span>
   <button id="btnAtualizar" onclick="carregar(true)">Atualizar</button>
 </header>
@@ -102,7 +102,7 @@
   <div id="semacesso" class="center" hidden>
     <h2>Sem acesso</h2>
     <p>A conta <b id="saEmail"></b> não está autorizada na console.</p>
-    <p>Peça a um administrador para incluir o seu e-mail na aba <code>Acesso</code> da planilha de resultados de homologação.</p>
+    <p>Peça a um administrador para incluir o seu e-mail na aba <code>Acesso</code> da planilha de resultados.</p>
   </div>
 
   <div id="erro" class="center" hidden>
@@ -288,6 +288,9 @@
 
     el('tabAcesso').hidden = !(d.acesso && d.acesso.papel === 'admin');
 
+    var amb = (d.ambiente || 'producao');
+    el('envBadge').hidden = (amb !== 'homologacao');
+
     grupo('gRoteiro', d.por_roteiro);
     grupo('gTecnico', d.por_tecnico);
     grupo('gZE',      d.por_ze);
@@ -300,8 +303,8 @@
     });
 
     renderVist();
-    el('foot').textContent = 'DICON Web · homologação · dados de ' +
-      new Date(d.gerado_em).toLocaleString('pt-BR') + ' · SEASU-COINF-STIC';
+    el('foot').textContent = 'DICON Web · ' + (amb === 'homologacao' ? 'homologação' : 'produção') +
+      ' · dados de ' + new Date(d.gerado_em).toLocaleString('pt-BR') + ' · SEASU-COINF-STIC';
     el('app').hidden = false;
     if (TAB === 'vivo') carregarVivo();
   }
