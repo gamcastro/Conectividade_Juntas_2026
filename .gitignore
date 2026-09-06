@@ -3,6 +3,7 @@
 /resultados/enviados/*
 /relatorios/*
 /logs/*
+/eventos/*
 
 # Cache local da lista de Juntas (baixado do Web App)
 /data/*

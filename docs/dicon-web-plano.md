@@ -17,7 +17,19 @@
   - `apps-script/Codigo.gs`: `doGet` roteia `?app=web` → `webConsolePagina(e)`.
   - `apps-script/appsscript.json`: `webapp.executeAs` → `USER_ACCESSING`.
   - Redeploy a cada mudança: `clasp push` + `clasp redeploy AKfycby4rG…wM-w`.
-- **Fase 1 — em andamento** (check-in ao vivo).
+- **Fase 1 — no ar em homologação** ✅ (check-in ao vivo)
+  - Console: `webCheckin` / `webRegistrarEvento` (via `executar`, token de
+    serviço), `carregarAoVivo`, aba **Ao vivo** no `Index.html`. Redeploy @8.
+  - DICON desktop (**v0.6.121**, `src/core/EventosWeb.ps1`): `Add-EventoWeb`
+    (fila `eventos\pendentes\`, só escreve arquivo), `Send-EventosWebPendentes`
+    (flush, no runspace do "Atualizar dados"), `Start-EnvioWebAssincrono`
+    (runspace fire-and-forget: heartbeat + flush), `Start/Stop-HeartbeatWeb`
+    (timer 5 min). Hooks: `abriu_app` no login, `iniciou_diagnostico` ao chegar
+    no passo 3, `transmitiu`, `finalizou`. Toggle `config/envio.json >
+    checkin_web` (padrão on); `$Global:ModoTeste` desliga nos testes.
+  - **Falta**: o upload do PDF individual para o Drive (depende do ID do
+    Shared Drive) — some com o parte do PDF na Fase 1 e vai junto de/perto da
+    Fase 3.
 - Fases 2–4: não iniciadas.
 
 ## 1. Objetivo

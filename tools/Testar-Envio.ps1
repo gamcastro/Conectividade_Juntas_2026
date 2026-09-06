@@ -200,8 +200,38 @@ try {
     if ($s9.NoServidor -eq 1 -and $s9.Baixados -eq 0 -and $s9.Falhas -eq 1 -and $arqs9.Count -eq 0) {
         Write-Host "[9] Sync-Resultados: JSON vazio na camada 2 -> falha contada, nada gravado  OK"
     } else { Write-Host "[9] FALHA: serv=$($s9.NoServidor) baix=$($s9.Baixados) falhas=$($s9.Falhas) arqs=$($arqs9.Count)"; $falhas++ }
+
+    # ---- DICON Web: fila de eventos de check-in -----------------------------
+    $evDir = Join-Path $Global:RaizApp 'eventos\pendentes'
+    if (-not (Test-Path $evDir)) { New-Item -ItemType Directory -Path $evDir -Force | Out-Null }
+    Get-ChildItem $evDir -Filter '*.json' -EA SilentlyContinue | Remove-Item -Force -EA SilentlyContinue
+    function New-EventoWebFalso($tipo, $idade) {
+        $p = Join-Path $evDir ('{0}_{1}_ZEWEB-TESTE.json' -f (Get-Date -Format 'yyyyMMdd_HHmmss_fff'), $tipo)
+        [pscustomobject]@{ id_evento = [guid]::NewGuid().ToString(); hora_cliente = (Get-Date).ToString('dd/MM/yyyy HH:mm:ss')
+                           tipo = $tipo; tecnico = 'TESTE WEB'; email = 'x@tre-ma.jus.br'; versao_dicon = 'teste'
+                           maquina = 'PC'; roteiro = 'R1'; local_id = 'ZEWEB-TESTE-1'; zona = 99; municipio = 'X'
+                           tipo_local = 'principal'; detalhe = 'Local X' } | ConvertTo-Json -Depth 5 | Set-Content -Path $p -Encoding UTF8
+        if ($idade) { (Get-Item $p).LastWriteTime = (Get-Date).AddDays(-$idade) }
+        return $p
+    }
+
+    # CASO 10: fila com 2 eventos -> servidor responde ok -> enviados e apagados
+    Set-Content $modeFile 'ok'
+    $e1 = New-EventoWebFalso 'iniciou_diagnostico'; $e2 = New-EventoWebFalso 'transmitiu'
+    $n10 = Send-EventosWebPendentes
+    if ($n10 -eq 2 -and -not (Test-Path $e1) -and -not (Test-Path $e2)) {
+        Write-Host "[10] Send-EventosWebPendentes: 2 eventos enviados e removidos da fila  OK"
+    } else { Write-Host "[10] FALHA: n=$n10 e1=$([bool](Test-Path $e1)) e2=$([bool](Test-Path $e2))"; $falhas++ }
+
+    # CASO 11: evento com mais de 7 dias -> descartado sem enviar
+    $e3 = New-EventoWebFalso 'abriu_app' 9
+    $n11 = Send-EventosWebPendentes
+    if (-not (Test-Path $e3)) {
+        Write-Host "[11] Send-EventosWebPendentes: evento com +7 dias e' descartado  OK"
+    } else { Write-Host "[11] FALHA: e3 ainda existe (n=$n11)"; $falhas++ }
 }
 finally {
+    try { $ev = Join-Path $Global:RaizApp 'eventos\pendentes'; if (Test-Path $ev) { Get-ChildItem $ev -Filter '*ZEWEB-TESTE*' -EA SilentlyContinue | Remove-Item -Force -EA SilentlyContinue } } catch { }
     $listener.Stop(); $listener.Close()
     try { $ps.EndInvoke($handle) } catch { }
     $ps.Dispose(); $rs.Dispose()
