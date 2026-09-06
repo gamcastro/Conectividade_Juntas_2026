@@ -103,8 +103,15 @@ function carregarGelLocal(localId) {
   var fotos = { fotos: [] };
   try { fotos = listarFotosGel(localId); } catch (e) { /* Drive opcional */ }
 
+  var testado = false, pdfUrl = '';
+  try {
+    var tt = _webTestados()[localId];
+    if (tt) { testado = true; pdfUrl = tt.pdf_url || ''; }
+  } catch (e) { /* ok */ }
+
   return { acesso: acesso, local: u, gel_web: web, gel_resultado: doResultado,
-           fotos: fotos.fotos || [], fotos_erro: fotos.erro || '' };
+           fotos: fotos.fotos || [], fotos_erro: fotos.erro || '',
+           testado: testado, pdf_url: pdfUrl };
 }
 
 // Grava/atualiza a linha do Local na aba GEL. req: { local_id, secoes }

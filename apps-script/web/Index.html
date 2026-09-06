@@ -285,6 +285,18 @@
         </div>
         <div id="gelGaleria" class="gel-fotos"></div>
       </div>
+
+      <div id="gelRelCard" class="card" hidden>
+        <h3>Relatório do Local (com GEL + fotos)</h3>
+        <div class="lbl" style="text-transform:none;letter-spacing:0;color:var(--tinta2);margin:0 0 10px">
+          Regera o <b>PDF individual</b> deste Local juntando as medições do técnico + as 5 seções do GEL
+          acima + as fotos — no mesmo visual do relatório do DICON desktop — e <b>substitui</b> o arquivo
+          em <code>DICON / relatorios</code> do Drive (o que a coluna PDF das Vistorias aponta).
+        </div>
+        <button class="btn-primario" id="gelBtnRel" onclick="gelGerarRel()">Gerar / atualizar relatório</button>
+        <span id="gelRelStatus" class="lbl" style="margin-left:12px;text-transform:none;letter-spacing:0;color:var(--tinta2)"></span>
+        <div id="gelRelOk" hidden style="margin-top:10px;padding:10px 12px;background:#E7F4EC;border:1px solid #B7E0C6;border-radius:8px;font-size:13px"></div>
+      </div>
     </div>
 
     <div id="vistorias" hidden>
@@ -620,6 +632,9 @@
     el('gelFotosStatus').textContent = '';
     el('gelGaleria').innerHTML = '';
     el('gelFotosCard').hidden = !GEL_LOCAL;
+    el('gelRelCard').hidden = true;
+    el('gelRelOk').hidden = true;
+    el('gelRelStatus').textContent = '';
     gelPdfEscolhido();
     gelFotosEscolhidas();
     if (!GEL_LOCAL) return;
@@ -641,6 +656,7 @@
         gelRenderGaleria(d.fotos || []);
         if (d.fotos_erro === 'DRIVE_SEM_ESCOPO')
           el('gelFotosStatus').textContent = 'Envio de fotos indisponível: o token de serviço ainda não tem acesso ao Drive.';
+        el('gelRelCard').hidden = !d.testado;
       })
       .withFailureHandler(function(){})
       .carregarGelLocal(GEL_LOCAL);
@@ -723,6 +739,33 @@
       }).catch(function(){ erros++; i++; proxima(); });
     }
     proxima();
+  }
+
+  function gelGerarRel(){
+    if (!GEL_LOCAL) return;
+    el('gelBtnRel').disabled = true;
+    el('gelRelOk').hidden = true;
+    el('gelRelStatus').textContent = 'Gerando… (pode levar até 1 min)';
+    google.script.run
+      .withSuccessHandler(function(d){
+        el('gelBtnRel').disabled = false;
+        el('gelRelStatus').textContent = '';
+        if (!d || !d.ok){
+          if (d && d.erro === 'SEM_RESULTADO'){ el('gelRelStatus').textContent = 'Este Local ainda não foi transmitido pelo técnico.'; return; }
+          if (d && d.erro === 'DRIVE_SEM_ESCOPO'){ el('gelRelStatus').textContent = 'O token de serviço não tem acesso ao Drive.'; return; }
+          el('gelRelStatus').textContent = 'Falhou.';
+          return;
+        }
+        el('gelRelOk').innerHTML = '<b>Relatório atualizado no Drive.</b> ' +
+          (d.tem_gel ? 'Com dados do GEL' : 'Sem GEL anexado') + (d.fotos ? (' · ' + d.fotos + ' foto(s)') : '') +
+          ' · <a href="' + esc(d.url) + '" target="_blank" rel="noopener">abrir</a>';
+        el('gelRelOk').hidden = false;
+      })
+      .withFailureHandler(function(e){
+        el('gelBtnRel').disabled = false;
+        el('gelRelStatus').textContent = 'Erro: ' + ((e && e.message) || e);
+      })
+      .gerarRelatorioLocal({ local_id: GEL_LOCAL });
   }
 
   function gelRemoverFoto(id){

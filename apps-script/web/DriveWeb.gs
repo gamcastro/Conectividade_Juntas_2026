@@ -81,6 +81,17 @@ function _driveUpload(token, paiId, nome, mimeType, bytes) {
   return j;
 }
 
+// baixa um arquivo do Drive e devolve um data: URI (pra embutir imagem no HTML).
+function _driveBaixarDataUri(token, id, mimePref) {
+  var resp = UrlFetchApp.fetch(DRIVE_API + '/files/' + id + '?alt=media&' + DRIVE_COMUM, {
+    method: 'get', muteHttpExceptions: true, headers: _driveHeaders(token)
+  });
+  if (resp.getResponseCode() >= 300) return '';
+  var b = resp.getBlob();
+  var m = mimePref || b.getContentType() || 'image/jpeg';
+  return 'data:' + m + ';base64,' + Utilities.base64Encode(b.getBytes());
+}
+
 function _driveUploadMedia(token, fileId, mimeType, bytes) {
   return _driveFetch(DRIVE_UPLOAD + '/' + fileId + '?uploadType=media&fields=id,webViewLink&' + DRIVE_COMUM, {
     method: 'patch', muteHttpExceptions: true, contentType: mimeType,
