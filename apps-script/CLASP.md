@@ -46,13 +46,21 @@ Vive no **mesmo projeto Apps Script de homolog** (`17BLQ6IOZ…`), pasta
 `apps-script/web/` (`Console.gs`, `DriveWeb.gs`, `RelatorioFinal.gs`,
 `Brasao.gs`, `Index.html`). Ver `docs/dicon-web-plano.md`.
 
-- **Implantação Web App** (a que a coordenação acessa) — **≠** a implantação da
-  Execution API que o DICON de campo consome:
-  - deploymentId: `AKfycby4rGyTNWzgl6FxYkdAmnTQpO1zSsmolqJll6psftuH2S-SZQh76s6j2qLWYypZi6wM-w`  (homolog **@22**)
-  - URL: `…/AKfycby4rG…wM-w/exec?app=web`  (`doGet` roteia `?app=web` → `webConsolePagina`)
-- **Implantação da Execution API do DICON**: `AKfycbxHMpUwQuDH1SwRiLersK1Qbk3x90Xpu76zxnPl12Upthotd3UiaTd_eOPQ01FF2PBk`  (homolog **@23**, `clasp version` 23).
+| ambiente | Web App da console (`?app=web`) | Execution API do DICON de campo |
+|---|---|---|
+| **homolog** | `AKfycby4rGyTNWzgl6FxYkdAmnTQpO1zSsmolqJll6psftuH2S-SZQh76s6j2qLWYypZi6wM-w` (@26) | `AKfycbxHMpUwQuDH1SwRiLersK1Qbk3x90Xpu76zxnPl12Upthotd3UiaTd_eOPQ01FF2PBk` (@23) |
+| **prod** (2026-09-06) | `AKfycbylhIAahOf0coAHwpOH2OCMbySmfeZR1feT-JFG5aw69GGrtRWYAnxtcL4b3carWYNy0w` (@16) | `AKfycbya1hdu7dgLzXd8U2Totm8cffCtiAnIjJptppe7AuxfvbuHhkNGOAXlCa90QCE_-HOApQ` (@16, `clasp version` 16) |
 
-Redeploy da console (mantém a URL), da pasta `~/dicon-clasp-homolog`:
+- URL da console = `.../macros/s/<Web App deploymentId>/exec?app=web` (`doGet`
+  roteia `?app=web` → `webConsolePagina`).
+- A implantação **legada** `/exec` anônima de prod (`AKfycbyrPcog…` @12) fica
+  **congelada** — nunca é tocada.
+- **`DICON_DRIVE_ROOT`** (Script Property, só em prod): pasta `DICON` de produção
+  no Shared Drive `= 11fTYm2KdDWR5BZaq6igCswSiWlsgctc_`. Sem a property (homolog)
+  → cai na pasta antiga (`1ZaV3-…`, renomeada para `DICON-HOMOLOG`).
+
+Redeploy da console (mantém a URL), da pasta `~/dicon-clasp-homolog`
+(ou `~/dicon-clasp-prod` p/ produção):
 
     cp apps-script\web\*.gs apps-script\web\*.html  $env:USERPROFILE\dicon-clasp-homolog\web\
     cd $env:USERPROFILE\dicon-clasp-homolog
