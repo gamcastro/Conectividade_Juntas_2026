@@ -44,7 +44,8 @@ function _webAmbiente() {
 /* ============================ PAGINA ============================ */
 
 function webConsolePagina(e) {
-  var m = e && e.parameter && (e.parameter.m || e.parameter.mobile);
+  var pp = (e && e.parameter) || {};
+  var m = (pp.app === 'mobile') || pp.m || pp.mobile;
   return HtmlService.createHtmlOutputFromFile(m ? 'web/Mobile' : 'web/Index')
     .setTitle('DICON Web — Coordenação')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
