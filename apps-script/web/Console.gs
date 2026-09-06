@@ -14,6 +14,9 @@
 
 var WEB_ABA_ACESSO     = 'Acesso';
 var WEB_BOOTSTRAP_ADMIN = 'george.castro@tre-ma.jus.br';
+// Pasta raiz "DICON" no Shared Drive da coordenacao (nao e' segredo -- so' um id).
+// Sob ela a console cria relatorios/ , gel/<local_id>/ , relatorios-finais/ .
+var WEB_DRIVE_ROOT = '1ZaV3-VYAgwXJ6knuODCK6lw9FCPDjZJf';
 
 /* ============================ PAGINA ============================ */
 

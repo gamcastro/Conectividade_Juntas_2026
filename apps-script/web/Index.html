@@ -61,6 +61,10 @@
   .pill.no { background:#F1F3F6; color:var(--tinta2); }
   .num { font-variant-numeric:tabular-nums; }
 
+  .btn-primario { background:var(--azul); color:#fff; border:0; border-radius:8px; padding:9px 18px; font-size:13px; font-weight:700; cursor:pointer; }
+  .btn-primario:hover { background:#0E2F80; }
+  .btn-primario:disabled { opacity:.55; cursor:default; }
+
   .tec { border:1px solid var(--hair); border-radius:9px; padding:12px 14px; background:#fff; }
   .tec .top { display:flex; align-items:center; gap:8px; }
   .tec .dot { width:9px; height:9px; border-radius:50%; background:#C4CAD4; flex:none; }
@@ -122,6 +126,7 @@
       <button id="tabPainel" class="on" onclick="verTab('painel')">Painel</button>
       <button id="tabVivo" onclick="verTab('vivo')">Ao vivo</button>
       <button id="tabVist" onclick="verTab('vistorias')">Vistorias</button>
+      <button id="tabRel" onclick="verTab('rel')">Relatório final</button>
     </div>
 
     <div id="painel">
@@ -146,6 +151,34 @@
           <table>
             <thead><tr><th>Hora</th><th>Técnico</th><th>Evento</th><th>Local</th><th>Roteiro</th></tr></thead>
             <tbody id="vivoFeed"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div id="rel" hidden>
+      <div class="card">
+        <h3>Gerar relatório consolidado</h3>
+        <div class="cap" style="font-size:13px;color:var(--tinta2);line-height:1.5;margin-bottom:12px">
+          Junta a cobertura (por ZE / município / técnico) e uma tabela por Local
+          (medições, meio sugerido, cabo de rede, observações do técnico, GEL). Sai um
+          <b>Google Doc + PDF</b> na pasta <code>relatorios-finais/</code> do Drive.
+          Modo <b>medição</b> — sem juízo de viabilidade.
+        </div>
+        <button id="btnGerarRel" class="btn-primario" onclick="gerarRel()">Gerar relatório</button>
+        <span id="relStatus" class="lbl" style="margin-left:12px;color:var(--tinta2)"></span>
+        <div id="relResultado" hidden style="margin-top:12px;padding:12px 14px;background:#E7F4EC;border:1px solid #B7E0C6;border-radius:8px;font-size:13px">
+          <b>Relatório gerado.</b>
+          <a id="relPdf" href="#" target="_blank" rel="noopener">abrir PDF</a> ·
+          <a id="relDoc" href="#" target="_blank" rel="noopener">abrir Doc</a>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Gerações anteriores</h3>
+        <div class="tbwrap" style="max-height:44vh">
+          <table>
+            <thead><tr><th>Quando</th><th>Por</th><th>Modo</th><th class="num">Cobertura</th><th>Links</th></tr></thead>
+            <tbody id="relHist"></tbody>
           </table>
         </div>
       </div>
@@ -261,10 +294,53 @@
     el('tabPainel').classList.toggle('on', t==='painel');
     el('tabVivo').classList.toggle('on', t==='vivo');
     el('tabVist').classList.toggle('on', t==='vistorias');
+    el('tabRel').classList.toggle('on', t==='rel');
     el('painel').hidden    = (t!=='painel');
     el('vivo').hidden      = (t!=='vivo');
     el('vistorias').hidden = (t!=='vistorias');
+    el('rel').hidden       = (t!=='rel');
     if (t==='vivo') { carregarVivo(); iniciarVivoTimer(); } else { pararVivoTimer(); }
+    if (t==='rel')  { atualizarBotaoRel(); carregarRelHist(); }
+  }
+
+  function atualizarBotaoRel(){
+    var pct = DADOS && DADOS.resumo ? DADOS.resumo.pct : 0;
+    el('btnGerarRel').textContent = (pct >= 100)
+      ? 'Gerar relatório final'
+      : ('Gerar relatório parcial (' + pct + '% — faltam ' + (DADOS.resumo.pendentes) + ')');
+  }
+
+  function gerarRel(){
+    el('btnGerarRel').disabled = true;
+    el('relStatus').textContent = 'Gerando… (pode levar até 1 min)';
+    el('relResultado').hidden = true;
+    google.script.run
+      .withSuccessHandler(function(d){
+        el('btnGerarRel').disabled = false;
+        if (!d || !d.ok) { el('relStatus').textContent = 'Falhou.'; return; }
+        el('relStatus').textContent = 'Cobertura ' + d.cobertura_pct + '% (' + d.feitos + '/' + d.total + ')' + (d.parcial ? ' — PARCIAL' : '');
+        el('relPdf').href = d.pdf_url;
+        el('relDoc').href = d.doc_url;
+        el('relResultado').hidden = false;
+        carregarRelHist();
+      })
+      .withFailureHandler(function(e){
+        el('btnGerarRel').disabled = false;
+        el('relStatus').textContent = 'Erro: ' + ((e && e.message) || e);
+      })
+      .gerarRelatorioFinal('medicao');
+  }
+
+  function carregarRelHist(){
+    google.script.run.withSuccessHandler(function(d){
+      if (!d || d.sem_acesso) return;
+      el('relHist').innerHTML = (d.historico || []).map(function(h){
+        return '<tr><td class="num">'+esc(h.gerado_em)+'</td><td>'+esc(h.por)+'</td>' +
+          '<td>'+esc(h.modo)+'</td><td class="num">'+esc(h.cobertura_pct)+'%</td>' +
+          '<td><a href="'+esc(h.pdf_url)+'" target="_blank" rel="noopener">PDF</a> · ' +
+          '<a href="'+esc(h.doc_url)+'" target="_blank" rel="noopener">Doc</a></td></tr>';
+      }).join('') || '<tr><td colspan="5">Nenhum relatório gerado ainda.</td></tr>';
+    }).withFailureHandler(function(){}).listarRelatoriosFinais();
   }
   function iniciarVivoTimer(){ pararVivoTimer(); vivoTimer = setInterval(function(){ if (TAB==='vivo') carregarVivo(); }, 30000); }
   function pararVivoTimer(){ if (vivoTimer) { clearInterval(vivoTimer); vivoTimer = null; } }
