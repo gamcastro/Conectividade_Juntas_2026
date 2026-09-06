@@ -462,7 +462,16 @@ veredito do título fora do `completo`.
    Nível do sinal · "Velocidade da placa Wi-Fi" (a placa sem-fio recebe o hotspot
    — `New-ResultadoJson` agora emite `rede_local_wifi_banda`/`_sinal_pct`/
    `_velocidade_link_mbps` também para o meio `celular`). As sub-tabelas "Sem VPN /
-   Com VPN" ficam só com as métricas medidas.
+   Com VPN" ficam só com as métricas medidas; as **curvas ao longo do teste**
+   saem das colunas para uma faixa "Curvas ao longo do teste" de largura total,
+   centralizada (`.grafzona`/`.grafpar`), com Download e Upload em gráficos
+   separados e maiores (v0.6.129, `Get-CurvaDuploHtml`). Cada curva
+   (`Get-GraficoLinhaHtml`) tem grade + eixo de tempo em segundos, linha
+   tracejada do **alvo** (limiar viável da métrica, via `Get-LimiarMetrica` sobre
+   `rede_local_avaliacao`/`avaliacao`), linha da **média**, marcação de **min/pico**
+   e uma **frase-laudo** (`Get-LaudoCurva`) que lê a forma da curva —
+   estabilizou / dente-de-serra / ainda subindo / queda de X % no meio; a de
+   latência conta amostras perdidas e picos.
    **Nomes de produto** (speedtest/Ookla/iperf3/Selenium) não aparecem em texto
    visível — só "teste de velocidade", "banda pela VPN", "análise de banda",
    "sistema de totalização"; chaves de config (`speedtest_server_id`), nomes de

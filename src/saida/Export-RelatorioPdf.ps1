@@ -96,6 +96,110 @@ function Format-NumSvg {
     ([double] $N).ToString('0.###', [System.Globalization.CultureInfo]::InvariantCulture)
 }
 
+# "Teto bonito" para o eixo Y: arredonda pra cima para 1/2/2,5/5/10 x 10^n.
+function Get-NiceMax {
+    param([double] $V)
+    if ($V -le 0) { return 1.0 }
+    $exp  = [math]::Floor([math]::Log10($V))
+    $base = [math]::Pow(10, $exp)
+    $frac = $V / $base
+    $nice = if ($frac -le 1) { 1 } elseif ($frac -le 2) { 2 } elseif ($frac -le 2.5) { 2.5 } elseif ($frac -le 5) { 5 } else { 10 }
+    return [double] ($nice * $base)
+}
+
+# Limiar (viavel) + direcao de uma metrica, a partir das linhas de avaliacao de
+# uma medicao. $Chaves: nomes possiveis da metrica (ex.: 'rl_download','download').
+# Devolve @{ limiar; direcao } ('max' = maior e' melhor / 'min' = menor e' melhor)
+# ou $null se nao achar / sem limiar.
+function Get-LimiarMetrica {
+    param($Avaliacao, [string[]] $Chaves)
+    foreach ($a in @($Avaliacao | Where-Object { $_ })) {
+        $mk = [string] $a.metrica
+        if ($Chaves -contains $mk -and $null -ne $a.limiar_viavel -and "$($a.limiar_viavel)" -ne '') {
+            $dir = [string] $a.direcao
+            return @{ limiar = [double] $a.limiar_viavel; direcao = $(if ($dir -eq 'min') { 'min' } else { 'max' }) }
+        }
+    }
+    return $null
+}
+
+# Leitura automatica de uma curva (banda ao longo do tempo, ou latencia por
+# amostra) -- a frase-laudo que ajuda a bater o olho e ver gargalo / instabilidade.
+# $Pontos: lista {T; V} (V $null = amostra perdida). $Metrica: 'banda' | 'latencia'.
+function Get-LaudoCurva {
+    param(
+        [array] $Pontos, [string] $Unidade = 'Mbps',
+        [double] $Limiar = -1, [string] $Direcao = 'max',
+        [string] $Metrica = 'banda'
+    )
+    $ordenados = @($Pontos | Where-Object { $_ } | Sort-Object { [double] $_.T })
+    $vs = @($ordenados | Where-Object { $null -ne $_.V } | ForEach-Object { [double] $_.V })
+    $n  = $vs.Count
+    if ($n -lt 4) { return '' }
+
+    $max   = ($vs | Measure-Object -Maximum).Maximum
+    $min   = ($vs | Measure-Object -Minimum).Minimum
+    $media = ($vs | Measure-Object -Average).Average
+    $terco = [math]::Max(2, [int]($n / 3))
+    $fim   = @($vs[($n - $terco)..($n - 1)])
+    $mediaFim = ($fim | Measure-Object -Average).Average
+    $sdFim = if ($fim.Count -gt 1) {
+        [math]::Sqrt((($fim | ForEach-Object { ($_ - $mediaFim) * ($_ - $mediaFim) } | Measure-Object -Sum).Sum) / $fim.Count)
+    } else { 0 }
+    $cvFim = if ($mediaFim -gt 0) { $sdFim / $mediaFim } else { 0 }
+
+    if ($Metrica -eq 'latencia') {
+        $perdidas = @($ordenados | Where-Object { $null -eq $_.V }).Count
+        $totAm    = $ordenados.Count
+        $picos = @($vs | Where-Object { $_ -gt ($media + 2 * [math]::Max($sdFim, $media * 0.15)) }).Count
+        $p = @()
+        if ($cvFim -lt 0.25 -and $perdidas -eq 0 -and $picos -eq 0) {
+            $p += ('lat' + [char]0x00EA + 'ncia estavel (~{0:0} ms)' -f $mediaFim)
+        } else {
+            $p += ('lat' + [char]0x00EA + 'ncia {0:0}-{1:0} ms' -f $min, $max)
+        }
+        if ($perdidas -ge 1) { $p += ('{0} amostra(s) perdida(s) (~{1:0}%)' -f $perdidas, ([math]::Round(100 * $perdidas / [math]::Max($totAm, 1)))) }
+        if ($picos -ge 1)    { $p += ('{0} pico(s) acima da media' -f $picos) }
+        if ($Limiar -ge 0)   { $p += ('media ' + $(if ($mediaFim -le $Limiar) { 'abaixo' } else { 'acima' }) + (' do teto de {0:0} ms' -f $Limiar)) }
+        return (($p -join '; ') + '.')
+    }
+
+    # oscilacao (dente-de-serra): trocas de sinal relevantes na diferenca ponto-a-ponto
+    $difs = @(for ($i = 1; $i -lt $n; $i++) { $vs[$i] - $vs[$i - 1] })
+    $trocas = 0
+    for ($i = 1; $i -lt $difs.Count; $i++) {
+        if ((($difs[$i] -gt 0) -ne ($difs[$i - 1] -gt 0)) -and [math]::Abs($difs[$i]) -gt ($media * 0.06)) { $trocas++ }
+    }
+    $oscila = ($trocas -ge ($n * 0.30)) -and (($max - $min) -gt ($media * 0.4))
+    # "quedas" so' contam DEPOIS que a curva chegou perto do pico (a rampa
+    # inicial nao e' queda); a % usa o menor valor desse trecho.
+    $iniPos = 0
+    for ($i = 0; $i -lt $n; $i++) { if ($vs[$i] -ge ($max * 0.7)) { $iniPos = $i; break } }
+    if ($iniPos -ge ($n - 2)) { $iniPos = [int]($n * 0.3) }
+    $posArr = @($vs[$iniPos..($n - 1)])
+    $minPos = ($posArr | Measure-Object -Minimum).Minimum
+    $quedas = @($posArr | Where-Object { $_ -lt ($max * 0.6) }).Count
+
+    $p = @()
+    if ($oscila) {
+        $p += ('oscilou entre {0:0.#} e {1:0.#} {2} (dente-de-serra)' -f $min, $max, $Unidade)
+    } elseif ($cvFim -lt 0.12 -and $mediaFim -ge ($media * 0.9)) {
+        $p += ('estabilizou em ~{0:0.#} {1}' -f $mediaFim, $Unidade)
+    } elseif ($mediaFim -gt ($media * 1.15)) {
+        $p += 'ainda subindo no fim do teste (nao estabilizou)'
+    } else {
+        $p += ('variou de {0:0.#} a {1:0.#} {2}' -f $min, $max, $Unidade)
+    }
+    if ($quedas -ge 1 -and $max -gt 0 -and $minPos -lt ($max * 0.7)) {
+        $p += ('queda de ate -{0:0}% no meio do teste' -f [math]::Round((1 - $minPos / $max) * 100))
+    }
+    if ($Limiar -ge 0) {
+        $ok = if ($Direcao -eq 'min') { $mediaFim -le $Limiar } else { $mediaFim -ge $Limiar }
+        $p += ('media ' + $(if ($ok) { 'acima' } else { 'abaixo' }) + (' do alvo de {0:0.#} {1}' -f $Limiar, $Unidade))
+    }
+    return (($p -join '; ') + '.')
+}
+
 # Grafico de barras horizontais. $Barras: lista de {Rotulo; Valor; Cor?} --
 # Valor $null vira uma linha "sem medida" (sem barra). Devolve '' se nao
 # houver nenhuma barra (o chamador so' inclui o grafico se vier algo).
@@ -163,31 +267,67 @@ function Get-GraficoLinhaHtml {
         [Parameter(Mandatory)] [AllowEmptyCollection()] [array] $Series,
         [string] $Titulo = '',
         [string] $EixoY = '',
+        [string] $EixoXUnidade = '',        # ex.: 's' -> ticks "0 s", "3 s"...
         [int] $Largura = 300,
-        [int] $Altura = 110
+        [int] $Altura = 110,
+        [double] $Limiar = -1,              # linha de alvo horizontal (>= 0 desenha)
+        [string] $DirecaoLimiar = 'max',    # 'max' = alvo e' piso / 'min' = alvo e' teto
+        [switch] $MarcarExtremos,           # ponto + rotulo no minimo e no pico (1a serie)
+        [switch] $Media,                    # linha pontilhada na media (1a serie)
+        [string] $Laudo = ''               # frase de leitura da curva (Get-LaudoCurva)
     )
     $comPonto = @($Series | Where-Object { $_ -and $_.Pontos } | ForEach-Object { $_.Pontos } | Where-Object { $_ -and $null -ne $_.V -and $null -ne $_.T })
     if (-not $comPonto.Count) { return '' }
 
-    $margemEsq = 34; $margemDir = 8; $margemTopo = 10; $margemBaixo = 20
+    $margemEsq = 40; $margemDir = 12; $margemTopo = 10; $margemBaixo = 26
     $areaW = [math]::Max(20, $Largura - $margemEsq - $margemDir)
     $areaH = [math]::Max(20, $Altura - $margemTopo - $margemBaixo)
+    $x0 = $margemEsq; $x1 = $margemEsq + $areaW
+    $y0 = $margemTopo; $y1 = $margemTopo + $areaH
     $tMin = ($comPonto | ForEach-Object { [double] $_.T } | Measure-Object -Minimum).Minimum
     $tMax = ($comPonto | ForEach-Object { [double] $_.T } | Measure-Object -Maximum).Maximum
     if ($tMax -le $tMin) { $tMax = $tMin + 1 }
-    $vMax = ($comPonto | ForEach-Object { [double] $_.V } | Measure-Object -Maximum).Maximum
+    $vMaxDado = ($comPonto | ForEach-Object { [double] $_.V } | Measure-Object -Maximum).Maximum
+    if ($Limiar -ge 0 -and $Limiar -gt $vMaxDado) { $vMaxDado = $Limiar }
+    $vMax = Get-NiceMax ($vMaxDado * 1.08)
     if ($vMax -le 0) { $vMax = 1 }
-    $escX = { param($t) Format-NumSvg ([math]::Round($margemEsq + ((([double] $t - $tMin) / ($tMax - $tMin)) * $areaW), 1)) }
-    $escY = { param($v) Format-NumSvg ([math]::Round($margemTopo + $areaH - (([double] $v / $vMax) * $areaH), 1)) }
+    $escX = { param($t) Format-NumSvg ([math]::Round($x0 + ((([double] $t - $tMin) / ($tMax - $tMin)) * $areaW), 1)) }
+    $escY = { param($v) Format-NumSvg ([math]::Round($y0 + $areaH - (([double] $v / $vMax) * $areaH), 1)) }
 
-    $linhas = foreach ($s in @($Series | Where-Object { $_ -and $_.Pontos })) {
+    # --- grade + rotulos do eixo Y (4 divisoes) ---
+    $gradeY = for ($k = 0; $k -le 4; $k++) {
+        $v = $vMax * $k / 4
+        $y = & $escY $v
+        $vTxt = if ($vMax -ge 20) { '{0:0}' -f $v } else { '{0:0.#}' -f $v }
+        "<line x1=""$x0"" y1=""$y"" x2=""$x1"" y2=""$y"" stroke=""#EDF0F5"" stroke-width=""1""/>" +
+        "<text x=""$($x0 - 4)"" y=""$([double]$y + 3)"" font-size=""8"" text-anchor=""end"" fill=""#8891A0"">$vTxt</text>"
+    }
+    $rotEixoY = if ($EixoY) { "<text x=""2"" y=""$($y0 - 2)"" font-size=""8"" fill=""#8891A0"">$(ConvertTo-HtmlSafe $EixoY)</text>" } else { '' }
+
+    # --- ticks do eixo X (5 marcas) ---
+    $ticksX = for ($k = 0; $k -le 4; $k++) {
+        $t = $tMin + ($tMax - $tMin) * $k / 4
+        $x = & $escX $t
+        $tTxt = ('{0:0.#}' -f $t) + $(if ($EixoXUnidade) { ' ' + $EixoXUnidade } else { '' })
+        "<line x1=""$x"" y1=""$y1"" x2=""$x"" y2=""$([double]$y1 + 3)"" stroke=""#D6DBE6"" stroke-width=""1""/>" +
+        "<text x=""$x"" y=""$([double]$y1 + 13)"" font-size=""8"" text-anchor=""middle"" fill=""#8891A0"">$tTxt</text>"
+    }
+
+    # --- linha do limiar (alvo) ---
+    $limHtml = ''
+    if ($Limiar -ge 0 -and $Limiar -le $vMax) {
+        $yl = & $escY $Limiar
+        $rot = if ($DirecaoLimiar -eq 'min') { 'teto' } else { 'alvo' }
+        $limHtml = "<line x1=""$x0"" y1=""$yl"" x2=""$x1"" y2=""$yl"" stroke=""#BC352A"" stroke-width=""1"" stroke-dasharray=""4 3""/>" +
+                   "<text x=""$([double]$x1 - 2)"" y=""$([double]$yl - 3)"" font-size=""8"" text-anchor=""end"" fill=""#BC352A"">$rot $('{0:0.#}' -f $Limiar)</text>"
+    }
+
+    $seriesL = @($Series | Where-Object { $_ -and $_.Pontos })
+    $linhas = foreach ($s in $seriesL) {
         $cor = if ($s.Cor) { [string] $s.Cor } else { '#123FA8' }
-        # ordena por T (a serie pode vir fora de ordem) e, se for muito densa
-        # (JSON antigo sem reamostragem), decima pra no maximo ~40 pontos --
-        # senao o traco vira um rabisco no SVG pequeno.
         $ptsOrd = @($s.Pontos | Where-Object { $_ } | Sort-Object { [double] $_.T })
-        if ($ptsOrd.Count -gt 40) {
-            $passoDec = [math]::Ceiling($ptsOrd.Count / 40)
+        if ($ptsOrd.Count -gt 60) {
+            $passoDec = [math]::Ceiling($ptsOrd.Count / 60)
             $ptsOrd = @(for ($k = 0; $k -lt $ptsOrd.Count; $k += $passoDec) { $ptsOrd[$k] }) + @($ptsOrd[-1])
         }
         $trechoAtual = New-Object System.Collections.Generic.List[string]
@@ -201,27 +341,54 @@ function Get-GraficoLinhaHtml {
             $trechoAtual.Add(('{0},{1}' -f (& $escX $p.T), (& $escY $p.V)))
         }
         if ($trechoAtual.Count -gt 1) { $trechos.Add(($trechoAtual -join ' ')) }
-        foreach ($pts in $trechos) { '<polyline points="' + $pts + '" fill="none" stroke="' + $cor + '" stroke-width="1.6"/>' }
+        foreach ($pts in $trechos) { '<polyline points="' + $pts + '" fill="none" stroke="' + $cor + '" stroke-width="1.7"/>' }
     }
 
-    # eixo Y: so' o valor maximo, pra nao poluir (grafico pequeno)
-    $eixoYHtml = "<text x=""2"" y=""$($margemTopo + 4)"" font-size=""8"" fill=""#8891A0"">$('{0:N0}' -f $vMax) $(ConvertTo-HtmlSafe $EixoY)</text>" +
-                 "<text x=""2"" y=""$($margemTopo + $areaH)"" font-size=""8"" fill=""#8891A0"">0</text>"
+    # --- media + extremos (so' na 1a serie, quando pedido) ---
+    $decor = ''
+    if (($Media -or $MarcarExtremos) -and $seriesL.Count) {
+        $vsP = @($seriesL[0].Pontos | Where-Object { $_ -and $null -ne $_.V -and $null -ne $_.T } | Sort-Object { [double] $_.T })
+        if ($vsP.Count -ge 3) {
+            $cor0 = if ($seriesL[0].Cor) { [string] $seriesL[0].Cor } else { '#123FA8' }
+            if ($Media) {
+                $md = ($vsP | ForEach-Object { [double] $_.V } | Measure-Object -Average).Average
+                $ym = & $escY $md
+                $decor += "<line x1=""$x0"" y1=""$ym"" x2=""$x1"" y2=""$ym"" stroke=""$cor0"" stroke-width=""1"" stroke-dasharray=""2 3"" opacity=""0.7""/>" +
+                          "<text x=""$([double]$x0 + 3)"" y=""$([double]$ym - 3)"" font-size=""8"" fill=""$cor0"">media $('{0:0.#}' -f $md)</text>"
+            }
+            if ($MarcarExtremos) {
+                $pMax = $vsP | Sort-Object { [double] $_.V } -Descending | Select-Object -First 1
+                $pMin = $vsP | Sort-Object { [double] $_.V } | Select-Object -First 1
+                foreach ($pr in @(@{ p = $pMax; t = 'pico' }, @{ p = $pMin; t = 'min' })) {
+                    $cx = & $escX $pr.p.T; $cy = & $escY $pr.p.V
+                    $decor += "<circle cx=""$cx"" cy=""$cy"" r=""2.4"" fill=""$cor0""/>" +
+                              "<text x=""$([double]$cx + 4)"" y=""$([double]$cy - 3)"" font-size=""8"" fill=""#333"">$($pr.t) $('{0:0.#}' -f [double] $pr.p.V)</text>"
+                }
+            }
+        }
+    }
+
     $legenda = ($Series | Where-Object { $_ -and $_.Nome } | ForEach-Object {
         '<span style="color:' + [string] $_.Cor + '">&#9632;</span> ' + (ConvertTo-HtmlSafe ([string] $_.Nome))
     }) -join '&nbsp;&nbsp;'
-    $tit = if ($Titulo) { '<div class="graftit">' + (ConvertTo-HtmlSafe $Titulo) + '</div>' } else { '' }
+    $tit     = if ($Titulo) { '<div class="graftit">' + (ConvertTo-HtmlSafe $Titulo) + '</div>' } else { '' }
     $legHtml = if ($legenda) { '<div class="graflegenda">' + $legenda + '</div>' } else { '' }
+    $laudoHtml = if ($Laudo) { '<div class="graflaudo">' + (ConvertTo-HtmlSafe $Laudo) + '</div>' } else { '' }
     @"
 <div class="grafico">
   $tit
   <svg width="$Largura" height="$Altura" viewBox="0 0 $Largura $Altura" xmlns="http://www.w3.org/2000/svg">
-    <line x1="$margemEsq" y1="$margemTopo" x2="$margemEsq" y2="$($margemTopo + $areaH)" stroke="#D6DBE6" stroke-width="1"/>
-    <line x1="$margemEsq" y1="$($margemTopo + $areaH)" x2="$($margemEsq + $areaW)" y2="$($margemTopo + $areaH)" stroke="#D6DBE6" stroke-width="1"/>
-    $eixoYHtml
-    $($linhas -join "`n")
+    $($gradeY -join "`n    ")
+    $($ticksX -join "`n    ")
+    <line x1="$x0" y1="$y0" x2="$x0" y2="$y1" stroke="#C6CCD8" stroke-width="1"/>
+    <line x1="$x0" y1="$y1" x2="$x1" y2="$y1" stroke="#C6CCD8" stroke-width="1"/>
+    $rotEixoY
+    $limHtml
+    $($linhas -join "`n    ")
+    $decor
   </svg>
   $legHtml
+  $laudoHtml
 </div>
 "@
 }
@@ -307,46 +474,65 @@ function Get-GraficoSemComVpnHtml {
     '<div class="graflinha">' + ($blocos -join "`n") + '</div>'
 }
 
-# Item 5: curva de velocidade do speedtest (Fase 1, sem VPN) -- 2 series
-# (Download/Upload), eixo X = % daquela fase (ver ConvertTo-SerieVelocidadeSpeedtest).
-function Get-GraficoCurvaVelocidadeHtml {
-    param($M)
-    $pontos = @(Get-Prop $M 'rede_local_serie_velocidade')
-    if (-not $pontos.Count) { return '' }
-    $mk = { param($Fase) @($pontos | Where-Object { $_.Fase -eq $Fase } | ForEach-Object { [pscustomobject]@{ T = $_.T; V = $_.Mbps } }) }
-    $series = @(
-        [pscustomobject]@{ Nome = 'Download'; Cor = '#123FA8'; Pontos = @(& $mk 'download') }
-        [pscustomobject]@{ Nome = 'Upload';   Cor = '#1B7F3B'; Pontos = @(& $mk 'upload') }
-    )
-    Get-GraficoLinhaHtml -Series $series -Titulo 'Velocidade ao longo do teste (download, depois upload)' -EixoY 'Mbps' -Largura 360 -Altura 120
+# Curva de banda Download + Upload em DOIS graficos lado a lado (cada um com seu
+# eixo 0..t em segundos), com linha do alvo (limiar), media, min/pico e a
+# frase-laudo. $Pontos: [{T; Mbps; Fase='download'|'upload'}].
+function Get-CurvaDuploHtml {
+    param($Pontos, $Avaliacao, [string[]] $ChavesDl, [string[]] $ChavesUp,
+          [string] $Contexto = '', [int] $Largura = 400, [int] $Altura = 190)
+    $pts = @($Pontos | Where-Object { $_ })
+    if (-not $pts.Count) { return '' }
+    $mk = { param($F) @($pts | Where-Object { $_.Fase -eq $F } | ForEach-Object { [pscustomobject]@{ T = [double] $_.T; V = $_.Mbps } }) }
+    $ctx = if ($Contexto) { " ($Contexto)" } else { '' }
+    $g = @()
+    foreach ($par in @(
+            @{ nome = 'Download'; cor = '#123FA8'; serie = @(& $mk 'download'); chaves = $ChavesDl },
+            @{ nome = 'Upload';   cor = '#1B7F3B'; serie = @(& $mk 'upload');   chaves = $ChavesUp })) {
+        if (-not @($par.serie).Count) { continue }
+        $lim = Get-LimiarMetrica $Avaliacao $par.chaves
+        $lv  = if ($lim) { [double] $lim.limiar } else { -1 }
+        $g += Get-GraficoLinhaHtml -Series @([pscustomobject]@{ Nome = $par.nome; Cor = $par.cor; Pontos = @($par.serie) }) `
+            -Titulo ("$($par.nome) ao longo do teste$ctx") -EixoY 'Mbps' -EixoXUnidade 's' `
+            -Largura $Largura -Altura $Altura -Limiar $lv -DirecaoLimiar 'max' -Media -MarcarExtremos `
+            -Laudo (Get-LaudoCurva -Pontos @($par.serie) -Unidade 'Mbps' -Limiar $lv -Direcao 'max' -Metrica 'banda')
+    }
+    $g = @($g | Where-Object { $_ })
+    if (-not $g.Count) { return '' }
+    '<div class="grafpar">' + ($g -join "`n") + '</div>'
 }
 
-# Item 6a: curva de banda do iperf3 (Fase 2, com VPN) -- download e upload em
-# sequencia na mesma linha do tempo (ver Test-BandaVpn/SerieBanda).
+# Item 5: curva de velocidade do speedtest (Fase 1, sem VPN).
+function Get-GraficoCurvaVelocidadeHtml {
+    param($M, [int] $Largura = 400, [int] $Altura = 190)
+    Get-CurvaDuploHtml -Pontos @(Get-Prop $M 'rede_local_serie_velocidade') `
+        -Avaliacao @(Get-Prop $M 'rede_local_avaliacao') -ChavesDl @('rl_download') -ChavesUp @('rl_upload') `
+        -Contexto 'sem VPN' -Largura $Largura -Altura $Altura
+}
+
+# Item 6a: curva de banda do iperf3 (Fase 2, com VPN).
 function Get-GraficoCurvaBandaVpnHtml {
-    param($M)
-    $pontos = @(Get-Prop $M 'vpn_serie_banda')
-    if (-not $pontos.Count) { return '' }
-    $mk = { param($Fase) @($pontos | Where-Object { $_.Fase -eq $Fase } | ForEach-Object { [pscustomobject]@{ T = $_.T; V = $_.Mbps } }) }
-    $series = @(
-        [pscustomobject]@{ Nome = 'Download'; Cor = '#123FA8'; Pontos = @(& $mk 'download') }
-        [pscustomobject]@{ Nome = 'Upload';   Cor = '#1B7F3B'; Pontos = @(& $mk 'upload') }
-    )
-    Get-GraficoLinhaHtml -Series $series -Titulo 'Banda pela VPN ao longo do teste (segundos)' -EixoY 'Mbps' -Largura 360 -Altura 120
+    param($M, $Avaliacao = @(), [int] $Largura = 400, [int] $Altura = 190)
+    Get-CurvaDuploHtml -Pontos @(Get-Prop $M 'vpn_serie_banda') `
+        -Avaliacao $Avaliacao -ChavesDl @('download') -ChavesUp @('upload') `
+        -Contexto 'com a VPN' -Largura $Largura -Altura $Altura
 }
 
 # Item 6b: latencia por amostra do ping (Fase 2, com VPN) -- uma amostra sem
 # resposta vira um buraco na linha (ver Test-Latencia/AmostrasMs).
 function Get-GraficoLatenciaAmostraHtml {
-    param($M)
+    param($M, $Avaliacao = @(), [int] $Largura = 780, [int] $Altura = 190)
     $amostras = @(Get-Prop $M 'vpn_serie_latencia')
     if (-not $amostras.Count) { return '' }
     $pontos = for ($i = 0; $i -lt $amostras.Count; $i++) {
         [pscustomobject]@{ T = $i + 1; V = $amostras[$i] }
     }
+    $lim = Get-LimiarMetrica $Avaliacao @('latencia')
+    $lv  = if ($lim) { [double] $lim.limiar } else { -1 }
     $series = @([pscustomobject]@{ Nome = 'Lat' + [char]0x00EA + 'ncia'; Cor = '#B77F00'; Pontos = @($pontos) })
     $titulo = 'Lat' + [char]0x00EA + 'ncia por amostra do ping (falha = buraco na linha)'
-    Get-GraficoLinhaHtml -Series $series -Titulo $titulo -EixoY 'ms' -Largura 360 -Altura 120
+    Get-GraficoLinhaHtml -Series $series -Titulo $titulo -EixoY 'ms' -EixoXUnidade 'amostra' `
+        -Largura $Largura -Altura $Altura -Limiar $lv -DirecaoLimiar 'min' -Media `
+        -Laudo (Get-LaudoCurva -Pontos $pontos -Unidade 'ms' -Limiar $lv -Direcao 'min' -Metrica 'latencia')
 }
 
 # Item 7: comparacao entre as tentativas do "Refazer" (so' aparece quando o
@@ -435,13 +621,14 @@ function Get-MeioBlocoHtml {
     }
     $f1 = Get-TabelaAvaliacaoHtml -Linhas $M.rede_local_avaliacao -Modo $Modo
     if (-not $f1) { $f1 = '<div class="small">O teste de velocidade n&atilde;o mediu neste meio.</div>' }
+    $avalVpn = if ($Recomendado) { @($R.avaliacao) } else { @() }
     $grafVelocidade = Get-GraficoCurvaVelocidadeHtml -M $M
 
     if ($M.vpn_conectou) {
         $f2 = if ($Recomendado) { Get-TabelaAvaliacaoHtml -Linhas $R.avaliacao -ComMotivo -Modo $Modo } else { Get-TabelaVpnNumerosHtml $M }
         if (-not $f2) { $f2 = '<div class="small">Sem m&eacute;tricas registradas para a fase com a VPN.</div>' }
-        $grafBanda    = Get-GraficoCurvaBandaVpnHtml -M $M
-        $grafLatencia = Get-GraficoLatenciaAmostraHtml -M $M
+        $grafBanda    = Get-GraficoCurvaBandaVpnHtml -M $M -Avaliacao $avalVpn
+        $grafLatencia = Get-GraficoLatenciaAmostraHtml -M $M -Avaliacao $avalVpn
     } else {
         $mv = if ($M.vpn_motivo) { ' Motivo: ' + (ConvertTo-HtmlSafe ([string] $M.vpn_motivo)) } else { '' }
         $f2 = '<div class="warn"><b>N&atilde;o foi poss&iacute;vel conectar a VPN da Justi&ccedil;a Eleitoral neste meio.</b>' + $mv + '</div>'
@@ -455,6 +642,13 @@ function Get-MeioBlocoHtml {
     $grafSemCom     = Get-GraficoSemComVpnHtml -M $M
     $grafTentativas = Get-GraficoTentativasHtml -M $M
 
+    # As curvas ao longo do tempo saem das colunas e vao pra uma faixa de largura
+    # total, centralizada e maior (mais facil bater o olho e ver gargalo/queda).
+    $zonaGraf = @($grafVelocidade, $grafBanda, $grafLatencia | Where-Object { $_ })
+    $zonaGrafHtml = if ($zonaGraf.Count) {
+        '<div class="grafzona"><div class="graftit">Curvas ao longo do teste</div>' + ($zonaGraf -join "`n") + '</div>'
+    } else { '' }
+
     @"
   <div class="meio">
     <div class="meiotit"><span>$tit</span>$badge$flag$titPropsHtml</div>
@@ -464,15 +658,13 @@ function Get-MeioBlocoHtml {
         <div class="subt">$subSem</div>
         $diagBox
         $f1
-        $grafVelocidade
       </div>
       <div>
         <div class="subt">$subCom</div>
         $f2
-        $grafBanda
-        $grafLatencia
       </div>
     </div>
+    $zonaGrafHtml
     $grafTentativas
   </div>
 "@
@@ -1000,6 +1192,11 @@ function New-RelatorioHtml {
   .graftit { font-size: 9.5px; font-weight: 700; color: #5C6472; text-transform: uppercase;
              letter-spacing: .03em; margin: 0 0 3px; }
   .graflegenda { font-size: 9px; color: #5C6472; margin-top: 2px; }
+  .graflaudo { font-size: 9.5px; color: #333; margin-top: 3px; max-width: 400px; line-height: 1.35; }
+  .grafzona { margin: 10px 0 2px; padding: 8px 12px; background: #FAFBFD;
+              border: 1px solid #E7EDF6; border-radius: 4px; page-break-inside: avoid; }
+  .grafzona > .graftit { margin-bottom: 6px; }
+  .grafpar { display: flex; flex-wrap: wrap; gap: 12px 26px; justify-content: center; }
 
   .gel { border: 1px solid #BFC9DA; border-top: none; padding: 10px 12px 4px; }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 24px; margin: 2px 0 10px; }
