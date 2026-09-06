@@ -43,7 +43,7 @@ e `rootDir` vazio.)
 ## DICON Web (console de coordenação) — homologação
 
 Vive no **mesmo projeto Apps Script de homolog** (`17BLQ6IOZ…`), pasta
-`apps-script/web/` (`Console.gs`, `GelWeb.gs`, `DriveWeb.gs`, `RelatorioFinal.gs`,
+`apps-script/web/` (`Console.gs`, `DriveWeb.gs`, `RelatorioFinal.gs`,
 `Brasao.gs`, `Index.html`). Ver `docs/dicon-web-plano.md`.
 
 - **Implantação Web App** (a que a coordenação acessa) — **≠** a implantação da
@@ -62,8 +62,8 @@ Redeploy da console (mantém a URL), da pasta `~/dicon-clasp-homolog`:
 ### ⚠️ Ação nova em `executar` → redeploy das DUAS implantações
 
 Funções chamadas por **`google.script.run`** (a página da console:
-`carregarPainel`, `carregarAoVivo`, `gerarRelatorioFinal`, `salvarGelWeb`,
-`carregarGelLocal`, …) só precisam do redeploy do **Web App** acima.
+`carregarPainel`, `carregarAoVivo`, `gerarRelatorioFinal`, `listarAcesso`,
+`salvarAcesso`, …) só precisam do redeploy do **Web App** acima.
 
 Mas toda **nova `acao` dentro de `executar`** (`Codigo.gs`) que o DICON de campo
 chame pela Execution API (ex.: `checkin`, `evento`, `resultados.listar`,

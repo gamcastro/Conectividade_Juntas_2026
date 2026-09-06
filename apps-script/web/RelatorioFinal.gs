@@ -96,7 +96,6 @@ function gerarRelatorioFinal(modo) {
 
   var universo = _webUniverso();
   var testados = _webTestadosCompleto();
-  var gelWeb   = _webGelWeb();
   var total  = universo.length;
   var feitos = universo.filter(function (u) { return testados[u.local_id]; }).length;
   var pct    = total ? Math.round(feitos * 100 / total) : 0;
@@ -116,7 +115,6 @@ function gerarRelatorioFinal(modo) {
       var vg = t.doc.vistoria_gel;
       gel = (vg && (vg.tipo_local || vg.infraestrutura || vg.eletrica || (vg.fotos && vg.fotos > 0))) ? 'sim' : '';
     }
-    if (!gel && gelWeb[u.local_id] && gelWeb[u.local_id].secoes) { gel = 'sim (web)'; }
     var qd = _webParseData(t ? t.recebido_em : '');
     var status = t
       ? '<span class="ok">testado' + (qd ? ' ' + Utilities.formatDate(qd, tz, 'dd/MM') : '') + '</span>'

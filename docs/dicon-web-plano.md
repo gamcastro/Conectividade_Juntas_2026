@@ -44,38 +44,27 @@
     colunas com `<table>` aninhada (sem grid/flex).
   - `Index.html`: aba **Relatório final** (Gerar → baixa o PDF + histórico).
   - Redeploy Web App @13.
-- **Fase 2 — no ar em homologação** ✅ (GEL pela web, com fotos)
-  - `apps-script/web/GelWeb.gs`: `salvarGelWeb({local_id,secoes})` grava/atualiza
-    a aba **`GEL`** (`local_id | secoes_json | n_fotos | por | quando |
-    pdf_gel_id | pasta_drive_id`) via **token de serviço** (coordenador tem só
-    leitor); `_gelNormaliza` põe o formulário no MESMO shape do
-    `New-BlocoVistoriaGel` do desktop. `carregarGelLocal(localId)` (identidade
-    do Local + GEL já existente + lista de fotos). `_webGelWeb()` (índice
-    `local_id → {secoes,por,quando}`), consumido por `carregarPainel` (coluna
-    GEL da aba Vistorias) e por `gerarRelatorioFinal` (coluna GEL, `sim (web)`).
-  - `Index.html`: aba **GEL** — seletor de Local, `<input type=file>` do PDF,
-    **pdf.js do cdnjs (3.11.174)** lê o PDF **no navegador** na ordem do
-    content-stream (a mesma do PdfPig — resposta ANTES do `R. :`);
-    `gelExtrairCampos` = espelho do `ConvertFrom-VistoriaGel` + `gelTiraMobilia`
-    (tira cabeçalho/rodapé de página). Formulário de conferência das 5 seções +
-    `Registrar GEL`. **Fotos**: `<input multiple>` → resize no `<canvas>`
-    (1600 px / q80) → `uploadFotoGel` uma a uma → galeria com remover.
-  - `apps-script/web/DriveWeb.gs`: `uploadFotoGel` / `listarFotosGel` /
-    `removerFotoGel` via **API REST do Drive** (`UrlFetchApp` + token de
-    serviço, **não** `DriveApp`) na pasta `DICON/gel/<local_id>/`. Escopo
-    `drive.file` — só o que a console cria. Sem o escopo → `DRIVE_SEM_ESCOPO`,
-    a UI avisa e o resto continua.
-  - `tools/Conectar-DriveServico.ps1`: consentimento OAuth próprio (loopback)
-    que gera o refresh token de serviço com `spreadsheets` + `drive.file` sem
-    tocar em `config/ambiente.exemplo.json` (técnicos de campo intactos). Ver
-    `docs/oauth-google.md`.
-  - Chamadas por `google.script.run` (não `executar`) → só a implantação Web App
-    precisa de redeploy.
-  - **Token de serviço com Drive: FEITO** (2026-09-06) — `OAUTH_REFRESH_TOKEN`
-    do projeto homolog trocado por um com `spreadsheets` + `drive.file`
-    (`Conectar-DriveServico-Standalone.ps1`, colado em Propriedades do script).
-    Upload de fotos validado ao vivo.
-  - **Falta**: calibração do extrator com mais PDFs de GEL reais.
+- **Fase 2 (GEL pela web) — RETIRADA** (decisão 2026-09-06, Web App **@25**)
+  - Chegou a rodar (import do PDF do GEL por pdf.js + conferência das 5 seções +
+    upload de fotos + `gerarRelatorioLocal`), mas o `Utilities` HTML→PDF do
+    Apps Script não dá paridade visual com o relatório do DICON desktop (é
+    retrato, não paisagem; SVG/gráficos instáveis) e `DocumentApp` está barrado
+    pela trava de escopo. **A importação do GEL e as fotos ficam SÓ no DICON
+    desktop.**
+  - Fluxo definido: o técnico transmite pelo DICON desktop (relatório com ou
+    sem GEL, sobe pro Drive via `pdf.relatorio` da Fase 4). Se o técnico não
+    tem acesso ao GEL web, o **coordenador** abre o **DICON desktop dele**, faz
+    login **com o nome do técnico**, "Atualizar dados" (o `Sync-Resultados`
+    puxa os resultados transmitidos daquele técnico), vai em **Locais**, anexa
+    o formulário do GEL + fotos, "Abrir relatório completo (PDF)" → regenera o
+    relatório **completo** e a v0.6.123 sobe pro Drive, sobrescrevendo.
+  - Removidos: `apps-script/web/GelWeb.gs`, `apps-script/web/RelatorioLocal.gs`,
+    aba **GEL** do `Index.html`, `uploadFotoGel`/`listarFotosGel`/`removerFotoGel`
+    de `DriveWeb.gs`, coluna GEL das Vistorias, `sim (web)` do relatório final.
+  - **Mantidos** (a Fase 4 usa): token de serviço com `drive.file`
+    (`tools/Conectar-DriveServico*.ps1`, `OAUTH_REFRESH_TOKEN` já trocado),
+    `_driveGarantirPasta`/`_driveUpload`/`_driveUploadOuAtualiza`/`_resultadoSetPdf`,
+    `webUploadPdfRelatorio` (`pdf.relatorio`).
 - **Fase 4 — parcial em homologação** 🚧 (polimento)
   - `carregarPainel(forcar)`: corpo pesado (universo × testados) em
     `CacheService` (45 s); o botão **Atualizar** passa `forcar=true`.
@@ -94,14 +83,6 @@
     Local já foi transmitido; toggle `config/envio.json > pdf_web`.
   - Nova ação em `executar` → redeploy das **duas** implantações: Web App
     **@22**, Execution API **@23** (`clasp version` 23).
-  - **Relatório individual pela console** (`web/RelatorioLocal.gs`,
-    `gerarRelatorioLocal({local_id})`, Web App **@24**): quando o técnico
-    transmitiu pelo desktop mas não pôde anexar o GEL (não tem GEL web), o
-    coordenador importa GEL + fotos pela console e **regera** o PDF individual
-    daquele Local — medições do JSON transmitido + 5 seções do GEL da console
-    + fotos do Drive, no visual do relatório do desktop (modo `medicao`) —
-    e **sobrescreve** `DICON/relatorios/<local_id>.pdf` + atualiza `pdf_url`.
-    Botão na aba **GEL** (aparece quando o Local já foi transmitido).
   - **Falta**: aba-resumo agregada por trigger; retenção da aba `Eventos`.
 
 ### ⚠️ Trava de escopo OAuth (vale para Fase 2 também)
