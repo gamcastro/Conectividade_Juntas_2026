@@ -87,12 +87,9 @@
   .cp:hover{ border-color:var(--je); color:var(--je); }
   .cp.ok{ border-color:var(--je); color:var(--je); }
 
-  .sites{ margin-top:34px; border-top:1px solid var(--line); padding-top:20px; font-size:.92rem; }
-  .sites h2{ font-size:1rem; font-weight:800; margin:0 0 .5rem; }
-  .sites ol{ margin:.4rem 0; padding-left:1.3rem; } .sites li{ margin:.35rem 0; }
-  .sites code{ font-family:"IBM Plex Mono", monospace; font-size:.85em;
-    background:color-mix(in srgb,var(--je) 10%,transparent);
-    border:1px solid color-mix(in srgb,var(--je) 22%,transparent); border-radius:5px; padding:.05em .4em; }
+  .tip{ margin:26px 0 0; padding:14px 16px; background:var(--card); border:1px solid var(--line);
+    border-radius:12px; font-size:.9rem; color:var(--steel); box-shadow:var(--shadow); }
+  .tip b{ color:var(--ink); }
 
   footer{ max-width:46rem; margin:0 auto; padding:0 24px 52px; color:var(--steel-2); font-size:.8rem; line-height:1.55; }
 </style>
@@ -144,19 +141,8 @@
     </div>
   </section>
 
-  <div class="sites">
-    <h2>Publicar no Google Sites</h2>
-    <p>Em <code>sites.google.com/tre-ma.jus.br/dicon</code>, com elementos nativos do Sites:</p>
-    <ol>
-      <li><b>Inserir → Seção</b> — uma para “Produção” e outra para “Homologação”.</li>
-      <li><b>Inserir → Botão</b> (4 no total) — cole as URLs de <b>Console — computador</b> e
-        <b>Console — celular</b> de cada ambiente.</li>
-      <li><b>Inserir → Imagem</b> — os 4 arquivos <code>qr-*.png</code>
-        (pasta <code>D:\Comum\DICON\Guias</code>), um ao lado do botão correspondente.</li>
-    </ol>
-    <p>Mais rápido: <b>Inserir → Incorporar → Código incorporado</b> e colar este arquivo HTML inteiro
-      (fica num quadro rolável).</p>
-  </div>
+  <p class="tip">Não sabe qual usar? <b>Computador</b> = navegador do PC (tem tudo, inclusive Relatório final e Acesso).
+    <b>Celular</b> = versão enxuta pro telefone — abra pelo QR e adicione à tela inicial.</p>
 
 </main>
 
