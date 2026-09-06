@@ -14,13 +14,19 @@
 
 var WEB_ABA_ACESSO     = 'Acesso';
 var WEB_BOOTSTRAP_ADMIN = 'george.castro@tre-ma.jus.br';
-// Pasta raiz "DICON" no Shared Drive da coordenacao. AINDA NAO USADA: escrever
-// no Drive daqui exigiria o escopo 'drive' no manifest, e a Execution API que o
-// DICON de campo usa exige que o token do DICON tenha TODOS os escopos do
-// script (o do DICON so' tem 'spreadsheets'). Fica para a Fase 4, quando o
-// token de servico tiver 'drive'. Por ora, o relatorio final e' baixado pelo
-// navegador (ver web/RelatorioFinal.gs).
-var WEB_DRIVE_ROOT = '1ZaV3-VYAgwXJ6knuODCK6lw9FCPDjZJf';
+
+// Pasta raiz no Shared Drive onde a console arquiva os PDFs (relatorios/ e
+// relatorios-finais/). Producao e homologacao usam pastas SEPARADAS: a Script
+// Property DICON_DRIVE_ROOT (setada so' no projeto de producao) vence; sem ela,
+// cai na pasta atual -- que em homolog foi renomeada para "DICON-HOMOLOG" (o
+// Drive referencia por ID, nao por nome, entao renomear nao quebra nada).
+function _webDriveRoot() {
+  try {
+    var p = PropertiesService.getScriptProperties().getProperty('DICON_DRIVE_ROOT');
+    if (p && String(p).trim()) return String(p).trim();
+  } catch (e) { /* usa o default */ }
+  return '1ZaV3-VYAgwXJ6knuODCK6lw9FCPDjZJf';
+}
 
 /* ============================ PAGINA ============================ */
 

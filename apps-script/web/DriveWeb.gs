@@ -134,7 +134,7 @@ function webUploadPdfRelatorio(req) {
 
   var f;
   try {
-    var pasta = _driveGarantirPasta(token, 'relatorios', WEB_DRIVE_ROOT);
+    var pasta = _driveGarantirPasta(token, 'relatorios', _webDriveRoot());
     f = _driveUploadOuAtualiza(token, pasta, nome, 'application/pdf', Utilities.base64Decode(req.b64));
   } catch (e) {
     if (String(e.message || e).indexOf('DRIVE_SEM_ESCOPO') >= 0) return { status: 'ignorado', motivo: 'DRIVE_SEM_ESCOPO' };

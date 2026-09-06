@@ -244,7 +244,7 @@ function gerarRelatorioFinal(modo) {
   var arq = { id: '', url: '' };
   try {
     var tokenD = _tokenServico();
-    var pastaRF = _driveGarantirPasta(tokenD, 'relatorios-finais', WEB_DRIVE_ROOT);
+    var pastaRF = _driveGarantirPasta(tokenD, 'relatorios-finais', _webDriveRoot());
     var fRF = _driveUpload(tokenD, pastaRF, nomeArq, 'application/pdf', pdf.getBytes());
     arq = { id: fRF.id, url: fRF.webViewLink || '' };
   } catch (e) { /* sem Drive: so' download */ }
