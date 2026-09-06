@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<style>
+  :root {
+    --navy:#0A1E4D; --azul:#123FA8; --bg:#F1F3F7; --tinta:#14181F;
+    --tinta2:#5C6472; --hair:#DDE2EC; --verde:#1B7F3B; --ambar:#E8B93E;
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { margin:0; padding:0; }
+  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+         background:var(--bg); color:var(--tinta); font-size:15px; -webkit-text-size-adjust:100%; }
+  a { color:var(--azul); text-decoration:none; }
+
+  header { position:sticky; top:0; z-index:5; background:var(--navy); color:#fff;
+           padding:10px 14px; display:flex; align-items:center; gap:8px; }
+  header .wm { font-weight:800; font-size:16px; letter-spacing:-.01em; }
+  header .badge { background:var(--ambar); color:#3A2B00; font-weight:800; font-size:9px;
+                  letter-spacing:.06em; text-transform:uppercase; border-radius:4px; padding:2px 6px; }
+  header .sp { flex:1; }
+  header button { background:rgba(255,255,255,.16); color:#fff; border:0; border-radius:8px;
+                  width:38px; height:38px; font-size:17px; cursor:pointer; }
+  header button:active { background:rgba(255,255,255,.3); }
+
+  .strip { display:flex; background:#fff; border-bottom:1px solid var(--hair); }
+  .strip > div { flex:1; text-align:center; padding:10px 4px; border-right:1px solid #EEF1F5; }
+  .strip > div:last-child { border-right:0; }
+  .strip .n { font-size:22px; font-weight:800; color:var(--navy); line-height:1;
+              font-variant-numeric:tabular-nums; }
+  .strip .l { font-size:11px; color:var(--tinta2); margin-top:2px; }
+  .pbar { height:4px; background:#E3E8F0; }
+  .pbar > i { display:block; height:100%; background:var(--verde); }
+
+  nav.seg { position:sticky; top:52px; z-index:4; display:flex; background:#fff;
+            border-bottom:1px solid var(--hair); }
+  nav.seg button { flex:1; background:none; border:0; padding:12px 4px; font-size:13px;
+                   font-weight:700; color:var(--tinta2); cursor:pointer; border-bottom:3px solid transparent; }
+  nav.seg button.on { color:var(--azul); border-bottom-color:var(--azul); }
+
+  main { padding:12px; padding-bottom:40px; }
+  .card { background:#fff; border:1px solid var(--hair); border-radius:12px; padding:12px 14px; margin-bottom:10px; }
+  .muted { color:var(--tinta2); font-size:13px; }
+  .sechead { font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--tinta2);
+             font-weight:800; margin:14px 4px 8px; }
+  .sechead:first-child { margin-top:0; }
+
+  .pill { display:inline-block; border-radius:99px; padding:2px 9px; font-size:11px; font-weight:800; }
+  .pill.ok { background:#E7F4EC; color:var(--verde); }
+  .pill.no { background:#EEF1F5; color:var(--tinta2); }
+
+  /* ao vivo */
+  .tec { border-left:4px solid #C4CAD4; }
+  .tec.on { border-left-color:var(--verde); }
+  .tec .top { display:flex; align-items:baseline; gap:8px; }
+  .tec .nm { font-weight:800; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .tec .st { font-size:12px; color:var(--tinta2); white-space:nowrap; }
+  .tec .at { font-size:14px; margin-top:5px; }
+  .tec .tecloc { font-size:13px; margin-top:4px; }
+  .tec .zebadge { display:inline-block; background:var(--azul); color:#fff; border-radius:4px;
+                  padding:1px 6px; font-size:11px; font-weight:700; margin-left:4px; vertical-align:1px; }
+  .tec .meta { font-size:12px; color:var(--tinta2); margin-top:3px; }
+
+  .ev { padding:9px 0; border-top:1px solid #EEF1F5; font-size:13.5px; }
+  .ev:first-child { border-top:0; }
+  .ev .h { color:var(--tinta2); font-variant-numeric:tabular-nums; font-size:12px; }
+  .ev .w { font-weight:700; }
+  .ev .loc { color:var(--tinta2); font-size:12.5px; margin-top:2px; }
+
+  /* vistorias */
+  .filtros { position:sticky; top:97px; z-index:3; background:var(--bg); padding:8px 0 4px;
+             display:flex; flex-direction:column; gap:8px; }
+  .filtros input, .filtros select { border:1px solid var(--hair); border-radius:9px; padding:10px 12px;
+             font-size:14px; background:#fff; color:var(--tinta); width:100%; }
+  .filtros .lin { display:flex; gap:8px; }
+  .filtros .lin > * { flex:1; }
+  .cont { font-size:12px; color:var(--tinta2); padding:0 4px 6px; }
+
+  .v .lname { font-weight:800; font-size:14.5px; }
+  .v .sub { color:var(--tinta2); font-size:12.5px; margin-top:2px; }
+  .v .lin2 { display:flex; align-items:center; gap:8px; margin-top:7px; flex-wrap:wrap; }
+  .v .nums { font-size:12.5px; color:var(--tinta2); font-variant-numeric:tabular-nums; }
+
+  /* painel */
+  .g { padding:8px 0; border-top:1px solid #EEF1F5; }
+  .g:first-child { border-top:0; }
+  .g .gr { display:flex; align-items:center; gap:8px; font-size:13.5px; }
+  .g .gnm { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .g .gct { color:var(--tinta2); font-variant-numeric:tabular-nums; font-size:12.5px; }
+  .g .mini { height:5px; background:#E7ECF3; border-radius:99px; overflow:hidden; margin-top:4px; }
+  .g .mini > i { display:block; height:100%; background:var(--azul); }
+
+  .center { text-align:center; padding:60px 24px; color:var(--tinta2); }
+  .center h2 { color:var(--tinta); }
+  .foot { text-align:center; color:#9AA3B2; font-size:11px; margin-top:16px; }
+  code { background:#EEF1F5; border-radius:4px; padding:1px 5px; }
+  [hidden] { display:none !important; }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="wm">DICON&nbsp;Web</span>
+  <span class="badge" id="envBadge" hidden>Homolog</span>
+  <span class="sp"></span>
+  <button id="btnRefresh" onclick="carregar(true)" aria-label="Atualizar">&#x21bb;</button>
+</header>
+
+<div id="tela-carregando" class="center">Carregando&hellip;</div>
+
+<div id="tela-semacesso" class="center" hidden>
+  <h2>Sem acesso</h2>
+  <p class="muted">A conta <b id="saEmail"></b> não está autorizada. Peça a um administrador para incluir o seu e-mail na aba <code>Acesso</code>.</p>
+</div>
+
+<div id="tela-erro" class="center" hidden>
+  <h2>Erro ao carregar</h2>
+  <p class="muted" id="erroMsg"></p>
+</div>
+
+<div id="app" hidden>
+  <div class="strip">
+    <div><div class="n" id="rPct">0%</div><div class="l">cobertura</div></div>
+    <div><div class="n" id="rFeitos">0</div><div class="l">testados</div></div>
+    <div><div class="n" id="rPend">0</div><div class="l">pendentes</div></div>
+  </div>
+  <div class="pbar"><i id="rBar" style="width:0%"></i></div>
+
+  <nav class="seg">
+    <button id="tabVivo" class="on" onclick="verTab('vivo')">Ao vivo</button>
+    <button id="tabVist" onclick="verTab('vist')">Vistorias</button>
+    <button id="tabPainel" onclick="verTab('painel')">Painel</button>
+  </nav>
+
+  <main>
+    <section id="vivo">
+      <div class="sechead" id="vivoInfo">Técnicos</div>
+      <div id="vivoCards"></div>
+      <div class="sechead">Atividade recente</div>
+      <div class="card" id="vivoFeed"></div>
+    </section>
+
+    <section id="vist" hidden>
+      <div class="filtros">
+        <input id="fTexto" type="search" placeholder="Buscar local, município, técnico…" oninput="renderVist()">
+        <div class="lin">
+          <select id="fRoteiro" onchange="renderVist()"><option value="">Todos os roteiros</option></select>
+          <select id="fStatus" onchange="renderVist()">
+            <option value="">Todos</option>
+            <option value="sim">Testados</option>
+            <option value="nao">Pendentes</option>
+          </select>
+        </div>
+      </div>
+      <div class="cont" id="fContagem"></div>
+      <div id="tbVist"></div>
+    </section>
+
+    <section id="painel" hidden>
+      <div class="sechead">Por roteiro</div><div class="card" id="gRoteiro"></div>
+      <div class="sechead">Por técnico previsto</div><div class="card" id="gTecnico"></div>
+      <div class="sechead">Por ZE</div><div class="card" id="gZE"></div>
+      <div class="sechead">Por município</div><div class="card" id="gMun"></div>
+    </section>
+
+    <div class="foot" id="foot"></div>
+  </main>
+</div>
+
+<script>
+  var DADOS = null, TAB = 'vivo', vivoTimer = null;
+
+  function el(id){ return document.getElementById(id); }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function fmt(n){ return (n===''||n==null||isNaN(n)) ? '—' : (Math.round(n*10)/10); }
+
+  var EV_ROTULO = {
+    abriu_app:'abriu o DICON', iniciou_diagnostico:'iniciou diagnóstico',
+    rodou_checagem:'rodou checagem', salvou:'salvou o resultado',
+    transmitiu:'transmitiu', finalizou:'finalizou', abandonou:'saiu do assistente'
+  };
+
+  function carregar(forcar){
+    el('tela-carregando').hidden = false;
+    el('tela-semacesso').hidden = true;
+    el('tela-erro').hidden = true;
+    el('app').hidden = true;
+    el('btnRefresh').disabled = true;
+    google.script.run.withSuccessHandler(onDados).withFailureHandler(onErro).carregarPainel(!!forcar);
+  }
+
+  function onErro(e){
+    el('tela-carregando').hidden = true;
+    el('btnRefresh').disabled = false;
+    var m = (e && e.message) || String(e);
+    if (m.indexOf('SEM_ACESSO') >= 0) { el('tela-semacesso').hidden = false; return; }
+    el('erroMsg').textContent = m;
+    el('tela-erro').hidden = false;
+  }
+
+  function onDados(d){
+    el('tela-carregando').hidden = true;
+    el('btnRefresh').disabled = false;
+    DADOS = d;
+
+    if (d.sem_acesso) {
+      el('saEmail').textContent = (d.acesso && d.acesso.email) || '(não identificada)';
+      el('tela-semacesso').hidden = false;
+      return;
+    }
+
+    el('rPct').textContent    = d.resumo.pct + '%';
+    el('rFeitos').textContent = d.resumo.feitos;
+    el('rPend').textContent   = d.resumo.pendentes;
+    el('rBar').style.width    = d.resumo.pct + '%';
+
+    var amb = d.ambiente || 'producao';
+    el('envBadge').hidden = (amb !== 'homologacao');
+
+    grupo('gRoteiro', d.por_roteiro);
+    grupo('gTecnico', d.por_tecnico);
+    grupo('gZE',      d.por_ze);
+    grupo('gMun',     d.por_municipio);
+
+    var sel = el('fRoteiro');
+    sel.length = 1;
+    d.por_roteiro.forEach(function(g){
+      var o = document.createElement('option'); o.value = g.rotulo; o.textContent = g.rotulo; sel.appendChild(o);
+    });
+
+    renderVist();
+    el('foot').textContent = 'DICON Web · ' + (amb === 'homologacao' ? 'homologação' : 'produção') +
+      ' · ' + new Date(d.gerado_em).toLocaleString('pt-BR');
+    el('app').hidden = false;
+    if (TAB === 'vivo') carregarVivo();
+  }
+
+  function grupo(id, arr){
+    el(id).innerHTML = (arr || []).map(function(g){
+      return '<div class="g"><div class="gr">' +
+        '<span class="gnm">'+esc(g.rotulo)+'</span>' +
+        '<span class="gct">'+g.feitos+'/'+g.total+' · '+g.pct+'%</span></div>' +
+        '<div class="mini"><i style="width:'+g.pct+'%"></i></div></div>';
+    }).join('') || '<div class="muted">—</div>';
+  }
+
+  function verTab(t){
+    TAB = t;
+    el('tabVivo').classList.toggle('on', t==='vivo');
+    el('tabVist').classList.toggle('on', t==='vist');
+    el('tabPainel').classList.toggle('on', t==='painel');
+    el('vivo').hidden   = (t!=='vivo');
+    el('vist').hidden   = (t!=='vist');
+    el('painel').hidden = (t!=='painel');
+    window.scrollTo(0, 0);
+    if (t==='vivo') { carregarVivo(); iniciarTimer(); } else { pararTimer(); }
+  }
+
+  function iniciarTimer(){
+    pararTimer();
+    vivoTimer = setInterval(function(){
+      if (TAB==='vivo' && !document.hidden) carregarVivo();
+    }, 45000);
+  }
+  function pararTimer(){ if (vivoTimer){ clearInterval(vivoTimer); vivoTimer = null; } }
+  document.addEventListener('visibilitychange', function(){
+    if (!document.hidden && TAB==='vivo') carregarVivo();
+  });
+
+  function carregarVivo(){
+    google.script.run
+      .withSuccessHandler(function(d){
+        if (!d || d.sem_acesso) return;
+        var ps = d.presencas || [];
+        var online = ps.filter(function(p){ return p.online; }).length;
+        el('vivoInfo').textContent = online + ' online · ' + ps.length + ' no total';
+
+        el('vivoCards').innerHTML = ps.map(function(p){
+          var quando = (p.minutos==null) ? 'sem check-in'
+            : (p.minutos<=1 ? 'agora' : ('há '+p.minutos+' min'));
+          return '<div class="card tec '+(p.online?'on':'')+'">' +
+            '<div class="top"><span class="nm">'+esc(p.tecnico||p.email||'—')+'</span>' +
+            '<span class="st">'+esc(quando)+'</span></div>' +
+            '<div class="at">'+esc(p.atividade_atual||'—')+'</div>' +
+            (p.municipio_atual ? '<div class="tecloc">'+esc(p.municipio_atual)+'<span class="zebadge">ZE '+esc(p.zona_atual||'?')+'</span></div>' : '') +
+            '<div class="meta">'+esc(p.roteiro||'')+(p.versao_dicon?(' · v'+esc(p.versao_dicon)):'')+'</div>' +
+          '</div>';
+        }).join('') || '<div class="card muted">Nenhum técnico registrou check-in ainda.</div>';
+
+        el('vivoFeed').innerHTML = (d.eventos||[]).map(function(e){
+          var loc = e.local_id
+            ? (esc(e.municipio? (e.municipio+' · ') : '') + 'ZE '+esc(e.zona) + (e.tipo_local?(' · '+esc(e.tipo_local)):''))
+            : '';
+          return '<div class="ev">' +
+            '<span class="h">'+esc(e.hora)+'</span> · <span class="w">'+esc(e.tecnico||'')+'</span><br>' +
+            esc(EV_ROTULO[e.tipo]||e.tipo||'') + (e.detalhe?(' — '+esc(e.detalhe)):'') +
+            (loc ? '<div class="loc">'+loc+'</div>' : '') +
+          '</div>';
+        }).join('') || '<div class="muted">Nenhum evento ainda.</div>';
+      })
+      .withFailureHandler(function(){ /* silencioso */ })
+      .carregarAoVivo();
+  }
+
+  function renderVist(){
+    if (!DADOS) return;
+    var q = (el('fTexto').value || '').toLowerCase().trim();
+    var fr = el('fRoteiro').value;
+    var fs = el('fStatus').value;
+    var linhas = DADOS.vistorias.filter(function(l){
+      if (fr && (l.roteiro_rotulo||('Roteiro '+l.roteiro)) !== fr) return false;
+      if (fs === 'sim' && !l.testado) return false;
+      if (fs === 'nao' && l.testado) return false;
+      if (q) {
+        var alvo = (l.nome+' '+l.municipio+' ZE'+l.zona+' '+(l.tecnico_previsto||'')+' '+(l.tecnico||'')).toLowerCase();
+        if (alvo.indexOf(q) < 0) return false;
+      }
+      return true;
+    });
+    el('fContagem').textContent = linhas.length + ' local(is)';
+    el('tbVist').innerHTML = linhas.map(function(l){
+      var st = l.testado
+        ? '<span class="pill ok">testado</span>'
+        : '<span class="pill no">pendente</span>';
+      var pdf = l.pdf_url ? ' · <a href="'+esc(l.pdf_url)+'" target="_blank" rel="noopener">PDF</a>' : '';
+      var linTest = l.testado
+        ? ('<div class="nums">'+esc(l.quando)+(l.tecnico?(' · '+esc(l.tecnico)):'')+'</div>' +
+           '<div class="nums">'+esc(l.conexao||'—')+' · '+fmt(l.download_mbps)+' Mbps · '+fmt(l.latencia_ms)+' ms'+pdf+'</div>')
+        : '';
+      return '<div class="card v">' +
+        '<div class="lin2" style="margin:0 0 2px"><span class="lname">'+esc(l.nome||l.local_id)+'</span>' +
+        '<span style="margin-left:auto">'+st+'</span></div>' +
+        '<div class="sub">'+esc(l.municipio)+' · ZE '+esc(l.zona)+' · '+esc(l.tipo)+'</div>' +
+        '<div class="sub">'+esc(l.roteiro_rotulo||('Roteiro '+l.roteiro))+' · '+esc(l.tecnico_previsto||'')+'</div>' +
+        linTest +
+      '</div>';
+    }).join('') || '<div class="card muted">Nenhum local com esses filtros.</div>';
+  }
+
+  carregar();
+</script>
+</body>
+</html>

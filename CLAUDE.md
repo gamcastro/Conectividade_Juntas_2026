@@ -142,7 +142,8 @@ Script), em vez de criar um BI/dashboard separado.
   `badgeHomologRail` no rail) e põe o sufixo `- HOMOLOGACAO` no título da janela.
 
 ## Telas (rail de navegação)
-`login → início → guia de bordo → **Locais** → diagnóstico → administração`,
+`login → início → guia de bordo → **Locais** → [**Coordenação**] → diagnóstico →
+administração` (Coordenação e Administração só aparecem para o admin).
 Grids empilhados alternados por `Visibility` (`$Global:Views`, `Show-View`).
 O rail recolhe/expande (`btnRailToggle` → `Invoke-ToggleRail` / `Set-RailRecolhido`:
 214 px ↔ 56 px só-ícones, oculta `railCabTexto`/`railRodape`/`lblNav*`;
@@ -157,10 +158,55 @@ locais de vistoria do roteiro do técnico (`Get-LocaisDoTecnico` achata
 `$Global:RoteiroAtual.juntas[].locais[]`), grade `dgLocais` + busca livre
 (`txtBuscaLocais`) + filtros por ZE (`cboFiltroZE`) e município (`cboFiltroMun`)
 em `Update-LocaisFiltrados`; clicar numa linha da grade abre a **tela dedicada**
-`viewLocalDetalhe` (`Invoke-AbrirLocalDetalhe`, que grava `$Global:LocalDetalheAtual`)
-com a ficha completa do local (tipo, endereço, internet, UC, responsável/função,
-telefone e `texto_completo` do roteiro); `btnLocalDetalheVoltar` →
-`Invoke-VoltarAosLocais` volta à lista com os filtros preservados.
+`viewLocalDetalhe` — via `Invoke-AbrirLocalDetalhe` → **`Open-LocalDetalhe -Dados
+-Origem`** (o corpo compartilhado que preenche a ficha, grava
+`$Global:LocalDetalheAtual` + `$Global:LocalDetalheOrigem`) — com a ficha completa
+do local (tipo, endereço, internet, UC, responsável/função, telefone e
+`texto_completo` do roteiro); `btnLocalDetalheVoltar` → `Invoke-VoltarDoDetalhe`
+roteia por `$Global:LocalDetalheOrigem` (`Invoke-VoltarAosLocais` ou
+`Invoke-VoltarACoordenacao`), preservando os filtros.
+**Coordenação** (`viewCoord`, item `navCoord` — **só admin**, `Enter-Home` liga a
+visibilidade junto de `navAdmin`): `Show-Coord` → `Initialize-Coord` lista **todos
+os locais de todos os roteiros** (`Get-TodosLocaisCoord` sobre `Get-Juntas`, com
+`RoteiroRotulo`/`RoteiroNum` de `Get-MapaRoteiroPorLocal` — mapa `local_id →
+{numero;rotulo}` a partir de `Get-Roteiros[].juntas_ids` — e as colunas de status
+`CoordStatusTeste` / `CoordStatusGel` já calculadas de uma varredura só). Grade
+`dgCoord` + busca + filtros roteiro/ZE/município (`Update-CoordFiltrados`); clicar
+numa linha → `Invoke-AbrirLocalCoord` → `Open-LocalDetalhe -Origem 'viewCoord'`
+(mesma ficha, mesmo `cardGel`/`Invoke-AnexarGel`/`Invoke-GelAddFotos`/
+`Invoke-AbrirRelatorioLocal`). É o caminho do **coordenador anexar o formulário do
+GEL + fotos e regenerar o relatório de qualquer local sem trocar de usuário nem
+ficar preso à própria rota**. Ao abrir a tela, **`Start-CoordListaTransmitidos`**
+(async, `Start-TarefaRede`) faz um `resultados.listar` **sem filtro de técnico** →
+`$Global:CoordTransmitidos` (set de `local_id` com diagnóstico transmitido) +
+`$Global:CoordListaOk`; `Complete-CoordListaTransmitidos` re-renderiza a coluna de
+status (ganha o estado **"na planilha"**) e re-avalia o botão. Só na origem
+`viewCoord` aparece o botão **`btnLdBaixarResultado`** ("Baixar resultado
+transmitido") — **habilitado apenas quando o local está em `CoordTransmitidos`**
+(ou enquanto o `listar` ainda não respondeu); desabilitado com tooltip quando a
+planilha não tem diagnóstico para aquele local → `Invoke-BaixarResultadoLocal`
+→ `Sync-Resultados -LocalIds @($id)` **sem `-TecnicoNome`** (puxa da planilha o
+último diagnóstico transmitido daquele local, de qualquer técnico, para
+`resultados\enviados\`; e, no mesmo passo, **`Get-VistoriaGelRemoto`** puxa o
+formulário do GEL + fotos daquele local se ainda não houver anexo local) →
+`Complete-BaixarResultadoLocal` — assim "Abrir relatório completo" funciona também
+para locais que **outro** técnico testou, já com GEL/fotos.
+**Sync de GEL/fotos (v0.6.125, `config/envio.json > gel_sync`, padrão ligado)**:
+o formulário do GEL (`data/vistoria-gel/<id>.json`) e as fotos deixaram de ser
+só-local. `Invoke-GelRegistrar` / `Invoke-GelAddFotos` / `Invoke-GelFotoRemover` /
+`Invoke-GelRemover` disparam **`Start-EnvioGelWeb -LocalId [-Remover]`**
+(`src/core/EventosWeb.ps1`, runspace best-effort) → ação **`gel.enviar`**
+(`apps-script/web/GelWeb.gs`, token de serviço): grava o JSON numa aba **`GEL`**
+da planilha de Resultados (1 linha/local, upsert) e sobe as fotos no Drive da
+coordenação em **`vistoria-gel/<local_id>/`** (`_driveUploadOuAtualiza` +
+`_driveApagar` das que saíram). A volta é **`Get-VistoriaGelRemoto`** → ação
+**`gel.obter`** (JSON + fotos base64), chamada por `Sync-Resultados` (no "Atualizar
+dados", para os locais baixados; via `-LocalIds`, todos os da lista) e pelo
+"Baixar resultado transmitido"; **nunca sobrescreve um anexo local** (só baixa se
+não houver, salvo `-Forcar`). Último envio ganha (last-writer-wins, como
+`gravarResultado`). **Exige redeploy manual (clasp) das duas implantações** — até
+lá degrada quieto ("acao desconhecida"). `Sem escopo de Drive no token →
+`DRIVE_SEM_ESCOPO`; o JSON do formulário ainda é gravado na planilha.
 Essa tela tem, no topo, um **card STATUS DO LOCAL** com 5 indicadores
 (`dot Ld Testado/Salvo/Transmitido/Exportado/Gel` — `Ellipse` vermelha quando
 não / verde quando sim; `dotLdTestado` usa a cor do veredito) + `txtLdStatusInfo`
@@ -309,9 +355,11 @@ técnico avança pelo botão `btnChkIniciar` (`Invoke-ChkAvancar`, texto/estado 
 mostra IP da VPN/interface/DNS em verde e o estado vira `f2-vpn-ok` com o botão
 "Iniciar diagnóstico com a VPN"; só esse clique roda `Start-DiagnosticoVpn` →
 `Start-DiagnosticoAssincrono -AoConcluir` = ping + `Test-BandaVpn` + Selenium
-(velocímetro iperf3) → `Complete-CheckFase2`. Se a VPN estiver fora,
-`btnChkVpnImpossivel`→`Invoke-CheckVpnImpossivel` com motivo →
-`Set-DiagnosticoVpnImpossivel`, meio inviável → **Fase 3** (Selenium, "em
+(velocímetro iperf3) → `Complete-CheckFase2`. Se a VPN estiver fora, o técnico
+marca `chkVpnImpossivel` ("não foi possível conectar a VPN…") e descreve o
+motivo — só então **`Update-BotaoVpnImpossivel`** habilita o botão
+`btnChkVpnImpossivel` ("Registrar este meio sem a VPN"); `Invoke-CheckVpnImpossivel`
+→ `Set-DiagnosticoVpnImpossivel`, meio inviável → **Fase 3** (Selenium, "em
 implementação"). `Complete-CheckMeio` → `Add-MedicaoAtual`; `Close-OverlayCheck`
 (`btnChkFechar`) fecha. O corpo tem um stepper de 3 linhas
 (`txtChkS1/S2/S3`+`dotChkS1/S2/S3`, linhas `rowChkS1/S2/S3`) — **só informa se
@@ -348,7 +396,9 @@ exclusivo em **todos os modos** — v0.6.99+): combo `cboConexaoRec`
 (candidatos + "nenhuma") pré-selecionado por `Get-ConexaoRecomendada`,
 `txtMotivoRec` e a tabela read-only `dgMedicoes` de todas as medições do
 Local; `Test-RecomendacaoValida` é o gate 5→6, sempre exige a seleção do
-combo. No modo `completo`, o cartão "RECOMENDAÇÃO FINAL" (`cboDecisaoFinal`,
+combo **e, quando a conexão escolhida é `lan`, exige o card cabo de rede
+preenchido** (`$Global:CaboLan` — "não precisa" ou "precisa + metragem > 0").
+No modo `completo`, o cartão "RECOMENDAÇÃO FINAL" (`cboDecisaoFinal`,
 override manual do veredito) continua acima e o motivo é **obrigatório**;
 nos modos `medicao`/`referencia` esse cartão fica escondido
 (`cardDecisaoViavel`), o título/rótulo do motivo mudam para "SUGESTÃO DE
@@ -358,7 +408,9 @@ maior download) sem precisar justificar, já que é só informativo. Quando a
 conexão escolhida no combo é a **LAN**, aparece o card `cardCaboLan`
 (`Update-CardCaboLan`, chamado do `Update-ContextoRecomendacao`): chips
 "Não precisa / 5 m / 10 m / 15 m / Outro (digitar)" (`wrapCaboLan` +
-`txtCaboLanOutro`) → `$Global:CaboLan` = `{necessario;metros}`, que vai pro
+`txtCaboLanOutro`) → `$Global:CaboLan` = `{necessario;metros}` — **obrigatório
+preencher** (o gate 5→6 barra; `Update-CaboLanResumo` marca "Obrigatório…" em
+vermelho enquanto falta) —, que vai pro
 JSON (`cabo_lan`, via `-CaboLan` em `New-ResultadoJson`/`Save-Diagnostico`)
 e vira uma linha "Cabo de rede (LAN)" no relatório
 (`Get-CaboLanTextoRelatorio`) →
@@ -400,12 +452,26 @@ veredito do título fora do `completo`.
    local / Celular): por meio, "Sem VPN conectada — teste de velocidade"
    (`rede_local_avaliacao[]`) + "Com VPN conectada — diagnóstico pela VPN da JE"
    (o meio recomendado usa `avaliacao[]` com faixa+motivo; os demais, os números
-   crus). Meios "não aplicável" viram uma linha só com o motivo. Logo abaixo do
-   provedor, uma linha com os dados da placa usada no teste (congelados no
-   `snapshot_adaptador` da medição, ver "Congelamento" no passo 3): **LAN** só
-   velocidade do link; **Wi-Fi do local** velocidade + SSID + banda (2,4/5 GHz)
-   + sinal; **Celular** nenhum desses (a rede de interesse ali é a do celular,
-   não a placa Wi-Fi que a recebe).
+   crus). Meios "não aplicável" viram uma linha só com o motivo. **Ao lado do
+   título do meio** (`.meiotit` → `<span class="meiotit-props">`, v0.6.127), as
+   propriedades da placa/meio congeladas no `snapshot_adaptador` da medição (ver
+   "Congelamento" no passo 3) — a "Velocidade da placa" vem do adaptador
+   (`Get-NetAdapter.Speed`), **não** do teste de velocidade: **LAN** → "Velocidade
+   da placa de rede"; **Wi-Fi do local** → Provedor · SSID · Banda (2,4/5 GHz) ·
+   Nível do sinal · "Velocidade da placa Wi-Fi"; **Celular** → Operadora · Banda ·
+   Nível do sinal · "Velocidade da placa Wi-Fi" (a placa sem-fio recebe o hotspot
+   — `New-ResultadoJson` agora emite `rede_local_wifi_banda`/`_sinal_pct`/
+   `_velocidade_link_mbps` também para o meio `celular`). As sub-tabelas "Sem VPN /
+   Com VPN" ficam só com as métricas medidas; as **curvas ao longo do teste**
+   saem das colunas para uma faixa "Curvas ao longo do teste" de largura total,
+   centralizada (`.grafzona`/`.grafpar`), com Download e Upload em gráficos
+   separados e maiores (v0.6.129, `Get-CurvaDuploHtml`). Cada curva
+   (`Get-GraficoLinhaHtml`) tem grade + eixo de tempo em segundos, linha
+   tracejada do **alvo** (limiar viável da métrica, via `Get-LimiarMetrica` sobre
+   `rede_local_avaliacao`/`avaliacao`), linha da **média**, marcação de **min/pico**
+   e uma **frase-laudo** (`Get-LaudoCurva`) que lê a forma da curva —
+   estabilizou / dente-de-serra / ainda subindo / queda de X % no meio; a de
+   latência conta amostras perdidas e picos.
    **Nomes de produto** (speedtest/Ookla/iperf3/Selenium) não aparecem em texto
    visível — só "teste de velocidade", "banda pela VPN", "análise de banda",
    "sistema de totalização"; chaves de config (`speedtest_server_id`), nomes de
@@ -442,12 +508,16 @@ resultado (`New-ResultadoJson`).
   = índice leve (`local_id` + data + veredito, sem o `json`), filtrado por
   técnico; `resultados.obter` = o `json` completo de um local. Só **adiciona**
   o que falta (nunca toca em `pendentes/`; pula o que já existe local e não é
-  mais novo). **As fotos do GEL não voltam** (só a contagem vai no `json`) —
-  reanexar pelo GEL web. **Exige redeploy manual (clasp)** das duas
-  implantações; até lá `Sync-Resultados` degrada com aviso ("recurso ainda
-  não disponível no servidor").
+  mais novo). O `json` transmitido leva só a **contagem** de fotos do GEL, mas
+  desde a v0.6.125 o `Sync-Resultados` também chama **`Get-VistoriaGelRemoto`**
+  (ação `gel.obter`) para os locais que baixou, trazendo o formulário do GEL +
+  as fotos de volta (ver "Sync de GEL/fotos" nas Telas). **Exige redeploy
+  manual (clasp)** das duas implantações; até lá `Sync-Resultados` degrada com
+  aviso ("recurso ainda não disponível no servidor") e o GEL não volta.
 - Teste: `tools/Testar-Envio.ps1` (HttpListener local simula o Apps Script;
-  cobre envio + as duas camadas do `Sync-Resultados`).
+  cobre envio + as duas camadas do `Sync-Resultados` + o sync de GEL/fotos —
+  `Get-VistoriaGelRemoto` baixa/não sobrescreve, `Start-EnvioGelWeb` respeita o
+  gate).
 - **Transporte: Apps Script Execution API (v0.6.73, `src/core/AppsScriptApi.ps1`)**:
   o DICON chama `POST script.googleapis.com/v1/scripts/{deployment_id}:run`
   (`function:'executar'`, `apps-script/Codigo.gs`) em vez da URL `/exec` do Web
@@ -496,4 +566,9 @@ resultado (`New-ResultadoJson`).
   Selenium/carregamento web (Fase 3) segue "em implementação"; "motivo da
   recomendação" é obrigatório sempre (provisório)
 - Fase 2 do admin: incluir/alterar Locais das Juntas
+- **Sync de GEL/fotos** (v0.6.125): implementado (`gel.enviar`/`gel.obter` em
+  `apps-script/web/GelWeb.gs`, `Start-EnvioGelWeb`/`Get-VistoriaGelRemoto` no
+  desktop, flag `gel_sync`) — **falta o redeploy manual (clasp) das duas
+  implantações em homologação e depois produção** e validar ponta a ponta
+  (subir num PC, baixar noutro). Até o redeploy, degrada quieto.
 - Empacotamento de campo (pasta portátil autocontida)

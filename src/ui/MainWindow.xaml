@@ -135,6 +135,15 @@
                         </StackPanel>
                     </RadioButton>
 
+                    <RadioButton x:Name="navCoord" Style="{DynamicResource NavBotao}" Visibility="Collapsed">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Width="18" Height="18" Stretch="Uniform"
+                                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
+                                  Data="M6,3 L14,3 L14,18 L6,18 Z M8,1.5 L12,1.5 L12,4 L8,4 Z M8,7.5 L12,7.5 M8,10.5 L12,10.5 M8,13.5 L11,13.5"/>
+                            <TextBlock x:Name="lblNavCoord" Text="Coordena&#231;&#227;o" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </RadioButton>
+
                     <RadioButton x:Name="navAdmin" Style="{DynamicResource NavBotao}" Visibility="Collapsed">
                         <StackPanel Orientation="Horizontal">
                             <Path Width="18" Height="18" Stretch="Uniform"
@@ -575,6 +584,10 @@
                                 <TextBlock x:Name="txtLdStatusInfo" Margin="0,4,0,0" FontFamily="Consolas" FontSize="11"
                                            TextWrapping="Wrap" Foreground="{DynamicResource Dicon.Text3}"/>
                                 <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                                    <Button x:Name="btnLdBaixarResultado" Content="Baixar resultado transmitido"
+                                            Style="{DynamicResource BotaoSecundario}" Visibility="Collapsed"
+                                            Margin="0,0,8,0"
+                                            ToolTip="Puxa da planilha o &#250;ltimo diagn&#243;stico transmitido deste local (de qualquer t&#233;cnico) para este computador."/>
                                     <Button x:Name="btnLdRelatorio" Content="Abrir relat&#243;rio completo (PDF)"
                                             Style="{DynamicResource BotaoSecundario}"/>
                                     <TextBlock x:Name="txtLdRelatStatus" Margin="12,0,0,0" VerticalAlignment="Center"
@@ -771,6 +784,66 @@
                         </Border>
                     </StackPanel>
                 </ScrollViewer>
+            </Grid>
+
+            <!-- ===== COORDENACAO - GEL e fotos de qualquer local (so admin) ===== -->
+            <Grid x:Name="viewCoord" Visibility="Collapsed">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" Text="Coordena&#231;&#227;o" Style="{DynamicResource TituloTela}"/>
+                <TextBlock x:Name="txtCoordSub" Grid.Row="1" Style="{DynamicResource SubtituloTela}"
+                           Margin="0,6,0,12"
+                           Text="Qualquer local dos roteiros. Clique para anexar o formul&#225;rio do GEL e as fotos e gerar o relat&#243;rio completo."/>
+
+                <Grid Grid.Row="2" Margin="0,0,0,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="Buscar" Style="{DynamicResource Rotulo}"
+                               VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <TextBox x:Name="txtBuscaCoord" Grid.Column="1" MinHeight="32"
+                             VerticalContentAlignment="Center"/>
+                    <ComboBox x:Name="cboCoordRoteiro" Grid.Column="2" MinHeight="32" Width="150" Margin="10,0,0,0"
+                              VerticalContentAlignment="Center"/>
+                    <ComboBox x:Name="cboCoordZE" Grid.Column="3" MinHeight="32" Width="110" Margin="10,0,0,0"
+                              VerticalContentAlignment="Center"/>
+                    <ComboBox x:Name="cboCoordMun" Grid.Column="4" MinHeight="32" Width="190" Margin="10,0,0,0"
+                              VerticalContentAlignment="Center"/>
+                    <TextBlock x:Name="txtCoordContagem" Grid.Column="5" VerticalAlignment="Center"
+                               Margin="14,0,0,0" FontFamily="Consolas" FontSize="11"
+                               Foreground="{DynamicResource Dicon.Text3}"/>
+                </Grid>
+
+                <DataGrid x:Name="dgCoord" Grid.Row="3" Style="{DynamicResource GridMetricas}"
+                          RowHeight="34" AutoGenerateColumns="False"
+                          IsReadOnly="True" CanUserResizeRows="False" HeadersVisibility="Column"
+                          SelectionUnit="FullRow" SelectionMode="Single"
+                          GridLinesVisibility="Horizontal" VerticalScrollBarVisibility="Auto">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="ZE" Binding="{Binding zona_eleitoral}" Width="46"/>
+                        <DataGridTextColumn Header="Munic&#237;pio" Binding="{Binding municipio_termo}" Width="140"/>
+                        <DataGridTextColumn Header="Tipo" Binding="{Binding TipoRotulo}" Width="86"/>
+                        <DataGridTextColumn Header="Roteiro" Binding="{Binding RoteiroRotulo}" Width="120"/>
+                        <DataGridTextColumn Header="Local" Binding="{Binding nome}" Width="*"/>
+                        <DataGridTextColumn Header="Diagn&#243;stico" Binding="{Binding CoordStatusTeste}" Width="120"/>
+                        <DataGridTextColumn Header="GEL" Binding="{Binding CoordStatusGel}" Width="120"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+
+                <Button x:Name="btnCoordVoltar" Grid.Row="4" Content="Voltar ao in&#237;cio"
+                        HorizontalAlignment="Left" Margin="0,14,0,0"
+                        Style="{DynamicResource BotaoFantasma}"/>
             </Grid>
 
             <!-- ===== DIAGNOSTICO (assistente de 6 passos) ===== -->

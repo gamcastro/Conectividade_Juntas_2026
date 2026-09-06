@@ -170,9 +170,9 @@ function _migrarLimiaresAntigos(linhas) {
 
 function doGet(e) {
   var p = (e && e.parameter) || {};
-  // Console web de coordenacao (DICON Web) -> ?app=web serve a pagina HTML.
+  // Console web de coordenacao (DICON Web) -> ?app=web (desktop) ou ?app=mobile.
   // O resto segue como o Web App legado (?recurso=juntas|tecnicos|roteiros|limiares).
-  if (p.app === 'web') return webConsolePagina(e);
+  if (p.app === 'web' || p.app === 'mobile') return webConsolePagina(e);
   var recurso = p.recurso || 'juntas';
   try {
     if (recurso === 'juntas') {
@@ -243,6 +243,10 @@ function executar(req) {
     if (acao === 'checkin') return webCheckin(req);
     if (acao === 'evento')  return webRegistrarEvento(req);
     if (acao === 'pdf.relatorio') return webUploadPdfRelatorio(req);
+    // DICON Web -- sync do formulario do GEL + fotos (aba GEL + Drive), via token
+    // de servico. Ver apps-script/web/GelWeb.gs.
+    if (acao === 'gel.enviar') return webGelEnviar(req);
+    if (acao === 'gel.obter')  return webGelObter(req);
 
     if (acao === 'resultado') {
       if (!_idResultados()) return { status: 'ignorado', motivo: 'PLANILHA_RESULTADOS_ID nao configurado' };

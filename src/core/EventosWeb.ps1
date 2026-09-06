@@ -251,3 +251,161 @@ function Start-EnvioPdfRelatorioWeb {
         try { Write-Log "Envio do PDF do relatorio nao iniciou: $_" -Nivel Aviso } catch { }
     }
 }
+
+# ---------------------------------------------------------------------------
+# Sync do formulario do GEL + fotos (Escopo 2 da tela Coordenacao). O GEL
+# (data\vistoria-gel\<id>.json) e as fotos (data\vistoria-gel\<id>\*.jpg) ficavam
+# so' na maquina onde foram anexados. Aqui sobem/descem pelo backend:
+#   - 'gel.enviar'  -> aba GEL da planilha de Resultados + Drive da coordenacao
+#   - 'gel.obter'   -> devolve o JSON + as fotos (base64)
+# Ver apps-script/web/GelWeb.gs. Best-effort: nunca trava a tela, nunca lanca.
+function Test-GelSyncLigado {
+    if ($Global:ModoTeste) { return $false }
+    try {
+        $cfg = Get-Config 'envio'
+        if ($cfg -and $cfg.PSObject.Properties['gel_sync']) { return [bool] $cfg.gel_sync }
+    } catch { }
+    return $true
+}
+
+# Sobe o GEL + fotos de um Local para o backend, num runspace proprio (nao
+# bloqueia a UI). -Remover: manda apagar o anexo do servidor. Le os arquivos AQUI
+# (thread da UI); guarda de tamanho total (~9 MB).
+$Global:GelWebState = $null
+function Start-EnvioGelWeb {
+    param([Parameter(Mandatory)] [string] $LocalId, [switch] $Remover)
+    if (-not (Test-GelSyncLigado)) { return }
+    if ([string]::IsNullOrWhiteSpace($LocalId)) { return }
+
+    $payload = @{
+        local_id     = [string] $LocalId
+        enviado_por  = ''
+        remover      = [bool] $Remover
+        gel_json     = ''
+        fotos        = @()
+    }
+    try { $payload.enviado_por = [string] (Get-EmailGoogleConectado) } catch { }
+    if (-not $payload.enviado_por) { $payload.enviado_por = [string] $Global:SessaoAtual.tecnico_nome }
+
+    if (-not $Remover) {
+        $g = $null
+        try { $g = Get-VistoriaGel -LocalId $LocalId } catch { }
+        if ($g) { try { $payload.gel_json = ($g | ConvertTo-Json -Depth 6 -Compress) } catch { } }
+
+        $fotos = @()
+        $total = 0L
+        try {
+            foreach ($f in @(Get-FotosGel -LocalId $LocalId)) {
+                $fi = Get-Item $f -ErrorAction Stop
+                $total += $fi.Length
+                if ($total -gt 9MB) {
+                    try { Write-Log 'Sync GEL: fotos passam de 9 MB no total; envio pulado.' -Nivel Aviso } catch { }
+                    return
+                }
+                $fotos += @{ nome = $fi.Name; b64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($fi.FullName)) }
+            }
+        } catch { }
+        $payload.fotos = $fotos
+        # nada pra enviar (sem GEL e sem fotos) e nao e' remocao -> sai
+        if (-not $payload.gel_json -and -not $fotos.Count) { return }
+    }
+
+    if ($Global:GelWebState) {
+        if ($Global:GelWebState.Handle.IsCompleted) {
+            try { $Global:GelWebState.PS.EndInvoke($Global:GelWebState.Handle) | Out-Null } catch { }
+            try { $Global:GelWebState.PS.Dispose(); $Global:GelWebState.RS.Dispose() } catch { }
+            $Global:GelWebState = $null
+        } else { return }
+    }
+
+    try {
+        $rs = [runspacefactory]::CreateRunspace()
+        $rs.ApartmentState = 'MTA'
+        $rs.Open()
+        $rs.SessionStateProxy.SetVariable('RaizAppW', $Global:RaizApp)
+        $rs.SessionStateProxy.SetVariable('ArquivoLogW', $Global:ArquivoLog)
+        $rs.SessionStateProxy.SetVariable('PayloadW', $payload)
+
+        $ps = [powershell]::Create()
+        $ps.Runspace = $rs
+        [void] $ps.AddScript({
+            try {
+                Import-Module (Join-Path $RaizAppW 'src\Conectividade.psd1') -Force -ErrorAction Stop
+                $Global:RaizApp    = $RaizAppW
+                $Global:ArquivoLog = $ArquivoLogW
+                try {
+                    $r = Invoke-FuncaoAppsScript -Acao 'gel.enviar' -Payload $PayloadW -TimeoutS 60
+                    if ($r -and $r.status -eq 'ok') {
+                        $msg = if ($PayloadW.remover) { 'Anexo GEL removido da console.' }
+                               else { "Formulario GEL sincronizado com a console ($([int] $r.fotos) foto(s))." }
+                        try { Write-Log $msg -Nivel Ok } catch { }
+                    }
+                } catch { }
+            } catch { }
+        })
+        $h = $ps.BeginInvoke()
+        $Global:GelWebState = @{ PS = $ps; RS = $rs; Handle = $h }
+    } catch {
+        try { Write-Log "Sync do GEL nao iniciou: $_" -Nivel Aviso } catch { }
+    }
+}
+
+# Puxa do backend o GEL + fotos de um Local e grava em data\vistoria-gel\<id>\.
+# SINCRONO (chamado de dentro de um runspace: Sync-Resultados / Start-TarefaRede).
+# Nao sobrescreve um anexo LOCAL ja existente, a menos que -Forcar. Nao lanca.
+# Devolve $true se baixou algo.
+function Get-VistoriaGelRemoto {
+    param([Parameter(Mandatory)] [string] $LocalId, [switch] $Forcar)
+    if (-not (Test-GelSyncLigado)) { return $false }
+    if ([string]::IsNullOrWhiteSpace($LocalId)) { return $false }
+
+    if (-not $Forcar) {
+        $ja = $null
+        try { $ja = Get-VistoriaGel -LocalId $LocalId } catch { }
+        if ($ja) { return $false }   # ja tem anexo local -- nao mexe
+    }
+
+    $resp = $null
+    try { $resp = Invoke-FuncaoAppsScript -Acao 'gel.obter' -Payload @{ local_id = [string] $LocalId } -TimeoutS 45 }
+    catch {
+        $m = "$_"
+        if ($m -match 'acao desconhecida' -or $m -match 'gel\.obter') { return $false }  # servidor sem o recurso
+        return $false
+    }
+    if (-not $resp -or $resp.erro) { return $false }
+
+    $baixou = $false
+    $idSan = [string] $LocalId -replace '[^\w\-]', '_'
+    $dir   = Join-Path (Get-PastaDados) 'vistoria-gel'
+    if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+
+    if ($resp.gel_json) {
+        $obj = $null
+        try { $obj = $resp.gel_json | ConvertFrom-Json } catch { }
+        if ($obj) {
+            try {
+                Write-TextoArquivo -Caminho (Join-Path $dir ($idSan + '.json')) -Conteudo ($obj | ConvertTo-Json -Depth 8)
+                $baixou = $true
+            } catch { }
+        }
+    }
+
+    $fotos = @($resp.fotos)
+    if ($fotos.Count) {
+        $fdir = Join-Path $dir $idSan
+        if (-not (Test-Path $fdir)) { New-Item -ItemType Directory -Path $fdir -Force | Out-Null }
+        # servidor manda o conjunto atual -> limpa o que houver e regrava
+        try { Get-ChildItem -Path $fdir -Filter '*.jpg' -File -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue } catch { }
+        $n = 0
+        foreach ($ft in $fotos) {
+            if (-not $ft.b64) { continue }
+            $n++
+            $nome = [string] $ft.nome
+            if (-not $nome -or $nome -notmatch '\.(jpg|jpeg|png)$') { $nome = 'foto-{0:00}.jpg' -f $n }
+            try { [IO.File]::WriteAllBytes((Join-Path $fdir $nome), [Convert]::FromBase64String([string] $ft.b64)); $baixou = $true } catch { }
+        }
+    }
+
+    if ($baixou) { try { Write-Log ("GEL do local {0} baixado da console ({1} foto(s))." -f $LocalId, $fotos.Count) -Nivel Info } catch { } }
+    return $baixou
+}

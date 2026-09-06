@@ -51,6 +51,10 @@ $Global:MedicaoPasso5Idx   = -1      # indice em $Global:Medicoes da medicao abe
 $Global:AtualizandoMedicaoP5 = $false # guarda: set programatico do combo de medicoes do passo 5
 $Global:VistoriaGel        = $null   # anexo do GEL do local aberto no assistente (carregado do disco)
 $Global:LocalDetalheAtual  = $null   # objeto do local aberto na tela viewLocalDetalhe
+$Global:LocalDetalheOrigem = 'viewLocais'  # de onde a ficha do local foi aberta: 'viewLocais' | 'viewCoord'
+$Global:LocaisCoord        = @()     # todos os locais (todos os roteiros) para a tela Coordenacao
+$Global:CoordTransmitidos  = @{}     # local_id (minusculo) -> $true : tem diagnostico na planilha (todos os tecnicos)
+$Global:CoordListaOk       = $false  # o 'resultados.listar' da tela Coordenacao respondeu?
 
 $Global:FeitoSalvar        = $false  # checklist do passo 7
 $Global:FeitoTransmitir    = $false
@@ -80,10 +84,11 @@ if (-not (Get-Variable -Name ModoAvaliacaoOverride -Scope Global -ErrorAction Si
     $Global:ModoAvaliacaoOverride = $null # testes: 'medicao'|'referencia'|'completo' fixo
 }
 
-$Global:Views = @('viewLogin', 'viewHome', 'viewGuia', 'viewLocais', 'viewLocalDetalhe', 'viewDiag', 'viewAdmin')
+$Global:Views = @('viewLogin', 'viewHome', 'viewGuia', 'viewLocais', 'viewLocalDetalhe', 'viewCoord', 'viewDiag', 'viewAdmin')
 
 $Global:LocaisTecnico            = @()      # locais do roteiro do tecnico (achatados)
 $Global:AtualizandoFiltroLocais  = $false   # guarda: preenchimento programatico dos combos
+$Global:AtualizandoFiltroCoord   = $false   # idem, na tela Coordenacao
 $Global:RailRecolhido            = $false   # menu lateral recolhido (so icones)?
 $Global:VersaoNova               = ''       # versao mais recente no canal (se > a atual)
 
@@ -323,6 +328,7 @@ function New-JanelaPrincipal {
     $window.FindName('btnAbrirFortiClient').Add_Click({ Invoke-AbrirFortiClient })
     $window.FindName('btnReverificarVpn').Add_Click({ Invoke-ReverificarVpn })
     $window.FindName('chkVpnImpossivel').Add_Click({ Update-VpnImpossivel })
+    $window.FindName('txtVpnMotivo').Add_TextChanged({ Update-BotaoVpnImpossivel })
     $window.FindName('btnAtualizar').Add_Click({ Invoke-AtualizarListaJuntas })
     $window.FindName('cboJunta').Add_SelectionChanged({ Update-ComboLocais })
     $window.FindName('cboLocal').Add_SelectionChanged({ Update-DetalheLocal })
@@ -418,6 +424,7 @@ function New-JanelaPrincipal {
     $window.FindName('navInicio').Add_Checked({ if (-not $Global:NavegandoPrograma) { Show-View 'viewHome' } })
     $window.FindName('navGuia').Add_Checked({ if (-not $Global:NavegandoPrograma) { Show-GuiaBordo } })
     $window.FindName('navLocais').Add_Checked({ if (-not $Global:NavegandoPrograma) { Show-Locais } })
+    $window.FindName('navCoord').Add_Checked({ if (-not $Global:NavegandoPrograma) { Show-Coord } })
     $window.FindName('navDiag').Add_Checked({ if (-not $Global:NavegandoPrograma) { Open-DiagnosticoLimpo } })
     $window.FindName('navAdmin').Add_Checked({ if (-not $Global:NavegandoPrograma) { Show-Admin } })
     $window.FindName('navAtualizar').Add_Checked({ if (-not $Global:NavegandoPrograma) { Invoke-AtualizarDados } })
@@ -425,11 +432,20 @@ function New-JanelaPrincipal {
 
     # locais de vistoria
     $window.FindName('btnLocaisVoltar').Add_Click({ Show-View 'viewHome' })
-    $window.FindName('btnLocalDetalheVoltar').Add_Click({ Invoke-VoltarAosLocais })
+    $window.FindName('btnLocalDetalheVoltar').Add_Click({ Invoke-VoltarDoDetalhe })
+    $window.FindName('btnLdBaixarResultado').Add_Click({ Invoke-BaixarResultadoLocal })
     $window.FindName('txtBuscaLocais').Add_TextChanged({ Update-LocaisFiltrados })
     $window.FindName('cboFiltroZE').Add_SelectionChanged({ if (-not $Global:AtualizandoFiltroLocais) { Update-LocaisFiltrados } })
     $window.FindName('cboFiltroMun').Add_SelectionChanged({ if (-not $Global:AtualizandoFiltroLocais) { Update-LocaisFiltrados } })
     $window.FindName('dgLocais').Add_SelectionChanged({ Invoke-AbrirLocalDetalhe })
+
+    # coordenacao (so admin)
+    $window.FindName('btnCoordVoltar').Add_Click({ Show-View 'viewHome' })
+    $window.FindName('txtBuscaCoord').Add_TextChanged({ if (-not $Global:AtualizandoFiltroCoord) { Update-CoordFiltrados } })
+    $window.FindName('cboCoordRoteiro').Add_SelectionChanged({ if (-not $Global:AtualizandoFiltroCoord) { Update-CoordFiltrados } })
+    $window.FindName('cboCoordZE').Add_SelectionChanged({ if (-not $Global:AtualizandoFiltroCoord) { Update-CoordFiltrados } })
+    $window.FindName('cboCoordMun').Add_SelectionChanged({ if (-not $Global:AtualizandoFiltroCoord) { Update-CoordFiltrados } })
+    $window.FindName('dgCoord').Add_SelectionChanged({ Invoke-AbrirLocalCoord })
 
     # guia / admin
     $window.FindName('btnGuiaVoltar').Add_Click({ Show-View 'viewHome' })
@@ -520,9 +536,11 @@ function Show-View {
     Set-RailTravadoNoDiag ($Nome -eq 'viewDiag')
 
     # sincroniza o item ativo do rail sem disparar os handlers de navegacao
-    $map = @{ viewHome = 'navInicio'; viewGuia = 'navGuia'; viewLocais = 'navLocais'; viewLocalDetalhe = 'navLocais'; viewDiag = 'navDiag'; viewAdmin = 'navAdmin' }
+    $map = @{ viewHome = 'navInicio'; viewGuia = 'navGuia'; viewLocais = 'navLocais'; viewLocalDetalhe = 'navLocais'; viewCoord = 'navCoord'; viewDiag = 'navDiag'; viewAdmin = 'navAdmin' }
+    # a ficha do local (viewLocalDetalhe) segue o rail de onde foi aberta
+    if ($Nome -eq 'viewLocalDetalhe' -and $Global:LocalDetalheOrigem -eq 'viewCoord') { $map['viewLocalDetalhe'] = 'navCoord' }
     $Global:NavegandoPrograma = $true
-    foreach ($nn in 'navInicio', 'navGuia', 'navLocais', 'navDiag', 'navAdmin', 'navAtualizar', 'navAjuda') {
+    foreach ($nn in 'navInicio', 'navGuia', 'navLocais', 'navCoord', 'navDiag', 'navAdmin', 'navAtualizar', 'navAjuda') {
         $rb = $w.FindName($nn)
         if ($rb) { $rb.IsChecked = ($map[$Nome] -eq $nn) }
     }
@@ -756,6 +774,7 @@ function Enter-Home {
     $visAdmin = if ($Sessao.papel -eq 'admin') { 'Visible' } else { 'Collapsed' }
     $w.FindName('btnMenuAdmin').Visibility = $visAdmin
     $w.FindName('navAdmin').Visibility     = $visAdmin
+    $w.FindName('navCoord').Visibility     = $visAdmin
 
     # seletor de Juntas: sempre so da rota (checkbox "incluir fora da rota"
     # desativado por ora; para reativar, use  $chkTodas.Visibility = $visAdmin)
@@ -820,7 +839,7 @@ function Set-HomeOcupado {
     if ($Ocupado) { $w.FindName('txtAtualizandoMsg').Text = $Rotulo }
     $habilita = (-not $Ocupado) -and (-not $Global:RailTravadoDiag)
     foreach ($n in 'btnMenuGuia', 'btnMenuDiag', 'btnMenuAdmin', 'btnMenuAtualizar',
-        'btnReenviarPendentes', 'btnTrocarUsuario', 'navInicio', 'navGuia', 'navLocais', 'navDiag', 'navAdmin', 'navAtualizar', 'navAjuda') {
+        'btnReenviarPendentes', 'btnTrocarUsuario', 'navInicio', 'navGuia', 'navLocais', 'navCoord', 'navDiag', 'navAdmin', 'navAtualizar', 'navAjuda') {
         $c = $w.FindName($n); if ($c) { $c.IsEnabled = $habilita }
     }
 }
@@ -837,7 +856,7 @@ function Set-RailTravadoNoDiag {
     $Global:RailTravadoDiag = $Travado
     $w = $Global:JanelaPrincipal
     if (-not $w) { return }
-    foreach ($n in 'navInicio', 'navGuia', 'navLocais', 'navDiag', 'navAdmin', 'navAtualizar', 'navAjuda', 'btnTrocarUsuario', 'btnAtualizarApp') {
+    foreach ($n in 'navInicio', 'navGuia', 'navLocais', 'navCoord', 'navDiag', 'navAdmin', 'navAtualizar', 'navAjuda', 'btnTrocarUsuario', 'btnAtualizarApp') {
         $c = $w.FindName($n); if ($c) { $c.IsEnabled = -not $Travado }
     }
 }
@@ -1116,13 +1135,15 @@ function Update-LocaisFiltrados {
     $w.FindName('txtLocaisContagem').Text = '{0} de {1}' -f @($lista).Count, @($Global:LocaisTecnico).Count
 }
 
-# Clicar numa linha da grade abre a ficha completa do local (tela dedicada).
-function Invoke-AbrirLocalDetalhe {
-    if ($Global:AtualizandoFiltroLocais) { return }
+# Preenche e abre a ficha completa do local (viewLocalDetalhe). Usada tanto pela
+# tela Locais (rota do tecnico) quanto pela tela Coordenacao (todos os locais).
+# -Origem: 'viewLocais' | 'viewCoord' -- define para onde o "Voltar" retorna e
+# se o botao "Baixar resultado transmitido" aparece.
+function Open-LocalDetalhe {
+    param([Parameter(Mandatory)] $Dados, [string] $Origem = 'viewLocais')
     $w = $Global:JanelaPrincipal
-    if (-not $w) { return }
-    $d = $w.FindName('dgLocais').SelectedItem
-    if (-not $d) { return }
+    if (-not $w -or -not $Dados) { return }
+    $d = $Dados
 
     $w.FindName('txtLDPTipo').Text = if ("$($d.tipo)" -eq 'principal') { 'LOCAL PRINCIPAL' } else { 'LOCAL DE CONTINGENCIA' }
     $w.FindName('txtLDPNome').Text = [string] $d.nome
@@ -1143,12 +1164,34 @@ function Invoke-AbrirLocalDetalhe {
     $card = $w.FindName('cardLDPCompleto')
     if ($comp) { $tc.Text = $comp; $card.Visibility = 'Visible' } else { $card.Visibility = 'Collapsed' }
 
-    $Global:LocalDetalheAtual = $d
+    $Global:LocalDetalheAtual  = $d
+    $Global:LocalDetalheOrigem = if ($Origem -eq 'viewCoord') { 'viewCoord' } else { 'viewLocais' }
+
+    # botao "Voltar" muda o rotulo conforme a origem
+    $bv = $w.FindName('btnLocalDetalheVoltar')
+    if ($bv) { $bv.Content = if ($Global:LocalDetalheOrigem -eq 'viewCoord') { [char]0x2039 + ' Voltar' } else { [char]0x2039 + ' Voltar aos locais' } }
+
     Update-StatusLocalDetalhe
     Update-CardGel
     Update-FotosGel
 
     Show-View 'viewLocalDetalhe'
+}
+
+# Clicar numa linha da grade (tela Locais) abre a ficha completa do local.
+function Invoke-AbrirLocalDetalhe {
+    if ($Global:AtualizandoFiltroLocais) { return }
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    $d = $w.FindName('dgLocais').SelectedItem
+    if (-not $d) { return }
+    Open-LocalDetalhe -Dados $d -Origem 'viewLocais'
+}
+
+# "Voltar" da ficha do local: volta para a tela de origem (Locais ou Coordenacao),
+# limpando a selecao da grade para que a mesma linha possa ser reaberta.
+function Invoke-VoltarDoDetalhe {
+    if ($Global:LocalDetalheOrigem -eq 'viewCoord') { Invoke-VoltarACoordenacao } else { Invoke-VoltarAosLocais }
 }
 
 # "Voltar aos locais": limpa a selecao (para reabrir a mesma linha depois) e
@@ -1160,6 +1203,243 @@ function Invoke-VoltarAosLocais {
     $w.FindName('dgLocais').SelectedIndex = -1
     $Global:AtualizandoFiltroLocais = $false
     Show-View 'viewLocais'
+}
+
+# ------------------------------------------------------- COORDENACAO (so admin)
+# Lista TODOS os locais (todos os roteiros) e abre a mesma ficha de detalhe -- o
+# coordenador anexa o formulario do GEL + fotos a qualquer local e regenera o
+# relatorio, sem trocar de usuario nem ficar preso a propria rota.
+
+# Mapa  local_id -> { numero; rotulo }  a partir do cache de roteiros.
+function Get-MapaRoteiroPorLocal {
+    $map = @{}
+    foreach ($rot in @(Get-Roteiros)) {
+        $lbl = [string] $rot.rotulo
+        if (-not $lbl) { $lbl = 'Roteiro {0} - {1}' -f $rot.numero, ([string] $rot.nome) }
+        foreach ($id in @($rot.juntas_ids)) {
+            $k = [string] $id
+            if ($k -and -not $map.ContainsKey($k)) { $map[$k] = [pscustomobject]@{ numero = $rot.numero; rotulo = $lbl } }
+        }
+    }
+    return $map
+}
+
+# Todos os locais do cache de Juntas, com TipoRotulo / RoteiroNum / RoteiroRotulo
+# e o status (diagnostico / GEL) ja calculados para as colunas da grade.
+function Get-TodosLocaisCoord {
+    $juntas = @(Get-Juntas)
+    if (-not $juntas.Count) { return @() }
+    $mapaRot = Get-MapaRoteiroPorLocal
+    $feitos  = Get-DiagnosticosRealizados     # local_id -> { Enviado; ClassificacaoFinal; ... }
+
+    $saida = New-Object System.Collections.Generic.List[object]
+    foreach ($loc in $juntas) {
+        if (-not $loc) { continue }
+        $id = [string] $loc.id
+        $tipoR = if ("$($loc.tipo)" -eq 'principal') { 'Principal' } else { 'Conting' + [char]0x00EA + 'ncia' }
+        $rot   = if ($id -and $mapaRot.ContainsKey($id)) { $mapaRot[$id] } else { $null }
+
+        $st = ''
+        $d  = if ($id) { $feitos[$id] } else { $null }
+        if ($d) {
+            $st = if ($d.Enviado) { 'transmitido' } else { 'no computador' }
+        } elseif ($Global:CoordListaOk -and $id -and $Global:CoordTransmitidos.ContainsKey($id.ToLower())) {
+            $st = 'na planilha'   # outro tecnico transmitiu; "Baixar resultado" traz
+        } else {
+            $st = [char]0x2014
+        }
+
+        $g   = if ($id) { Get-VistoriaGel -LocalId $id } else { $null }
+        $nf  = if ($id) { @(Get-FotosGel -LocalId $id).Count } else { 0 }
+        $gel = if ($g) { if ($nf) { 'sim - {0} foto(s)' -f $nf } else { 'sim' } } else { [char]0x2014 }
+
+        $loc | Add-Member -NotePropertyName TipoRotulo      -Force -NotePropertyValue $tipoR
+        $loc | Add-Member -NotePropertyName RoteiroNum      -Force -NotePropertyValue $(if ($rot) { $rot.numero } else { $null })
+        $loc | Add-Member -NotePropertyName RoteiroRotulo   -Force -NotePropertyValue $(if ($rot) { $rot.rotulo } else { '(sem roteiro)' })
+        $loc | Add-Member -NotePropertyName CoordStatusTeste -Force -NotePropertyValue $st
+        $loc | Add-Member -NotePropertyName CoordStatusGel   -Force -NotePropertyValue $gel
+        $saida.Add($loc)
+    }
+    return $saida
+}
+
+# Abre a tela Coordenacao (rail, so admin).
+function Show-Coord {
+    Initialize-Coord
+    Show-View 'viewCoord'
+}
+
+# Monta a lista + os combos (roteiro / ZE / municipio).
+function Initialize-Coord {
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+
+    $Global:LocaisCoord = @(Get-TodosLocaisCoord)
+    # em paralelo: pergunta a planilha quais locais tem diagnostico transmitido
+    # (qualquer tecnico) -> habilita/desabilita o "Baixar resultado" e a coluna
+    # de status ganha o estado "na planilha".
+    Start-CoordListaTransmitidos
+
+    $w.FindName('txtCoordSub').Text = if (@($Global:LocaisCoord).Count) {
+        'Todos os locais dos roteiros ({0}). Clique num local para anexar o formulario do GEL e as fotos e gerar o relatorio completo.' -f @($Global:LocaisCoord).Count
+    } else {
+        'Nenhum local no cache. Use "Atualizar dados" com internet.'
+    }
+
+    $rots = @($Global:LocaisCoord |
+        Sort-Object { if ($null -ne $_.RoteiroNum) { [int] $_.RoteiroNum } else { 999 } } |
+        ForEach-Object { [string] $_.RoteiroRotulo } | Where-Object { $_ } | Select-Object -Unique)
+    $zes  = @($Global:LocaisCoord | ForEach-Object { [string] $_.zona_eleitoral } | Where-Object { $_ } | Select-Object -Unique | Sort-Object { [int] $_ })
+    $muns = @($Global:LocaisCoord | ForEach-Object { [string] $_.municipio_termo } | Where-Object { $_ } | Select-Object -Unique | Sort-Object)
+
+    $Global:AtualizandoFiltroCoord = $true
+    $cR = $w.FindName('cboCoordRoteiro'); $cZ = $w.FindName('cboCoordZE'); $cM = $w.FindName('cboCoordMun')
+    $cR.ItemsSource = @('Todos os roteiros') + $rots
+    $cZ.ItemsSource = @('Todas as ZE') + @($zes | ForEach-Object { 'ZE ' + $_ })
+    $cM.ItemsSource = @('Todos os munic' + [char]0x00ED + 'pios') + $muns
+    $cR.SelectedIndex = 0; $cZ.SelectedIndex = 0; $cM.SelectedIndex = 0
+    $w.FindName('txtBuscaCoord').Text = ''
+    $Global:AtualizandoFiltroCoord = $false
+
+    Update-CoordFiltrados
+}
+
+# Aplica busca + filtros e atualiza a grade da Coordenacao.
+function Update-CoordFiltrados {
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+
+    $busca  = ([string] $w.FindName('txtBuscaCoord').Text).Trim()
+    $selRot = [string] $w.FindName('cboCoordRoteiro').SelectedItem
+    $selZE  = [string] $w.FindName('cboCoordZE').SelectedItem
+    $selMun = [string] $w.FindName('cboCoordMun').SelectedItem
+    $rotF = if ($selRot -and $selRot -notlike 'Todos os roteiros') { $selRot } else { '' }
+    $ze   = if ($selZE  -and $selZE  -like 'ZE *') { $selZE.Substring(3).Trim() } else { '' }
+    $mun  = if ($selMun -and $selMun -notlike 'Todos os munic*') { $selMun } else { '' }
+
+    $lista = @($Global:LocaisCoord)
+    if ($rotF) { $lista = @($lista | Where-Object { [string] $_.RoteiroRotulo -eq $rotF }) }
+    if ($ze)   { $lista = @($lista | Where-Object { "$($_.zona_eleitoral)" -eq $ze }) }
+    if ($mun)  { $lista = @($lista | Where-Object { "$($_.municipio_termo)" -eq $mun }) }
+    if ($busca) {
+        $alvo = $busca.ToLower()
+        $lista = @($lista | Where-Object {
+            $campos = @(
+                [string] $_.nome, [string] $_.endereco, [string] $_.municipio_termo,
+                [string] $_.municipio_sede, [string] $_.tipo_internet, [string] $_.RoteiroRotulo,
+                ('ze ' + [string] $_.zona_eleitoral),
+                [string] (Get-CampoLocal $_ 'responsavel')
+            )
+            ($campos -join ' ').ToLower().Contains($alvo)
+        })
+    }
+
+    $Global:AtualizandoFiltroCoord = $true
+    $w.FindName('dgCoord').ItemsSource = @($lista)
+    $Global:AtualizandoFiltroCoord = $false
+    $w.FindName('txtCoordContagem').Text = '{0} de {1}' -f @($lista).Count, @($Global:LocaisCoord).Count
+}
+
+# Async: 'resultados.listar' sem filtro de tecnico -> conjunto de local_ids que
+# tem diagnostico transmitido na planilha. Best-effort: se falhar, o botao
+# "Baixar resultado" fica habilitado (comportamento anterior).
+function Start-CoordListaTransmitidos {
+    if ($Global:ModoTeste) { return }
+    try {
+        Start-TarefaRede -Script "Invoke-FuncaoAppsScript -Acao 'resultados.listar' -Payload @{} -TimeoutS 25" `
+            -AoConcluir { param($resp, $erro) Complete-CoordListaTransmitidos $resp $erro }
+    } catch { }
+}
+
+function Complete-CoordListaTransmitidos {
+    param($Resp, $Erro)
+    if ($Erro -or -not $Resp) { return }   # nao deu -> nao mexe (CoordListaOk fica false)
+    $set = @{}
+    foreach ($it in @($Resp.itens)) {
+        $lid = ([string] $it.local_id).Trim().ToLower()
+        if ($lid) { $set[$lid] = $true }
+    }
+    $Global:CoordTransmitidos = $set
+    $Global:CoordListaOk = $true
+    try {
+        $w = $Global:JanelaPrincipal
+        if ($w -and "$($w.FindName('viewCoord').Visibility)" -eq 'Visible') {
+            $Global:LocaisCoord = @(Get-TodosLocaisCoord)
+            Update-CoordFiltrados
+        }
+        if ($w -and "$($w.FindName('viewLocalDetalhe').Visibility)" -eq 'Visible' -and $Global:LocalDetalheOrigem -eq 'viewCoord') {
+            Update-StatusLocalDetalhe
+        }
+    } catch { }
+}
+
+# Clicar numa linha da grade da Coordenacao abre a ficha do local.
+function Invoke-AbrirLocalCoord {
+    if ($Global:AtualizandoFiltroCoord) { return }
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    $d = $w.FindName('dgCoord').SelectedItem
+    if (-not $d) { return }
+    Open-LocalDetalhe -Dados $d -Origem 'viewCoord'
+}
+
+# "Voltar" para a tela Coordenacao (recalcula o status das colunas).
+function Invoke-VoltarACoordenacao {
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    $Global:AtualizandoFiltroCoord = $true
+    $w.FindName('dgCoord').SelectedIndex = -1
+    $Global:AtualizandoFiltroCoord = $false
+    Initialize-Coord
+    Show-View 'viewCoord'
+}
+
+# Botao "Baixar resultado transmitido" (ficha do local, so via Coordenacao):
+# puxa da planilha o ultimo diagnostico transmitido deste local, de qualquer
+# tecnico, para resultados\enviados\ -- assim "Abrir relatorio completo" passa a
+# funcionar mesmo para locais que outro tecnico testou.
+function Invoke-BaixarResultadoLocal {
+    $d = $Global:LocalDetalheAtual
+    if (-not $d) { return }
+    $w = $Global:JanelaPrincipal
+    $st = $w.FindName('txtLdRelatStatus')
+    $id = [string] $d.id
+    if (-not $id) { return }
+
+    $btn = $w.FindName('btnLdBaixarResultado'); if ($btn) { $btn.IsEnabled = $false }
+    if ($st) { $st.Text = 'Baixando o resultado transmitido deste local...' }
+
+    if ($Global:ModoTeste) {
+        try { $r = Sync-Resultados -LocalIds @($id) } catch { Complete-BaixarResultadoLocal $null "$_"; return }
+        Complete-BaixarResultadoLocal $r $null
+        return
+    }
+    Start-TarefaRede -Script 'Sync-Resultados -LocalIds @($Id)' -Vars @{ Id = $id } `
+        -AoConcluir { param($r, $erro) Complete-BaixarResultadoLocal $r $erro }
+}
+
+function Complete-BaixarResultadoLocal {
+    param($Resumo, $Erro)
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    $b = $w.FindName('btnLdBaixarResultado'); if ($b) { $b.IsEnabled = $true }
+    $s = $w.FindName('txtLdRelatStatus')
+    $nome = [string] $Global:LocalDetalheAtual.nome
+    if ($Erro) {
+        if ($s) { $s.Text = "Nao consegui baixar: $Erro" }
+        Write-Log "Baixar resultado do local ($nome): $Erro" -Nivel Erro
+    } elseif ($Resumo -and [int] $Resumo.Baixados -ge 1) {
+        if ($s) { $s.Text = 'Resultado baixado. Confira o GEL / fotos e clique em "Abrir relatorio completo".' }
+        Write-Log "Resultado do local $nome baixado da planilha." -Nivel Ok
+    } elseif ($Resumo -and [int] $Resumo.NoServidor -eq 0) {
+        if ($s) { $s.Text = 'A planilha nao tem diagnostico transmitido para este local ainda.' }
+    } else {
+        if ($s) { $s.Text = 'Este computador ja tem o resultado deste local (nada novo a baixar).' }
+    }
+    # o Sync tambem pode ter puxado o formulario do GEL + fotos deste local
+    Update-CardGel
+    Update-FotosGel
+    Update-StatusLocalDetalhe
 }
 
 # ------------------------------------------------------------- ASSISTENTE (WIZARD)
@@ -1440,7 +1720,31 @@ function Update-StatusLocalDetalhe {
         $btnR.IsEnabled = [bool] $s.testado
         $btnR.ToolTip = if ($s.testado) {
             'Gera o relatorio do ultimo diagnostico com o formulario do GEL e as fotos atuais.'
-        } else { 'Rode o diagnostico deste local antes de gerar o relatorio.' }
+        } else { 'Rode o diagnostico deste local (ou baixe o resultado transmitido) antes de gerar o relatorio.' }
+    }
+    # "Baixar resultado transmitido": so' na ficha aberta pela Coordenacao, e so'
+    # habilitado quando a planilha tem diagnostico transmitido para este local
+    # (checagem assincrona em Start-CoordListaTransmitidos). Se ainda nao deu pra
+    # checar, fica habilitado (o proprio clique diz se ha ou nao).
+    $bd = $w.FindName('btnLdBaixarResultado')
+    if ($bd) {
+        if ($Global:LocalDetalheOrigem -eq 'viewCoord') {
+            $bd.Visibility = 'Visible'
+            if ($Global:CoordListaOk) {
+                $temPlan = $id -and $Global:CoordTransmitidos.ContainsKey($id.ToLower())
+                $bd.IsEnabled = [bool] $temPlan
+                $bd.ToolTip = if ($temPlan) {
+                    'Puxa da planilha o ultimo diagnostico transmitido deste local (de qualquer tecnico) para este computador.'
+                } else {
+                    'Nenhum diagnostico transmitido para este local na planilha ainda.'
+                }
+            } else {
+                $bd.IsEnabled = $true
+                $bd.ToolTip = 'Puxa da planilha o ultimo diagnostico transmitido deste local (de qualquer tecnico) para este computador.'
+            }
+        } else {
+            $bd.Visibility = 'Collapsed'
+        }
     }
     $rs = $w.FindName('txtLdRelatStatus'); if ($rs) { $rs.Text = '' }
 }
@@ -1550,6 +1854,7 @@ function Invoke-GelRemover {
     Remove-VistoriaGel -LocalId ([string] $d.id)
     if ([string] $d.id -eq [string] $Global:LocalMedicoesId) { $Global:VistoriaGel = $null }
     Write-Log 'Anexo GEL removido do local.' -Nivel Aviso
+    try { Start-EnvioGelWeb -LocalId ([string] $d.id) -Remover } catch { }
     Update-CardGel
     Update-FotosGel
     Update-StatusLocalDetalhe
@@ -1587,6 +1892,7 @@ function Invoke-GelAddFotos {
     }
     if ($st) { $st.Text = "Fotos adicionadas: $ok" + $(if ($erro) { " ($erro falharam)" } else { '' }) }
     Write-Log ("Fotos do GEL: {0} adicionada(s) ao local {1}." -f $ok, $d.nome) -Nivel Ok
+    if ($ok) { try { Start-EnvioGelWeb -LocalId ([string] $d.id) } catch { } }
     Update-FotosGel
     Update-CardGel
     Update-StatusLocalDetalhe
@@ -1601,6 +1907,7 @@ function Invoke-GelFotoRemover {
     if (-not $sel) { Write-Log 'Selecione uma foto na lista para remover.' -Nivel Aviso; return }
     Remove-FotoGel -LocalId ([string] $d.id) -Nome $sel
     Write-Log ("Foto '{0}' removida do local." -f $sel) -Nivel Aviso
+    try { Start-EnvioGelWeb -LocalId ([string] $d.id) } catch { }
     Update-FotosGel
     Update-CardGel
     Update-StatusLocalDetalhe
@@ -1708,6 +2015,7 @@ function Invoke-GelRegistrar {
     Save-VistoriaGel -LocalId ([string] $d.id) -Dados $obj | Out-Null
     if ([string] $d.id -eq [string] $Global:LocalMedicoesId) { $Global:VistoriaGel = $obj }
     Write-Log ('Formulario GEL anexado ao local {0}.' -f $d.nome) -Nivel Ok
+    try { Start-EnvioGelWeb -LocalId ([string] $d.id) } catch { }
     Update-CardGel
     Update-StatusLocalDetalhe
 }
@@ -3391,6 +3699,7 @@ function Start-CheckFase2 {
         Set-ChkBotao
         $w.FindName('panelChkVpnGate').Visibility = 'Visible'
         $w.FindName('btnChkVpnImpossivel').Visibility = 'Visible'
+        Update-BotaoVpnImpossivel   # comeca desabilitado ate marcar o checkbox + motivo
         $pp = $w.FindName('txtChkVpnPassos'); if ($pp) { $pp.Visibility = 'Visible' }
         $rc = $w.FindName('txtChkVpnRecheck')
         if ($rc) {
@@ -3954,15 +4263,25 @@ function Update-CaboLanResumo {
     $lbl = $w.FindName('txtCaboLanResumo')
     if (-not $lbl) { return }
     $c = $Global:CaboLan
+    $incompleto = $false
     $lbl.Text = if (-not $c -or $null -eq $c.necessario) {
-        'Nao informado.'
+        $incompleto = $true
+        'Obrigatorio: escolha uma opcao acima.'
     } elseif (-not $c.necessario) {
         'Selecionado: nao precisa passar cabo de rede.'
     } elseif ($null -ne $c.metros -and [double] $c.metros -gt 0) {
         'Selecionado: precisa de cabo de rede de aprox. {0:0.#} m.' -f [double] $c.metros
     } else {
-        'Selecionado: precisa de cabo de rede - digite os metros no campo "Outro".'
+        $incompleto = $true
+        'Obrigatorio: precisa de cabo de rede - digite os metros no campo "Outro".'
     }
+    try {
+        $lbl.Foreground = if ($incompleto) {
+            [Windows.Media.SolidColorBrush]::new([Windows.Media.ColorConverter]::ConvertFromString('#E8695C'))
+        } else {
+            $w.TryFindResource('Dicon.Text3')
+        }
+    } catch { }
 }
 
 # Tabela read-only das medicoes feitas no local (passo 6).
@@ -4009,6 +4328,20 @@ function Test-RecomendacaoValida {
     }
     $Global:MotivoRecomendacao = $motivo
     $Global:RecomendacaoLocal  = Resolve-RecomendacaoSelecionada -Rotulo $sel
+
+    # Conexao escolhida = rede cabeada (LAN) -> e' obrigatorio dizer se precisa
+    # passar cabo de rede e, se precisar, a metragem (card "cabo de rede (LAN)").
+    if ([string] $Global:RecomendacaoLocal.meio -eq 'lan') {
+        $c = $Global:CaboLan
+        $okCabo = $c -and $null -ne $c.necessario -and (
+            (-not $c.necessario) -or ($null -ne $c.metros -and [double] $c.metros -gt 0)
+        )
+        if (-not $okCabo) {
+            Write-Log 'Conexao pela rede cabeada (LAN): informe se precisa passar cabo de rede e, se precisar, a metragem.' -Nivel Erro
+            return $false
+        }
+    }
+
     Write-Log ('Conexao recomendada: {0} -> {1}{2}' -f `
         $Global:RecomendacaoLocal.rotulo, (Get-RotuloVeredito $Global:RecomendacaoLocal.veredito),
         (& { if ($Global:RecomendacaoLocal.provisoria) { ' (provisoria)' } else { '' } })) -Nivel Ok
@@ -4954,6 +5287,18 @@ function Update-VpnImpossivel {
     $w.FindName('txtVpnMotivoDica').Visibility = $vis
     foreach ($n in 'wrapVpnSugestoes', 'txtVpnSugestoesDica') { $c = $w.FindName($n); if ($c) { $c.Visibility = $vis } }
     if ($on) { Update-SugestoesVpnImpossivel } else { $w.FindName('txtVpnMotivo').Text = '' }
+    Update-BotaoVpnImpossivel
+}
+
+# "Registrar este meio sem a VPN" so' habilita depois que o tecnico marca o
+# checkbox "nao foi possivel conectar a VPN" E descreve o motivo.
+function Update-BotaoVpnImpossivel {
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    $on = [bool] $w.FindName('chkVpnImpossivel').IsChecked
+    $motivo = ([string] $w.FindName('txtVpnMotivo').Text).Trim()
+    $b = $w.FindName('btnChkVpnImpossivel')
+    if ($b) { $b.IsEnabled = ($on -and -not [string]::IsNullOrWhiteSpace($motivo)) }
 }
 
 # Registra o local como INVIAVEL por VPN indisponivel (sem rodar a bateria).

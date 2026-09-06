@@ -181,15 +181,18 @@ function New-ResultadoJson {
         foreach ($a in @(Get-Prop $m 'avaliacoes')) { if ($a -and $a.metrica) { $mOvr[[string] $a.metrica] = $a } }
         # Dados da placa usada neste meio, do snapshot congelado no momento do
         # teste (nao do inventario ao vivo, que pode ter mudado depois com
-        # outro meio ja testado ou um probe geral). Velocidade do link entra
-        # para LAN e Wi-Fi do local; banda/sinal/SSID so' para Wi-Fi do local
-        # (no roteamento de celular nao faz sentido informar isso).
+        # outro meio ja testado ou um probe geral). Velocidade do link (da placa)
+        # entra para os 3 meios; banda/sinal da placa Wi-Fi entram para Wi-Fi do
+        # local E para o roteamento de celular (a mesma placa sem-fio recebe o
+        # hotspot); o SSID so' faz sentido para o Wi-Fi do proprio local.
         $mSnap = Get-Prop $m 'snapshot_adaptador'
-        $mVelocidadeLink = if ($mMeio -in @('lan', 'wifi_local')) { Get-Prop $mSnap 'velocidade_mbps' } else { $null }
+        $mVelocidadeLink = if ($mMeio -in @('lan', 'wifi_local', 'celular')) { Get-Prop $mSnap 'velocidade_mbps' } else { $null }
         $mWifiBanda = ''; $mWifiSinal = $null; $mWifiSsid = ''
-        if ($mMeio -eq 'wifi_local') {
+        if ($mMeio -in @('wifi_local', 'celular')) {
             $mWifiBanda = [string] (Get-Prop $mSnap 'banda_ghz')
             $mWifiSinal = Get-Prop $mSnap 'sinal_pct'
+        }
+        if ($mMeio -eq 'wifi_local') {
             $mWifiSsid  = [string] (Get-Prop $mSnap 'ssid')
         }
         $medicoesJson += [pscustomobject]@{

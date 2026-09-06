@@ -183,8 +183,8 @@ $htmlCompleto = New-RelatorioHtml -Resultado $docCompleto
 
 Checar 'item 1: comparacao entre os meios aparece no Painel de Viabilidade' ($htmlCompleto -match 'Compara..o entre os meios')
 Checar 'item 2: barras Sem VPN / Com VPN aparecem no bloco do meio' ($htmlCompleto -match 'Sem VPN' -and $htmlCompleto -match 'Com VPN')
-Checar 'item 5: curva de velocidade do speedtest aparece' ($htmlCompleto -match 'Velocidade ao longo do teste')
-Checar 'item 6a: curva de banda do iperf3 aparece' ($htmlCompleto -match 'Banda pela VPN ao longo do teste')
+Checar 'item 5: curva de velocidade do speedtest aparece' ($htmlCompleto -match 'ao longo do teste \(sem VPN\)' -and $htmlCompleto -match 'graflaudo')
+Checar 'item 6a: curva de banda do iperf3 aparece' ($htmlCompleto -match 'ao longo do teste \(com a VPN\)')
 Checar 'item 6b: latencia por amostra do ping aparece' ($htmlCompleto -match 'lat.ncia por amostra do ping')
 Checar 'item 7: tentativas do Refazer aparecem so no meio com 2+ tentativas (LAN)' `
     (([regex]::Matches($htmlCompleto, 'Tentativas do')).Count -eq 1)
@@ -196,7 +196,7 @@ $docMedicao = $docCompleto.PSObject.Copy()
 $docMedicao | Add-Member -NotePropertyName modo_avaliacao -NotePropertyValue 'medicao' -Force
 $htmlMedicao = New-RelatorioHtml -Resultado $docMedicao
 Checar 'modo medicao: comparacao entre os meios tambem aparece no Painel de Medicoes' ($htmlMedicao -match 'Compara..o entre os meios')
-Checar 'modo medicao: curva de velocidade tambem aparece' ($htmlMedicao -match 'Velocidade ao longo do teste')
+Checar 'modo medicao: curva de velocidade tambem aparece' ($htmlMedicao -match 'ao longo do teste \(sem VPN\)')
 
 # ------------------------------------------------ 3) pipeline sem os campos novos
 # Simula um resultado "antigo" (de antes desta versao) -- os campos novos nao
@@ -219,7 +219,7 @@ try {
         -ConexaoRecomendada $recTop -MotivoRecomendacao 'unico meio'
     $htmlAntigo = New-RelatorioHtml -Resultado $docAntigo
     Checar 'JSON sem os campos novos: nao quebra e os graficos de curva ficam ausentes' `
-        ($htmlAntigo -notmatch 'Velocidade ao longo do teste' -and $htmlAntigo -notmatch 'Banda pela VPN ao longo do teste')
+        ($htmlAntigo -notmatch 'ao longo do teste \(sem VPN\)' -and $htmlAntigo -notmatch 'ao longo do teste \(com a VPN\)')
 } catch {
     Checar 'JSON sem os campos novos: nao quebra' $false "erro: $_"
 }
