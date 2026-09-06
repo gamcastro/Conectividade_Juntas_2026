@@ -266,19 +266,20 @@
           <button class="btn-primario" id="gelBtnSalvar" onclick="gelSalvar()">Registrar GEL</button>
           <span id="gelSalvarStatus" class="lbl" style="margin-left:12px;text-transform:none;letter-spacing:0;color:var(--tinta2)"></span>
         </div>
+      </div>
 
-        <fieldset style="margin-top:16px"><legend>Fotos da vistoria</legend>
-          <div class="lbl" style="text-transform:none;letter-spacing:0;color:var(--tinta2);margin:2px 0 8px">
-            As imagens são reduzidas no navegador (máx. 1600 px) antes de subir para a pasta
-            <code>DICON / gel / &lt;local&gt;</code> do Drive.
-          </div>
-          <div class="gel-pdf">
-            <input type="file" id="gelFotos" multiple accept="image/*" onchange="gelFotosEscolhidas()">
-            <button class="btn-primario" id="gelBtnFotos" onclick="gelSubirFotos()" disabled>Enviar fotos</button>
-            <span id="gelFotosStatus" class="lbl" style="text-transform:none;letter-spacing:0;color:var(--tinta2)"></span>
-          </div>
-          <div id="gelGaleria" class="gel-fotos"></div>
-        </fieldset>
+      <div id="gelFotosCard" class="card" hidden>
+        <h3>Fotos da vistoria</h3>
+        <div class="lbl" style="text-transform:none;letter-spacing:0;color:var(--tinta2);margin:0 0 8px">
+          As imagens são reduzidas no navegador (máx. 1600 px) antes de subir para a pasta
+          <code>DICON / gel / &lt;local&gt;</code> do Drive.
+        </div>
+        <div class="gel-pdf">
+          <input type="file" id="gelFotos" multiple accept="image/*" onchange="gelFotosEscolhidas()">
+          <button class="btn-primario" id="gelBtnFotos" onclick="gelSubirFotos()" disabled>Enviar fotos</button>
+          <span id="gelFotosStatus" class="lbl" style="text-transform:none;letter-spacing:0;color:var(--tinta2)"></span>
+        </div>
+        <div id="gelGaleria" class="gel-fotos"></div>
       </div>
     </div>
 
@@ -371,7 +372,12 @@
 
     renderVist();
     var gsel = el('gelLocal');
-    if (gsel) { gsel.length = 1; delete gsel.dataset.pronto; if (TAB === 'gel') gelPopularLocais(); }
+    if (gsel) {
+      gsel.length = 1; delete gsel.dataset.pronto;
+      GEL_LOCAL = null;
+      el('gelForm').hidden = true; el('gelFotosCard').hidden = true;
+      if (TAB === 'gel') gelPopularLocais();
+    }
     el('foot').textContent = 'DICON Web · homologação · dados de ' +
       new Date(d.gerado_em).toLocaleString('pt-BR') + ' · SEASU-COINF-STIC';
     el('app').hidden = false;
@@ -579,9 +585,11 @@
     el('gelSalvarStatus').textContent = '';
     el('gelFotosStatus').textContent = '';
     el('gelGaleria').innerHTML = '';
+    el('gelFotosCard').hidden = !GEL_LOCAL;
     gelPdfEscolhido();
     gelFotosEscolhidas();
     if (!GEL_LOCAL) return;
+    el('gelGaleria').innerHTML = '<span class="lbl" style="text-transform:none;letter-spacing:0;color:var(--tinta2)">Carregando fotos…</span>';
     google.script.run
       .withSuccessHandler(function(d){
         if (!d) return;
