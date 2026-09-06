@@ -194,6 +194,14 @@ function _webUniverso() {
   return out;
 }
 
+// Data (string "dd/MM/yyyy HH:mm:ss" OU objeto Date do getValues()) -> texto
+// amigavel "dd/MM/yyyy HH:mm". Reusa _webParseData / _webHora (Console.gs Fase 1).
+function _webDataAmigavel(v) {
+  var d = _webParseData(v);
+  if (!d) return String(v || '');
+  return Utilities.formatDate(d, Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm');
+}
+
 // Mapa local_id -> ultimo resultado transmitido (linha mais recente da aba
 // Resultados; append-only, entao a linha de maior indice vence).
 function _webTestados() {
@@ -213,7 +221,7 @@ function _webTestados() {
     if (!id) continue;
     out[id] = {
       local_id: id,
-      recebido_em: String(cel(row, 'recebido_em') || ''),
+      recebido_em: _webDataAmigavel(cel(row, 'recebido_em')),
       tecnico: String(cel(row, 'tecnico') || ''),
       conexao_recomendada: String(cel(row, 'conexao_recomendada') || ''),
       operadora_recomendada: String(cel(row, 'operadora_recomendada') || ''),
