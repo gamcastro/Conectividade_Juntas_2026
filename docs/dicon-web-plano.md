@@ -5,24 +5,20 @@
 
 ## 0. Estado
 
-- **Fase 0 — código escrito, não implantado** (branch `homologacao`):
-  - `apps-script/web/Console.gs` — `verificarAcesso` / `_webExigirAcesso`,
+- **Fase 0 — no ar em homologação** ✅ (Painel + Vistorias, só leitura)
+  - URL: `https://script.google.com/macros/s/AKfycby4rGyTNWzgl6FxYkdAmnTQpO1zSsmolqJll6psftuH2S-SZQh76s6j2qLWYypZi6wM-w/exec?app=web`
+  - Implantação Web App `AKfycby4rG…wM-w` @7 (`clasp create-deployment`, projeto
+    de homolog `17BLQ6IOZ…`). A implantação da Execution API que o DICON consome
+    (`AKfycbxHMp…` @6) não foi tocada.
+  - `apps-script/web/Console.gs`: `verificarAcesso` / `_webExigirAcesso`,
     `_webAbaAcesso` (cria a aba `Acesso` sozinha, semeia o admin bootstrap),
-    `_webUniverso` (união dos `juntas_ids` dos roteiros), `_webTestados` (último
-    resultado por `local_id` da aba `Resultados`), `carregarPainel` (acesso +
-    resumo + agregados por roteiro/técnico/ZE/município + lista de vistorias,
-    numa chamada só).
-  - `apps-script/web/Index.html` — SPA de uma página: resumo de cobertura + abas
-    **Painel** (4 blocos agregados) e **Vistorias** (tabela filtrável por texto /
-    roteiro / status, com link do PDF quando houver). Vanilla JS.
-  - `apps-script/Codigo.gs` — `doGet` roteia `?app=web` → `webConsolePagina(e)`.
-  - `apps-script/appsscript.json` — `webapp.executeAs` → `USER_ACCESSING`
-    (para a console enxergar o e-mail do visitante). O Web App legado não é mais
-    usado; a Execution API que o DICON consome não usa `webapp.*`.
-- Falta implantar: `clasp push` no projeto de homolog + `clasp create-deployment`
-  de uma implantação **Web App** nova ("DICON Web — homolog"), com a URL entregue
-  à coordenação. Nada muda em `config/juntas.json`.
-- Fases 1–4: não iniciadas.
+    `_webUniverso`, `_webTestados`, `carregarPainel` (tudo numa chamada).
+  - `apps-script/web/Index.html`: SPA vanilla, abas **Painel** e **Vistorias**.
+  - `apps-script/Codigo.gs`: `doGet` roteia `?app=web` → `webConsolePagina(e)`.
+  - `apps-script/appsscript.json`: `webapp.executeAs` → `USER_ACCESSING`.
+  - Redeploy a cada mudança: `clasp push` + `clasp redeploy AKfycby4rG…wM-w`.
+- **Fase 1 — em andamento** (check-in ao vivo).
+- Fases 2–4: não iniciadas.
 
 ## 1. Objetivo
 

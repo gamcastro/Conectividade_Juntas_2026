@@ -61,6 +61,15 @@
   .pill.no { background:#F1F3F6; color:var(--tinta2); }
   .num { font-variant-numeric:tabular-nums; }
 
+  .tec { border:1px solid var(--hair); border-radius:9px; padding:12px 14px; background:#fff; }
+  .tec .top { display:flex; align-items:center; gap:8px; }
+  .tec .dot { width:9px; height:9px; border-radius:50%; background:#C4CAD4; flex:none; }
+  .tec.on .dot { background:var(--verde); }
+  .tec .nm { font-weight:700; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .tec .st { font-size:11px; color:var(--tinta2); }
+  .tec .at { font-size:12.5px; margin-top:6px; color:var(--tinta); }
+  .tec .meta { font-size:11px; color:var(--tinta2); margin-top:3px; }
+
   .foot { color:#9AA3B2; font-size:11px; text-align:center; margin-top:26px; }
   .center { text-align:center; padding:60px 20px; color:var(--tinta2); }
   .center h2 { color:var(--tinta); }
@@ -111,6 +120,7 @@
 
     <div class="tabs">
       <button id="tabPainel" class="on" onclick="verTab('painel')">Painel</button>
+      <button id="tabVivo" onclick="verTab('vivo')">Ao vivo</button>
       <button id="tabVist" onclick="verTab('vistorias')">Vistorias</button>
     </div>
 
@@ -120,6 +130,24 @@
         <div class="card"><h3>Por técnico previsto</h3><div id="gTecnico"></div></div>
         <div class="card"><h3>Por ZE</h3><div id="gZE"></div></div>
         <div class="card"><h3>Por município</h3><div id="gMun"></div></div>
+      </div>
+    </div>
+
+    <div id="vivo" hidden>
+      <div class="card">
+        <h3 style="display:flex;align-items:center;gap:10px">
+          Técnicos <span id="vivoInfo" class="lbl" style="text-transform:none;letter-spacing:0;font-weight:400"></span>
+        </h3>
+        <div id="vivoCards" class="grid"></div>
+      </div>
+      <div class="card">
+        <h3>Atividade recente</h3>
+        <div class="tbwrap" style="max-height:46vh">
+          <table>
+            <thead><tr><th>Hora</th><th>Técnico</th><th>Evento</th><th>Local</th><th>Roteiro</th></tr></thead>
+            <tbody id="vivoFeed"></tbody>
+          </table>
+        </div>
       </div>
     </div>
 
@@ -214,6 +242,7 @@
     el('foot').textContent = 'DICON Web · homologação · dados de ' +
       new Date(d.gerado_em).toLocaleString('pt-BR') + ' · SEASU-COINF-STIC';
     el('app').hidden = false;
+    if (TAB === 'vivo') carregarVivo();
   }
 
   function grupo(id, arr){
@@ -225,11 +254,60 @@
     }).join('') || '<div class="row"><span class="nm">—</span></div>';
   }
 
+  var TAB = 'painel', vivoTimer = null;
+
   function verTab(t){
+    TAB = t;
     el('tabPainel').classList.toggle('on', t==='painel');
+    el('tabVivo').classList.toggle('on', t==='vivo');
     el('tabVist').classList.toggle('on', t==='vistorias');
-    el('painel').hidden = (t!=='painel');
+    el('painel').hidden    = (t!=='painel');
+    el('vivo').hidden      = (t!=='vivo');
     el('vistorias').hidden = (t!=='vistorias');
+    if (t==='vivo') { carregarVivo(); iniciarVivoTimer(); } else { pararVivoTimer(); }
+  }
+  function iniciarVivoTimer(){ pararVivoTimer(); vivoTimer = setInterval(function(){ if (TAB==='vivo') carregarVivo(); }, 30000); }
+  function pararVivoTimer(){ if (vivoTimer) { clearInterval(vivoTimer); vivoTimer = null; } }
+
+  var EV_ROTULO = {
+    abriu_app:'abriu o DICON', iniciou_diagnostico:'iniciou diagnóstico',
+    rodou_checagem:'rodou checagem', salvou:'salvou o resultado',
+    transmitiu:'transmitiu', finalizou:'finalizou', abandonou:'saiu do assistente'
+  };
+
+  function carregarVivo(){
+    google.script.run
+      .withSuccessHandler(function(d){
+        if (!d || d.sem_acesso) return;
+        var ps = d.presencas || [];
+        var online = ps.filter(function(p){ return p.online; }).length;
+        el('vivoInfo').textContent = online + ' online · ' + ps.length + ' no total · atualizado ' +
+          new Date(d.gerado_em).toLocaleTimeString('pt-BR');
+        el('vivoCards').innerHTML = ps.map(function(p){
+          var quando = (p.minutos==null) ? 'sem check-in'
+            : (p.minutos<=1 ? 'agora' : ('visto há '+p.minutos+' min'));
+          return '<div class="tec '+(p.online?'on':'')+'">' +
+            '<div class="top"><span class="dot"></span>' +
+            '<span class="nm" title="'+esc(p.tecnico)+'">'+esc(p.tecnico||p.email||'—')+'</span>' +
+            '<span class="st">'+esc(quando)+'</span></div>' +
+            '<div class="at">'+esc(p.atividade_atual||'—')+'</div>' +
+            '<div class="meta">'+esc(p.roteiro||'')+(p.versao_dicon?(' · v'+esc(p.versao_dicon)):'')+'</div>' +
+          '</div>';
+        }).join('') || '<div class="row"><span class="nm">Nenhum técnico registrou check-in ainda.</span></div>';
+
+        el('vivoFeed').innerHTML = (d.eventos||[]).map(function(e){
+          var loc = e.local_id ? (esc(e.municipio? (e.municipio+' · ') : '') + 'ZE '+esc(e.zona) + (e.tipo_local?(' · '+esc(e.tipo_local)):'')) : '—';
+          return '<tr>' +
+            '<td class="num">'+esc(e.hora)+'</td>' +
+            '<td>'+esc(e.tecnico||'')+'</td>' +
+            '<td>'+esc(EV_ROTULO[e.tipo]||e.tipo||'')+(e.detalhe?(' — '+esc(e.detalhe)):'')+'</td>' +
+            '<td>'+loc+'</td>' +
+            '<td class="num">'+esc(e.roteiro||'')+'</td>' +
+          '</tr>';
+        }).join('') || '<tr><td colspan="5">Nenhum evento ainda.</td></tr>';
+      })
+      .withFailureHandler(function(){ /* silencioso no auto-refresh */ })
+      .carregarAoVivo();
   }
 
   function renderVist(){

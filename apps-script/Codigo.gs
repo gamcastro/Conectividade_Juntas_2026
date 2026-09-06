@@ -238,6 +238,11 @@ function executar(req) {
     if (acao === 'resultados.listar') return listarResultados(req);
     if (acao === 'resultados.obter')  return obterResultado(req);
 
+    // DICON Web -- check-in ao vivo do tecnico (gravado via token de servico,
+    // como o proprio 'resultado', porque o tecnico nao e' editor da planilha).
+    if (acao === 'checkin') return webCheckin(req);
+    if (acao === 'evento')  return webRegistrarEvento(req);
+
     if (acao === 'resultado') {
       if (!_idResultados()) return { status: 'ignorado', motivo: 'PLANILHA_RESULTADOS_ID nao configurado' };
       var quem = '';

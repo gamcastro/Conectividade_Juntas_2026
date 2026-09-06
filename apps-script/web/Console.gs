@@ -206,3 +206,180 @@ function carregarPainel() {
     gerado_em: new Date().toISOString()
   };
 }
+
+/* ==================== FASE 1: CHECK-IN AO VIVO ==================== */
+/* Escrita: webCheckin / webRegistrarEvento -- chamadas pela Execution API
+ * (Codigo.gs > executar), gravadas com o TOKEN DE SERVICO (o tecnico nao e'
+ * editor da planilha). Leitura: carregarAoVivo -- chamada pela console
+ * (google.script.run), como o usuario logado (leitor). */
+
+var WEB_HEAD_PRESENCA = ['tecnico', 'email', 'ultimo_checkin', 'versao_dicon', 'roteiro', 'maquina', 'atividade_atual', 'local_atual'];
+var WEB_HEAD_EVENTOS  = ['id_evento', 'hora_cliente', 'hora_servidor', 'tecnico', 'tipo', 'local_id', 'zona', 'municipio', 'tipo_local', 'roteiro', 'detalhe'];
+
+function _webAgora() {
+  return Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm:ss');
+}
+
+// Cria a aba (com cabecalho) se nao existir. Via token de servico -> o dono da
+// planilha e' quem cria, entao funciona mesmo com o tecnico chamando.
+function _sheetsGarantirAba(token, sheetId, nome, cabecalho) {
+  try {
+    _sheetsGetValores(token, sheetId, nome + '!1:1');
+    return;
+  } catch (e) {
+    var url = 'https://sheets.googleapis.com/v4/spreadsheets/' + sheetId + ':batchUpdate';
+    var resp = UrlFetchApp.fetch(url, {
+      method: 'post', muteHttpExceptions: true, contentType: 'application/json',
+      headers: { Authorization: 'Bearer ' + token },
+      payload: JSON.stringify({ requests: [{ addSheet: { properties: { title: nome } } }] })
+    });
+    if (resp.getResponseCode() >= 300 && String(resp.getContentText()).indexOf('already exists') < 0) {
+      throw new Error('Sheets addSheet ' + nome + ': ' + resp.getContentText());
+    }
+    _sheetsSetValores(token, sheetId, nome + '!A1', [cabecalho]);
+  }
+}
+
+// upsert de 1 linha na aba Presenca, casando por email (ou nome).
+function _webPresencaUpsert(token, sheetId, campos) {
+  _sheetsGarantirAba(token, sheetId, 'Presenca', WEB_HEAD_PRESENCA);
+  var v = _sheetsGetValores(token, sheetId, 'Presenca');
+  var head = (v[0] || WEB_HEAD_PRESENCA).map(function (c) { return String(c || '').trim(); });
+  var ix = {}; head.forEach(function (n, i) { ix[n] = i; });
+
+  var alvoEmail = String(campos.email || '').toLowerCase().trim();
+  var alvoNome  = String(campos.tecnico || '').toLowerCase().trim();
+  var rowNum = -1;
+  for (var r = 1; r < v.length; r++) {
+    var e = String(v[r][ix['email']] || '').toLowerCase().trim();
+    var n = String(v[r][ix['tecnico']] || '').toLowerCase().trim();
+    if ((alvoEmail && e === alvoEmail) || (!alvoEmail && alvoNome && n === alvoNome)) { rowNum = r + 1; break; }
+  }
+
+  var atual = (rowNum > 0) ? v[rowNum - 1] : [];
+  function val(nome, novo) {
+    if (novo !== undefined && novo !== null && novo !== '') return novo;
+    var i = ix[nome];
+    return (i != null && atual[i] != null) ? atual[i] : '';
+  }
+  var linha = [
+    val('tecnico', campos.tecnico), val('email', campos.email), _webAgora(),
+    val('versao_dicon', campos.versao_dicon), val('roteiro', campos.roteiro),
+    val('maquina', campos.maquina), val('atividade_atual', campos.atividade_atual),
+    val('local_atual', campos.local_atual)
+  ];
+  if (rowNum > 0) _sheetsSetValores(token, sheetId, 'Presenca!A' + rowNum + ':H' + rowNum, [linha]);
+  else _sheetsAppendLinha(token, sheetId, 'Presenca', linha);
+}
+
+// acao 'checkin' -- heartbeat. req: {tecnico, email, versao_dicon, roteiro, maquina}
+function webCheckin(req) {
+  req = req || {};
+  var token = _tokenServico();
+  var sheetId = _idResultados();
+  if (!sheetId) return { status: 'ignorado', motivo: 'PLANILHA_RESULTADOS_ID nao configurado' };
+  _webPresencaUpsert(token, sheetId, {
+    tecnico: req.tecnico, email: req.email, versao_dicon: req.versao_dicon,
+    roteiro: req.roteiro, maquina: req.maquina
+  });
+  return { status: 'ok', hora: _webAgora() };
+}
+
+// acao 'evento'. req: {id_evento, hora_cliente, tecnico, email, tipo, local_id,
+// zona, municipio, tipo_local, roteiro, detalhe, versao_dicon, maquina}
+function webRegistrarEvento(req) {
+  req = req || {};
+  var token = _tokenServico();
+  var sheetId = _idResultados();
+  if (!sheetId) return { status: 'ignorado', motivo: 'PLANILHA_RESULTADOS_ID nao configurado' };
+
+  _sheetsGarantirAba(token, sheetId, 'Eventos', WEB_HEAD_EVENTOS);
+
+  if (req.id_evento) {
+    var ids = _sheetsGetValores(token, sheetId, 'Eventos!A2:A');
+    for (var i = 0; i < ids.length; i++) {
+      if (String(ids[i][0] || '') === String(req.id_evento)) return { status: 'ok', dedupe: true };
+    }
+  }
+
+  _sheetsAppendLinha(token, sheetId, 'Eventos', [
+    req.id_evento || '', req.hora_cliente || '', _webAgora(), req.tecnico || '',
+    req.tipo || '', req.local_id || '', req.zona || '', req.municipio || '',
+    req.tipo_local || '', req.roteiro || '', req.detalhe || ''
+  ]);
+
+  // reflete no card do tecnico
+  var atividade = '', local = '';
+  if (req.tipo === 'iniciou_diagnostico') {
+    atividade = 'Diagnostico em ' + (req.detalhe || req.local_id || '') + ' desde ' + _webAgora();
+    local = req.local_id || '';
+  } else if (req.tipo === 'transmitiu' || req.tipo === 'finalizou' || req.tipo === 'abandonou') {
+    atividade = (req.tipo === 'finalizou' ? 'Concluiu ' : (req.tipo === 'transmitiu' ? 'Transmitiu ' : 'Saiu de ')) +
+                (req.detalhe || req.local_id || '') + ' as ' + _webAgora();
+    local = '';
+  }
+  try {
+    _webPresencaUpsert(token, sheetId, {
+      tecnico: req.tecnico, email: req.email, versao_dicon: req.versao_dicon,
+      roteiro: req.roteiro, maquina: req.maquina,
+      atividade_atual: atividade || undefined, local_atual: (req.tipo === 'iniciou_diagnostico') ? local : ''
+    });
+  } catch (e) { /* presenca e' secundaria */ }
+
+  return { status: 'ok' };
+}
+
+/* ---- leitura para a console ---- */
+
+function _webLerAba(ss, nome) {
+  var aba = ss.getSheetByName(nome);
+  if (!aba || aba.getLastRow() < 2) return [];
+  var v = aba.getDataRange().getValues();
+  var head = v[0].map(function (c) { return String(c || '').trim(); });
+  return v.slice(1).map(function (row) {
+    var o = {};
+    head.forEach(function (h, i) { o[h] = row[i]; });
+    return o;
+  });
+}
+
+function _webParseData(s) {
+  s = String(s || '').trim();
+  var m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})(?::(\d{2}))?$/);
+  if (!m) { var d = new Date(s); return isNaN(d.getTime()) ? null : d; }
+  return new Date(+m[3], +m[2] - 1, +m[1], +m[4], +m[5], +(m[6] || 0));
+}
+
+// Aba "Ao vivo" da console: presenca (online se <=10 min) + feed de eventos.
+function carregarAoVivo() {
+  var acesso = verificarAcesso();
+  if (!acesso.papel) return { acesso: acesso, sem_acesso: true };
+
+  var ss = SpreadsheetApp.openById(_idResultados());
+  var agora = new Date();
+
+  var presencas = _webLerAba(ss, 'Presenca').map(function (p) {
+    var visto = _webParseData(p['ultimo_checkin']);
+    var min = visto ? Math.round((agora - visto) / 60000) : null;
+    return {
+      tecnico: p['tecnico'], email: p['email'], roteiro: p['roteiro'],
+      versao_dicon: p['versao_dicon'], atividade_atual: p['atividade_atual'],
+      local_atual: p['local_atual'], ultimo_checkin: String(p['ultimo_checkin'] || ''),
+      minutos: min, online: (min != null && min <= 10)
+    };
+  }).sort(function (a, b) {
+    return (a.minutos == null ? 1e9 : a.minutos) - (b.minutos == null ? 1e9 : b.minutos);
+  });
+
+  var evs = _webLerAba(ss, 'Eventos');
+  var feed = evs.slice(-100).reverse().map(function (e) {
+    return {
+      hora: String(e['hora_cliente'] || e['hora_servidor'] || ''),
+      tecnico: e['tecnico'], tipo: e['tipo'], local_id: e['local_id'],
+      zona: e['zona'], municipio: e['municipio'], tipo_local: e['tipo_local'],
+      roteiro: e['roteiro'], detalhe: e['detalhe']
+    };
+  });
+
+  return { acesso: acesso, presencas: presencas, eventos: feed, gerado_em: agora.toISOString() };
+}
