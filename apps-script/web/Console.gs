@@ -344,10 +344,18 @@ function _webLerAba(ss, nome) {
 }
 
 function _webParseData(s) {
+  if (s instanceof Date) { return isNaN(s.getTime()) ? null : s; }
   s = String(s || '').trim();
   var m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})(?::(\d{2}))?$/);
   if (!m) { var d = new Date(s); return isNaN(d.getTime()) ? null : d; }
   return new Date(+m[3], +m[2] - 1, +m[1], +m[4], +m[5], +(m[6] || 0));
+}
+
+// Data (string "dd/MM/yyyy HH:mm:ss" OU objeto Date do Sheets) -> "dd/MM HH:mm".
+function _webHora(v) {
+  var d = _webParseData(v);
+  if (!d) { return String(v || ''); }
+  return Utilities.formatDate(d, Session.getScriptTimeZone(), 'dd/MM HH:mm');
 }
 
 // Aba "Ao vivo" da console: presenca (online se <=10 min) + feed de eventos.
@@ -363,8 +371,8 @@ function carregarAoVivo() {
     var min = visto ? Math.round((agora - visto) / 60000) : null;
     return {
       tecnico: p['tecnico'], email: p['email'], roteiro: p['roteiro'],
-      versao_dicon: p['versao_dicon'], atividade_atual: p['atividade_atual'],
-      local_atual: p['local_atual'], ultimo_checkin: String(p['ultimo_checkin'] || ''),
+      versao_dicon: p['versao_dicon'], atividade_atual: String(p['atividade_atual'] || ''),
+      local_atual: p['local_atual'], ultimo_checkin: _webHora(p['ultimo_checkin']),
       minutos: min, online: (min != null && min <= 10)
     };
   }).sort(function (a, b) {
@@ -374,7 +382,7 @@ function carregarAoVivo() {
   var evs = _webLerAba(ss, 'Eventos');
   var feed = evs.slice(-100).reverse().map(function (e) {
     return {
-      hora: String(e['hora_cliente'] || e['hora_servidor'] || ''),
+      hora: _webHora(e['hora_cliente'] || e['hora_servidor']),
       tecnico: e['tecnico'], tipo: e['tipo'], local_id: e['local_id'],
       zona: e['zona'], municipio: e['municipio'], tipo_local: e['tipo_local'],
       roteiro: e['roteiro'], detalhe: e['detalhe']
