@@ -169,7 +169,11 @@ function _migrarLimiaresAntigos(linhas) {
 
 
 function doGet(e) {
-  var recurso = (e && e.parameter && e.parameter.recurso) || 'juntas';
+  var p = (e && e.parameter) || {};
+  // Console web de coordenacao (DICON Web) -> ?app=web serve a pagina HTML.
+  // O resto segue como o Web App legado (?recurso=juntas|tecnicos|roteiros|limiares).
+  if (p.app === 'web') return webConsolePagina(e);
+  var recurso = p.recurso || 'juntas';
   try {
     if (recurso === 'juntas') {
       return _json({ atualizado_em: new Date().toISOString(), juntas: listarJuntas() });
@@ -233,6 +237,12 @@ function executar(req) {
 
     if (acao === 'resultados.listar') return listarResultados(req);
     if (acao === 'resultados.obter')  return obterResultado(req);
+
+    // DICON Web -- check-in ao vivo do tecnico (gravado via token de servico,
+    // como o proprio 'resultado', porque o tecnico nao e' editor da planilha).
+    if (acao === 'checkin') return webCheckin(req);
+    if (acao === 'evento')  return webRegistrarEvento(req);
+    if (acao === 'pdf.relatorio') return webUploadPdfRelatorio(req);
 
     if (acao === 'resultado') {
       if (!_idResultados()) return { status: 'ignorado', motivo: 'PLANILHA_RESULTADOS_ID nao configurado' };

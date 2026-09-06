@@ -97,12 +97,14 @@ $Global:WizardTitulos = @(
     ('Conclus' + [char]0x00E3 + 'o')
 )
 $Global:WizardNPassos = $Global:WizardPassos.Count
+$Global:EventoDiagIniciado = $false   # DICON Web: ja mandou 'iniciou_diagnostico' nesta sessao do assistente?
 
 # Ajusta o assistente ao modo de avaliacao: todos os modos tem os mesmos 6
 # passos agora (inclui sempre o passo de conexao recomendada/sugerida -- so
 # o titulo e o conteudo do passo mudam por modo, ver Update-Passo6Recomendacao).
 # Chamado ao abrir o assistente.
 function Set-ModoAssistente {
+    $Global:EventoDiagIniciado = $false   # nova sessao do assistente -> permite mandar 'iniciou_diagnostico' de novo
     $Global:WizardPassos = @('stepInfo', 'stepJunta', 'stepLocal', 'stepResultado', 'stepDecisao', 'stepFim')
     $passo4 = if (Test-ModoCompleto) { 'Resultado por m' + [char]0x00E9 + 'trica' } else { 'Medi' + [char]0x00E7 + [char]0x00F5 + 'es por meio' }
     $passo5 = if (Test-ModoCompleto) { 'Recomenda' + [char]0x00E7 + [char]0x00E3 + 'o final' } else { 'Sugest' + [char]0x00E3 + 'o de conex' + [char]0x00E3 + 'o' }
@@ -720,9 +722,16 @@ function Enter-SessaoInterno {
         $Global:SessaoAtual = $sessao
         try { Show-View 'viewHome' } catch { }
     }
+
+    # DICON Web: registra "abriu o app", manda o 1o check-in e liga o heartbeat.
+    # Tudo melhor esforco -- nada disso pode atrapalhar o login.
+    try { Add-EventoWeb -Tipo 'abriu_app' } catch { }
+    try { Start-EnvioWebAssincrono } catch { }
+    try { Start-HeartbeatWeb } catch { }
 }
 
 function Invoke-TrocarUsuario {
+    try { Stop-HeartbeatWeb } catch { }
     Clear-Sessao
     $Global:SessaoAtual  = $null
     $Global:RoteiroAtual = $null
@@ -941,6 +950,9 @@ function Invoke-AtualizarDados {
         if (-not $cfg -or $cfg.reenvio_ao_atualizar -ne $false) {
             Send-ResultadosPendentes -Endpoint $cfg.endpoint_apps_script | Out-Null
         }
+        # DICON Web: descarrega a fila de eventos de check-in (roda aqui dentro do
+        # trabalho de segundo plano -- nao bloqueia a UI).
+        try { Send-EventosWebPendentes | Out-Null } catch { }
         $r
     } -AoConcluir {
         param($res, $erro)
@@ -1180,7 +1192,16 @@ function Show-WizardPasso {
 
     switch ($Global:WizardPassos[$N - 1]) {
         'stepJunta'     { Update-DetalheLocal }
-        'stepLocal'     { if (-not $Global:FaseLocalPayload) { Invoke-ProbeRedeLocal }; Update-PainelMeios }
+        'stepLocal'     {
+            if (-not $Global:FaseLocalPayload) { Invoke-ProbeRedeLocal }
+            Update-PainelMeios
+            # DICON Web: "James iniciou diagnostico em <Local>" -- ao chegar no
+            # passo 3, uma vez por sessao do assistente (decisao 1 do plano).
+            if (-not $Global:EventoDiagIniciado) {
+                $Global:EventoDiagIniciado = $true
+                try { Add-EventoWeb -Tipo 'iniciou_diagnostico' } catch { }
+            }
+        }
         'stepResultado' { Update-SeletorMedicoes }
         'stepDecisao'   { Update-DecisaoRecalculada; Update-Passo6Recomendacao }
         'stepFim'       { Update-ResumoFim }
@@ -1477,6 +1498,13 @@ function Complete-AbrirRelatorioLocal {
     if ($st) { $st.Text = "Relatorio: $Saida" }
     Write-Log "Relatorio do local gerado: $Saida" -Nivel Ok
     if (-not $Global:ModoTeste -and $Saida) { try { Start-Process -FilePath $Saida } catch { } }
+    # DICON Web: sobe o PDF pra console se este Local ja foi transmitido.
+    try {
+        $lid = [string] $Global:LocalDetalheAtual.id
+        if ($lid -and $Saida -and ((Get-DiagnosticosRealizados)[$lid].Enviado)) {
+            Start-EnvioPdfRelatorioWeb -LocalId $lid -Caminho $Saida
+        }
+    } catch { }
 }
 
 # Reflete no card do GEL (tela de detalhe) o que ja esta anexado ao Local.
@@ -4183,6 +4211,8 @@ function Complete-TransmitirResultado {
         $Global:FeitoTransmitir = $true
         $st.Text = 'Resultado transmitido ao painel.'
         Write-Log 'Resultado transmitido ao painel.' -Nivel Ok
+        try { Add-EventoWeb -Tipo 'transmitiu' } catch { }
+        try { Start-EnvioWebAssincrono } catch { }
     } else {
         $st.Text = 'Nao foi possivel transmitir agora. O resultado fica pendente e vai no proximo "Atualizar dados".'
     }
@@ -4204,6 +4234,7 @@ function Invoke-FinalizarDiagnostico {
     } else {
         Write-Log 'Diagnostico finalizado.' -Nivel Ok
     }
+    try { Add-EventoWeb -Tipo 'finalizou' } catch { }
     $Global:WizardStep = 1
     Enter-Home -Sessao $Global:SessaoAtual
 }
@@ -4271,6 +4302,13 @@ function Complete-ExportarRelatorio {
         $st.Text = "Relatorio salvo: $Saida"
         Write-Log "Relatorio salvo: $Saida" -Nivel Ok
         if (-not $Global:ModoTeste -and $Saida) { try { Start-Process -FilePath $Saida } catch { } }
+        # DICON Web: sobe o PDF pra console se este Local ja foi transmitido.
+        try {
+            $lid = [string] (Get-LocalDoAssistente).id
+            if ($lid -and $Saida -and ((Get-DiagnosticosRealizados)[$lid].Enviado)) {
+                Start-EnvioPdfRelatorioWeb -LocalId $lid -Caminho $Saida
+            }
+        } catch { }
     }
     Update-ResumoFim
 }

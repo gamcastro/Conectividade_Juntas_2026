@@ -102,6 +102,26 @@ George", não importa qual técnico chamou.
    Autoriza a execução (é o George rodando no próprio editor). Feito — fica
    guardado nas Propriedades do Script; `gravarResultado` renova sozinho.
 
+### Token de serviço com Drive (DICON Web — fotos do GEL, arquivo de PDFs)
+
+A console DICON Web precisa que o token de serviço tenha **também** escopo de
+Drive para subir as fotos do GEL (e depois arquivar PDFs) no Shared Drive da
+coordenação. Isso **não** entra em `config/ambiente.exemplo.json` — os técnicos
+de campo continuam só com `spreadsheets`. Nada no projeto Apps Script chama
+`DriveApp`, então o manifest não muda e a Execution API do DICON não quebra; o
+escopo de Drive vive só neste refresh token.
+
+1. George roda `tools/Conectar-DriveServico.ps1` (consentimento OAuth próprio,
+   loopback; pede `spreadsheets` + `drive.file` — só os arquivos/pastas que a
+   própria console criar). `-DriveTotal` troca por `drive` completo se algum dia
+   for preciso enxergar itens criados por fora.
+2. Cola a linha `setupServiceAuth('<client_id>', '<client_secret>', '<refresh_token>')`
+   impressa no editor do Apps Script de **homologação** (Executar →
+   `setupServiceAuth`). Substitui o token anterior (que só tinha Sheets); o
+   `gravarResultado` continua funcionando igual.
+3. Confere na console: aba **GEL** → um Local → **Enviar fotos**. Sem o escopo,
+   a UI mostra "o token de serviço ainda não tem acesso ao Drive".
+
 ## Como o técnico conecta
 
 - 1º uso: abre o navegador → escolhe a conta `@tre-ma.jus.br` (já logado no

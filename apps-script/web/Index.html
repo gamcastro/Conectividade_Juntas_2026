@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<style>
+  :root {
+    --navy:#0A1E4D; --azul:#123FA8; --bg:#F4F5F8; --tinta:#14181F;
+    --tinta2:#5C6472; --hair:#D6DBE6; --verde:#1B7F3B; --ambar:#E8B93E;
+  }
+  * { box-sizing:border-box; }
+  html,body { margin:0; padding:0; }
+  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+         background:var(--bg); color:var(--tinta); font-size:14px; }
+  a { color:var(--azul); }
+
+  header { background:linear-gradient(135deg,var(--navy),var(--azul) 130%); color:#fff;
+           padding:16px 24px; display:flex; align-items:center; gap:14px; }
+  header .wm { font-weight:800; font-size:19px; letter-spacing:-.01em; }
+  header .badge { background:var(--ambar); color:#3A2B00; font-weight:800; font-size:10px;
+                  letter-spacing:.08em; text-transform:uppercase; border-radius:5px; padding:3px 8px; }
+  header .sp { flex:1; }
+  header button { background:rgba(255,255,255,.14); color:#fff; border:1px solid rgba(255,255,255,.35);
+                  border-radius:7px; padding:7px 14px; font-size:13px; font-weight:600; cursor:pointer; }
+  header button:hover { background:rgba(255,255,255,.24); }
+
+  .wrap { max-width:1180px; margin:0 auto; padding:22px 24px 40px; }
+  .card { background:#fff; border:1px solid var(--hair); border-radius:10px; padding:18px 20px; margin-bottom:18px; }
+
+  .resumo { display:flex; align-items:center; gap:26px; flex-wrap:wrap; }
+  .resumo .big { font-size:40px; font-weight:800; line-height:1; color:var(--navy); }
+  .resumo .lbl { font-size:13px; color:var(--tinta2); }
+  .bar { flex:1; min-width:220px; height:12px; background:#E7ECF3; border-radius:99px; overflow:hidden; }
+  .bar > i { display:block; height:100%; background:var(--verde); }
+
+  .tabs { display:flex; gap:8px; margin:6px 0 16px; }
+  .tabs button { background:#fff; border:1px solid var(--hair); border-radius:8px; padding:8px 16px;
+                 font-size:13px; font-weight:700; color:var(--tinta2); cursor:pointer; }
+  .tabs button.on { background:var(--azul); border-color:var(--azul); color:#fff; }
+
+  .grid { display:grid; grid-template-columns:repeat(2,1fr); gap:18px; }
+  @media (max-width:820px){ .grid { grid-template-columns:1fr; } }
+  h3 { margin:0 0 10px; font-size:14px; letter-spacing:.02em; text-transform:uppercase; color:var(--tinta2); }
+  .row { display:flex; align-items:center; gap:10px; padding:6px 0; border-top:1px solid #EEF1F5; font-size:13px; }
+  .row:first-of-type { border-top:0; }
+  .row .nm { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .row .ct { font-variant-numeric:tabular-nums; color:var(--tinta2); }
+  .mini { width:120px; height:8px; background:#E7ECF3; border-radius:99px; overflow:hidden; flex:none; }
+  .mini > i { display:block; height:100%; background:var(--azul); }
+
+  .filtros { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px; }
+  .filtros input, .filtros select { border:1px solid var(--hair); border-radius:7px; padding:7px 10px; font-size:13px; }
+  .filtros input { flex:1; min-width:180px; }
+
+  table { width:100%; border-collapse:collapse; font-size:12.5px; }
+  th,td { text-align:left; padding:7px 9px; border-bottom:1px solid #EEF1F5; vertical-align:top; }
+  th { position:sticky; top:0; background:#fff; color:var(--tinta2); font-size:11px; text-transform:uppercase; letter-spacing:.03em; }
+  .tbwrap { max-height:60vh; overflow:auto; border:1px solid var(--hair); border-radius:8px; }
+  .pill { display:inline-block; border-radius:99px; padding:2px 9px; font-size:11px; font-weight:700; }
+  .pill.ok { background:#E7F4EC; color:var(--verde); }
+  .pill.no { background:#F1F3F6; color:var(--tinta2); }
+  .num { font-variant-numeric:tabular-nums; }
+
+  .btn-primario { background:var(--azul); color:#fff; border:0; border-radius:8px; padding:9px 18px; font-size:13px; font-weight:700; cursor:pointer; }
+  .btn-primario:hover { background:#0E2F80; }
+  .btn-primario:disabled { opacity:.55; cursor:default; }
+
+  .tec { border:1px solid var(--hair); border-radius:9px; padding:12px 14px; background:#fff; }
+  .tec .top { display:flex; align-items:center; gap:8px; }
+  .tec .dot { width:9px; height:9px; border-radius:50%; background:#C4CAD4; flex:none; }
+  .tec.on .dot { background:var(--verde); }
+  .tec .nm { font-weight:700; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .tec .st { font-size:11px; color:var(--tinta2); }
+  .tec .at { font-size:12.5px; margin-top:6px; color:var(--tinta); }
+  .tec .meta { font-size:11px; color:var(--tinta2); margin-top:3px; }
+
+  .foot { color:#9AA3B2; font-size:11px; text-align:center; margin-top:26px; }
+  .center { text-align:center; padding:60px 20px; color:var(--tinta2); }
+  .center h2 { color:var(--tinta); }
+  code { background:#EEF1F5; border-radius:4px; padding:1px 5px; }
+
+  .acbtn { border:0; background:#F1F3F6; color:var(--tinta2); border-radius:6px; padding:3px 9px; font-size:11px; cursor:pointer; }
+  .acbtn:hover { background:#E7ECF3; }
+  .acbtn.rem:hover { background:#F6E3E1; color:#a3320f; }
+
+  [hidden] { display:none !important; }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="wm">DICON&nbsp;Web</span>
+  <span class="badge">Homologação</span>
+  <span class="sp"></span>
+  <button id="btnAtualizar" onclick="carregar(true)">Atualizar</button>
+</header>
+
+<div class="wrap">
+
+  <div id="carregando" class="center">Carregando&hellip;</div>
+
+  <div id="semacesso" class="center" hidden>
+    <h2>Sem acesso</h2>
+    <p>A conta <b id="saEmail"></b> não está autorizada na console.</p>
+    <p>Peça a um administrador para incluir o seu e-mail na aba <code>Acesso</code> da planilha de resultados de homologação.</p>
+  </div>
+
+  <div id="erro" class="center" hidden>
+    <h2>Erro ao carregar</h2>
+    <p id="erroMsg"></p>
+  </div>
+
+  <div id="app" hidden>
+    <div class="card resumo">
+      <div>
+        <div class="big"><span id="rPct">0</span>%</div>
+        <div class="lbl">cobertura</div>
+      </div>
+      <div>
+        <div class="big num" id="rFeitos">0</div>
+        <div class="lbl">de <span id="rTotal">0</span> locais testados</div>
+      </div>
+      <div>
+        <div class="big num" id="rPend">0</div>
+        <div class="lbl">pendentes</div>
+      </div>
+      <div class="bar"><i id="rBar" style="width:0%"></i></div>
+    </div>
+
+    <div class="tabs">
+      <button id="tabPainel" class="on" onclick="verTab('painel')">Painel</button>
+      <button id="tabVivo" onclick="verTab('vivo')">Ao vivo</button>
+      <button id="tabVist" onclick="verTab('vistorias')">Vistorias</button>
+      <button id="tabRel" onclick="verTab('rel')">Relatório final</button>
+      <button id="tabAcesso" onclick="verTab('acesso')" hidden>Acesso</button>
+    </div>
+
+    <div id="painel">
+      <div class="grid">
+        <div class="card"><h3>Por roteiro</h3><div id="gRoteiro"></div></div>
+        <div class="card"><h3>Por técnico previsto</h3><div id="gTecnico"></div></div>
+        <div class="card"><h3>Por ZE</h3><div id="gZE"></div></div>
+        <div class="card"><h3>Por município</h3><div id="gMun"></div></div>
+      </div>
+    </div>
+
+    <div id="vivo" hidden>
+      <div class="card">
+        <h3 style="display:flex;align-items:center;gap:10px">
+          Técnicos <span id="vivoInfo" class="lbl" style="text-transform:none;letter-spacing:0;font-weight:400"></span>
+        </h3>
+        <div id="vivoCards" class="grid"></div>
+      </div>
+      <div class="card">
+        <h3>Atividade recente</h3>
+        <div class="tbwrap" style="max-height:46vh">
+          <table>
+            <thead><tr><th>Hora</th><th>Técnico</th><th>Evento</th><th>Local</th><th>Roteiro</th></tr></thead>
+            <tbody id="vivoFeed"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div id="rel" hidden>
+      <div class="card">
+        <h3>Gerar relatório consolidado</h3>
+        <div class="cap" style="font-size:13px;color:var(--tinta2);line-height:1.5;margin-bottom:12px">
+          Junta a cobertura (por ZE / município / técnico) e uma tabela por Local
+          (medições, meio sugerido, cabo de rede, observações do técnico, GEL). Gera um
+          <b>PDF</b> que o navegador baixa e é arquivado na pasta <code>DICON / relatorios-finais</code> do Drive.
+          Modo <b>medição</b> — sem juízo de viabilidade.
+        </div>
+        <button id="btnGerarRel" class="btn-primario" onclick="gerarRel()">Gerar relatório</button>
+        <span id="relStatus" class="lbl" style="margin-left:12px;color:var(--tinta2)"></span>
+        <div id="relResultado" hidden style="margin-top:12px;padding:12px 14px;background:#E7F4EC;border:1px solid #B7E0C6;border-radius:8px;font-size:13px">
+          <b>PDF gerado e baixado.</b> <span id="relResumo"></span>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Gerações anteriores</h3>
+        <div class="tbwrap" style="max-height:44vh">
+          <table>
+            <thead><tr><th>Quando</th><th>Por</th><th>Modo</th><th class="num">%</th><th class="num">Testados</th><th>PDF</th></tr></thead>
+            <tbody id="relHist"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div id="vistorias" hidden>
+      <div class="card">
+        <div class="filtros">
+          <input id="fTexto" type="text" placeholder="Buscar local, município, técnico…" oninput="renderVist()">
+          <select id="fRoteiro" onchange="renderVist()"><option value="">Todos os roteiros</option></select>
+          <select id="fStatus" onchange="renderVist()">
+            <option value="">Testado e pendente</option>
+            <option value="sim">Só testados</option>
+            <option value="nao">Só pendentes</option>
+          </select>
+          <span id="fContagem" class="lbl" style="align-self:center;color:var(--tinta2)"></span>
+        </div>
+        <div class="tbwrap">
+          <table>
+            <thead><tr>
+              <th>Local</th><th>ZE</th><th>Município</th><th>Tipo</th><th>Roteiro</th>
+              <th>Técnico previsto</th><th>Status</th><th>Conexão</th><th class="num">Down</th>
+              <th class="num">Lat.</th><th>PDF</th>
+            </tr></thead>
+            <tbody id="tbVist"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div id="acesso" hidden>
+      <div class="card">
+        <h3>Quem acessa a console</h3>
+        <div class="cap" style="font-size:13px;color:var(--tinta2);line-height:1.5;margin-bottom:12px">
+          <b>leitura</b> = vê tudo. <b>admin</b> = também edita esta lista. <b>Desativar</b> tira o acesso sem apagar a linha.
+          O membro também precisa de <b>leitor</b> nas 3 planilhas de referência (Resultados de homolog, Juntas, Roteiros).
+        </div>
+        <div class="filtros">
+          <input id="acEmail" type="email" placeholder="email@tre-ma.jus.br">
+          <select id="acPapel"><option value="leitura">leitura</option><option value="admin">admin</option></select>
+          <button class="btn-primario" onclick="acSalvar()">Adicionar / atualizar</button>
+          <span id="acStatus" class="lbl" style="align-self:center;text-transform:none;letter-spacing:0;color:var(--tinta2)"></span>
+        </div>
+        <div class="tbwrap" style="max-height:56vh">
+          <table>
+            <thead><tr><th>E-mail</th><th>Papel</th><th>Ativo</th><th>Obs.</th><th></th></tr></thead>
+            <tbody id="acTab"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="foot" id="foot"></div>
+  </div>
+
+</div>
+
+<script>
+  var DADOS = null;
+
+  function el(id){ return document.getElementById(id); }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function fmt(n){ return (n===''||n==null||isNaN(n)) ? '—' : (Math.round(n*10)/10); }
+
+  function carregar(forcar){
+    el('carregando').hidden = false;
+    el('semacesso').hidden = true;
+    el('erro').hidden = true;
+    el('app').hidden = true;
+    el('btnAtualizar').disabled = true;
+    google.script.run
+      .withSuccessHandler(onDados)
+      .withFailureHandler(onErro)
+      .carregarPainel(!!forcar);
+  }
+
+  function onErro(e){
+    el('carregando').hidden = true;
+    el('btnAtualizar').disabled = false;
+    var m = (e && e.message) || String(e);
+    if (m.indexOf('SEM_ACESSO') >= 0) { el('semacesso').hidden = false; return; }
+    el('erroMsg').textContent = m;
+    el('erro').hidden = false;
+  }
+
+  function onDados(d){
+    el('carregando').hidden = true;
+    el('btnAtualizar').disabled = false;
+    DADOS = d;
+
+    if (d.sem_acesso) {
+      el('saEmail').textContent = (d.acesso && d.acesso.email) || '(não identificada)';
+      el('semacesso').hidden = false;
+      return;
+    }
+
+    el('rPct').textContent    = d.resumo.pct;
+    el('rFeitos').textContent = d.resumo.feitos;
+    el('rTotal').textContent  = d.resumo.total;
+    el('rPend').textContent   = d.resumo.pendentes;
+    el('rBar').style.width    = d.resumo.pct + '%';
+
+    el('tabAcesso').hidden = !(d.acesso && d.acesso.papel === 'admin');
+
+    grupo('gRoteiro', d.por_roteiro);
+    grupo('gTecnico', d.por_tecnico);
+    grupo('gZE',      d.por_ze);
+    grupo('gMun',     d.por_municipio);
+
+    var sel = el('fRoteiro');
+    sel.length = 1;
+    d.por_roteiro.forEach(function(g){
+      var o = document.createElement('option'); o.value = g.rotulo; o.textContent = g.rotulo; sel.appendChild(o);
+    });
+
+    renderVist();
+    el('foot').textContent = 'DICON Web · homologação · dados de ' +
+      new Date(d.gerado_em).toLocaleString('pt-BR') + ' · SEASU-COINF-STIC';
+    el('app').hidden = false;
+    if (TAB === 'vivo') carregarVivo();
+  }
+
+  function grupo(id, arr){
+    el(id).innerHTML = (arr || []).map(function(g){
+      return '<div class="row">' +
+        '<span class="nm" title="'+esc(g.rotulo)+'">'+esc(g.rotulo)+'</span>' +
+        '<span class="mini"><i style="width:'+g.pct+'%"></i></span>' +
+        '<span class="ct num">'+g.feitos+'/'+g.total+'</span></div>';
+    }).join('') || '<div class="row"><span class="nm">—</span></div>';
+  }
+
+  var TAB = 'painel', vivoTimer = null;
+
+  function verTab(t){
+    TAB = t;
+    el('tabPainel').classList.toggle('on', t==='painel');
+    el('tabVivo').classList.toggle('on', t==='vivo');
+    el('tabVist').classList.toggle('on', t==='vistorias');
+    el('tabRel').classList.toggle('on', t==='rel');
+    el('tabAcesso').classList.toggle('on', t==='acesso');
+    el('painel').hidden    = (t!=='painel');
+    el('vivo').hidden      = (t!=='vivo');
+    el('vistorias').hidden = (t!=='vistorias');
+    el('rel').hidden       = (t!=='rel');
+    el('acesso').hidden    = (t!=='acesso');
+    if (t==='vivo') { carregarVivo(); iniciarVivoTimer(); } else { pararVivoTimer(); }
+    if (t==='rel')  { atualizarBotaoRel(); carregarRelHist(); }
+    if (t==='acesso') { carregarAcesso(); }
+  }
+
+  function atualizarBotaoRel(){
+    var pct = DADOS && DADOS.resumo ? DADOS.resumo.pct : 0;
+    el('btnGerarRel').textContent = (pct >= 100)
+      ? 'Gerar relatório final'
+      : ('Gerar relatório parcial (' + pct + '% — faltam ' + (DADOS.resumo.pendentes) + ')');
+  }
+
+  function b64ToBlob(b64, mime){
+    var bin = atob(b64), len = bin.length, arr = new Uint8Array(len);
+    for (var i=0;i<len;i++) arr[i] = bin.charCodeAt(i);
+    return new Blob([arr], { type: mime });
+  }
+
+  function gerarRel(){
+    el('btnGerarRel').disabled = true;
+    el('relStatus').textContent = 'Gerando… (pode levar até 1 min)';
+    el('relResultado').hidden = true;
+    google.script.run
+      .withSuccessHandler(function(d){
+        el('btnGerarRel').disabled = false;
+        if (!d || !d.ok) { el('relStatus').textContent = 'Falhou.'; return; }
+        try {
+          var url = URL.createObjectURL(b64ToBlob(d.pdf_b64, 'application/pdf'));
+          var a = document.createElement('a');
+          a.href = url; a.download = d.filename || 'DICON-relatorio.pdf';
+          document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
+        } catch (e) {}
+        el('relStatus').textContent = '';
+        el('relResumo').innerHTML = 'Cobertura ' + d.cobertura_pct + '% (' + d.feitos + '/' + d.total + ')' +
+          (d.parcial ? ' — PARCIAL' : '') + ' · ' + esc(d.filename || '') +
+          (d.arquivo_url ? ' · <a href="' + esc(d.arquivo_url) + '" target="_blank" rel="noopener">arquivado no Drive</a>' : '');
+        el('relResultado').hidden = false;
+        carregarRelHist();
+      })
+      .withFailureHandler(function(e){
+        el('btnGerarRel').disabled = false;
+        el('relStatus').textContent = 'Erro: ' + ((e && e.message) || e);
+      })
+      .gerarRelatorioFinal('medicao');
+  }
+
+  function carregarRelHist(){
+    google.script.run.withSuccessHandler(function(d){
+      if (!d || d.sem_acesso) return;
+      el('relHist').innerHTML = (d.historico || []).map(function(h){
+        var pdf = h.pdf_url ? '<a href="'+esc(h.pdf_url)+'" target="_blank" rel="noopener">abrir</a>' : '—';
+        return '<tr><td class="num">'+esc(h.gerado_em)+'</td><td>'+esc(h.por)+'</td>' +
+          '<td>'+esc(h.modo)+'</td><td class="num">'+esc(h.cobertura_pct)+'%</td>' +
+          '<td class="num">'+esc(h.feitos)+'/'+esc(h.total)+'</td><td>'+pdf+'</td></tr>';
+      }).join('') || '<tr><td colspan="6">Nenhum relatório gerado ainda.</td></tr>';
+    }).withFailureHandler(function(){}).listarRelatoriosFinais();
+  }
+  function iniciarVivoTimer(){ pararVivoTimer(); vivoTimer = setInterval(function(){ if (TAB==='vivo') carregarVivo(); }, 30000); }
+  function pararVivoTimer(){ if (vivoTimer) { clearInterval(vivoTimer); vivoTimer = null; } }
+
+  var EV_ROTULO = {
+    abriu_app:'abriu o DICON', iniciou_diagnostico:'iniciou diagnóstico',
+    rodou_checagem:'rodou checagem', salvou:'salvou o resultado',
+    transmitiu:'transmitiu', finalizou:'finalizou', abandonou:'saiu do assistente'
+  };
+
+  function carregarVivo(){
+    google.script.run
+      .withSuccessHandler(function(d){
+        if (!d || d.sem_acesso) return;
+        var ps = d.presencas || [];
+        var online = ps.filter(function(p){ return p.online; }).length;
+        el('vivoInfo').textContent = online + ' online · ' + ps.length + ' no total · atualizado ' +
+          new Date(d.gerado_em).toLocaleTimeString('pt-BR');
+        el('vivoCards').innerHTML = ps.map(function(p){
+          var quando = (p.minutos==null) ? 'sem check-in'
+            : (p.minutos<=1 ? 'agora' : ('visto há '+p.minutos+' min'));
+          return '<div class="tec '+(p.online?'on':'')+'">' +
+            '<div class="top"><span class="dot"></span>' +
+            '<span class="nm" title="'+esc(p.tecnico)+'">'+esc(p.tecnico||p.email||'—')+'</span>' +
+            '<span class="st">'+esc(quando)+'</span></div>' +
+            '<div class="at">'+esc(p.atividade_atual||'—')+'</div>' +
+            '<div class="meta">'+esc(p.roteiro||'')+(p.versao_dicon?(' · v'+esc(p.versao_dicon)):'')+'</div>' +
+          '</div>';
+        }).join('') || '<div class="row"><span class="nm">Nenhum técnico registrou check-in ainda.</span></div>';
+
+        el('vivoFeed').innerHTML = (d.eventos||[]).map(function(e){
+          var loc = e.local_id ? (esc(e.municipio? (e.municipio+' · ') : '') + 'ZE '+esc(e.zona) + (e.tipo_local?(' · '+esc(e.tipo_local)):'')) : '—';
+          return '<tr>' +
+            '<td class="num">'+esc(e.hora)+'</td>' +
+            '<td>'+esc(e.tecnico||'')+'</td>' +
+            '<td>'+esc(EV_ROTULO[e.tipo]||e.tipo||'')+(e.detalhe?(' — '+esc(e.detalhe)):'')+'</td>' +
+            '<td>'+loc+'</td>' +
+            '<td class="num">'+esc(e.roteiro||'')+'</td>' +
+          '</tr>';
+        }).join('') || '<tr><td colspan="5">Nenhum evento ainda.</td></tr>';
+      })
+      .withFailureHandler(function(){ /* silencioso no auto-refresh */ })
+      .carregarAoVivo();
+  }
+
+  function renderVist(){
+    if (!DADOS) return;
+    var q = (el('fTexto').value || '').toLowerCase().trim();
+    var fr = el('fRoteiro').value;
+    var fs = el('fStatus').value;
+    var linhas = DADOS.vistorias.filter(function(l){
+      if (fr && (l.roteiro_rotulo||('Roteiro '+l.roteiro)) !== fr) return false;
+      if (fs === 'sim' && !l.testado) return false;
+      if (fs === 'nao' && l.testado) return false;
+      if (q) {
+        var alvo = (l.nome+' '+l.municipio+' ZE'+l.zona+' '+(l.tecnico_previsto||'')+' '+(l.tecnico||'')).toLowerCase();
+        if (alvo.indexOf(q) < 0) return false;
+      }
+      return true;
+    });
+    el('fContagem').textContent = linhas.length + ' local(is)';
+    el('tbVist').innerHTML = linhas.map(function(l){
+      var st = l.testado
+        ? '<span class="pill ok">testado</span> <span class="lbl">'+esc(l.quando)+'</span>'
+        : '<span class="pill no">não testado</span>';
+      var pdf = l.pdf_url
+        ? '<a href="'+esc(l.pdf_url)+'" target="_blank" rel="noopener">abrir</a>'
+        : '—';
+      return '<tr>' +
+        '<td><b>'+esc(l.nome||l.local_id)+'</b></td>' +
+        '<td class="num">'+esc(l.zona)+'</td>' +
+        '<td>'+esc(l.municipio)+'</td>' +
+        '<td>'+esc(l.tipo)+'</td>' +
+        '<td class="num">'+esc(l.roteiro)+'</td>' +
+        '<td>'+esc(l.tecnico_previsto||'')+'</td>' +
+        '<td>'+st+(l.testado && l.tecnico ? ' · '+esc(l.tecnico) : '')+'</td>' +
+        '<td>'+esc(l.conexao||'')+'</td>' +
+        '<td class="num">'+fmt(l.download_mbps)+'</td>' +
+        '<td class="num">'+fmt(l.latencia_ms)+'</td>' +
+        '<td>'+pdf+'</td>' +
+        '</tr>';
+    }).join('');
+  }
+
+  /* ========================= ABA ACESSO (admin) ========================= */
+
+  function carregarAcesso(){
+    el('acTab').innerHTML = '<tr><td colspan="5"><span class="lbl" style="text-transform:none;letter-spacing:0;color:var(--tinta2)">Carregando…</span></td></tr>';
+    google.script.run
+      .withSuccessHandler(function(d){
+        if (!d || !d.linhas){ el('acTab').innerHTML = ''; return; }
+        el('acTab').innerHTML = d.linhas.map(function(l){
+          var boot = (String(l.email).toLowerCase() === d.bootstrap);
+          var acoes = boot ? '' :
+            '<button class="acbtn" onclick="acEditar(\''+esc(l.email)+'\',\''+esc(l.papel)+'\')">editar</button> ' +
+            (l.ativo
+              ? '<button class="acbtn rem" onclick="acRemover(\''+esc(l.email)+'\')">desativar</button>'
+              : '<button class="acbtn" onclick="acReativar(\''+esc(l.email)+'\',\''+esc(l.papel)+'\')">reativar</button>');
+          return '<tr>' +
+            '<td>'+esc(l.email)+(boot?' <span class="lbl" style="text-transform:none;letter-spacing:0">(inicial)</span>':'')+'</td>' +
+            '<td>'+esc(l.papel)+'</td>' +
+            '<td>'+(l.ativo?'<span class="pill ok">sim</span>':'<span class="pill no">não</span>')+'</td>' +
+            '<td>'+esc(l.obs||'')+'</td>' +
+            '<td>'+acoes+'</td>' +
+          '</tr>';
+        }).join('') || '<tr><td colspan="5">—</td></tr>';
+      })
+      .withFailureHandler(function(e){
+        el('acTab').innerHTML = '<tr><td colspan="5">Erro: '+esc((e&&e.message)||e)+'</td></tr>';
+      })
+      .listarAcesso();
+  }
+
+  function acEditar(email, papel){ el('acEmail').value = email; el('acPapel').value = papel; el('acEmail').focus(); }
+
+  function acSalvar(){
+    var email = (el('acEmail').value || '').trim();
+    if (!email){ el('acStatus').textContent = 'Informe um e-mail.'; return; }
+    el('acStatus').textContent = 'Salvando…';
+    google.script.run
+      .withSuccessHandler(function(){ el('acStatus').textContent = 'Salvo.'; el('acEmail').value = ''; carregarAcesso(); })
+      .withFailureHandler(function(e){ el('acStatus').textContent = 'Erro: ' + ((e && e.message) || e); })
+      .salvarAcesso({ email: email, papel: el('acPapel').value, ativo: true });
+  }
+
+  function acRemover(email){
+    el('acStatus').textContent = 'Desativando…';
+    google.script.run
+      .withSuccessHandler(function(){ el('acStatus').textContent = ''; carregarAcesso(); })
+      .withFailureHandler(function(e){ el('acStatus').textContent = 'Erro: ' + ((e && e.message) || e); })
+      .removerAcesso(email);
+  }
+
+  function acReativar(email, papel){
+    el('acStatus').textContent = 'Reativando…';
+    google.script.run
+      .withSuccessHandler(function(){ el('acStatus').textContent = ''; carregarAcesso(); })
+      .withFailureHandler(function(e){ el('acStatus').textContent = 'Erro: ' + ((e && e.message) || e); })
+      .salvarAcesso({ email: email, papel: papel, ativo: true });
+  }
+
+  carregar();
+</script>
+</body>
+</html>
