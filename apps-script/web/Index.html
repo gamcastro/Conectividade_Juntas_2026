@@ -161,23 +161,21 @@
         <h3>Gerar relatório consolidado</h3>
         <div class="cap" style="font-size:13px;color:var(--tinta2);line-height:1.5;margin-bottom:12px">
           Junta a cobertura (por ZE / município / técnico) e uma tabela por Local
-          (medições, meio sugerido, cabo de rede, observações do técnico, GEL). Sai um
-          <b>Google Doc + PDF</b> na pasta <code>relatorios-finais/</code> do Drive.
+          (medições, meio sugerido, cabo de rede, observações do técnico, GEL). Gera um
+          <b>PDF</b> que o navegador baixa — salve na pasta do Drive se quiser arquivar.
           Modo <b>medição</b> — sem juízo de viabilidade.
         </div>
         <button id="btnGerarRel" class="btn-primario" onclick="gerarRel()">Gerar relatório</button>
         <span id="relStatus" class="lbl" style="margin-left:12px;color:var(--tinta2)"></span>
         <div id="relResultado" hidden style="margin-top:12px;padding:12px 14px;background:#E7F4EC;border:1px solid #B7E0C6;border-radius:8px;font-size:13px">
-          <b>Relatório gerado.</b>
-          <a id="relPdf" href="#" target="_blank" rel="noopener">abrir PDF</a> ·
-          <a id="relDoc" href="#" target="_blank" rel="noopener">abrir Doc</a>
+          <b>PDF gerado e baixado.</b> <span id="relResumo"></span>
         </div>
       </div>
       <div class="card">
         <h3>Gerações anteriores</h3>
         <div class="tbwrap" style="max-height:44vh">
           <table>
-            <thead><tr><th>Quando</th><th>Por</th><th>Modo</th><th class="num">Cobertura</th><th>Links</th></tr></thead>
+            <thead><tr><th>Quando</th><th>Por</th><th>Modo</th><th class="num">%</th><th class="num">Testados</th></tr></thead>
             <tbody id="relHist"></tbody>
           </table>
         </div>
@@ -310,6 +308,12 @@
       : ('Gerar relatório parcial (' + pct + '% — faltam ' + (DADOS.resumo.pendentes) + ')');
   }
 
+  function b64ToBlob(b64, mime){
+    var bin = atob(b64), len = bin.length, arr = new Uint8Array(len);
+    for (var i=0;i<len;i++) arr[i] = bin.charCodeAt(i);
+    return new Blob([arr], { type: mime });
+  }
+
   function gerarRel(){
     el('btnGerarRel').disabled = true;
     el('relStatus').textContent = 'Gerando… (pode levar até 1 min)';
@@ -318,9 +322,15 @@
       .withSuccessHandler(function(d){
         el('btnGerarRel').disabled = false;
         if (!d || !d.ok) { el('relStatus').textContent = 'Falhou.'; return; }
-        el('relStatus').textContent = 'Cobertura ' + d.cobertura_pct + '% (' + d.feitos + '/' + d.total + ')' + (d.parcial ? ' — PARCIAL' : '');
-        el('relPdf').href = d.pdf_url;
-        el('relDoc').href = d.doc_url;
+        try {
+          var url = URL.createObjectURL(b64ToBlob(d.pdf_b64, 'application/pdf'));
+          var a = document.createElement('a');
+          a.href = url; a.download = d.filename || 'DICON-relatorio.pdf';
+          document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
+        } catch (e) {}
+        el('relStatus').textContent = '';
+        el('relResumo').textContent = 'Cobertura ' + d.cobertura_pct + '% (' + d.feitos + '/' + d.total + ')' + (d.parcial ? ' — PARCIAL' : '') + ' · ' + (d.filename || '');
         el('relResultado').hidden = false;
         carregarRelHist();
       })
@@ -337,8 +347,7 @@
       el('relHist').innerHTML = (d.historico || []).map(function(h){
         return '<tr><td class="num">'+esc(h.gerado_em)+'</td><td>'+esc(h.por)+'</td>' +
           '<td>'+esc(h.modo)+'</td><td class="num">'+esc(h.cobertura_pct)+'%</td>' +
-          '<td><a href="'+esc(h.pdf_url)+'" target="_blank" rel="noopener">PDF</a> · ' +
-          '<a href="'+esc(h.doc_url)+'" target="_blank" rel="noopener">Doc</a></td></tr>';
+          '<td class="num">'+esc(h.feitos)+'/'+esc(h.total)+'</td></tr>';
       }).join('') || '<tr><td colspan="5">Nenhum relatório gerado ainda.</td></tr>';
     }).withFailureHandler(function(){}).listarRelatoriosFinais();
   }

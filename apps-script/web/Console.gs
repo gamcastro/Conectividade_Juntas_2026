@@ -14,8 +14,12 @@
 
 var WEB_ABA_ACESSO     = 'Acesso';
 var WEB_BOOTSTRAP_ADMIN = 'george.castro@tre-ma.jus.br';
-// Pasta raiz "DICON" no Shared Drive da coordenacao (nao e' segredo -- so' um id).
-// Sob ela a console cria relatorios/ , gel/<local_id>/ , relatorios-finais/ .
+// Pasta raiz "DICON" no Shared Drive da coordenacao. AINDA NAO USADA: escrever
+// no Drive daqui exigiria o escopo 'drive' no manifest, e a Execution API que o
+// DICON de campo usa exige que o token do DICON tenha TODOS os escopos do
+// script (o do DICON so' tem 'spreadsheets'). Fica para a Fase 4, quando o
+// token de servico tiver 'drive'. Por ora, o relatorio final e' baixado pelo
+// navegador (ver web/RelatorioFinal.gs).
 var WEB_DRIVE_ROOT = '1ZaV3-VYAgwXJ6knuODCK6lw9FCPDjZJf';
 
 /* ============================ PAGINA ============================ */
