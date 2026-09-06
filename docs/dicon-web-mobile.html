@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DICON Web no celular — Guia rápido</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --je:#123FA8; --je-hi:#0E2F80; --deep:#0A1E4D;
+    --ink:#14181F; --steel:#5C6472; --steel-2:#8891A0;
+    --paper:#F4F5F8; --card:#FFFFFF; --line:#D6DBE6;
+    --ok:#1B7F3B; --warn:#B77F00; --bad:#BC352A;
+    --code-bg:#0E2244; --code-ink:#DCE6FF; --code-line:#25407A;
+    --shadow: 0 1px 2px rgba(15,23,42,.06), 0 8px 24px -12px rgba(15,23,42,.18);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --je:#6E9BFF; --je-hi:#8BB0FF; --deep:#0A1428;
+      --ink:#E6EAF2; --steel:#AEB6C4; --steel-2:#7D8698;
+      --paper:#0F1319; --card:#151A22; --line:#262D39;
+      --ok:#4FC177; --warn:#E8B93E; --bad:#E8695C;
+      --code-bg:#0C1626; --code-ink:#D9E4FF; --code-line:#233252;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 28px -14px rgba(0,0,0,.6);
+    }
+  }
+  :root[data-theme="dark"]{
+    --je:#6E9BFF; --je-hi:#8BB0FF; --deep:#0A1428;
+    --ink:#E6EAF2; --steel:#AEB6C4; --steel-2:#7D8698;
+    --paper:#0F1319; --card:#151A22; --line:#262D39;
+    --ok:#4FC177; --warn:#E8B93E; --bad:#E8695C;
+    --code-bg:#0C1626; --code-ink:#D9E4FF; --code-line:#233252;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 28px -14px rgba(0,0,0,.6);
+  }
+
+  *{ box-sizing:border-box; }
+  html{ color-scheme:light dark; }
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:"Archivo", ui-sans-serif, system-ui, sans-serif;
+    -webkit-font-smoothing:antialiased; line-height:1.55;
+  }
+  a{ color:var(--je); }
+
+  .band{
+    background:
+      radial-gradient(120% 260% at 8% 0%, rgba(255,255,255,.06), transparent 55%),
+      linear-gradient(135deg, var(--deep), var(--je-hi) 130%);
+    color:#EFF3FF; padding:34px 22px 30px;
+  }
+  .inner{ max-width:720px; margin:0 auto; }
+  .band .kick{ font-family:"IBM Plex Mono", monospace; font-size:.72rem; letter-spacing:.18em;
+               text-transform:uppercase; opacity:.8; }
+  .band h1{ font-weight:900; font-size:1.7rem; letter-spacing:-.01em; margin:.35rem 0 .3rem; color:#fff; }
+  .band p{ margin:.2rem 0 0; opacity:.92; font-size:.98rem; }
+
+  main{ max-width:720px; margin:0 auto; padding:26px 22px 60px; }
+
+  .card{ background:var(--card); border:1px solid var(--line); border-radius:14px;
+         padding:18px 20px; margin:16px 0; box-shadow:var(--shadow); }
+  .card h2{ font-size:1.06rem; font-weight:800; margin:0 0 4px; }
+  .card h2 .n{ display:inline-grid; place-items:center; width:1.55rem; height:1.55rem; margin-right:.5rem;
+               border-radius:50%; background:var(--je); color:#fff; font-size:.85rem; font-weight:800;
+               vertical-align:.05em; }
+  .card .sub{ color:var(--steel); font-size:.9rem; margin:0 0 10px; }
+
+  ol,ul{ margin:8px 0; padding-left:22px; }
+  li{ margin:5px 0; }
+  b{ font-weight:700; }
+
+  code{ font-family:"IBM Plex Mono", monospace; font-size:.86em; background:rgba(18,63,168,.09);
+        border:1px solid rgba(18,63,168,.16); border-radius:5px; padding:.05em .4em; }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]) code{ background:rgba(110,155,255,.14); border-color:rgba(110,155,255,.28); }
+  }
+  .url{ display:block; font-family:"IBM Plex Mono", monospace; font-size:.8rem; line-height:1.5;
+        background:var(--code-bg); color:var(--code-ink); border:1px solid var(--code-line);
+        border-radius:9px; padding:10px 12px; margin:8px 0; word-break:break-all; }
+  .url .q{ color:#8BE0A6; }
+
+  .tag{ display:inline-block; font-family:"IBM Plex Mono", monospace; font-size:.7rem; font-weight:600;
+        letter-spacing:.06em; text-transform:uppercase; padding:.16em .55em; border-radius:5px;
+        border:1px solid var(--line); color:var(--steel); }
+
+  .box{ border-radius:12px; padding:12px 15px; margin:14px 0; font-size:.94rem; border:1px solid; }
+  .box.warn{ border-color:color-mix(in srgb, var(--warn) 45%, var(--line)); background:color-mix(in srgb, var(--warn) 9%, var(--card)); }
+  .box.bad{ border-color:color-mix(in srgb, var(--bad) 45%, var(--line)); background:color-mix(in srgb, var(--bad) 9%, var(--card)); }
+  .box.ok{ border-color:color-mix(in srgb, var(--ok) 45%, var(--line)); background:color-mix(in srgb, var(--ok) 9%, var(--card)); }
+  .box b{ display:block; margin-bottom:3px; }
+
+  table{ width:100%; border-collapse:collapse; font-size:.9rem; margin:8px 0; }
+  td,th{ border:1px solid var(--line); padding:7px 10px; text-align:left; vertical-align:top; }
+  th{ background:color-mix(in srgb, var(--je) 8%, var(--card)); font-weight:700; }
+
+  footer{ max-width:720px; margin:0 auto; padding:0 22px 50px; color:var(--steel-2); font-size:.8rem; }
+  hr{ border:0; border-top:1px solid var(--line); margin:22px 0; }
+</style>
+</head>
+<body>
+
+<div class="band"><div class="inner">
+  <div class="kick">DICON · Diagnóstico de Conectividade · Juntas Especiais 2026</div>
+  <h1>DICON Web no celular</h1>
+  <p>Guia rápido para o coordenador instalar a console (versão mobile) na tela inicial do celular.</p>
+</div></div>
+
+<main>
+
+  <div class="card">
+    <h2>O que é</h2>
+    <p class="sub">A <b>DICON Web</b> é a console de acompanhamento das vistorias de conectividade — cobertura,
+      técnicos ao vivo, lista de locais e relatório final. Tem duas telas:</p>
+    <table>
+      <tr><th>Tela</th><th>Para quê</th><th>Endereço</th></tr>
+      <tr>
+        <td><b>Desktop</b> <span class="tag">?app=web</span></td>
+        <td>Computador — tudo (inclui Relatório final e Acesso).</td>
+        <td><code>&hellip;/exec?app=web</code></td>
+      </tr>
+      <tr>
+        <td><b>Mobile</b> <span class="tag">?app=mobile</span></td>
+        <td>Celular — Ao vivo, Vistorias e Painel, enxuto.</td>
+        <td><code>&hellip;/exec?app=mobile</code></td>
+      </tr>
+    </table>
+    <p class="sub" style="margin-top:10px">Endereço da versão mobile (<b>produção</b>):</p>
+    <span class="url">https://script.google.com/macros/s/AKfycbylhIAahOf0coAHwpOH2OCMbySmfeZR1feT-JFG5aw69GGrtRWYAnxtcL4b3carWYNy0w/exec<span class="q">?app=mobile</span></span>
+    <p class="sub" style="margin:0">Na console de desktop também há um atalho <b>📱 mobile</b> no topo.</p>
+  </div>
+
+  <div class="box bad">
+    <b>Antes de tudo: abra no Chrome, não na janelinha do WhatsApp</b>
+    Links abertos dentro do WhatsApp (ou outro app) usam um navegador interno que <b>não está logado
+    na conta Google</b> → dá <i>"Não foi possível abrir o arquivo"</i>. Sempre abra a URL no
+    <b>Google Chrome</b> do celular.
+  </div>
+
+  <div class="card">
+    <h2><span class="n">1</span>Confirmar a conta no Chrome do celular</h2>
+    <p class="sub">A console só abre para contas <code>@tre-ma.jus.br</code> autorizadas.</p>
+    <ol>
+      <li>No Chrome, abra <code>myaccount.google.com</code>.</li>
+      <li>Toque no <b>círculo do perfil</b> (canto superior direito) → veja as contas logadas.</li>
+      <li>A conta <b>ativa</b> precisa ser a corporativa, ex.: <code>george.castro@tre-ma.jus.br</code>
+        (aparece "Gerenciado por tre-ma.jus.br").</li>
+      <li>Se não estiver: <b>Adicionar outra conta</b> → entrar com a conta <code>@tre-ma.jus.br</code>.</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h2><span class="n">2</span>Levar o endereço até o celular</h2>
+    <p class="sub">Digitar a URL na mão dá erro (é enorme). Escolha um jeito:</p>
+
+    <p style="margin:12px 0 4px"><b>A) Enviar do computador (Chrome sincronizado) — recomendado</b></p>
+    <ol>
+      <li>No <b>Chrome do computador</b>, abra a URL mobile (acima) — confira que carrega.</li>
+      <li><b>⋮</b> (três pontos) → <b>Transmitir, salvar e compartilhar</b> → <b>Enviar para seu dispositivo</b>.</li>
+      <li>Escolha o seu celular na lista.</li>
+      <li>No celular aparece uma <b>notificação do Chrome</b> → toque nela → a página abre no Chrome do celular.</li>
+    </ol>
+
+    <p style="margin:14px 0 4px"><b>B) QR Code</b></p>
+    <ol>
+      <li>No Chrome do computador, na mesma URL: <b>⋮</b> → <b>Transmitir, salvar e compartilhar</b> → <b>Criar QR code</b>.</li>
+      <li>Abra a <b>câmera do celular</b> e aponte para o QR → toque no link que aparece → abre no Chrome.</li>
+    </ol>
+
+    <p style="margin:14px 0 4px"><b>C) E-mail para você mesmo</b></p>
+    <ol>
+      <li>Mande a URL por e-mail para você mesmo.</li>
+      <li>Abra no <b>Gmail</b> → toque no link. Se abrir numa janelinha, use <b>⋮ → Abrir no Chrome</b>.</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h2><span class="n">3</span>Instalar na tela inicial</h2>
+    <p class="sub">Com a console <b>já aberta no Chrome do celular</b>:</p>
+    <ol>
+      <li><b>⋮</b> (três pontos, canto superior direito).</li>
+      <li>Toque em <b>"Instalar e criar atalho"</b> (em algumas versões: <b>"Adicionar à tela inicial"</b>).</li>
+      <li>Escolha <b>Instalar</b> (abre em tela cheia, sem barra de endereço).</li>
+      <li>Ajuste o nome para <b>DICON Web</b> → <b>Adicionar / Instalar</b>.</li>
+      <li>O ícone aparece na tela inicial. Pronto — toque nele para abrir.</li>
+    </ol>
+  </div>
+
+  <hr>
+
+  <div class="card">
+    <h2>Se der problema</h2>
+    <table>
+      <tr><th>Aparece</th><th>Causa / o que fazer</th></tr>
+      <tr>
+        <td><i>"Não foi possível abrir o arquivo"</i> (com logo do Google Drive)</td>
+        <td>Abriu no navegador interno de outro app (WhatsApp, e-mail) <b>ou</b> a conta ativa não é a
+          <code>@tre-ma.jus.br</code>. Abra no <b>Chrome</b> e confira a conta (passo 1).</td>
+      </tr>
+      <tr>
+        <td><b>"Sem acesso"</b> mostrando o seu e-mail</td>
+        <td>O e-mail não está autorizado. Um administrador precisa incluí-lo na aba <code>Acesso</code>
+          (na própria console desktop → aba <b>Acesso</b>).</td>
+      </tr>
+      <tr>
+        <td>Tela de <b>login do Google</b></td>
+        <td>Escolha a conta <code>@tre-ma.jus.br</code>. Na 1ª vez, também aparece uma tela pedindo para
+          <b>autorizar o script</b> → autorize.</td>
+      </tr>
+      <tr>
+        <td>O <b>Ao vivo</b> não atualiza sozinho</td>
+        <td>Ele atualiza a cada ~45&nbsp;s e <b>pausa quando o celular está com a tela travada</b> ou o
+          Chrome em segundo plano. Toque no <b>↻</b> no topo para forçar.</td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="box ok">
+    <b>Deu certo quando…</b>
+    o ícone <b>DICON Web</b> está na tela inicial e, ao tocar, abre a faixa com
+    <b>cobertura % · testados · pendentes</b> e as abas <b>Ao vivo · Vistorias · Painel</b>.
+  </div>
+
+</main>
+
+<footer>
+  DICON Web · SEASU / COINF / STIC · TRE-MA — Juntas Eleitorais Especiais 2026.
+  A versão de desktop (<code>?app=web</code>) tem o Relatório final e a gestão de Acesso.
+</footer>
+
+</body>
+</html>
