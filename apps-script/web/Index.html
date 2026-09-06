@@ -660,9 +660,28 @@
     try { return t.normalize('NFD').replace(new RegExp('[\\u0300-\\u036f]', 'g'), ''); } catch (e){ return t; }
   }
 
-  // Port fiel do ConvertFrom-VistoriaGel (src/core/VistoriaGel.ps1): mesmos
-  // marcadores/regex -- resposta ANTES de "R. :", "Coordenadas:" DEPOIS do valor,
-  // captura para no primeiro "?".
+  // Extrator dos campos do GEL a partir do texto lido pelo pdf.js.
+  //
+  // No PDF real do GEL a resposta vem DEPOIS do marcador "R. :":
+  //   "<pergunta>?  R. :  <resposta>  <proxima pergunta>?  R. : ..."
+  // (o ConvertFrom-VistoriaGel do desktop captura ANTES do "R. :" -- e' outra
+  // ordem de leitura, do PdfPig; aqui e' a do pdf.js). A resposta vai do "R. :"
+  // ate' o proximo "R. :" ou o proximo rotulo de pergunta conhecido ("parede").
+  var GEL_PAREDES = [
+    'Localizacao do Quadro de Energia', 'Tipo de local', 'Localizacao', 'Observacoes',
+    'Coordenadas', 'Infraestrutura', 'Instalacoes eletricas', 'Dados do local',
+    'Quantidade de salas necessarias', 'Ha abastecimento de agua',
+    'A climatizacao ou ventilacao', 'Ha iluminacao', 'Ha agua potavel',
+    'Selecione os tipos de ambientes', 'Ha energia eletrica', 'Ha quantas tomadas funcionando',
+    'tomadas funcionando', 'Qual a tensao da rede eletrica', 'tensao da rede eletrica',
+    'Ha necessidade de extensao eletrica', 'necessidade de extensao eletrica',
+    'Qual o numero da unidade consumidora', 'numero da unidade consumidora',
+    'Qual a esfera administrativa', 'esfera administrativa', 'O predio esta em reforma',
+    'Qual o nome do tecnico', 'nome do tecnico ou empresa responsavel',
+    'Qual o telefone do tecnico', 'telefone do tecnico ou empresa responsavel'
+  ];
+  var GEL_RE_MARC = 'R\\s*\\.?\\s*:';
+
   function gelExtrairCampos(texto){
     var t = gelSemAcento(String(texto || '').replace(/\s+/g, ' ').trim());
     var o = {};
@@ -675,33 +694,47 @@
       o.precisao_m = mc[3].replace(',', '.');
     }
 
+    // resposta = do "R. :" que segue a pergunta ate' o proximo "R. :" / parede.
     function resp(rxPergunta){
-      var rx = new RegExp(rxPergunta + '\\s*[?:]?\\s*([^?]{1,80}?)\\s*R\\s*\\.?\\s*:', 'i');
-      var m = t.match(rx);
-      return m ? m[1].replace(/\s+/g, ' ').trim() : '';
+      var m = t.match(new RegExp(rxPergunta + '[^?:]{0,40}?[?:]?\\s*' + GEL_RE_MARC + '\\s*', 'i'));
+      if (!m) return '';
+      var resto = t.slice(m.index + m[0].length);
+      var mNext = resto.match(new RegExp(GEL_RE_MARC));
+      if (mNext) resto = resto.slice(0, mNext.index);
+      var corte = resto.length;
+      GEL_PAREDES.forEach(function(p){
+        var i = resto.search(new RegExp('\\b' + p, 'i'));
+        if (i >= 0 && i < corte) corte = i;
+      });
+      return resto.slice(0, corte).replace(/\s+/g, ' ').replace(/[;,.\s]+$/, '').trim();
     }
 
-    o.esfera_administrativa = resp('esfera administrativa do local vistoriado');
-    var ml = t.match(/\bLocalizacao\s+(Urbano|Rural|Semi[ -]?urbano|Semiurbano)\b/i);
-    if (ml) o.localizacao = ml[1];
-    var mt = t.match(/Tipo de local\s+(?!que\b)([^?:]{1,38}?)\s*R\s*\.?\s*:/i);
-    if (mt) o.tipo_local = mt[1].replace(/\s+/g, ' ').trim();
+    o.esfera_administrativa = resp('esfera administrativa do local vistoriado') || resp('esfera administrativa');
 
-    o.salas_necessarias = resp('Quantidade de salas necessarias para funcionar como secao eleitoral');
+    var ml = t.match(/\bLocalizacao\s+(?:R\s*\.?\s*:\s*)?(Urbano|Rural|Semi[ -]?urbano|Semiurbano)\b/i);
+    o.localizacao = ml ? ml[1] : resp('Localizacao(?! do Quadro)');
+
+    o.tipo_local = resp('Tipo de local\\s+(?!que\\b)');
+
+    o.salas_necessarias = resp('Quantidade de salas necessarias para funcionar como secao eleitoral') ||
+                          resp('Quantidade de salas necessarias');
     o.agua              = resp('Ha abastecimento de agua');
-    o.climatizacao      = resp('A climatizacao ou ventilacao e feita por');
+    o.climatizacao      = resp('A climatizacao ou ventilacao e feita por') || resp('A climatizacao ou ventilacao');
     o.iluminacao        = resp('Ha iluminacao');
-    o.agua_potavel      = resp('Ha agua potavel disponivel para mesarias\\S* e eleitoras\\S*');
+    o.agua_potavel      = resp('Ha agua potavel disponivel para mesarias\\S* e eleitoras\\S*') ||
+                          resp('Ha agua potavel disponivel');
     o.predio_reforma    = resp('O predio esta em reforma');
 
     o.quadro_energia    = resp('Localizacao do Quadro de Energia');
     o.energia_eletrica  = resp('Ha energia eletrica');
-    o.eletrica_tomadas  = resp('quantas tomadas funcionando');
-    o.eletrica_tensao   = resp('tensao da rede eletrica');
-    o.eletrica_extensao = resp('necessidade de extensao eletrica');
+    o.eletrica_tomadas  = resp('Ha quantas tomadas funcionando') || resp('quantas tomadas funcionando');
+    o.eletrica_tensao   = resp('Qual a tensao da rede eletrica') || resp('tensao da rede eletrica');
+    o.eletrica_extensao = resp('Ha necessidade de extensao eletrica') || resp('necessidade de extensao eletrica');
 
-    o.suporte_nome      = resp('nome do tecnico ou empresa responsavel pelo suporte ao link local');
-    o.suporte_telefone  = resp('telefone do tecnico ou empresa responsavel pelo suporte ao link local');
+    o.suporte_nome      = resp('nome do tecnico ou empresa responsavel pelo suporte ao link local') ||
+                          resp('nome do tecnico ou empresa responsavel');
+    o.suporte_telefone  = resp('telefone do tecnico ou empresa responsavel pelo suporte ao link local') ||
+                          resp('telefone do tecnico ou empresa responsavel');
 
     return o;
   }
