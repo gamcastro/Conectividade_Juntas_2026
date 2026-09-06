@@ -446,12 +446,17 @@ veredito do título fora do `completo`.
    local / Celular): por meio, "Sem VPN conectada — teste de velocidade"
    (`rede_local_avaliacao[]`) + "Com VPN conectada — diagnóstico pela VPN da JE"
    (o meio recomendado usa `avaliacao[]` com faixa+motivo; os demais, os números
-   crus). Meios "não aplicável" viram uma linha só com o motivo. Logo abaixo do
-   provedor, uma linha com os dados da placa usada no teste (congelados no
-   `snapshot_adaptador` da medição, ver "Congelamento" no passo 3): **LAN** só
-   velocidade do link; **Wi-Fi do local** velocidade + SSID + banda (2,4/5 GHz)
-   + sinal; **Celular** nenhum desses (a rede de interesse ali é a do celular,
-   não a placa Wi-Fi que a recebe).
+   crus). Meios "não aplicável" viram uma linha só com o motivo. **Ao lado do
+   título do meio** (`.meiotit` → `<span class="meiotit-props">`, v0.6.127), as
+   propriedades da placa/meio congeladas no `snapshot_adaptador` da medição (ver
+   "Congelamento" no passo 3) — a "Velocidade da placa" vem do adaptador
+   (`Get-NetAdapter.Speed`), **não** do teste de velocidade: **LAN** → "Velocidade
+   da placa de rede"; **Wi-Fi do local** → Provedor · SSID · Banda (2,4/5 GHz) ·
+   Nível do sinal · "Velocidade da placa Wi-Fi"; **Celular** → Operadora · Banda ·
+   Nível do sinal · "Velocidade da placa Wi-Fi" (a placa sem-fio recebe o hotspot
+   — `New-ResultadoJson` agora emite `rede_local_wifi_banda`/`_sinal_pct`/
+   `_velocidade_link_mbps` também para o meio `celular`). As sub-tabelas "Sem VPN /
+   Com VPN" ficam só com as métricas medidas.
    **Nomes de produto** (speedtest/Ookla/iperf3/Selenium) não aparecem em texto
    visível — só "teste de velocidade", "banda pela VPN", "análise de banda",
    "sistema de totalização"; chaves de config (`speedtest_server_id`), nomes de

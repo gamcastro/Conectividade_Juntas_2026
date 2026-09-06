@@ -402,28 +402,31 @@ function Get-MeioBlocoHtml {
     }
     $flag = if ($Recomendado) { ' <span class="tag">meio recomendado</span>' } else { '' }
 
-    $prov = if ($M.rede_local_provedor) { '<div class="small"><b>Provedor:</b> ' + (ConvertTo-HtmlSafe ([string] $M.rede_local_provedor)) + '</div>' } else { '' }
-
-    # Dados da placa usada no teste (congelados no momento da checagem, ver
-    # New-ResultadoJson): velocidade do link em LAN/Wi-Fi do local; banda,
-    # sinal e SSID so' em Wi-Fi do local (no roteamento de celular nao
-    # informamos isso, a rede de interesse ali e' a do celular, nao a placa).
-    $infoPlaca = @()
-    if ($M.PSObject.Properties['rede_local_velocidade_link_mbps'] -and $M.rede_local_velocidade_link_mbps) {
-        $infoPlaca += '<b>Velocidade do link:</b> ' + $M.rede_local_velocidade_link_mbps + ' Mbps'
+    # Propriedades do meio/placa, mostradas AO LADO DO TITULO (congeladas no
+    # momento da checagem -- ver New-ResultadoJson). A "Velocidade da placa"
+    # vem do adaptador (Get-NetAdapter.Speed), NAO do teste de velocidade:
+    #   LAN            -> Velocidade da placa de rede
+    #   Wi-Fi do local -> Provedor . SSID . Banda . Nivel do sinal . Velocidade da placa Wi-Fi
+    #   Celular        -> Operadora . Banda . Nivel do sinal . Velocidade da placa Wi-Fi
+    $meio    = [string] $M.meio
+    $velLink = if ($M.PSObject.Properties['rede_local_velocidade_link_mbps']) { $M.rede_local_velocidade_link_mbps } else { $null }
+    $sinalPct = if ($M.PSObject.Properties['rede_local_wifi_sinal_pct']) { $M.rede_local_wifi_sinal_pct } else { $null }
+    $props = @()
+    if ($meio -eq 'lan') {
+        if ($velLink) { $props += '<b>Velocidade da placa de rede:</b> ' + $velLink + ' Mbps' }
+    } elseif ($meio -eq 'wifi_local') {
+        if ($M.rede_local_provedor)   { $props += '<b>Provedor:</b> ' + (ConvertTo-HtmlSafe ([string] $M.rede_local_provedor)) }
+        if ($M.rede_local_wifi_ssid)  { $props += '<b>Rede (SSID):</b> ' + (ConvertTo-HtmlSafe ([string] $M.rede_local_wifi_ssid)) }
+        if ($M.rede_local_wifi_banda) { $props += '<b>Banda:</b> ' + (ConvertTo-HtmlSafe ([string] $M.rede_local_wifi_banda)) }
+        if ($null -ne $sinalPct -and "$sinalPct" -ne '') { $props += '<b>N&iacute;vel do sinal:</b> ' + $sinalPct + ' %' }
+        if ($velLink) { $props += '<b>Velocidade da placa Wi-Fi:</b> ' + $velLink + ' Mbps' }
+    } elseif ($meio -eq 'celular') {
+        if ($M.operadora)             { $props += '<b>Operadora:</b> ' + (ConvertTo-HtmlSafe ([string] $M.operadora)) }
+        if ($M.rede_local_wifi_banda) { $props += '<b>Banda:</b> ' + (ConvertTo-HtmlSafe ([string] $M.rede_local_wifi_banda)) }
+        if ($null -ne $sinalPct -and "$sinalPct" -ne '') { $props += '<b>N&iacute;vel do sinal:</b> ' + $sinalPct + ' %' }
+        if ($velLink) { $props += '<b>Velocidade da placa Wi-Fi:</b> ' + $velLink + ' Mbps' }
     }
-    if ([string] $M.meio -eq 'wifi_local') {
-        if ($M.PSObject.Properties['rede_local_wifi_ssid'] -and $M.rede_local_wifi_ssid) {
-            $infoPlaca += '<b>Rede (SSID):</b> ' + (ConvertTo-HtmlSafe ([string] $M.rede_local_wifi_ssid))
-        }
-        if ($M.PSObject.Properties['rede_local_wifi_banda'] -and $M.rede_local_wifi_banda) {
-            $infoPlaca += '<b>Banda:</b> ' + (ConvertTo-HtmlSafe ([string] $M.rede_local_wifi_banda))
-        }
-        if ($M.PSObject.Properties['rede_local_wifi_sinal_pct'] -and $null -ne $M.rede_local_wifi_sinal_pct -and "$($M.rede_local_wifi_sinal_pct)" -ne '') {
-            $infoPlaca += '<b>N&iacute;vel do sinal:</b> ' + $M.rede_local_wifi_sinal_pct + ' %'
-        }
-    }
-    $infoPlacaHtml = if ($infoPlaca.Count) { '<div class="small">' + ($infoPlaca -join ' &middot; ') + '</div>' } else { '' }
+    $titPropsHtml = if ($props.Count) { '<span class="meiotit-props">' + ($props -join ' &middot; ') + '</span>' } else { '' }
 
     $diagBox = ''
     if ($M.rede_local_diagnostico -and (@('handshake', 'bloqueio') -contains [string] $M.rede_local_falha_tipo)) {
@@ -454,13 +457,11 @@ function Get-MeioBlocoHtml {
 
     @"
   <div class="meio">
-    <div class="meiotit"><span>$tit</span>$badge$flag</div>
+    <div class="meiotit"><span>$tit</span>$badge$flag$titPropsHtml</div>
     $grafSemCom
     <div class="cols">
       <div>
         <div class="subt">$subSem</div>
-        $prov
-        $infoPlacaHtml
         $diagBox
         $f1
         $grafVelocidade
@@ -986,7 +987,8 @@ function New-RelatorioHtml {
   .meio { border: 1px solid #BFC9DA; margin: 0 0 12px; page-break-inside: avoid; }
   .meio.na { padding: 8px 12px; background: #F4F7FB; color: #555; }
   .meiotit { background: #E7EDF6; padding: 6px 12px; font-weight: 700; font-size: 12px;
-             display: flex; align-items: center; gap: 10px; }
+             display: flex; align-items: baseline; flex-wrap: wrap; gap: 3px 10px; }
+  .meiotit-props { font-weight: 400; font-size: 10px; color: #333; }
   .badge { border: 1px solid; border-radius: 3px; padding: 1px 7px; font-size: 10px; font-weight: 700; }
   .tag { background: #1F4E79; color: #fff; border-radius: 3px; padding: 1px 7px; font-size: 9px;
          font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
