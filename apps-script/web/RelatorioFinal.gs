@@ -24,6 +24,8 @@ function _webAbaSimples(nome, cabecalho) {
   if (!aba) {
     aba = ss.insertSheet(nome);
     aba.getRange(1, 1, 1, cabecalho.length).setValues([cabecalho]);
+  } else if (aba.getLastColumn() < cabecalho.length) {
+    aba.getRange(1, 1, 1, cabecalho.length).setValues([cabecalho]);  // estende cabecalho antigo
   }
   return aba;
 }
@@ -239,14 +241,25 @@ function gerarRelatorioFinal(modo) {
                 Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd HHmm') + '.pdf';
   var pdf = Utilities.newBlob(html, 'text/html', nomeArq).getAs('application/pdf');
 
+  // arquiva no Shared Drive (DICON/relatorios-finais/) -- best-effort: se o
+  // token de servico ainda nao tiver escopo de Drive, segue so' com o download.
+  var arq = { id: '', url: '' };
   try {
-    _webAbaSimples('RelatoriosFinais', ['gerado_em', 'por', 'modo', 'cobertura_pct', 'feitos', 'total'])
-      .appendRow([_webAgora(), acesso.email, modo, pct, feitos, total]);
+    var tokenD = _tokenServico();
+    var pastaRF = _driveGarantirPasta(tokenD, 'relatorios-finais', WEB_DRIVE_ROOT);
+    var fRF = _driveUpload(tokenD, pastaRF, nomeArq, 'application/pdf', pdf.getBytes());
+    arq = { id: fRF.id, url: fRF.webViewLink || '' };
+  } catch (e) { /* sem Drive: so' download */ }
+
+  try {
+    _webAbaSimples('RelatoriosFinais', ['gerado_em', 'por', 'modo', 'cobertura_pct', 'feitos', 'total', 'pdf_url', 'pdf_id'])
+      .appendRow([_webAgora(), acesso.email, modo, pct, feitos, total, arq.url, arq.id]);
   } catch (e) { /* historico e' secundario */ }
 
   return {
     ok: true, cobertura_pct: pct, feitos: feitos, total: total, parcial: !final_,
-    filename: nomeArq, pdf_b64: Utilities.base64Encode(pdf.getBytes())
+    filename: nomeArq, pdf_b64: Utilities.base64Encode(pdf.getBytes()),
+    arquivo_url: arq.url
   };
 }
 
@@ -257,7 +270,8 @@ function listarRelatoriosFinais() {
   var hist = _webLerAba(ss, 'RelatoriosFinais').reverse().map(function (r) {
     return {
       gerado_em: _webHora(r['gerado_em']), por: r['por'], modo: r['modo'],
-      cobertura_pct: r['cobertura_pct'], feitos: r['feitos'], total: r['total']
+      cobertura_pct: r['cobertura_pct'], feitos: r['feitos'], total: r['total'],
+      pdf_url: r['pdf_url'] || ''
     };
   });
   return { acesso: acesso, historico: hist };

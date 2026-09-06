@@ -194,7 +194,7 @@
         <h3>Gerações anteriores</h3>
         <div class="tbwrap" style="max-height:44vh">
           <table>
-            <thead><tr><th>Quando</th><th>Por</th><th>Modo</th><th class="num">%</th><th class="num">Testados</th></tr></thead>
+            <thead><tr><th>Quando</th><th>Por</th><th>Modo</th><th class="num">%</th><th class="num">Testados</th><th>PDF</th></tr></thead>
             <tbody id="relHist"></tbody>
           </table>
         </div>
@@ -441,7 +441,9 @@
           setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
         } catch (e) {}
         el('relStatus').textContent = '';
-        el('relResumo').textContent = 'Cobertura ' + d.cobertura_pct + '% (' + d.feitos + '/' + d.total + ')' + (d.parcial ? ' — PARCIAL' : '') + ' · ' + (d.filename || '');
+        el('relResumo').innerHTML = 'Cobertura ' + d.cobertura_pct + '% (' + d.feitos + '/' + d.total + ')' +
+          (d.parcial ? ' — PARCIAL' : '') + ' · ' + esc(d.filename || '') +
+          (d.arquivo_url ? ' · <a href="' + esc(d.arquivo_url) + '" target="_blank" rel="noopener">arquivado no Drive</a>' : '');
         el('relResultado').hidden = false;
         carregarRelHist();
       })
@@ -456,10 +458,11 @@
     google.script.run.withSuccessHandler(function(d){
       if (!d || d.sem_acesso) return;
       el('relHist').innerHTML = (d.historico || []).map(function(h){
+        var pdf = h.pdf_url ? '<a href="'+esc(h.pdf_url)+'" target="_blank" rel="noopener">abrir</a>' : '—';
         return '<tr><td class="num">'+esc(h.gerado_em)+'</td><td>'+esc(h.por)+'</td>' +
           '<td>'+esc(h.modo)+'</td><td class="num">'+esc(h.cobertura_pct)+'%</td>' +
-          '<td class="num">'+esc(h.feitos)+'/'+esc(h.total)+'</td></tr>';
-      }).join('') || '<tr><td colspan="5">Nenhum relatório gerado ainda.</td></tr>';
+          '<td class="num">'+esc(h.feitos)+'/'+esc(h.total)+'</td><td>'+pdf+'</td></tr>';
+      }).join('') || '<tr><td colspan="6">Nenhum relatório gerado ainda.</td></tr>';
     }).withFailureHandler(function(){}).listarRelatoriosFinais();
   }
   function iniciarVivoTimer(){ pararVivoTimer(); vivoTimer = setInterval(function(){ if (TAB==='vivo') carregarVivo(); }, 30000); }
