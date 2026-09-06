@@ -341,7 +341,7 @@ function _carregarPainelCorpo() {
  * editor da planilha). Leitura: carregarAoVivo -- chamada pela console
  * (google.script.run), como o usuario logado (leitor). */
 
-var WEB_HEAD_PRESENCA = ['tecnico', 'email', 'ultimo_checkin', 'versao_dicon', 'roteiro', 'maquina', 'atividade_atual', 'local_atual'];
+var WEB_HEAD_PRESENCA = ['tecnico', 'email', 'ultimo_checkin', 'versao_dicon', 'roteiro', 'maquina', 'atividade_atual', 'local_atual', 'municipio_atual', 'zona_atual'];
 var WEB_HEAD_EVENTOS  = ['id_evento', 'hora_cliente', 'hora_servidor', 'tecnico', 'tipo', 'local_id', 'zona', 'municipio', 'tipo_local', 'roteiro', 'detalhe'];
 
 function _webAgora() {
@@ -373,6 +373,11 @@ function _webPresencaUpsert(token, sheetId, campos) {
   _sheetsGarantirAba(token, sheetId, 'Presenca', WEB_HEAD_PRESENCA);
   var v = _sheetsGetValores(token, sheetId, 'Presenca');
   var head = (v[0] || WEB_HEAD_PRESENCA).map(function (c) { return String(c || '').trim(); });
+  // aba antiga com menos colunas -> estende o cabecalho (municipio_atual/zona_atual)
+  if (head.length < WEB_HEAD_PRESENCA.length) {
+    _sheetsSetValores(token, sheetId, 'Presenca!A1', [WEB_HEAD_PRESENCA]);
+    head = WEB_HEAD_PRESENCA.slice();
+  }
   var ix = {}; head.forEach(function (n, i) { ix[n] = i; });
 
   var alvoEmail = String(campos.email || '').toLowerCase().trim();
@@ -385,18 +390,28 @@ function _webPresencaUpsert(token, sheetId, campos) {
   }
 
   var atual = (rowNum > 0) ? v[rowNum - 1] : [];
+  // merge padrao: so' sobrescreve com valor "cheio" (heartbeat nao apaga identidade)
   function val(nome, novo) {
     if (novo !== undefined && novo !== null && novo !== '') return novo;
     var i = ix[nome];
     return (i != null && atual[i] != null) ? atual[i] : '';
   }
+  // estado do diagnostico em andamento: uma string vazia EXPLICITA limpa
+  // (fim do diagnostico); undefined = nao mexe (evento que nao e' de estado).
+  function estado(nome) {
+    var novo = campos[nome];
+    if (novo === undefined) { var i = ix[nome]; return (i != null && atual[i] != null) ? atual[i] : ''; }
+    return (novo == null) ? '' : String(novo);
+  }
   var linha = [
     val('tecnico', campos.tecnico), val('email', campos.email), _webAgora(),
     val('versao_dicon', campos.versao_dicon), val('roteiro', campos.roteiro),
     val('maquina', campos.maquina), val('atividade_atual', campos.atividade_atual),
-    val('local_atual', campos.local_atual)
+    val('local_atual', campos.local_atual),
+    estado('municipio_atual'), estado('zona_atual')
   ];
-  if (rowNum > 0) _sheetsSetValores(token, sheetId, 'Presenca!A' + rowNum + ':H' + rowNum, [linha]);
+  var colFim = _colA1(WEB_HEAD_PRESENCA.length);   // 'J'
+  if (rowNum > 0) _sheetsSetValores(token, sheetId, 'Presenca!A' + rowNum + ':' + colFim + rowNum, [linha]);
   else _sheetsAppendLinha(token, sheetId, 'Presenca', linha);
 }
 
@@ -437,20 +452,26 @@ function webRegistrarEvento(req) {
   ]);
 
   // reflete no card do tecnico
-  var atividade = '', local = '';
+  var atividade = '', local = '', muniAtual, zonaAtual;
   if (req.tipo === 'iniciou_diagnostico') {
     atividade = 'Diagnostico em ' + (req.detalhe || req.local_id || '') + ' desde ' + _webAgora();
     local = req.local_id || '';
+    muniAtual = String(req.municipio || '');   // preenche o "onde" do card
+    zonaAtual = String(req.zona || '');
   } else if (req.tipo === 'transmitiu' || req.tipo === 'finalizou' || req.tipo === 'abandonou') {
     atividade = (req.tipo === 'finalizou' ? 'Concluiu ' : (req.tipo === 'transmitiu' ? 'Transmitiu ' : 'Saiu de ')) +
                 (req.detalhe || req.local_id || '') + ' as ' + _webAgora();
     local = '';
+    muniAtual = ''; zonaAtual = '';            // acabou -> limpa o "onde"
   }
+  // outros tipos (rodou_checagem, salvou, ...): muniAtual/zonaAtual ficam undefined -> nao mexe
   try {
     _webPresencaUpsert(token, sheetId, {
       tecnico: req.tecnico, email: req.email, versao_dicon: req.versao_dicon,
       roteiro: req.roteiro, maquina: req.maquina,
-      atividade_atual: atividade || undefined, local_atual: (req.tipo === 'iniciou_diagnostico') ? local : ''
+      atividade_atual: atividade || undefined,
+      local_atual: (req.tipo === 'iniciou_diagnostico') ? local : '',
+      municipio_atual: muniAtual, zona_atual: zonaAtual
     });
   } catch (e) { /* presenca e' secundaria */ }
 
@@ -500,7 +521,9 @@ function carregarAoVivo() {
     return {
       tecnico: p['tecnico'], email: p['email'], roteiro: p['roteiro'],
       versao_dicon: p['versao_dicon'], atividade_atual: String(p['atividade_atual'] || ''),
-      local_atual: p['local_atual'], ultimo_checkin: _webHora(p['ultimo_checkin']),
+      local_atual: p['local_atual'],
+      municipio_atual: String(p['municipio_atual'] || ''), zona_atual: String(p['zona_atual'] || ''),
+      ultimo_checkin: _webHora(p['ultimo_checkin']),
       minutos: min, online: (min != null && min <= 10)
     };
   }).sort(function (a, b) {
