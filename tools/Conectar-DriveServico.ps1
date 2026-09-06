@@ -118,8 +118,18 @@ try {
     Write-Host "Conta            : $email" -ForegroundColor Cyan
     Write-Host "Escopo do Drive  : $escopoDrive" -ForegroundColor Cyan
     Write-Host ''
-    Write-Host 'Cole no editor do Apps Script de HOMOLOGACAO (Executar > setupServiceAuth):' -ForegroundColor Yellow
+    Write-Host '=================================================================' -ForegroundColor DarkGray
+    Write-Host ' JEITO SIMPLES -- Editor do Apps Script de HOMOLOGACAO:' -ForegroundColor Yellow
+    Write-Host '   engrenagem "Configuracoes do projeto" > "Propriedades do script"' -ForegroundColor Yellow
+    Write-Host '   edite OAUTH_REFRESH_TOKEN e cole SO este valor:' -ForegroundColor Yellow
     Write-Host ''
+    Write-Host "   $($tk.refresh_token)" -ForegroundColor Green
+    Write-Host ''
+    Write-Host '   (OAUTH_CLIENT_ID e OAUTH_CLIENT_SECRET ja devem estar la, do' -ForegroundColor DarkGray
+    Write-Host '    setup anterior; se nao, os valores estao abaixo.)' -ForegroundColor DarkGray
+    Write-Host '=================================================================' -ForegroundColor DarkGray
+    Write-Host ''
+    Write-Host ' JEITO ALTERNATIVO -- rodar setupServiceAuth() no editor:' -ForegroundColor Yellow
     Write-Host '  setupServiceAuth(' -NoNewline
     Write-Host "'$($g.client_id)', " -NoNewline -ForegroundColor Green
     Write-Host "'$($g.client_secret)', " -NoNewline -ForegroundColor Green
