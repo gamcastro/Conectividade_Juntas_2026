@@ -35,8 +35,33 @@
     (NÃO `DocumentApp`/`DriveApp` — ver a trava de escopo abaixo). O PDF volta
     em **base64** e o navegador baixa; a aba `RelatoriosFinais` guarda só os
     metadados. `listarRelatoriosFinais`, `_webTestadosCompleto` (lê `json`).
+  - **Visual espelhado do relatório do DICON Desktop** (`src/saida/Export-RelatorioPdf.ps1`):
+    cabeçalho JE + brasão (`web/Brasao.gs` = `assets/brasao-republica.jpg` em
+    `data:` URI, string constante, sem escopo de Drive), régua navy, faixas
+    `#1F4E79`, `th #D9E2F3`, bordas `#BFC9DA`, `table.kv` `#E7EDF6`, layout de 2
+    colunas com `<table>` aninhada (sem grid/flex).
   - `Index.html`: aba **Relatório final** (Gerar → baixa o PDF + histórico).
-  - Redeploy Web App @12.
+  - Redeploy Web App @13.
+- **Fase 2 — parcial em homologação** 🚧 (GEL pela web — SEM fotos)
+  - `apps-script/web/GelWeb.gs`: `salvarGelWeb({local_id,secoes})` grava/atualiza
+    a aba **`GEL`** (`local_id | secoes_json | n_fotos | por | quando |
+    pdf_gel_id | pasta_drive_id`) via **token de serviço** (coordenador tem só
+    leitor); `_gelNormaliza` põe o formulário no MESMO shape do
+    `New-BlocoVistoriaGel` do desktop. `carregarGelLocal(localId)` (identidade
+    do Local + GEL já existente da web ou do resultado transmitido).
+    `_webGelWeb()` (índice `local_id → {secoes,por,quando}`), consumido por
+    `carregarPainel` (coluna GEL da aba Vistorias) e por `gerarRelatorioFinal`
+    (coluna GEL, `sim (web)`).
+  - `Index.html`: aba **GEL** — seletor de Local, `<input type=file>` do PDF,
+    **pdf.js do cdnjs (3.11.174, `workerSrc` no cdnjs)** lê o PDF **no
+    navegador**, `gelExtrairCampos` (port fiel do `ConvertFrom-VistoriaGel`) +
+    `gelLerPdf` (ordem de leitura y↓ x↑, plano — espelha `pg.GetWords()`),
+    formulário de conferência das 5 seções, `Registrar GEL`.
+  - Chamadas por `google.script.run` (não `executar`) → só a implantação Web App
+    precisa de redeploy. Redeploy Web App @14.
+  - **Falta**: upload das **fotos** da vistoria (depende do escopo `drive` no
+    token de serviço — decisão 2026-09-06 abaixo) + calibração lado a lado do
+    extrator com PDFs de GEL reais.
 
 ### ⚠️ Trava de escopo OAuth (vale para Fase 2 também)
 
@@ -51,13 +76,18 @@ passa a exigir `drive`/`documents` e **o DICON de campo quebra**.
 **Regra:** nada no projeto pode exigir escopo além dos 4 acima, enquanto a
 console viver no mesmo projeto que a Execution API do DICON.
 
-**Opções para quando precisar do Drive (Fase 2 fotos, arquivar o relatório):**
-1. Token de serviço com escopo `drive` (novo grant OAuth do George, só backend
-   — não toca nos field techs) + Drive API via `UrlFetchApp`.
-2. Console em **projeto Apps Script separado** (isolamento total de escopo;
-   precisa de cópias dos leitores `listarJuntas`/`listarRoteiros`).
+**Decisão (2026-09-06): opção 1.** Quando o Drive entrar (fotos do GEL, arquivar
+o relatório final), o **token de serviço ganha o escopo `drive`** — o George
+re-roda `tools/Extrair-TokenServico.ps1` / `setupServiceAuth` com `drive` somado
+aos escopos, e as gravações no Drive passam pela **API REST via `UrlFetchApp`**
+com esse token. **Nenhum `.gs` chama `DriveApp`/`DocumentApp`** → o manifest
+continua mínimo e o DICON de campo (Execution API) não quebra. Sem duplicar
+projeto. (Opção 2 descartada: projeto Apps Script separado — isolamento total,
+mas exigiria cópias dos leitores `listarJuntas`/`listarRoteiros` e uma segunda
+implantação/`doGet`.)
 
-- **Fase 2 — não iniciada** (GEL pela web). **Fase 4 — não iniciada**.
+- **Fase 2 — parcial** (GEL pela web; falta só o upload de fotos).
+  **Fase 4 — não iniciada**.
 
 ## 1. Objetivo
 
@@ -310,6 +340,11 @@ Ao abrir: login Google implícito → `verificarAcesso()` → sem acesso ⇒ tel
 5. **Modo `medicao`.** O relatório final é **medições + sugestão de conexão**
    (download/latência/perda por meio, meio sugerido, cabo de rede, observações do
    técnico, GEL anexado) — **sem** KPIs de viável/ressalva/inviável.
+6. **(2026-09-06) Drive = opção 1** (token de serviço ganha `drive`; sem projeto
+   separado). Ver "Trava de escopo OAuth" acima.
+7. **(2026-09-06) Fase 2 primeiro, fotos por último.** O import do GEL + a
+   conferência + o `salvarGelWeb` (só Sheets) entram antes; o upload de fotos
+   espera o `drive` no token de serviço.
 
 ### O que ainda falta para arrancar a Fase 0
 

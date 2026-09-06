@@ -40,6 +40,37 @@ clasp 3.4 no Windows). Rodar de uma pasta limpa no `C:`:
 (a pasta `~/dicon-clasp-homolog` tem um `.clasp.json` com o scriptId de homolog
 e `rootDir` vazio.)
 
+## DICON Web (console de coordenação) — homologação
+
+Vive no **mesmo projeto Apps Script de homolog** (`17BLQ6IOZ…`), pasta
+`apps-script/web/` (`Console.gs`, `GelWeb.gs`, `RelatorioFinal.gs`, `Brasao.gs`,
+`Index.html`). Ver `docs/dicon-web-plano.md`.
+
+- **Implantação Web App** (a que a coordenação acessa) — **≠** a implantação da
+  Execution API que o DICON de campo consome:
+  - deploymentId: `AKfycby4rGyTNWzgl6FxYkdAmnTQpO1zSsmolqJll6psftuH2S-SZQh76s6j2qLWYypZi6wM-w`
+  - URL: `…/AKfycby4rG…wM-w/exec?app=web`  (`doGet` roteia `?app=web` → `webConsolePagina`)
+- **Implantação da Execution API do DICON**: `AKfycbxHMpUwQuDH1SwRiLersK1Qbk3x90Xpu76zxnPl12Upthotd3UiaTd_eOPQ01FF2PBk`.
+
+Redeploy da console (mantém a URL), da pasta `~/dicon-clasp-homolog`:
+
+    cp apps-script\web\*.gs apps-script\web\*.html  $env:USERPROFILE\dicon-clasp-homolog\web\
+    cd $env:USERPROFILE\dicon-clasp-homolog
+    clasp push -f
+    clasp redeploy AKfycby4rGyTNWzgl6FxYkdAmnTQpO1zSsmolqJll6psftuH2S-SZQh76s6j2qLWYypZi6wM-w -d "DICON Web homolog vN"
+
+### ⚠️ Ação nova em `executar` → redeploy das DUAS implantações
+
+Funções chamadas por **`google.script.run`** (a página da console:
+`carregarPainel`, `carregarAoVivo`, `gerarRelatorioFinal`, `salvarGelWeb`,
+`carregarGelLocal`, …) só precisam do redeploy do **Web App** acima.
+
+Mas toda **nova `acao` dentro de `executar`** (`Codigo.gs`) que o DICON de campo
+chame pela Execution API (ex.: `checkin`, `evento`, `resultados.listar`) **exige
+`clasp version` + `clasp redeploy AKfycbxHMp…` também** — senão a implantação
+congela sem a ação e responde `{erro:'acao desconhecida: …'}`, e o DICON nunca
+tira os itens da fila. Já mordeu com `resultados.listar` e com `checkin`/`evento`.
+
 ## Config extra
 
 - `?recurso=juntas` -> Juntas/locais; `?recurso=tecnicos`; `?recurso=roteiros`; `?recurso=limiares`.

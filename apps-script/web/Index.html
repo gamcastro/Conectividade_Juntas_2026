@@ -78,6 +78,19 @@
   .center { text-align:center; padding:60px 20px; color:var(--tinta2); }
   .center h2 { color:var(--tinta); }
   code { background:#EEF1F5; border-radius:4px; padding:1px 5px; }
+
+  .gel-top select { border:1px solid var(--hair); border-radius:7px; padding:8px 10px; font-size:13px; min-width:320px; max-width:100%; }
+  .gel-pdf { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:12px; }
+  .gel-pdf input[type=file] { font-size:12.5px; }
+  .gel-info { background:#EEF3FB; border:1px solid #CFE0F5; border-radius:8px; padding:10px 12px; font-size:12.5px; margin-top:12px; }
+  fieldset { border:1px solid var(--hair); border-radius:9px; padding:8px 14px 4px; margin:0 0 14px; }
+  fieldset legend { font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--tinta2); font-weight:800; padding:0 6px; }
+  .gel-cols { display:grid; grid-template-columns:repeat(2,1fr); gap:0 20px; }
+  @media (max-width:820px){ .gel-cols { grid-template-columns:1fr; } .gel-top select { min-width:0; width:100%; } }
+  .gel-cols label { display:flex; flex-direction:column; gap:3px; font-size:11.5px; color:var(--tinta2); margin-bottom:9px; }
+  .gel-cols input { border:1px solid var(--hair); border-radius:6px; padding:6px 9px; font-size:13px; color:var(--tinta); }
+  .gel-cols input:focus { outline:2px solid #BcD3F2; border-color:var(--azul); }
+
   [hidden] { display:none !important; }
 </style>
 </head>
@@ -126,6 +139,7 @@
       <button id="tabPainel" class="on" onclick="verTab('painel')">Painel</button>
       <button id="tabVivo" onclick="verTab('vivo')">Ao vivo</button>
       <button id="tabVist" onclick="verTab('vistorias')">Vistorias</button>
+      <button id="tabGel" onclick="verTab('gel')">GEL</button>
       <button id="tabRel" onclick="verTab('rel')">Relatório final</button>
     </div>
 
@@ -182,6 +196,77 @@
       </div>
     </div>
 
+    <div id="gel" hidden>
+      <div class="card">
+        <h3>Anexar formulário do GEL</h3>
+        <div class="cap" style="font-size:13px;color:var(--tinta2);line-height:1.5;margin-bottom:10px">
+          Escolha o Local, selecione o <b>PDF do GEL</b> e clique em <b>Extrair</b>: a leitura
+          acontece <b>no seu navegador</b>, nada do PDF sai daqui. Confira as 5 seções e
+          <b>Registre</b> — grava na aba <code>GEL</code> da planilha de homologação.
+        </div>
+        <div class="gel-top">
+          <select id="gelLocal" onchange="gelTrocarLocal()">
+            <option value="">Selecione o local…</option>
+          </select>
+        </div>
+        <div id="gelExistente" class="gel-info" hidden></div>
+        <div class="gel-pdf">
+          <input type="file" id="gelPdf" accept="application/pdf" onchange="gelPdfEscolhido()">
+          <button class="btn-primario" id="gelBtnExtrair" onclick="gelExtrair()" disabled>Extrair do PDF</button>
+          <span id="gelPdfStatus" class="lbl" style="color:var(--tinta2)"></span>
+        </div>
+      </div>
+
+      <div id="gelForm" class="card" hidden>
+        <h3>Conferência — 5 seções do GEL</h3>
+        <p class="lbl" style="text-transform:none;letter-spacing:0;color:var(--tinta2);margin:0 0 12px">
+          Ajuste o que o extrator não pegou. Campo em branco é normal quando o PDF não traz aquela resposta.
+        </p>
+
+        <fieldset><legend>Coordenadas</legend><div class="gel-cols">
+          <label>Latitude<input id="f_latitude"></label>
+          <label>Longitude<input id="f_longitude"></label>
+          <label>Precisão (m)<input id="f_precisao_m"></label>
+        </div></fieldset>
+
+        <fieldset><legend>Tipo do local</legend><div class="gel-cols">
+          <label>Esfera administrativa<input id="f_esfera_administrativa"></label>
+          <label>Localização (Urbano / Rural)<input id="f_localizacao"></label>
+          <label>Tipo de local<input id="f_tipo_local"></label>
+        </div></fieldset>
+
+        <fieldset><legend>Infraestrutura</legend><div class="gel-cols">
+          <label>Salas necessárias<input id="f_salas_necessarias"></label>
+          <label>Abastecimento de água<input id="f_agua"></label>
+          <label>Climatização / ventilação<input id="f_climatizacao"></label>
+          <label>Iluminação<input id="f_iluminacao"></label>
+          <label>Água potável p/ mesárias e eleitoras<input id="f_agua_potavel"></label>
+          <label>Prédio em reforma<input id="f_predio_reforma"></label>
+        </div></fieldset>
+
+        <fieldset><legend>Instalações elétricas</legend><div class="gel-cols">
+          <label>Localização do quadro de energia<input id="f_quadro_energia"></label>
+          <label>Há energia elétrica<input id="f_energia_eletrica"></label>
+          <label>Tomadas funcionando<input id="f_eletrica_tomadas"></label>
+          <label>Tensão da rede elétrica<input id="f_eletrica_tensao"></label>
+          <label>Necessidade de extensão elétrica<input id="f_eletrica_extensao"></label>
+        </div></fieldset>
+
+        <fieldset><legend>Suporte ao link local</legend><div class="gel-cols">
+          <label>Técnico / empresa<input id="f_suporte_nome"></label>
+          <label>Telefone<input id="f_suporte_telefone"></label>
+        </div></fieldset>
+
+        <div style="margin-top:6px">
+          <button class="btn-primario" id="gelBtnSalvar" onclick="gelSalvar()">Registrar GEL</button>
+          <span id="gelSalvarStatus" class="lbl" style="margin-left:12px;text-transform:none;letter-spacing:0;color:var(--tinta2)"></span>
+        </div>
+        <div class="lbl" style="margin-top:12px;text-transform:none;letter-spacing:0;color:var(--tinta2)">
+          As <b>fotos</b> da vistoria continuam sendo anexadas pelo DICON desktop / GEL web — o upload pela console entra na próxima etapa.
+        </div>
+      </div>
+    </div>
+
     <div id="vistorias" hidden>
       <div class="card">
         <div class="filtros">
@@ -199,7 +284,7 @@
             <thead><tr>
               <th>Local</th><th>ZE</th><th>Município</th><th>Tipo</th><th>Roteiro</th>
               <th>Técnico previsto</th><th>Status</th><th>Conexão</th><th class="num">Down</th>
-              <th class="num">Lat.</th><th>PDF</th>
+              <th class="num">Lat.</th><th>PDF</th><th>GEL</th>
             </tr></thead>
             <tbody id="tbVist"></tbody>
           </table>
@@ -270,6 +355,8 @@
     });
 
     renderVist();
+    var gsel = el('gelLocal');
+    if (gsel) { gsel.length = 1; delete gsel.dataset.pronto; if (TAB === 'gel') gelPopularLocais(); }
     el('foot').textContent = 'DICON Web · homologação · dados de ' +
       new Date(d.gerado_em).toLocaleString('pt-BR') + ' · SEASU-COINF-STIC';
     el('app').hidden = false;
@@ -292,13 +379,16 @@
     el('tabPainel').classList.toggle('on', t==='painel');
     el('tabVivo').classList.toggle('on', t==='vivo');
     el('tabVist').classList.toggle('on', t==='vistorias');
+    el('tabGel').classList.toggle('on', t==='gel');
     el('tabRel').classList.toggle('on', t==='rel');
     el('painel').hidden    = (t!=='painel');
     el('vivo').hidden      = (t!=='vivo');
     el('vistorias').hidden = (t!=='vistorias');
+    el('gel').hidden       = (t!=='gel');
     el('rel').hidden       = (t!=='rel');
     if (t==='vivo') { carregarVivo(); iniciarVivoTimer(); } else { pararVivoTimer(); }
     if (t==='rel')  { atualizarBotaoRel(); carregarRelHist(); }
+    if (t==='gel')  { gelPopularLocais(); }
   }
 
   function atualizarBotaoRel(){
@@ -430,8 +520,254 @@
         '<td class="num">'+fmt(l.download_mbps)+'</td>' +
         '<td class="num">'+fmt(l.latencia_ms)+'</td>' +
         '<td>'+pdf+'</td>' +
+        '<td>'+(l.gel_web ? '<span class="pill ok">web</span>' : '—')+'</td>' +
         '</tr>';
     }).join('');
+  }
+
+  /* ========================= ABA GEL ========================= */
+
+  var GEL_LOCAL = null, GEL_EXISTENTE = null;
+  var PDFJS_VER = '3.11.174', pdfjsFila = null;
+
+  function gelPopularLocais(){
+    var sel = el('gelLocal');
+    if (!DADOS || !DADOS.vistorias || !sel || sel.dataset.pronto) return;
+    var arr = DADOS.vistorias.slice().sort(function(a,b){
+      return (a.zona - b.zona)
+        || String(a.municipio||'').localeCompare(String(b.municipio||''))
+        || String(a.nome||'').localeCompare(String(b.nome||''));
+    });
+    arr.forEach(function(l){
+      var o = document.createElement('option');
+      o.value = l.local_id;
+      o.textContent = 'ZE ' + l.zona + ' — ' + l.municipio + ' — ' + (l.nome || l.local_id) + (l.gel_web ? '  ✓ GEL' : '');
+      sel.appendChild(o);
+    });
+    sel.dataset.pronto = '1';
+  }
+
+  function setv(id, v){ var e = el(id); if (e) e.value = (v == null ? '' : v); }
+
+  function gelPdfEscolhido(){
+    var f = el('gelPdf').files[0];
+    el('gelBtnExtrair').disabled = !GEL_LOCAL || !f;
+    el('gelPdfStatus').textContent = f ? f.name : '';
+  }
+
+  function gelTrocarLocal(){
+    GEL_LOCAL = el('gelLocal').value || null;
+    GEL_EXISTENTE = null;
+    el('gelForm').hidden = true;
+    el('gelExistente').hidden = true;
+    el('gelPdfStatus').textContent = '';
+    el('gelSalvarStatus').textContent = '';
+    gelPdfEscolhido();
+    if (!GEL_LOCAL) return;
+    google.script.run
+      .withSuccessHandler(function(d){
+        if (!d) return;
+        GEL_EXISTENTE = d;
+        var partes = [];
+        if (d.gel_web && d.gel_web.secoes)
+          partes.push('Já registrado pela web em <b>' + esc(d.gel_web.quando) + '</b> por ' + esc(d.gel_web.por) + '.');
+        if (d.gel_resultado)
+          partes.push('Há dados do GEL no resultado transmitido pelo técnico.');
+        if (partes.length){
+          el('gelExistente').innerHTML = partes.join(' ') +
+            ' <a href="#" onclick="gelPrefill();return false;">Carregar no formulário</a>';
+          el('gelExistente').hidden = false;
+        }
+      })
+      .withFailureHandler(function(){})
+      .carregarGelLocal(GEL_LOCAL);
+  }
+
+  function gelPrefill(){
+    if (!GEL_EXISTENTE) return;
+    var s = (GEL_EXISTENTE.gel_web && GEL_EXISTENTE.gel_web.secoes) || GEL_EXISTENTE.gel_resultado;
+    if (!s) return;
+    var tl = s.tipo_local || {}, inf = s.infraestrutura || {}, et = s.eletrica || {};
+    setv('f_latitude', s.latitude); setv('f_longitude', s.longitude); setv('f_precisao_m', s.precisao_m);
+    setv('f_esfera_administrativa', tl.esfera_administrativa); setv('f_localizacao', tl.localizacao); setv('f_tipo_local', tl.tipo);
+    setv('f_salas_necessarias', inf.salas_necessarias); setv('f_agua', inf.agua); setv('f_climatizacao', inf.climatizacao);
+    setv('f_iluminacao', inf.iluminacao); setv('f_agua_potavel', inf.agua_potavel); setv('f_predio_reforma', inf.predio_reforma);
+    setv('f_quadro_energia', et.quadro_energia); setv('f_energia_eletrica', et.energia_eletrica);
+    setv('f_eletrica_tomadas', et.tomadas != null && et.tomadas !== '' ? et.tomadas : s.eletrica_tomadas);
+    setv('f_eletrica_tensao', et.tensao != null && et.tensao !== '' ? et.tensao : s.eletrica_tensao);
+    setv('f_eletrica_extensao', et.extensao != null && et.extensao !== '' ? et.extensao : s.eletrica_extensao);
+    setv('f_suporte_nome', s.suporte_nome); setv('f_suporte_telefone', s.suporte_telefone);
+    el('gelForm').hidden = false;
+  }
+
+  var GEL_CAMPOS = ['latitude','longitude','precisao_m','esfera_administrativa','localizacao','tipo_local',
+    'salas_necessarias','agua','climatizacao','iluminacao','agua_potavel','predio_reforma',
+    'quadro_energia','energia_eletrica','eletrica_tomadas','eletrica_tensao','eletrica_extensao',
+    'suporte_nome','suporte_telefone'];
+
+  function gelPreencherDeExtrator(o){
+    GEL_CAMPOS.forEach(function(k){ setv('f_'+k, o[k]); });
+    el('gelForm').hidden = false;
+  }
+
+  function carregarPdfJs(cb){
+    if (window.pdfjsLib){ cb(null); return; }
+    if (pdfjsFila){ pdfjsFila.push(cb); return; }
+    pdfjsFila = [cb];
+    var s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/' + PDFJS_VER + '/pdf.min.js';
+    s.onload = function(){
+      try {
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+          'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/' + PDFJS_VER + '/pdf.worker.min.js';
+      } catch (e) {}
+      var cbs = pdfjsFila; pdfjsFila = null; cbs.forEach(function(f){ f(null); });
+    };
+    s.onerror = function(){
+      var cbs = pdfjsFila; pdfjsFila = null; cbs.forEach(function(f){ f('rede'); });
+    };
+    document.head.appendChild(s);
+  }
+
+  // Texto do PDF na ordem de leitura (y desc, x asc), plano -- espelha o
+  // pg.GetWords() do PdfPig usado pelo DICON desktop.
+  function gelLerPdf(bytes){
+    return window.pdfjsLib.getDocument({ data: bytes }).promise.then(function(pdf){
+      var paginas = [], seq = Promise.resolve();
+      for (var i = 1; i <= pdf.numPages; i++){
+        (function(n){
+          seq = seq.then(function(){
+            return pdf.getPage(n).then(function(page){
+              return page.getTextContent().then(function(tc){
+                var itens = (tc.items || [])
+                  .filter(function(it){ return it.str && it.str.trim() !== ''; })
+                  .map(function(it){ var tr = it.transform || [1,0,0,1,0,0]; return { s: it.str, x: tr[4], y: tr[5] }; });
+                itens.sort(function(a,b){
+                  var dy = Math.round(b.y/2) - Math.round(a.y/2);
+                  return dy !== 0 ? dy : (a.x - b.x);
+                });
+                paginas.push(itens.map(function(it){ return it.s; }).join(' '));
+              });
+            });
+          });
+        })(i);
+      }
+      return seq.then(function(){ return paginas.join(' '); });
+    });
+  }
+
+  function gelSemAcento(t){
+    try { return t.normalize('NFD').replace(new RegExp('[\\u0300-\\u036f]', 'g'), ''); } catch (e){ return t; }
+  }
+
+  // Port fiel do ConvertFrom-VistoriaGel (src/core/VistoriaGel.ps1): mesmos
+  // marcadores/regex -- resposta ANTES de "R. :", "Coordenadas:" DEPOIS do valor,
+  // captura para no primeiro "?".
+  function gelExtrairCampos(texto){
+    var t = gelSemAcento(String(texto || '').replace(/\s+/g, ' ').trim());
+    var o = {};
+    GEL_CAMPOS.forEach(function(k){ o[k] = ''; });
+
+    var mc = t.match(/(-?\d+[.,]\d+)\s*[°ºo]?\s*,\s*(-?\d+[.,]\d+)\s*[°ºo]?\s*\.?\s*Precisao\s*:?\s*(\d+[.,]?\d*)/i);
+    if (mc){
+      o.latitude   = mc[1].replace(',', '.');
+      o.longitude  = mc[2].replace(',', '.');
+      o.precisao_m = mc[3].replace(',', '.');
+    }
+
+    function resp(rxPergunta){
+      var rx = new RegExp(rxPergunta + '\\s*[?:]?\\s*([^?]{1,80}?)\\s*R\\s*\\.?\\s*:', 'i');
+      var m = t.match(rx);
+      return m ? m[1].replace(/\s+/g, ' ').trim() : '';
+    }
+
+    o.esfera_administrativa = resp('esfera administrativa do local vistoriado');
+    var ml = t.match(/\bLocalizacao\s+(Urbano|Rural|Semi[ -]?urbano|Semiurbano)\b/i);
+    if (ml) o.localizacao = ml[1];
+    var mt = t.match(/Tipo de local\s+(?!que\b)([^?:]{1,38}?)\s*R\s*\.?\s*:/i);
+    if (mt) o.tipo_local = mt[1].replace(/\s+/g, ' ').trim();
+
+    o.salas_necessarias = resp('Quantidade de salas necessarias para funcionar como secao eleitoral');
+    o.agua              = resp('Ha abastecimento de agua');
+    o.climatizacao      = resp('A climatizacao ou ventilacao e feita por');
+    o.iluminacao        = resp('Ha iluminacao');
+    o.agua_potavel      = resp('Ha agua potavel disponivel para mesarias\\S* e eleitoras\\S*');
+    o.predio_reforma    = resp('O predio esta em reforma');
+
+    o.quadro_energia    = resp('Localizacao do Quadro de Energia');
+    o.energia_eletrica  = resp('Ha energia eletrica');
+    o.eletrica_tomadas  = resp('quantas tomadas funcionando');
+    o.eletrica_tensao   = resp('tensao da rede eletrica');
+    o.eletrica_extensao = resp('necessidade de extensao eletrica');
+
+    o.suporte_nome      = resp('nome do tecnico ou empresa responsavel pelo suporte ao link local');
+    o.suporte_telefone  = resp('telefone do tecnico ou empresa responsavel pelo suporte ao link local');
+
+    return o;
+  }
+
+  function gelExtrair(){
+    var f = el('gelPdf').files[0];
+    if (!f || !GEL_LOCAL) return;
+    el('gelBtnExtrair').disabled = true;
+    el('gelPdfStatus').textContent = 'Carregando o leitor de PDF…';
+    carregarPdfJs(function(err){
+      if (err){
+        el('gelPdfStatus').textContent = 'Não consegui carregar o leitor de PDF. Preencha o formulário manualmente.';
+        el('gelBtnExtrair').disabled = false;
+        el('gelForm').hidden = false;
+        return;
+      }
+      el('gelPdfStatus').textContent = 'Lendo o PDF…';
+      var fr = new FileReader();
+      fr.onload = function(){
+        gelLerPdf(new Uint8Array(fr.result)).then(function(texto){
+          var campos = gelExtrairCampos(texto);
+          gelPreencherDeExtrator(campos);
+          var achou = GEL_CAMPOS.filter(function(k){ return campos[k] !== '' && campos[k] != null; }).length;
+          el('gelPdfStatus').textContent = achou
+            ? ('Extraído: ' + achou + ' campo(s) preenchido(s). Confira abaixo.')
+            : 'O extrator não encontrou campos neste PDF — preencha manualmente.';
+          el('gelBtnExtrair').disabled = false;
+        }).catch(function(e){
+          el('gelPdfStatus').textContent = 'Erro ao ler o PDF: ' + ((e && e.message) || e) + '. Preencha manualmente.';
+          el('gelForm').hidden = false;
+          el('gelBtnExtrair').disabled = false;
+        });
+      };
+      fr.onerror = function(){
+        el('gelPdfStatus').textContent = 'Não consegui abrir o arquivo.';
+        el('gelBtnExtrair').disabled = false;
+      };
+      fr.readAsArrayBuffer(f);
+    });
+  }
+
+  function gelSalvar(){
+    if (!GEL_LOCAL) return;
+    var secoes = {};
+    GEL_CAMPOS.forEach(function(k){ secoes[k] = (el('f_'+k).value || '').trim(); });
+    el('gelBtnSalvar').disabled = true;
+    el('gelSalvarStatus').textContent = 'Salvando…';
+    google.script.run
+      .withSuccessHandler(function(d){
+        el('gelBtnSalvar').disabled = false;
+        if (d && d.ok){
+          el('gelSalvarStatus').textContent = 'Registrado em ' + d.quando + '.';
+          var opt = el('gelLocal').options[el('gelLocal').selectedIndex];
+          if (opt && opt.textContent.indexOf('✓ GEL') < 0) opt.textContent += '  ✓ GEL';
+        } else {
+          el('gelSalvarStatus').textContent = 'Não foi possível salvar.';
+        }
+      })
+      .withFailureHandler(function(e){
+        el('gelBtnSalvar').disabled = false;
+        var m = (e && e.message) || String(e);
+        el('gelSalvarStatus').textContent = (m.indexOf('Token de servico') >= 0 || m.indexOf('token de servico') >= 0)
+          ? 'O token de serviço do Apps Script não está configurado (fale com o administrador).'
+          : ('Erro: ' + m);
+      })
+      .salvarGelWeb({ local_id: GEL_LOCAL, secoes: secoes });
   }
 
   carregar();

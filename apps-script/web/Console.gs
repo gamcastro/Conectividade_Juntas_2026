@@ -164,9 +164,11 @@ function carregarPainel() {
 
   var universo = _webUniverso();
   var testados = _webTestados();
+  var gelWeb   = _webGelWeb();
 
   var linhas = universo.map(function (u) {
     var t = testados[u.local_id];
+    var gw = gelWeb[u.local_id];
     return {
       local_id: u.local_id,
       zona: u.zona,
@@ -184,7 +186,9 @@ function carregarPainel() {
       download_mbps: t ? t.download_mbps : '',
       latencia_ms: t ? t.latencia_ms : '',
       perda: t ? t.perda : '',
-      pdf_url: t ? t.pdf_url : ''
+      pdf_url: t ? t.pdf_url : '',
+      gel_web: !!(gw && gw.secoes),
+      gel_web_quando: gw ? gw.quando : ''
     };
   });
 
