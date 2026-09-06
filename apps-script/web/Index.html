@@ -95,6 +95,9 @@
   .gel-foto a { max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .gel-foto button { border:0; background:#F1F3F6; color:var(--tinta2); border-radius:6px; padding:3px 8px; font-size:11px; cursor:pointer; }
   .gel-foto button:hover { background:#F6E3E1; color:#a3320f; }
+  .acbtn { border:0; background:#F1F3F6; color:var(--tinta2); border-radius:6px; padding:3px 9px; font-size:11px; cursor:pointer; }
+  .acbtn:hover { background:#E7ECF3; }
+  .acbtn.rem:hover { background:#F6E3E1; color:#a3320f; }
 
   [hidden] { display:none !important; }
 </style>
@@ -105,7 +108,7 @@
   <span class="wm">DICON&nbsp;Web</span>
   <span class="badge">Homologação</span>
   <span class="sp"></span>
-  <button id="btnAtualizar" onclick="carregar()">Atualizar</button>
+  <button id="btnAtualizar" onclick="carregar(true)">Atualizar</button>
 </header>
 
 <div class="wrap">
@@ -146,6 +149,7 @@
       <button id="tabVist" onclick="verTab('vistorias')">Vistorias</button>
       <button id="tabGel" onclick="verTab('gel')">GEL</button>
       <button id="tabRel" onclick="verTab('rel')">Relatório final</button>
+      <button id="tabAcesso" onclick="verTab('acesso')" hidden>Acesso</button>
     </div>
 
     <div id="painel">
@@ -308,6 +312,28 @@
       </div>
     </div>
 
+    <div id="acesso" hidden>
+      <div class="card">
+        <h3>Quem acessa a console</h3>
+        <div class="cap" style="font-size:13px;color:var(--tinta2);line-height:1.5;margin-bottom:12px">
+          <b>leitura</b> = vê tudo. <b>admin</b> = também edita esta lista. <b>Desativar</b> tira o acesso sem apagar a linha.
+          O membro também precisa de <b>leitor</b> nas 3 planilhas de referência (Resultados de homolog, Juntas, Roteiros).
+        </div>
+        <div class="filtros">
+          <input id="acEmail" type="email" placeholder="email@tre-ma.jus.br">
+          <select id="acPapel"><option value="leitura">leitura</option><option value="admin">admin</option></select>
+          <button class="btn-primario" onclick="acSalvar()">Adicionar / atualizar</button>
+          <span id="acStatus" class="lbl" style="align-self:center;text-transform:none;letter-spacing:0;color:var(--tinta2)"></span>
+        </div>
+        <div class="tbwrap" style="max-height:56vh">
+          <table>
+            <thead><tr><th>E-mail</th><th>Papel</th><th>Ativo</th><th>Obs.</th><th></th></tr></thead>
+            <tbody id="acTab"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <div class="foot" id="foot"></div>
   </div>
 
@@ -321,7 +347,7 @@
     return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
   function fmt(n){ return (n===''||n==null||isNaN(n)) ? '—' : (Math.round(n*10)/10); }
 
-  function carregar(){
+  function carregar(forcar){
     el('carregando').hidden = false;
     el('semacesso').hidden = true;
     el('erro').hidden = true;
@@ -330,7 +356,7 @@
     google.script.run
       .withSuccessHandler(onDados)
       .withFailureHandler(onErro)
-      .carregarPainel();
+      .carregarPainel(!!forcar);
   }
 
   function onErro(e){
@@ -358,6 +384,8 @@
     el('rTotal').textContent  = d.resumo.total;
     el('rPend').textContent   = d.resumo.pendentes;
     el('rBar').style.width    = d.resumo.pct + '%';
+
+    el('tabAcesso').hidden = !(d.acesso && d.acesso.papel === 'admin');
 
     grupo('gRoteiro', d.por_roteiro);
     grupo('gTecnico', d.por_tecnico);
@@ -402,14 +430,17 @@
     el('tabVist').classList.toggle('on', t==='vistorias');
     el('tabGel').classList.toggle('on', t==='gel');
     el('tabRel').classList.toggle('on', t==='rel');
+    el('tabAcesso').classList.toggle('on', t==='acesso');
     el('painel').hidden    = (t!=='painel');
     el('vivo').hidden      = (t!=='vivo');
     el('vistorias').hidden = (t!=='vistorias');
     el('gel').hidden       = (t!=='gel');
     el('rel').hidden       = (t!=='rel');
+    el('acesso').hidden    = (t!=='acesso');
     if (t==='vivo') { carregarVivo(); iniciarVivoTimer(); } else { pararVivoTimer(); }
     if (t==='rel')  { atualizarBotaoRel(); carregarRelHist(); }
     if (t==='gel')  { gelPopularLocais(); }
+    if (t==='acesso') { carregarAcesso(); }
   }
 
   function atualizarBotaoRel(){
@@ -902,6 +933,63 @@
           : ('Erro: ' + m);
       })
       .salvarGelWeb({ local_id: GEL_LOCAL, secoes: secoes });
+  }
+
+  /* ========================= ABA ACESSO (admin) ========================= */
+
+  function carregarAcesso(){
+    el('acTab').innerHTML = '<tr><td colspan="5"><span class="lbl" style="text-transform:none;letter-spacing:0;color:var(--tinta2)">Carregando…</span></td></tr>';
+    google.script.run
+      .withSuccessHandler(function(d){
+        if (!d || !d.linhas){ el('acTab').innerHTML = ''; return; }
+        el('acTab').innerHTML = d.linhas.map(function(l){
+          var boot = (String(l.email).toLowerCase() === d.bootstrap);
+          var acoes = boot ? '' :
+            '<button class="acbtn" onclick="acEditar(\''+esc(l.email)+'\',\''+esc(l.papel)+'\')">editar</button> ' +
+            (l.ativo
+              ? '<button class="acbtn rem" onclick="acRemover(\''+esc(l.email)+'\')">desativar</button>'
+              : '<button class="acbtn" onclick="acReativar(\''+esc(l.email)+'\',\''+esc(l.papel)+'\')">reativar</button>');
+          return '<tr>' +
+            '<td>'+esc(l.email)+(boot?' <span class="lbl" style="text-transform:none;letter-spacing:0">(inicial)</span>':'')+'</td>' +
+            '<td>'+esc(l.papel)+'</td>' +
+            '<td>'+(l.ativo?'<span class="pill ok">sim</span>':'<span class="pill no">não</span>')+'</td>' +
+            '<td>'+esc(l.obs||'')+'</td>' +
+            '<td>'+acoes+'</td>' +
+          '</tr>';
+        }).join('') || '<tr><td colspan="5">—</td></tr>';
+      })
+      .withFailureHandler(function(e){
+        el('acTab').innerHTML = '<tr><td colspan="5">Erro: '+esc((e&&e.message)||e)+'</td></tr>';
+      })
+      .listarAcesso();
+  }
+
+  function acEditar(email, papel){ el('acEmail').value = email; el('acPapel').value = papel; el('acEmail').focus(); }
+
+  function acSalvar(){
+    var email = (el('acEmail').value || '').trim();
+    if (!email){ el('acStatus').textContent = 'Informe um e-mail.'; return; }
+    el('acStatus').textContent = 'Salvando…';
+    google.script.run
+      .withSuccessHandler(function(){ el('acStatus').textContent = 'Salvo.'; el('acEmail').value = ''; carregarAcesso(); })
+      .withFailureHandler(function(e){ el('acStatus').textContent = 'Erro: ' + ((e && e.message) || e); })
+      .salvarAcesso({ email: email, papel: el('acPapel').value, ativo: true });
+  }
+
+  function acRemover(email){
+    el('acStatus').textContent = 'Desativando…';
+    google.script.run
+      .withSuccessHandler(function(){ el('acStatus').textContent = ''; carregarAcesso(); })
+      .withFailureHandler(function(e){ el('acStatus').textContent = 'Erro: ' + ((e && e.message) || e); })
+      .removerAcesso(email);
+  }
+
+  function acReativar(email, papel){
+    el('acStatus').textContent = 'Reativando…';
+    google.script.run
+      .withSuccessHandler(function(){ el('acStatus').textContent = ''; carregarAcesso(); })
+      .withFailureHandler(function(e){ el('acStatus').textContent = 'Erro: ' + ((e && e.message) || e); })
+      .salvarAcesso({ email: email, papel: papel, ativo: true });
   }
 
   carregar();

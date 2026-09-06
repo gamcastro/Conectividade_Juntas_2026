@@ -75,6 +75,73 @@ function _webExigirAcesso(papelMin) {
   return a;
 }
 
+/* -------- gestao da allowlist (papel admin) -------- */
+
+function listarAcesso() {
+  var acesso = _webExigirAcesso('admin');
+  var token = _tokenServico();
+  var sheetId = _idResultados();
+  _sheetsGarantirAba(token, sheetId, WEB_ABA_ACESSO, ['email', 'papel', 'ativo', 'obs']);
+  var v = _sheetsGetValores(token, sheetId, WEB_ABA_ACESSO);
+  var linhas = (v || []).slice(1)
+    .filter(function (r) { return String(r[0] || '').trim(); })
+    .map(function (r) {
+      var ativoRaw = String(r[2] || '').toLowerCase().trim();
+      return {
+        email: String(r[0] || '').trim(),
+        papel: (String(r[1] || '').toLowerCase().trim() === 'admin') ? 'admin' : 'leitura',
+        ativo: !(ativoRaw === 'nao' || ativoRaw === 'não' || ativoRaw === 'false' || ativoRaw === '0' || ativoRaw === ''),
+        obs: String(r[3] || '')
+      };
+    });
+  return { acesso: acesso, linhas: linhas, bootstrap: String(WEB_BOOTSTRAP_ADMIN).toLowerCase() };
+}
+
+function salvarAcesso(req) {
+  _webExigirAcesso('admin');
+  req = req || {};
+  var email = String(req.email || '').toLowerCase().trim();
+  if (!email || email.indexOf('@') < 1) throw new Error('e-mail invalido');
+  var papel = (String(req.papel || '').toLowerCase().trim() === 'admin') ? 'admin' : 'leitura';
+  var ativo = (req.ativo === false) ? 'nao' : 'sim';
+
+  var token = _tokenServico();
+  var sheetId = _idResultados();
+  _sheetsGarantirAba(token, sheetId, WEB_ABA_ACESSO, ['email', 'papel', 'ativo', 'obs']);
+  var v = _sheetsGetValores(token, sheetId, WEB_ABA_ACESSO);
+  var rowNum = -1, obs = req.obs != null ? String(req.obs) : '';
+  for (var r = 1; r < v.length; r++) {
+    if (String(v[r][0] || '').toLowerCase().trim() === email) {
+      rowNum = r + 1;
+      if (req.obs == null) obs = String(v[r][3] || '');
+      break;
+    }
+  }
+  var linha = [email, papel, ativo, obs];
+  if (rowNum > 0) _sheetsSetValores(token, sheetId, WEB_ABA_ACESSO + '!A' + rowNum + ':D' + rowNum, [linha]);
+  else _sheetsAppendLinha(token, sheetId, WEB_ABA_ACESSO, linha);
+  return { ok: true };
+}
+
+// "desativar" -- marca ativo=nao mantendo papel/obs (nao apaga a linha).
+function removerAcesso(email) {
+  _webExigirAcesso('admin');
+  email = String(email || '').toLowerCase().trim();
+  if (!email) throw new Error('e-mail ausente');
+  if (email === String(WEB_BOOTSTRAP_ADMIN).toLowerCase()) throw new Error('o administrador inicial nao pode ser desativado');
+  var token = _tokenServico();
+  var sheetId = _idResultados();
+  var v = _sheetsGetValores(token, sheetId, WEB_ABA_ACESSO);
+  for (var r = 1; r < v.length; r++) {
+    if (String(v[r][0] || '').toLowerCase().trim() === email) {
+      _sheetsSetValores(token, sheetId, WEB_ABA_ACESSO + '!A' + (r + 1) + ':D' + (r + 1),
+        [[email, String(v[r][1] || 'leitura'), 'nao', String(v[r][3] || '')]]);
+      break;
+    }
+  }
+  return { ok: true };
+}
+
 /* ======================= UNIVERSO x TESTADOS ======================= */
 
 // Todos os Locais que DEVEM ser testados (uniao dos juntas_ids dos roteiros),
@@ -158,10 +225,35 @@ function _webOrdena(m) {
 // Uma chamada so': acesso + resumo + agregados + a lista de vistorias.
 // Sem acesso -> devolve { acesso, sem_acesso: true } (o cliente mostra a tela
 // "sem permissao" com o e-mail); nao lanca.
-function carregarPainel() {
+//
+// O corpo pesado (universo x testados) e' IGUAL pra todos os coordenadores ->
+// cache de ~45 s no CacheService (o `acesso`, esse sim por e-mail, vai fresco).
+// `forcar` (botao Atualizar) pula o cache.
+function carregarPainel(forcar) {
   var acesso = verificarAcesso();
   if (!acesso.papel) return { acesso: acesso, sem_acesso: true };
 
+  var cache = null;
+  try { cache = CacheService.getScriptCache(); } catch (e) { cache = null; }
+  if (cache && !forcar) {
+    var hit = cache.get('painel_v2');
+    if (hit) {
+      try { var o = JSON.parse(hit); o.acesso = acesso; o.cache = true; return o; } catch (e) { /* recomputa */ }
+    }
+  }
+
+  var corpo = _carregarPainelCorpo();
+  if (cache) {
+    try {
+      var s = JSON.stringify(corpo);
+      if (s.length < 95000) cache.put('painel_v2', s, 45);
+    } catch (e) { /* cache e' opcional */ }
+  }
+  corpo.acesso = acesso;
+  return corpo;
+}
+
+function _carregarPainelCorpo() {
   var universo = _webUniverso();
   var testados = _webTestados();
   var gelWeb   = _webGelWeb();
@@ -204,7 +296,6 @@ function carregarPainel() {
   });
 
   return {
-    acesso: acesso,
     resumo: {
       total: total, feitos: feitos, pendentes: total - feitos,
       pct: total ? Math.round(feitos * 100 / total) : 0

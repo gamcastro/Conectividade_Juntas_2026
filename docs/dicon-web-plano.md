@@ -32,9 +32,11 @@
 - **Fase 3 — no ar em homologação** ✅ (relatório final)
   - `apps-script/web/RelatorioFinal.gs`: `gerarRelatorioFinal(modo)` monta um
     **HTML → PDF** com `Utilities.newBlob(html,'text/html').getAs('application/pdf')`
-    (NÃO `DocumentApp`/`DriveApp` — ver a trava de escopo abaixo). O PDF volta
-    em **base64** e o navegador baixa; a aba `RelatoriosFinais` guarda só os
-    metadados. `listarRelatoriosFinais`, `_webTestadosCompleto` (lê `json`).
+    (NÃO `DocumentApp` — ver a trava de escopo abaixo). O PDF volta em **base64**
+    e o navegador baixa **e** é arquivado em `DICON/relatorios-finais/` pelo
+    token de serviço (`_driveUpload`, best-effort); `pdf_url`/`pdf_id` vão pra
+    aba `RelatoriosFinais` e viram a coluna "PDF" do histórico.
+    `listarRelatoriosFinais`, `_webTestadosCompleto` (lê `json`).
   - **Visual espelhado do relatório do DICON Desktop** (`src/saida/Export-RelatorioPdf.ps1`):
     cabeçalho JE + brasão (`web/Brasao.gs` = `assets/brasao-republica.jpg` em
     `data:` URI, string constante, sem escopo de Drive), régua navy, faixas
@@ -68,10 +70,23 @@
     tocar em `config/ambiente.exemplo.json` (técnicos de campo intactos). Ver
     `docs/oauth-google.md`.
   - Chamadas por `google.script.run` (não `executar`) → só a implantação Web App
-    precisa de redeploy. Redeploy Web App @18.
-  - **Falta**: George rodar `Conectar-DriveServico.ps1` + `setupServiceAuth`
-    (troca o token só-Sheets pelo Sheets+Drive) para o envio de fotos passar a
-    funcionar de fato; calibração do extrator com mais PDFs de GEL reais.
+    precisa de redeploy.
+  - **Token de serviço com Drive: FEITO** (2026-09-06) — `OAUTH_REFRESH_TOKEN`
+    do projeto homolog trocado por um com `spreadsheets` + `drive.file`
+    (`Conectar-DriveServico-Standalone.ps1`, colado em Propriedades do script).
+    Upload de fotos validado ao vivo.
+  - **Falta**: calibração do extrator com mais PDFs de GEL reais.
+- **Fase 4 — parcial em homologação** 🚧 (polimento)
+  - `carregarPainel(forcar)`: corpo pesado (universo × testados) em
+    `CacheService` (45 s); o botão **Atualizar** passa `forcar=true`.
+  - Aba **Acesso** (só papel `admin`): `listarAcesso` / `salvarAcesso` /
+    `removerAcesso` (token de serviço) + tela pra incluir/editar/desativar
+    e-mails da allowlist sem abrir a planilha. O admin inicial
+    (`WEB_BOOTSTRAP_ADMIN`) não pode ser desativado.
+  - Redeploy Web App @21.
+  - **Falta**: aba-resumo agregada por trigger; retenção da aba `Eventos`;
+    arquivar o PDF individual de cada Local (depende de mudança no DICON
+    desktop — ver Fase 1 abaixo).
 
 ### ⚠️ Trava de escopo OAuth (vale para Fase 2 também)
 
