@@ -81,6 +81,76 @@ function _driveUpload(token, paiId, nome, mimeType, bytes) {
   return j;
 }
 
+function _driveUploadMedia(token, fileId, mimeType, bytes) {
+  return _driveFetch(DRIVE_UPLOAD + '/' + fileId + '?uploadType=media&fields=id,webViewLink&' + DRIVE_COMUM, {
+    method: 'patch', muteHttpExceptions: true, contentType: mimeType,
+    headers: _driveHeaders(token), payload: bytes
+  });
+}
+
+// cria o arquivo, ou SOBRESCREVE se ja existe um com esse nome na pasta.
+function _driveUploadOuAtualiza(token, paiId, nome, mimeType, bytes) {
+  var id = _driveAcharFilho(token, nome, paiId, false);
+  if (id) return _driveUploadMedia(token, id, mimeType, bytes);
+  return _driveUpload(token, paiId, nome, mimeType, bytes);
+}
+
+function _colA1(n) {
+  var s = '';
+  while (n > 0) { var m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = (n - m - 1) / 26; }
+  return s;
+}
+
+// grava pdf_url na linha mais recente do Local (casando o tecnico quando dado)
+// na aba Resultados. Cria a coluna pdf_url se ela nao existir.
+function _resultadoSetPdf(token, sheetId, localId, tecnico, url) {
+  var v = _sheetsGetValores(token, sheetId, ABA_RESULTADOS);
+  if (!v || v.length < 2) return;
+  var head = v[0].map(function (c) { return String(c || '').trim(); });
+  var ix = {}; head.forEach(function (n, i) { ix[n] = i; });
+  if (ix['local_id'] == null) return;
+
+  if (ix['pdf_url'] == null) {
+    var nova = head.length + 1;
+    _sheetsSetValores(token, sheetId, ABA_RESULTADOS + '!' + _colA1(nova) + '1', [['pdf_url']]);
+    ix['pdf_url'] = nova - 1;
+  }
+
+  var alvoTec = String(tecnico || '').toLowerCase().trim();
+  for (var r = v.length - 1; r >= 1; r--) {   // mais recente primeiro
+    if (String(v[r][ix['local_id']] || '').trim() !== localId) continue;
+    if (alvoTec && ix['tecnico'] != null && String(v[r][ix['tecnico']] || '').toLowerCase().trim() !== alvoTec) continue;
+    _sheetsSetValores(token, sheetId, ABA_RESULTADOS + '!' + _colA1(ix['pdf_url'] + 1) + (r + 1), [[url]]);
+    return;
+  }
+}
+
+// acao 'pdf.relatorio' (Codigo.gs > executar). Chamada pelo DICON desktop.
+// req: { local_id, tecnico, nome, b64 }
+function webUploadPdfRelatorio(req) {
+  req = req || {};
+  var localId = String(req.local_id || '').trim();
+  if (!localId) return { status: 'ignorado', motivo: 'local_id ausente' };
+  if (!req.b64)  return { status: 'ignorado', motivo: 'pdf vazio' };
+
+  var token = _tokenServico();
+  var sheetId = _idResultados();
+  var nome = String(req.nome || '').trim() || (localId.replace(/[^A-Za-z0-9_.-]+/g, '_') + '.pdf');
+
+  var f;
+  try {
+    var pasta = _driveGarantirPasta(token, 'relatorios', WEB_DRIVE_ROOT);
+    f = _driveUploadOuAtualiza(token, pasta, nome, 'application/pdf', Utilities.base64Decode(req.b64));
+  } catch (e) {
+    if (String(e.message || e).indexOf('DRIVE_SEM_ESCOPO') >= 0) return { status: 'ignorado', motivo: 'DRIVE_SEM_ESCOPO' };
+    throw e;
+  }
+
+  var url = f.webViewLink || ('https://drive.google.com/file/d/' + f.id + '/view');
+  try { _resultadoSetPdf(token, sheetId, localId, String(req.tecnico || ''), url); } catch (e) { /* link e' secundario */ }
+  return { status: 'ok', url: url, id: f.id };
+}
+
 // ---- fotos do GEL ----------------------------------------------------------
 
 // atualiza n_fotos (e pasta_drive_id / secoes_json.fotos) na linha da aba GEL.

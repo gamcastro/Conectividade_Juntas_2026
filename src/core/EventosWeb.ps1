@@ -171,3 +171,83 @@ function Stop-HeartbeatWeb {
         $Global:HeartbeatWebTimer = $null
     }
 }
+
+# ---------------------------------------------------------------------------
+# Envio do PDF do relatorio individual para o Drive da coordenacao (DICON Web
+# Fase 1, item 4). Best-effort: roda num runspace proprio, nao bloqueia a UI,
+# nunca lanca. O servidor (acao 'pdf.relatorio' -> webUploadPdfRelatorio) sobe
+# o arquivo em DICON/relatorios/ com o token de servico e grava pdf_url na
+# linha do Local na aba Resultados.
+function Test-PdfWebLigado {
+    if ($Global:ModoTeste) { return $false }
+    try {
+        $cfg = Get-Config 'envio'
+        if ($cfg -and $cfg.PSObject.Properties['pdf_web']) { return [bool] $cfg.pdf_web }
+    } catch { }
+    return $true
+}
+
+$Global:PdfWebState = $null
+function Start-EnvioPdfRelatorioWeb {
+    param(
+        [Parameter(Mandatory)] [string] $LocalId,
+        [Parameter(Mandatory)] [string] $Caminho
+    )
+    if (-not (Test-PdfWebLigado)) { return }
+    if (-not $LocalId -or -not (Test-Path $Caminho)) { return }
+
+    # le o arquivo AQUI (thread da UI): bytes + guarda de tamanho.
+    $b64 = $null
+    try {
+        $fi = Get-Item $Caminho -ErrorAction Stop
+        if ($fi.Length -gt 9MB) {
+            try { Write-Log ("Relatorio PDF ({0} MB) grande demais para a console; envio pulado." -f [math]::Round($fi.Length / 1MB, 1)) -Nivel Aviso } catch { }
+            return
+        }
+        $b64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($fi.FullName))
+    } catch { return }
+    if (-not $b64) { return }
+
+    $payload = @{
+        local_id = [string] $LocalId
+        tecnico  = [string] $Global:SessaoAtual.tecnico_nome
+        nome     = ('{0}.pdf' -f ([string] $LocalId -replace '[^A-Za-z0-9_.-]+', '_'))
+        b64      = $b64
+    }
+
+    # nao empilha: se ja ha um envio rodando, deixa quieto (o proximo export reenvia).
+    if ($Global:PdfWebState) {
+        if ($Global:PdfWebState.Handle.IsCompleted) {
+            try { $Global:PdfWebState.PS.EndInvoke($Global:PdfWebState.Handle) | Out-Null } catch { }
+            try { $Global:PdfWebState.PS.Dispose(); $Global:PdfWebState.RS.Dispose() } catch { }
+            $Global:PdfWebState = $null
+        } else { return }
+    }
+
+    try {
+        $rs = [runspacefactory]::CreateRunspace()
+        $rs.ApartmentState = 'MTA'
+        $rs.Open()
+        $rs.SessionStateProxy.SetVariable('RaizAppW', $Global:RaizApp)
+        $rs.SessionStateProxy.SetVariable('ArquivoLogW', $Global:ArquivoLog)
+        $rs.SessionStateProxy.SetVariable('PayloadW', $payload)
+
+        $ps = [powershell]::Create()
+        $ps.Runspace = $rs
+        [void] $ps.AddScript({
+            try {
+                Import-Module (Join-Path $RaizAppW 'src\Conectividade.psd1') -Force -ErrorAction Stop
+                $Global:RaizApp    = $RaizAppW
+                $Global:ArquivoLog = $ArquivoLogW
+                try {
+                    $r = Invoke-FuncaoAppsScript -Acao 'pdf.relatorio' -Payload $PayloadW -TimeoutS 60
+                    if ($r -and $r.status -eq 'ok') { try { Write-Log "Relatorio PDF enviado a console: $($r.url)" -Nivel Ok } catch { } }
+                } catch { }
+            } catch { }
+        })
+        $h = $ps.BeginInvoke()
+        $Global:PdfWebState = @{ PS = $ps; RS = $rs; Handle = $h }
+    } catch {
+        try { Write-Log "Envio do PDF do relatorio nao iniciou: $_" -Nivel Aviso } catch { }
+    }
+}

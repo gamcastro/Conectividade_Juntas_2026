@@ -242,6 +242,7 @@ function executar(req) {
     // como o proprio 'resultado', porque o tecnico nao e' editor da planilha).
     if (acao === 'checkin') return webCheckin(req);
     if (acao === 'evento')  return webRegistrarEvento(req);
+    if (acao === 'pdf.relatorio') return webUploadPdfRelatorio(req);
 
     if (acao === 'resultado') {
       if (!_idResultados()) return { status: 'ignorado', motivo: 'PLANILHA_RESULTADOS_ID nao configurado' };

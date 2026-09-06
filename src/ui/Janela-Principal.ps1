@@ -1498,6 +1498,13 @@ function Complete-AbrirRelatorioLocal {
     if ($st) { $st.Text = "Relatorio: $Saida" }
     Write-Log "Relatorio do local gerado: $Saida" -Nivel Ok
     if (-not $Global:ModoTeste -and $Saida) { try { Start-Process -FilePath $Saida } catch { } }
+    # DICON Web: sobe o PDF pra console se este Local ja foi transmitido.
+    try {
+        $lid = [string] $Global:LocalDetalheAtual.id
+        if ($lid -and $Saida -and ((Get-DiagnosticosRealizados)[$lid].Enviado)) {
+            Start-EnvioPdfRelatorioWeb -LocalId $lid -Caminho $Saida
+        }
+    } catch { }
 }
 
 # Reflete no card do GEL (tela de detalhe) o que ja esta anexado ao Local.
@@ -4295,6 +4302,13 @@ function Complete-ExportarRelatorio {
         $st.Text = "Relatorio salvo: $Saida"
         Write-Log "Relatorio salvo: $Saida" -Nivel Ok
         if (-not $Global:ModoTeste -and $Saida) { try { Start-Process -FilePath $Saida } catch { } }
+        # DICON Web: sobe o PDF pra console se este Local ja foi transmitido.
+        try {
+            $lid = [string] (Get-LocalDoAssistente).id
+            if ($lid -and $Saida -and ((Get-DiagnosticosRealizados)[$lid].Enviado)) {
+                Start-EnvioPdfRelatorioWeb -LocalId $lid -Caminho $Saida
+            }
+        } catch { }
     }
     Update-ResumoFim
 }
