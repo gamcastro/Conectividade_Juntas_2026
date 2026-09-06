@@ -27,10 +27,19 @@
     (timer 5 min). Hooks: `abriu_app` no login, `iniciou_diagnostico` ao chegar
     no passo 3, `transmitiu`, `finalizou`. Toggle `config/envio.json >
     checkin_web` (padrão on); `$Global:ModoTeste` desliga nos testes.
-  - **Falta**: o upload do PDF individual para o Drive (depende do ID do
-    Shared Drive) — some com o parte do PDF na Fase 1 e vai junto de/perto da
-    Fase 3.
-- Fases 2–4: não iniciadas.
+  - **Falta**: o upload do PDF individual para o Drive (mudança no DICON
+    desktop) — a coluna PDF fica vazia até isso.
+- **Fase 3 — no ar em homologação** ✅ (relatório final)
+  - `apps-script/web/RelatorioFinal.gs`: `gerarRelatorioFinal(modo)` (Doc →
+    PDF em `relatorios-finais/` da pasta do Drive `1ZaV3-…`, registra em
+    `RelatoriosFinais`, funciona parcial ou 100%), `listarRelatoriosFinais`,
+    `_webTestadosCompleto` (lê a coluna `json`).
+  - `Console.gs`: `WEB_DRIVE_ROOT` = pasta DICON no Shared Drive.
+  - `Index.html`: aba **Relatório final** (botão Gerar + links + histórico).
+  - Redeploy Web App @11. Usa `DriveApp`/`DocumentApp` → o coordenador é
+    **re-solicitado a autorizar** no 1º acesso (escopos novos) e precisa de
+    **editor** na pasta do Drive.
+- **Fase 2 — não iniciada** (GEL pela web). **Fase 4 — não iniciada**.
 
 ## 1. Objetivo
 
