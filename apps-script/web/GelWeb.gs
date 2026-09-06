@@ -100,7 +100,11 @@ function carregarGelLocal(localId) {
     if (t && t.doc && t.doc.vistoria_gel) doResultado = t.doc.vistoria_gel;
   } catch (e) { /* ok */ }
 
-  return { acesso: acesso, local: u, gel_web: web, gel_resultado: doResultado };
+  var fotos = { fotos: [] };
+  try { fotos = listarFotosGel(localId); } catch (e) { /* Drive opcional */ }
+
+  return { acesso: acesso, local: u, gel_web: web, gel_resultado: doResultado,
+           fotos: fotos.fotos || [], fotos_erro: fotos.erro || '' };
 }
 
 // Grava/atualiza a linha do Local na aba GEL. req: { local_id, secoes }

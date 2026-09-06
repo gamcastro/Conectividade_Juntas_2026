@@ -42,26 +42,36 @@
     colunas com `<table>` aninhada (sem grid/flex).
   - `Index.html`: aba **Relatório final** (Gerar → baixa o PDF + histórico).
   - Redeploy Web App @13.
-- **Fase 2 — parcial em homologação** 🚧 (GEL pela web — SEM fotos)
+- **Fase 2 — no ar em homologação** ✅ (GEL pela web, com fotos)
   - `apps-script/web/GelWeb.gs`: `salvarGelWeb({local_id,secoes})` grava/atualiza
     a aba **`GEL`** (`local_id | secoes_json | n_fotos | por | quando |
     pdf_gel_id | pasta_drive_id`) via **token de serviço** (coordenador tem só
     leitor); `_gelNormaliza` põe o formulário no MESMO shape do
     `New-BlocoVistoriaGel` do desktop. `carregarGelLocal(localId)` (identidade
-    do Local + GEL já existente da web ou do resultado transmitido).
-    `_webGelWeb()` (índice `local_id → {secoes,por,quando}`), consumido por
-    `carregarPainel` (coluna GEL da aba Vistorias) e por `gerarRelatorioFinal`
-    (coluna GEL, `sim (web)`).
+    do Local + GEL já existente + lista de fotos). `_webGelWeb()` (índice
+    `local_id → {secoes,por,quando}`), consumido por `carregarPainel` (coluna
+    GEL da aba Vistorias) e por `gerarRelatorioFinal` (coluna GEL, `sim (web)`).
   - `Index.html`: aba **GEL** — seletor de Local, `<input type=file>` do PDF,
-    **pdf.js do cdnjs (3.11.174, `workerSrc` no cdnjs)** lê o PDF **no
-    navegador**, `gelExtrairCampos` (port fiel do `ConvertFrom-VistoriaGel`) +
-    `gelLerPdf` (ordem de leitura y↓ x↑, plano — espelha `pg.GetWords()`),
-    formulário de conferência das 5 seções, `Registrar GEL`.
+    **pdf.js do cdnjs (3.11.174)** lê o PDF **no navegador** na ordem do
+    content-stream (a mesma do PdfPig — resposta ANTES do `R. :`);
+    `gelExtrairCampos` = espelho do `ConvertFrom-VistoriaGel` + `gelTiraMobilia`
+    (tira cabeçalho/rodapé de página). Formulário de conferência das 5 seções +
+    `Registrar GEL`. **Fotos**: `<input multiple>` → resize no `<canvas>`
+    (1600 px / q80) → `uploadFotoGel` uma a uma → galeria com remover.
+  - `apps-script/web/DriveWeb.gs`: `uploadFotoGel` / `listarFotosGel` /
+    `removerFotoGel` via **API REST do Drive** (`UrlFetchApp` + token de
+    serviço, **não** `DriveApp`) na pasta `DICON/gel/<local_id>/`. Escopo
+    `drive.file` — só o que a console cria. Sem o escopo → `DRIVE_SEM_ESCOPO`,
+    a UI avisa e o resto continua.
+  - `tools/Conectar-DriveServico.ps1`: consentimento OAuth próprio (loopback)
+    que gera o refresh token de serviço com `spreadsheets` + `drive.file` sem
+    tocar em `config/ambiente.exemplo.json` (técnicos de campo intactos). Ver
+    `docs/oauth-google.md`.
   - Chamadas por `google.script.run` (não `executar`) → só a implantação Web App
-    precisa de redeploy. Redeploy Web App @14.
-  - **Falta**: upload das **fotos** da vistoria (depende do escopo `drive` no
-    token de serviço — decisão 2026-09-06 abaixo) + calibração lado a lado do
-    extrator com PDFs de GEL reais.
+    precisa de redeploy. Redeploy Web App @18.
+  - **Falta**: George rodar `Conectar-DriveServico.ps1` + `setupServiceAuth`
+    (troca o token só-Sheets pelo Sheets+Drive) para o envio de fotos passar a
+    funcionar de fato; calibração do extrator com mais PDFs de GEL reais.
 
 ### ⚠️ Trava de escopo OAuth (vale para Fase 2 também)
 

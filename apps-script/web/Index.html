@@ -90,6 +90,11 @@
   .gel-cols label { display:flex; flex-direction:column; gap:3px; font-size:11.5px; color:var(--tinta2); margin-bottom:9px; }
   .gel-cols input { border:1px solid var(--hair); border-radius:6px; padding:6px 9px; font-size:13px; color:var(--tinta); }
   .gel-cols input:focus { outline:2px solid #BcD3F2; border-color:var(--azul); }
+  .gel-fotos { display:flex; flex-wrap:wrap; gap:10px; margin-top:10px; }
+  .gel-foto { border:1px solid var(--hair); border-radius:8px; padding:8px 10px; font-size:12px; display:flex; align-items:center; gap:8px; background:#fff; }
+  .gel-foto a { max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .gel-foto button { border:0; background:#F1F3F6; color:var(--tinta2); border-radius:6px; padding:3px 8px; font-size:11px; cursor:pointer; }
+  .gel-foto button:hover { background:#F6E3E1; color:#a3320f; }
 
   [hidden] { display:none !important; }
 </style>
@@ -261,9 +266,19 @@
           <button class="btn-primario" id="gelBtnSalvar" onclick="gelSalvar()">Registrar GEL</button>
           <span id="gelSalvarStatus" class="lbl" style="margin-left:12px;text-transform:none;letter-spacing:0;color:var(--tinta2)"></span>
         </div>
-        <div class="lbl" style="margin-top:12px;text-transform:none;letter-spacing:0;color:var(--tinta2)">
-          As <b>fotos</b> da vistoria continuam sendo anexadas pelo DICON desktop / GEL web — o upload pela console entra na próxima etapa.
-        </div>
+
+        <fieldset style="margin-top:16px"><legend>Fotos da vistoria</legend>
+          <div class="lbl" style="text-transform:none;letter-spacing:0;color:var(--tinta2);margin:2px 0 8px">
+            As imagens são reduzidas no navegador (máx. 1600 px) antes de subir para a pasta
+            <code>DICON / gel / &lt;local&gt;</code> do Drive.
+          </div>
+          <div class="gel-pdf">
+            <input type="file" id="gelFotos" multiple accept="image/*" onchange="gelFotosEscolhidas()">
+            <button class="btn-primario" id="gelBtnFotos" onclick="gelSubirFotos()" disabled>Enviar fotos</button>
+            <span id="gelFotosStatus" class="lbl" style="text-transform:none;letter-spacing:0;color:var(--tinta2)"></span>
+          </div>
+          <div id="gelGaleria" class="gel-fotos"></div>
+        </fieldset>
       </div>
     </div>
 
@@ -562,7 +577,10 @@
     el('gelExistente').hidden = true;
     el('gelPdfStatus').textContent = '';
     el('gelSalvarStatus').textContent = '';
+    el('gelFotosStatus').textContent = '';
+    el('gelGaleria').innerHTML = '';
     gelPdfEscolhido();
+    gelFotosEscolhidas();
     if (!GEL_LOCAL) return;
     google.script.run
       .withSuccessHandler(function(d){
@@ -578,9 +596,104 @@
             ' <a href="#" onclick="gelPrefill();return false;">Carregar no formulário</a>';
           el('gelExistente').hidden = false;
         }
+        gelRenderGaleria(d.fotos || []);
+        if (d.fotos_erro === 'DRIVE_SEM_ESCOPO')
+          el('gelFotosStatus').textContent = 'Envio de fotos indisponível: o token de serviço ainda não tem acesso ao Drive.';
       })
       .withFailureHandler(function(){})
       .carregarGelLocal(GEL_LOCAL);
+  }
+
+  function gelFotosEscolhidas(){
+    var n = (el('gelFotos').files || []).length;
+    el('gelBtnFotos').disabled = !GEL_LOCAL || !n;
+    el('gelFotosStatus').textContent = n ? (n + ' arquivo(s) selecionado(s)') : '';
+  }
+
+  function gelRenderGaleria(fotos){
+    el('gelGaleria').innerHTML = (fotos || []).map(function(f){
+      return '<div class="gel-foto">' +
+        '<a href="' + esc(f.url) + '" target="_blank" rel="noopener" title="' + esc(f.nome) + '">' + esc(f.nome) + '</a>' +
+        '<button onclick="gelRemoverFoto(\'' + esc(f.id) + '\')">remover</button>' +
+      '</div>';
+    }).join('') || '<span class="lbl" style="text-transform:none;letter-spacing:0;color:var(--tinta2)">Nenhuma foto anexada pela console.</span>';
+  }
+
+  // reduz p/ no maximo 1600 px no maior lado, JPEG q80 -> { b64, mime, nome }
+  function gelResizeImagem(file){
+    return new Promise(function(resolve, reject){
+      var img = new Image();
+      var fr = new FileReader();
+      fr.onload = function(){ img.src = fr.result; };
+      fr.onerror = function(){ reject(new Error('não consegui ler ' + file.name)); };
+      img.onload = function(){
+        var MAX = 1600;
+        var w = img.naturalWidth, h = img.naturalHeight;
+        var esc2 = Math.min(1, MAX / Math.max(w, h));
+        var cw = Math.round(w * esc2), ch = Math.round(h * esc2);
+        var cv = document.createElement('canvas');
+        cv.width = cw; cv.height = ch;
+        cv.getContext('2d').drawImage(img, 0, 0, cw, ch);
+        var url;
+        try { url = cv.toDataURL('image/jpeg', 0.8); }
+        catch (e){ reject(new Error('falha ao converter ' + file.name)); return; }
+        var nome = (file.name || 'foto').replace(/\.[^.]+$/, '') + '.jpg';
+        resolve({ b64: url.split(',')[1], mime: 'image/jpeg', nome: nome });
+      };
+      img.onerror = function(){ reject(new Error('imagem inválida: ' + file.name)); };
+      fr.readAsDataURL(file);
+    });
+  }
+
+  function gelSubirFotos(){
+    var files = Array.prototype.slice.call(el('gelFotos').files || []);
+    if (!GEL_LOCAL || !files.length) return;
+    el('gelBtnFotos').disabled = true;
+    var i = 0, erros = 0;
+    function proxima(){
+      if (i >= files.length){
+        el('gelFotosStatus').textContent = 'Concluído' + (erros ? (' — ' + erros + ' falha(s)') : '') + '.';
+        el('gelFotos').value = '';
+        gelFotosEscolhidas();
+        google.script.run.withSuccessHandler(function(r){ gelRenderGaleria((r && r.fotos) || []); })
+          .withFailureHandler(function(){}).listarFotosGel(GEL_LOCAL);
+        return;
+      }
+      var f = files[i];
+      el('gelFotosStatus').textContent = 'Enviando ' + (i + 1) + '/' + files.length + '… (' + f.name + ')';
+      gelResizeImagem(f).then(function(img){
+        google.script.run
+          .withSuccessHandler(function(r){
+            if (!r || !r.ok){
+              erros++;
+              if (r && r.erro === 'DRIVE_SEM_ESCOPO'){
+                el('gelFotosStatus').textContent = 'O token de serviço ainda não tem acesso ao Drive — peça ao administrador.';
+                el('gelBtnFotos').disabled = false;
+                return;
+              }
+            }
+            i++; proxima();
+          })
+          .withFailureHandler(function(e){
+            erros++; i++; proxima();
+          })
+          .uploadFotoGel({ local_id: GEL_LOCAL, nome: img.nome, mime: img.mime, b64: img.b64 });
+      }).catch(function(){ erros++; i++; proxima(); });
+    }
+    proxima();
+  }
+
+  function gelRemoverFoto(id){
+    if (!GEL_LOCAL || !id) return;
+    el('gelFotosStatus').textContent = 'Removendo…';
+    google.script.run
+      .withSuccessHandler(function(){
+        el('gelFotosStatus').textContent = '';
+        google.script.run.withSuccessHandler(function(x){ gelRenderGaleria((x && x.fotos) || []); })
+          .withFailureHandler(function(){}).listarFotosGel(GEL_LOCAL);
+      })
+      .withFailureHandler(function(e){ el('gelFotosStatus').textContent = 'Não removeu: ' + ((e && e.message) || e); })
+      .removerFotoGel({ local_id: GEL_LOCAL, id: id });
   }
 
   function gelPrefill(){
