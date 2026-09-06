@@ -176,8 +176,15 @@ numa linha → `Invoke-AbrirLocalCoord` → `Open-LocalDetalhe -Origem 'viewCoor
 (mesma ficha, mesmo `cardGel`/`Invoke-AnexarGel`/`Invoke-GelAddFotos`/
 `Invoke-AbrirRelatorioLocal`). É o caminho do **coordenador anexar o formulário do
 GEL + fotos e regenerar o relatório de qualquer local sem trocar de usuário nem
-ficar preso à própria rota**. Só nessa origem aparece o botão
-**`btnLdBaixarResultado`** ("Baixar resultado transmitido") → `Invoke-BaixarResultadoLocal`
+ficar preso à própria rota**. Ao abrir a tela, **`Start-CoordListaTransmitidos`**
+(async, `Start-TarefaRede`) faz um `resultados.listar` **sem filtro de técnico** →
+`$Global:CoordTransmitidos` (set de `local_id` com diagnóstico transmitido) +
+`$Global:CoordListaOk`; `Complete-CoordListaTransmitidos` re-renderiza a coluna de
+status (ganha o estado **"na planilha"**) e re-avalia o botão. Só na origem
+`viewCoord` aparece o botão **`btnLdBaixarResultado`** ("Baixar resultado
+transmitido") — **habilitado apenas quando o local está em `CoordTransmitidos`**
+(ou enquanto o `listar` ainda não respondeu); desabilitado com tooltip quando a
+planilha não tem diagnóstico para aquele local → `Invoke-BaixarResultadoLocal`
 → `Sync-Resultados -LocalIds @($id)` **sem `-TecnicoNome`** (puxa da planilha o
 último diagnóstico transmitido daquele local, de qualquer técnico, para
 `resultados\enviados\`; e, no mesmo passo, **`Get-VistoriaGelRemoto`** puxa o

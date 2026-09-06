@@ -53,6 +53,8 @@ $Global:VistoriaGel        = $null   # anexo do GEL do local aberto no assistent
 $Global:LocalDetalheAtual  = $null   # objeto do local aberto na tela viewLocalDetalhe
 $Global:LocalDetalheOrigem = 'viewLocais'  # de onde a ficha do local foi aberta: 'viewLocais' | 'viewCoord'
 $Global:LocaisCoord        = @()     # todos os locais (todos os roteiros) para a tela Coordenacao
+$Global:CoordTransmitidos  = @{}     # local_id (minusculo) -> $true : tem diagnostico na planilha (todos os tecnicos)
+$Global:CoordListaOk       = $false  # o 'resultados.listar' da tela Coordenacao respondeu?
 
 $Global:FeitoSalvar        = $false  # checklist do passo 7
 $Global:FeitoTransmitir    = $false
@@ -1238,8 +1240,13 @@ function Get-TodosLocaisCoord {
 
         $st = ''
         $d  = if ($id) { $feitos[$id] } else { $null }
-        if ($d) { $st = if ($d.Enviado) { 'transmitido' } else { 'no computador' } }
-        else    { $st = [char]0x2014 }
+        if ($d) {
+            $st = if ($d.Enviado) { 'transmitido' } else { 'no computador' }
+        } elseif ($Global:CoordListaOk -and $id -and $Global:CoordTransmitidos.ContainsKey($id.ToLower())) {
+            $st = 'na planilha'   # outro tecnico transmitiu; "Baixar resultado" traz
+        } else {
+            $st = [char]0x2014
+        }
 
         $g   = if ($id) { Get-VistoriaGel -LocalId $id } else { $null }
         $nf  = if ($id) { @(Get-FotosGel -LocalId $id).Count } else { 0 }
@@ -1267,6 +1274,10 @@ function Initialize-Coord {
     if (-not $w) { return }
 
     $Global:LocaisCoord = @(Get-TodosLocaisCoord)
+    # em paralelo: pergunta a planilha quais locais tem diagnostico transmitido
+    # (qualquer tecnico) -> habilita/desabilita o "Baixar resultado" e a coluna
+    # de status ganha o estado "na planilha".
+    Start-CoordListaTransmitidos
 
     $w.FindName('txtCoordSub').Text = if (@($Global:LocaisCoord).Count) {
         'Todos os locais dos roteiros ({0}). Clique num local para anexar o formulario do GEL e as fotos e gerar o relatorio completo.' -f @($Global:LocaisCoord).Count
@@ -1326,6 +1337,39 @@ function Update-CoordFiltrados {
     $w.FindName('dgCoord').ItemsSource = @($lista)
     $Global:AtualizandoFiltroCoord = $false
     $w.FindName('txtCoordContagem').Text = '{0} de {1}' -f @($lista).Count, @($Global:LocaisCoord).Count
+}
+
+# Async: 'resultados.listar' sem filtro de tecnico -> conjunto de local_ids que
+# tem diagnostico transmitido na planilha. Best-effort: se falhar, o botao
+# "Baixar resultado" fica habilitado (comportamento anterior).
+function Start-CoordListaTransmitidos {
+    if ($Global:ModoTeste) { return }
+    try {
+        Start-TarefaRede -Script "Invoke-FuncaoAppsScript -Acao 'resultados.listar' -Payload @{} -TimeoutS 25" `
+            -AoConcluir { param($resp, $erro) Complete-CoordListaTransmitidos $resp $erro }
+    } catch { }
+}
+
+function Complete-CoordListaTransmitidos {
+    param($Resp, $Erro)
+    if ($Erro -or -not $Resp) { return }   # nao deu -> nao mexe (CoordListaOk fica false)
+    $set = @{}
+    foreach ($it in @($Resp.itens)) {
+        $lid = ([string] $it.local_id).Trim().ToLower()
+        if ($lid) { $set[$lid] = $true }
+    }
+    $Global:CoordTransmitidos = $set
+    $Global:CoordListaOk = $true
+    try {
+        $w = $Global:JanelaPrincipal
+        if ($w -and "$($w.FindName('viewCoord').Visibility)" -eq 'Visible') {
+            $Global:LocaisCoord = @(Get-TodosLocaisCoord)
+            Update-CoordFiltrados
+        }
+        if ($w -and "$($w.FindName('viewLocalDetalhe').Visibility)" -eq 'Visible' -and $Global:LocalDetalheOrigem -eq 'viewCoord') {
+            Update-StatusLocalDetalhe
+        }
+    } catch { }
 }
 
 # Clicar numa linha da grade da Coordenacao abre a ficha do local.
@@ -1677,11 +1721,29 @@ function Update-StatusLocalDetalhe {
             'Gera o relatorio do ultimo diagnostico com o formulario do GEL e as fotos atuais.'
         } else { 'Rode o diagnostico deste local (ou baixe o resultado transmitido) antes de gerar o relatorio.' }
     }
-    # "Baixar resultado transmitido": so' na ficha aberta pela Coordenacao.
+    # "Baixar resultado transmitido": so' na ficha aberta pela Coordenacao, e so'
+    # habilitado quando a planilha tem diagnostico transmitido para este local
+    # (checagem assincrona em Start-CoordListaTransmitidos). Se ainda nao deu pra
+    # checar, fica habilitado (o proprio clique diz se ha ou nao).
     $bd = $w.FindName('btnLdBaixarResultado')
     if ($bd) {
-        $bd.Visibility = if ($Global:LocalDetalheOrigem -eq 'viewCoord') { 'Visible' } else { 'Collapsed' }
-        $bd.IsEnabled  = $true
+        if ($Global:LocalDetalheOrigem -eq 'viewCoord') {
+            $bd.Visibility = 'Visible'
+            if ($Global:CoordListaOk) {
+                $temPlan = $id -and $Global:CoordTransmitidos.ContainsKey($id.ToLower())
+                $bd.IsEnabled = [bool] $temPlan
+                $bd.ToolTip = if ($temPlan) {
+                    'Puxa da planilha o ultimo diagnostico transmitido deste local (de qualquer tecnico) para este computador.'
+                } else {
+                    'Nenhum diagnostico transmitido para este local na planilha ainda.'
+                }
+            } else {
+                $bd.IsEnabled = $true
+                $bd.ToolTip = 'Puxa da planilha o ultimo diagnostico transmitido deste local (de qualquer tecnico) para este computador.'
+            }
+        } else {
+            $bd.Visibility = 'Collapsed'
+        }
     }
     $rs = $w.FindName('txtLdRelatStatus'); if ($rs) { $rs.Text = '' }
 }
