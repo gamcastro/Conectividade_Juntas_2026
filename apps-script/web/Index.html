@@ -629,8 +629,10 @@
     document.head.appendChild(s);
   }
 
-  // Texto do PDF na ordem de leitura (y desc, x asc), plano -- espelha o
-  // pg.GetWords() do PdfPig usado pelo DICON desktop.
+  // Texto do PDF na ordem do content-stream (a mesma que o getTextContent do
+  // pdf.js entrega e que o pg.GetWords() do PdfPig usa no DICON desktop). NAO
+  // reordenar geometricamente: nesse PDF a resposta e' emitida ANTES do "R. :"
+  // ("<pergunta>? <resposta> R. :"), e um sort por y/x embaralha isso.
   function gelLerPdf(bytes){
     return window.pdfjsLib.getDocument({ data: bytes }).promise.then(function(pdf){
       var paginas = [], seq = Promise.resolve();
@@ -639,14 +641,7 @@
           seq = seq.then(function(){
             return pdf.getPage(n).then(function(page){
               return page.getTextContent().then(function(tc){
-                var itens = (tc.items || [])
-                  .filter(function(it){ return it.str && it.str.trim() !== ''; })
-                  .map(function(it){ var tr = it.transform || [1,0,0,1,0,0]; return { s: it.str, x: tr[4], y: tr[5] }; });
-                itens.sort(function(a,b){
-                  var dy = Math.round(b.y/2) - Math.round(a.y/2);
-                  return dy !== 0 ? dy : (a.x - b.x);
-                });
-                paginas.push(itens.map(function(it){ return it.s; }).join(' '));
+                paginas.push((tc.items || []).map(function(it){ return it.str || ''; }).join(' '));
               });
             });
           });
@@ -660,36 +655,6 @@
     try { return t.normalize('NFD').replace(new RegExp('[\\u0300-\\u036f]', 'g'), ''); } catch (e){ return t; }
   }
 
-  // Extrator dos campos do GEL a partir do texto lido pelo pdf.js.
-  //
-  // No PDF real do GEL a resposta vem DEPOIS do marcador "R. :":
-  //   "<pergunta>?  R. :  <resposta>  <proxima pergunta>?  R. : ..."
-  // (o ConvertFrom-VistoriaGel do desktop captura ANTES do "R. :" -- e' outra
-  // ordem de leitura, do PdfPig; aqui e' a do pdf.js). A resposta vai do "R. :"
-  // ate' o proximo "R. :" ou o proximo rotulo de pergunta conhecido ("parede").
-  var GEL_PAREDES = [
-    // secoes
-    'Tipo do local', 'Infraestrutura', 'Instalacoes eletricas', 'Acessibilidade',
-    'Telecomunicacao na area', 'Comunicacao com o Local', 'Responsavel pelo Local',
-    'Dados do local',
-    // rotulos / perguntas (mapeadas e nao mapeadas -- servem de parede)
-    'Localizacao do Quadro de Energia', 'Tipo de local', 'Localizacao', 'Observacoes',
-    'Coordenadas', 'Quantidade de salas necessarias', 'Ha abastecimento de agua',
-    'A climatizacao ou ventilacao', 'Ha iluminacao', 'Ha agua potavel',
-    'Selecione os tipos de ambientes', 'O local possui mobiliario', 'Ha necessidade de reparos',
-    'Descreva a necessidade de reparos', 'O predio esta em reforma',
-    'Ha energia eletrica', 'Ha quantas tomadas funcionando',
-    'tomadas funcionando', 'Qual a tensao da rede eletrica', 'tensao da rede eletrica',
-    'Ha necessidade de extensao eletrica', 'necessidade de extensao eletrica',
-    'Qual o numero da unidade consumidora', 'numero da unidade consumidora',
-    'Selecione a esfera administrativa', 'Qual a esfera administrativa', 'esfera administrativa',
-    'Local habilitado para transmissao', 'Internet no local', 'Tipo de internet',
-    'Possui rampa de acesso', 'Possui calcada', 'Possui portas',
-    'Qual o nome do tecnico', 'nome do tecnico ou empresa responsavel',
-    'Qual o telefone do tecnico', 'telefone do tecnico ou empresa responsavel'
-  ];
-  var GEL_RE_MARC = 'R\\s*\\.?\\s*:';
-
   // Cabecalho/rodape que o pdf.js entrega em toda pagina -- some antes de extrair
   // pra nao vazar pra dentro de uma resposta que esta na virada de pagina.
   function gelTiraMobilia(t){
@@ -702,6 +667,10 @@
       .replace(/\s+/g, ' ').trim();
   }
 
+  // Espelho do ConvertFrom-VistoriaGel (src/core/VistoriaGel.ps1): na ordem do
+  // content-stream (pdf.js = PdfPig) a RESPOSTA aparece ENTRE a pergunta e o
+  // marcador " R. :"; "Coordenadas:" vem DEPOIS do valor; a captura para no
+  // primeiro "?" pra nao invadir a proxima pergunta.
   function gelExtrairCampos(texto){
     var t = gelTiraMobilia(gelSemAcento(String(texto || '').replace(/\s+/g, ' ').trim()));
     var o = {};
@@ -714,51 +683,35 @@
       o.precisao_m = mc[3].replace(',', '.');
     }
 
-    // resposta = do "R. :" que segue a pergunta ate' o proximo "R. :" / parede.
+    // "<pergunta> [?:]? <resposta> R. :" -- resposta = grupo lazy antes do "R. :".
     function resp(rxPergunta){
-      var m = t.match(new RegExp(rxPergunta + '[^?:]{0,40}?[?:]?\\s*' + GEL_RE_MARC + '\\s*', 'i'));
-      if (!m) return '';
-      var resto = t.slice(m.index + m[0].length);
-      var mNext = resto.match(new RegExp(GEL_RE_MARC));
-      if (mNext) resto = resto.slice(0, mNext.index);
-      var corte = resto.length;
-      GEL_PAREDES.forEach(function(p){
-        var i = resto.search(new RegExp('\\b' + p, 'i'));
-        if (i >= 0 && i < corte) corte = i;
-      });
-      // parede generica: qualquer pergunta seguinte comeca com um destes verbos
-      // e termina em "?" ou ":" -- resposta do GEL nunca comeca assim.
-      var mg = resto.search(/\b(?:Qual|Selecione|Possui|Descreva|Informe)\s+[^?:]{3,110}[?:]/i);
-      if (mg >= 0 && mg < corte) corte = mg;
-      return resto.slice(0, corte).replace(/\s+/g, ' ').replace(/[;,.\s]+$/, '').trim();
+      var m = t.match(new RegExp(rxPergunta + '\\s*[?:]?\\s*([^?]{1,80}?)\\s*R\\s*\\.?\\s*:', 'i'));
+      return m ? m[1].replace(/\s+/g, ' ').trim() : '';
     }
 
-    o.esfera_administrativa = resp('esfera administrativa do local vistoriado') || resp('esfera administrativa');
+    o.esfera_administrativa = resp('esfera administrativa do local vistoriado');
 
     var ml = t.match(/\bLocalizacao\s+(?:R\s*\.?\s*:\s*)?(Urbano|Rural|Semi[ -]?urbano|Semiurbano)\b/i);
-    o.localizacao = ml ? ml[1] : resp('Localizacao(?! do Quadro)');
+    if (ml) o.localizacao = ml[1];
 
-    o.tipo_local = resp('Tipo de local\\s+(?!que\\b)');
+    var mt = t.match(/Tipo de local\s+(?!que\b)([^?:]{1,38}?)\s*R\s*\.?\s*:/i);
+    if (mt) o.tipo_local = mt[1].replace(/\s+/g, ' ').trim();
 
-    o.salas_necessarias = resp('Quantidade de salas necessarias para funcionar como secao eleitoral') ||
-                          resp('Quantidade de salas necessarias');
+    o.salas_necessarias = resp('Quantidade de salas necessarias para funcionar como secao eleitoral');
     o.agua              = resp('Ha abastecimento de agua');
-    o.climatizacao      = resp('A climatizacao ou ventilacao e feita por') || resp('A climatizacao ou ventilacao');
+    o.climatizacao      = resp('A climatizacao ou ventilacao e feita por');
     o.iluminacao        = resp('Ha iluminacao');
-    o.agua_potavel      = resp('Ha agua potavel disponivel para mesarias\\S* e eleitoras\\S*') ||
-                          resp('Ha agua potavel disponivel');
+    o.agua_potavel      = resp('Ha agua potavel disponivel para mesarias\\S* e eleitoras\\S*');
     o.predio_reforma    = resp('O predio esta em reforma');
 
     o.quadro_energia    = resp('Localizacao do Quadro de Energia');
     o.energia_eletrica  = resp('Ha energia eletrica');
-    o.eletrica_tomadas  = resp('Ha quantas tomadas funcionando') || resp('quantas tomadas funcionando');
-    o.eletrica_tensao   = resp('Qual a tensao da rede eletrica') || resp('tensao da rede eletrica');
-    o.eletrica_extensao = resp('Ha necessidade de extensao eletrica') || resp('necessidade de extensao eletrica');
+    o.eletrica_tomadas  = resp('quantas tomadas funcionando');
+    o.eletrica_tensao   = resp('tensao da rede eletrica');
+    o.eletrica_extensao = resp('necessidade de extensao eletrica');
 
-    o.suporte_nome      = resp('nome do tecnico ou empresa responsavel pelo suporte ao link local') ||
-                          resp('nome do tecnico ou empresa responsavel');
-    o.suporte_telefone  = resp('telefone do tecnico ou empresa responsavel pelo suporte ao link local') ||
-                          resp('telefone do tecnico ou empresa responsavel');
+    o.suporte_nome      = resp('nome do tecnico ou empresa responsavel pelo suporte ao link local');
+    o.suporte_telefone  = resp('telefone do tecnico ou empresa responsavel pelo suporte ao link local');
 
     return o;
   }
