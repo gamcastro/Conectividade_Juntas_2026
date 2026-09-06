@@ -9,6 +9,11 @@
  * arquivamento no Shared Drive fica para quando o token de servico tiver
  * escopo 'drive' (Fase 4).
  *
+ * Visual espelhado do relatorio do DICON Desktop (src/saida/Export-RelatorioPdf.ps1):
+ * cabecalho JE + brasao, regua navy, faixas navy #1F4E79, th #D9E2F3, bordas
+ * #BFC9DA, celulas-chave #E7EDF6. Layout so' com tabelas aninhadas -- o
+ * renderizador HTML->PDF do Utilities nao faz flexbox/grid.
+ *
  * Modo 'medicao': medicoes + sugestao de conexao, sem KPIs de viabilidade.
  * Funciona a qualquer cobertura (parcial < 100% ou final).
  */
@@ -61,6 +66,7 @@ function _webEsc(s) {
   });
 }
 
+// Uma tabela "Testados / Total / %" por agrupamento, no estilo do relatorio Desktop.
 function _webTabelaCobertura(titulo, universo, testados, mapfn) {
   var ag = {};
   universo.forEach(function (u) {
@@ -69,13 +75,16 @@ function _webTabelaCobertura(titulo, universo, testados, mapfn) {
     ag[k].t++;
     if (testados[u.local_id]) { ag[k].f++; }
   });
-  var linhas = Object.keys(ag).sort().map(function (k) {
+  var linhas = Object.keys(ag).sort().map(function (k, i) {
     var o = ag[k], p = o.t ? Math.round(o.f * 100 / o.t) : 0;
-    return '<tr><td>' + _webEsc(k) + '</td><td class="n">' + o.f + '</td><td class="n">' + o.t +
+    return '<tr' + (i % 2 ? ' class="alt"' : '') + '><td>' + _webEsc(k) +
+      '</td><td class="n">' + o.f + '</td><td class="n">' + o.t +
       '</td><td class="n">' + p + '%</td></tr>';
   }).join('');
-  return '<h2>' + _webEsc(titulo) + '</h2><table class="cob"><thead><tr><th></th><th>Testados</th>' +
-    '<th>Total</th><th>%</th></tr></thead><tbody>' + linhas + '</tbody></table>';
+  return '<div class="subt">' + _webEsc(titulo) + '</div>' +
+    '<table class="cob"><thead><tr><th>' + _webEsc(titulo.replace(/^Cobertura por\s+/i, '')) +
+    '</th><th class="n">Testados</th><th class="n">Total</th><th class="n">%</th></tr></thead>' +
+    '<tbody>' + linhas + '</tbody></table>';
 }
 
 function gerarRelatorioFinal(modo) {
@@ -89,8 +98,10 @@ function gerarRelatorioFinal(modo) {
   var feitos = universo.filter(function (u) { return testados[u.local_id]; }).length;
   var pct    = total ? Math.round(feitos * 100 / total) : 0;
   var quando = Utilities.formatDate(new Date(), tz, "dd/MM/yyyy 'as' HH:mm");
+  var dataCurta = Utilities.formatDate(new Date(), tz, 'dd/MM/yyyy');
+  var final_ = (pct >= 100);
 
-  var linhasLocais = universo.map(function (u) {
+  var linhasLocais = universo.map(function (u, i) {
     var t = testados[u.local_id];
     var cabo = '', obs = '', gel = '';
     if (t && t.doc) {
@@ -104,9 +115,12 @@ function gerarRelatorioFinal(modo) {
     }
     var qd = _webParseData(t ? t.recebido_em : '');
     var status = t
-      ? '<span class="ok">testado ' + (qd ? Utilities.formatDate(qd, tz, 'dd/MM') : '') + '</span>'
+      ? '<span class="ok">testado' + (qd ? ' ' + Utilities.formatDate(qd, tz, 'dd/MM') : '') + '</span>'
       : '<span class="no">nao testado</span>';
-    return '<tr class="' + (t ? '' : 'pend') + '">' +
+    var cls = [];
+    if (!t) { cls.push('pend'); }
+    if (i % 2) { cls.push('alt'); }
+    return '<tr' + (cls.length ? ' class="' + cls.join(' ') + '"' : '') + '>' +
       '<td>' + _webEsc(u.nome || u.local_id) + '</td>' +
       '<td class="n">' + _webEsc(u.zona) + '</td>' +
       '<td>' + _webEsc(u.municipio) + '</td>' +
@@ -122,39 +136,104 @@ function gerarRelatorioFinal(modo) {
       '</tr>';
   }).join('');
 
+  var brasao = (typeof WEB_BRASAO !== 'undefined' && WEB_BRASAO)
+    ? '<img class="brasao" src="' + WEB_BRASAO + '">' : '';
+
+  var css =
+    "body{font-family:Arial,Helvetica,sans-serif;font-size:9px;color:#1f2430;margin:22px 26px}" +
+    ".cab{width:100%;border-collapse:collapse;margin-bottom:2px}" +
+    ".cab td{border:0;padding:0;vertical-align:middle}" +
+    ".cab .bcell{width:60px}" +
+    ".cab .brasao{width:52px;height:auto}" +
+    ".cab .org{color:#444;font-size:8.5px;line-height:1.4}" +
+    ".cab .org b{color:#1f2430;font-size:9.5px}" +
+    ".cab .dt{text-align:right;color:#555;font-size:8.5px;white-space:nowrap}" +
+    ".rule{border:0;border-top:3px solid #1a3a8f;margin:7px 0 10px}" +
+    "h1.tit{font-size:14px;margin:0 0 2px;color:#1f2430}" +
+    "p.sub{font-size:10px;margin:0;color:#333}" +
+    ".bar{background:#1F4E79;color:#fff;font-weight:bold;text-transform:uppercase;" +
+      "letter-spacing:.06em;font-size:9.5px;padding:5px 10px;margin:14px 0 6px}" +
+    ".subt{font-weight:bold;color:#2E5A8A;text-transform:uppercase;font-size:8.5px;" +
+      "letter-spacing:.03em;margin:9px 0 2px}" +
+    "table{border-collapse:collapse;width:100%;margin-top:3px}" +
+    "th,td{border:1px solid #BFC9DA;padding:4px 7px;text-align:left;vertical-align:top}" +
+    "th{background:#D9E2F3;font-size:8px;color:#22324a;text-transform:uppercase;letter-spacing:.03em}" +
+    "td.n,th.n{text-align:right}" +
+    "table.kv td.k{background:#E7EDF6;font-weight:bold;width:150px;color:#33465f}" +
+    "table.cob{width:auto;min-width:280px}" +
+    "tr.alt td{background:#F4F7FB}" +
+    "tr.pend td{color:#8891a0}" +
+    ".ok{color:#1b7f3b;font-weight:bold}.no{color:#8891a0}" +
+    ".warn{color:#a3320f;font-weight:bold}" +
+    ".big{font-size:9.5px;margin:2px 0}" +
+    ".grid2{width:100%;border-collapse:collapse;margin-top:3px}" +
+    ".grid2>tbody>tr>td{border:0;padding:0;vertical-align:top}" +
+    ".grid2 .gap{width:16px;border:0;padding:0}" +
+    ".foot{margin-top:12px;color:#5c6472;font-size:8px}";
+
+  var kvIdent =
+    '<table class="kv"><tbody>' +
+    '<tr><td class="k">Gerado em</td><td>' + _webEsc(quando) + '</td></tr>' +
+    '<tr><td class="k">Gerado por</td><td>' + _webEsc(acesso.email) + '</td></tr>' +
+    '<tr><td class="k">Modo</td><td>' + _webEsc(modo) + ' &middot; medicoes e sugestao de conexao</td></tr>' +
+    '<tr><td class="k">Ambiente</td><td>HOMOLOGACAO</td></tr>' +
+    '</tbody></table>';
+
+  var kvResumo =
+    '<table class="kv"><tbody>' +
+    '<tr><td class="k">Locais no plano</td><td class="n">' + total + '</td></tr>' +
+    '<tr><td class="k">Locais testados</td><td class="n">' + feitos + '</td></tr>' +
+    '<tr><td class="k">Cobertura</td><td class="n">' + pct + '%</td></tr>' +
+    '<tr><td class="k">Pendentes</td><td class="n">' + (total - feitos) + '</td></tr>' +
+    '</tbody></table>';
+
+  var cob = _webTabelaCobertura('Cobertura por roteiro', universo, testados, function (u) { return u.roteiro_rotulo; });
+  var cobTec = _webTabelaCobertura('Cobertura por tecnico previsto', universo, testados, function (u) { return u.tecnico_previsto; });
+  var cobZe = _webTabelaCobertura('Cobertura por ZE', universo, testados, function (u) { return 'ZE ' + u.zona; });
+  var cobMun = _webTabelaCobertura('Cobertura por municipio', universo, testados, function (u) { return u.municipio; });
+
   var html =
-    '<html><head><meta charset="utf-8"><style>' +
-    'body{font-family:Arial,Helvetica,sans-serif;font-size:9px;color:#14181f;margin:24px}' +
-    'h1{font-size:15px;margin:0 0 2px}h2{font-size:11px;margin:14px 0 4px;color:#0a1e4d}' +
-    '.sub{font-size:8px;color:#5c6472;letter-spacing:.06em}' +
-    '.meta{font-size:8.5px;color:#5c6472;margin:6px 0}' +
-    '.big{font-size:8.5px;margin:2px 0}.warn{color:#a3320f;font-weight:bold}' +
-    'table{border-collapse:collapse;width:100%;margin-top:3px}' +
-    'th,td{border:1px solid #cfd6e0;padding:3px 5px;text-align:left;vertical-align:top}' +
-    'th{background:#eef1f6;font-size:8px}td.n,th.n{text-align:right}' +
-    'table.cob{width:auto;min-width:260px}' +
-    'tr.pend td{color:#8891a0}.ok{color:#1b7f3b}.no{color:#8891a0}' +
-    '</style></head><body>' +
-    '<div class="sub">JUSTICA ELEITORAL / TRE-MA / SEASU-COINF-STIC / DICON</div>' +
-    '<h1>Relatorio ' + (pct >= 100 ? 'final' : 'parcial') + ' de diagnostico de conectividade</h1>' +
-    '<div class="meta">Gerado em ' + _webEsc(quando) + ' por ' + _webEsc(acesso.email) +
-      ' &middot; modo: ' + _webEsc(modo) + '</div>' +
+    '<html><head><meta charset="utf-8"><style>' + css + '</style></head><body>' +
+
+    '<table class="cab"><tbody><tr>' +
+    '<td class="bcell">' + brasao + '</td>' +
+    '<td class="org"><b>JUSTICA ELEITORAL</b><br>' +
+      'Tribunal Regional Eleitoral do Maranhao<br>' +
+      'SEASU / COINF / STIC &mdash; DICON &middot; Diagnostico de Conectividade</td>' +
+    '<td class="dt">' + _webEsc(dataCurta) + '</td>' +
+    '</tr></tbody></table>' +
+    '<hr class="rule">' +
+
+    '<h1 class="tit">Relatorio ' + (final_ ? 'final' : 'parcial') + ' de diagnostico de conectividade</h1>' +
+    '<p class="sub">Juntas Eleitorais Especiais 2026 &mdash; TRE-MA</p>' +
+
+    '<div class="bar">Painel de cobertura &mdash; Juntas Eleitorais Especiais 2026</div>' +
+    '<table class="grid2"><tbody><tr>' +
+    '<td>' + kvIdent + '</td><td class="gap"></td><td>' + kvResumo + '</td>' +
+    '</tr></tbody></table>' +
     '<div class="big"><b>Cobertura: ' + feitos + ' de ' + total + ' locais testados (' + pct + '%).</b></div>' +
-    (pct < 100 ? '<div class="big warn">RELATORIO PARCIAL - faltam ' + (total - feitos) + ' locais.</div>' : '') +
-    _webTabelaCobertura('Cobertura por roteiro', universo, testados, function (u) { return u.roteiro_rotulo; }) +
-    _webTabelaCobertura('Cobertura por tecnico previsto', universo, testados, function (u) { return u.tecnico_previsto; }) +
-    _webTabelaCobertura('Cobertura por ZE', universo, testados, function (u) { return 'ZE ' + u.zona; }) +
-    _webTabelaCobertura('Cobertura por municipio', universo, testados, function (u) { return u.municipio; }) +
-    '<h2>Locais</h2><table><thead><tr>' +
-    '<th>Local</th><th>ZE</th><th>Municipio</th><th>Tipo</th><th>Rot.</th><th>Status</th>' +
+    (final_ ? '' : '<div class="big warn">RELATORIO PARCIAL &mdash; faltam ' + (total - feitos) + ' locais.</div>') +
+
+    '<div class="bar">Cobertura por agrupamento</div>' +
+    '<table class="grid2"><tbody><tr>' +
+    '<td>' + cob + '</td><td class="gap"></td><td>' + cobTec + '</td>' +
+    '</tr><tr>' +
+    '<td>' + cobZe + '</td><td class="gap"></td><td>' + cobMun + '</td>' +
+    '</tr></tbody></table>' +
+
+    '<div class="bar">Locais</div>' +
+    '<table><thead><tr>' +
+    '<th>Local</th><th class="n">ZE</th><th>Municipio</th><th>Tipo</th><th class="n">Rot.</th><th>Status</th>' +
     '<th>Conexao sugerida</th><th class="n">Down Mbps</th><th class="n">Lat ms</th>' +
     '<th>Cabo de rede</th><th>Observacoes do tecnico</th><th class="n">GEL</th>' +
     '</tr></thead><tbody>' + linhasLocais + '</tbody></table>' +
-    '<div class="meta" style="margin-top:12px">Eleicoes 2026 - Juntas Eleitorais Especiais. ' +
-    'Modo ' + _webEsc(modo) + ' - medicoes e sugestao de conexao, sem juizo de viabilidade.</div>' +
+
+    '<div class="foot">Eleicoes 2026 &mdash; Juntas Eleitorais Especiais. ' +
+    'Modo ' + _webEsc(modo) + ': medicoes e sugestao de conexao, sem juizo de viabilidade. ' +
+    'Documento gerado pela console DICON Web (homologacao).</div>' +
     '</body></html>';
 
-  var nomeArq = 'DICON - Relatorio ' + (pct >= 100 ? 'final' : 'parcial ' + pct + 'pct') + ' - ' +
+  var nomeArq = 'DICON - Relatorio ' + (final_ ? 'final' : 'parcial ' + pct + 'pct') + ' - ' +
                 Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd HHmm') + '.pdf';
   var pdf = Utilities.newBlob(html, 'text/html', nomeArq).getAs('application/pdf');
 
@@ -164,7 +243,7 @@ function gerarRelatorioFinal(modo) {
   } catch (e) { /* historico e' secundario */ }
 
   return {
-    ok: true, cobertura_pct: pct, feitos: feitos, total: total, parcial: (pct < 100),
+    ok: true, cobertura_pct: pct, feitos: feitos, total: total, parcial: !final_,
     filename: nomeArq, pdf_b64: Utilities.base64Encode(pdf.getBytes())
   };
 }
