@@ -1,7 +1,28 @@
 # DICON Web — Plano (ambiente de homologação)
 
-> Console web de coordenação do DICON. **Rascunho para revisão** — nada
-> implementado ainda. Alvo: **homologação** primeiro; produção depois de validar.
+> Console web de coordenação do DICON. Alvo: **homologação** primeiro; produção
+> depois de validar.
+
+## 0. Estado
+
+- **Fase 0 — código escrito, não implantado** (branch `homologacao`):
+  - `apps-script/web/Console.gs` — `verificarAcesso` / `_webExigirAcesso`,
+    `_webAbaAcesso` (cria a aba `Acesso` sozinha, semeia o admin bootstrap),
+    `_webUniverso` (união dos `juntas_ids` dos roteiros), `_webTestados` (último
+    resultado por `local_id` da aba `Resultados`), `carregarPainel` (acesso +
+    resumo + agregados por roteiro/técnico/ZE/município + lista de vistorias,
+    numa chamada só).
+  - `apps-script/web/Index.html` — SPA de uma página: resumo de cobertura + abas
+    **Painel** (4 blocos agregados) e **Vistorias** (tabela filtrável por texto /
+    roteiro / status, com link do PDF quando houver). Vanilla JS.
+  - `apps-script/Codigo.gs` — `doGet` roteia `?app=web` → `webConsolePagina(e)`.
+  - `apps-script/appsscript.json` — `webapp.executeAs` → `USER_ACCESSING`
+    (para a console enxergar o e-mail do visitante). O Web App legado não é mais
+    usado; a Execution API que o DICON consome não usa `webapp.*`.
+- Falta implantar: `clasp push` no projeto de homolog + `clasp create-deployment`
+  de uma implantação **Web App** nova ("DICON Web — homolog"), com a URL entregue
+  à coordenação. Nada muda em `config/juntas.json`.
+- Fases 1–4: não iniciadas.
 
 ## 1. Objetivo
 

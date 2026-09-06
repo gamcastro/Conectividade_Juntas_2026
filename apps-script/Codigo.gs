@@ -169,7 +169,11 @@ function _migrarLimiaresAntigos(linhas) {
 
 
 function doGet(e) {
-  var recurso = (e && e.parameter && e.parameter.recurso) || 'juntas';
+  var p = (e && e.parameter) || {};
+  // Console web de coordenacao (DICON Web) -> ?app=web serve a pagina HTML.
+  // O resto segue como o Web App legado (?recurso=juntas|tecnicos|roteiros|limiares).
+  if (p.app === 'web') return webConsolePagina(e);
+  var recurso = p.recurso || 'juntas';
   try {
     if (recurso === 'juntas') {
       return _json({ atualizado_em: new Date().toISOString(), juntas: listarJuntas() });
