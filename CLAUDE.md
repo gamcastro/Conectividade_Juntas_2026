@@ -436,7 +436,17 @@ depende do `modo_avaliacao` do JSON: `medicao`/`referencia` → **`Get-PainelMed
 valores, sem KPIs de viáveis/inviáveis nem "Conclusão do diagnóstico"; `referencia`
 mostra também a faixa nas tabelas por meio via `Get-TabelaAvaliacaoHtml -Modo`).
 `completo` → `Get-PainelHtml` (abaixo). `Get-MeioBlocoHtml -Modo` tira o badge de
-veredito do título fora do `completo`.
+veredito do título fora do `completo`. As faixas navy são só **"Painel de
+Medições"** / **"Painel de Viabilidade de Conectividade"** (sem o sufixo "— Junta
+Eleitoral Especial 2026", v0.6.130). O gráfico **"Comparação entre os meios"**
+(`Get-GraficoComparacaoMeiosHtml` → `.grafcomp`) sai da coluna estreita do painel
+e vira uma **faixa de largura total, centralizada** (`.grafcompwrap`
+`justify-content: space-around`), abaixo do bloco de 2 colunas. **Paginação**
+(v0.6.130): `.meio` e `.grafzona` passaram a `page-break-inside: auto` (um meio
+longo flui entre páginas), protegendo só as peças atômicas — `table` e `.grafpar`
+(par Download|Upload) com `break-inside: avoid`, `.bar`/`.ptit`/`.meiotit` com
+`break-after: avoid` — pra acabar com os blocos grandes empurrados inteiros
+deixando meia página em branco.
 1. **Cabeçalho** JE / TRE-MA / SEASU-COINF-STIC / DICON.
 2. **Título + subtítulo** — "Relatório de Diagnóstico de Conectividade" + "ZE N —
    Município (sede: X)".
