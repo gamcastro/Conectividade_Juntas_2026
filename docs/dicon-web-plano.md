@@ -94,6 +94,14 @@
     Local já foi transmitido; toggle `config/envio.json > pdf_web`.
   - Nova ação em `executar` → redeploy das **duas** implantações: Web App
     **@22**, Execution API **@23** (`clasp version` 23).
+  - **Relatório individual pela console** (`web/RelatorioLocal.gs`,
+    `gerarRelatorioLocal({local_id})`, Web App **@24**): quando o técnico
+    transmitiu pelo desktop mas não pôde anexar o GEL (não tem GEL web), o
+    coordenador importa GEL + fotos pela console e **regera** o PDF individual
+    daquele Local — medições do JSON transmitido + 5 seções do GEL da console
+    + fotos do Drive, no visual do relatório do desktop (modo `medicao`) —
+    e **sobrescreve** `DICON/relatorios/<local_id>.pdf` + atualiza `pdf_url`.
+    Botão na aba **GEL** (aparece quando o Local já foi transmitido).
   - **Falta**: aba-resumo agregada por trigger; retenção da aba `Eventos`.
 
 ### ⚠️ Trava de escopo OAuth (vale para Fase 2 também)
