@@ -96,6 +96,22 @@ $ps = [powershell]::Create(); $ps.Runspace = $rs
                                     enviado_por = 'george@tre-ma.jus.br'; json = (New-JsonResultado $id) }
                 }
             }
+            elseif ($acao -eq 'gel.obter') {
+                $id = [string] $p0.local_id
+                if ($id -eq 'ZE99-GEL-TEM') {
+                    # 1x1 jpg base64 minimo
+                    $b64 = '/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/2wBDAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/wAARCAABAAEDASIAAhEBAxEB/8QAFAABAAAAAAAAAAAAAAAAAAAACv/EABQQAQAAAAAAAAAAAAAAAAAAAAD/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEQMRAD8AvwD/2Q=='
+                    $resultObj = @{ local_id = $id; atualizado_em = '05/09/2026 10:00:00'; enviado_por = 'george@tre-ma.jus.br'
+                                    gel_json = '{"lat":-3.49,"long":-42.56,"esfera_administrativa":"Estadual","tipo_local":"Escola"}'
+                                    fotos = @(@{ nome = 'foto-01.jpg'; b64 = $b64 }) }
+                } else {
+                    $resultObj = @{ local_id = $id; atualizado_em = ''; enviado_por = ''; gel_json = ''; fotos = @() }
+                }
+            }
+            elseif ($acao -eq 'gel.enviar') {
+                $n = if ($p0.fotos) { @($p0.fotos).Count } else { 0 }
+                $resultObj = if ($p0.remover) { @{ status = 'ok'; removido = $true } } else { @{ status = 'ok'; gel_gravado = $true; fotos = $n } }
+            }
             else {
                 $mode = if (Test-Path $modeFile) { (Get-Content $modeFile -Raw).Trim() } else { 'ok' }
                 $resultObj = switch ($mode) {
@@ -263,6 +279,52 @@ try {
         Write-Host "[13] reconciliar_resultados desligado -> nao arquiva nada  OK"
     } else { Write-Host "[13] FALHA: obs=$($s13.Obsoletos) fantasma2=$([bool](Test-Path $rFantasma2))"; $falhas++ }
     $Global:ReconciliarResultadosOverride = $null
+
+    # ---- Sync de GEL/fotos (Escopo 2 da tela Coordenacao) --------------------
+    $gelData = Join-Path ([IO.Path]::GetTempPath()) ('dicon-testgel-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
+    $Global:PastaDadosOverride = $gelData
+    New-Item -ItemType Directory -Path $gelData -Force | Out-Null
+    try {
+        # CASO 14: servidor tem GEL + 1 foto, sem anexo local -> baixa e grava
+        $ok14 = Get-VistoriaGelRemoto -LocalId 'ZE99-GEL-TEM'
+        $j14 = Join-Path $gelData 'vistoria-gel\ZE99-GEL-TEM.json'
+        $f14 = Join-Path $gelData 'vistoria-gel\ZE99-GEL-TEM\foto-01.jpg'
+        $g14 = Get-VistoriaGel -LocalId 'ZE99-GEL-TEM'
+        if ($ok14 -and (Test-Path $j14) -and (Test-Path $f14) -and $g14 -and "$($g14.tipo_local)" -eq 'Escola') {
+            Write-Host "[14] Get-VistoriaGelRemoto: baixou o formulario + 1 foto  OK"
+        } else { Write-Host "[14] FALHA: ok=$ok14 json=$([bool](Test-Path $j14)) foto=$([bool](Test-Path $f14)) tipo=$($g14.tipo_local)"; $falhas++ }
+
+        # CASO 15: rodar de novo com anexo local ja existente -> nao mexe
+        $marca = 'MARCA-LOCAL'
+        ($g14 | Add-Member -NotePropertyName obs_teste -NotePropertyValue $marca -Force -PassThru) | Out-Null
+        Save-VistoriaGel -LocalId 'ZE99-GEL-TEM' -Dados $g14 | Out-Null
+        $ok15 = Get-VistoriaGelRemoto -LocalId 'ZE99-GEL-TEM'
+        $g15  = Get-VistoriaGel -LocalId 'ZE99-GEL-TEM'
+        if ((-not $ok15) -and "$($g15.obs_teste)" -eq $marca) {
+            Write-Host "[15] Get-VistoriaGelRemoto: anexo local existente nao e' sobrescrito  OK"
+        } else { Write-Host "[15] FALHA: ok=$ok15 (esperado False) obs=$($g15.obs_teste)"; $falhas++ }
+
+        # CASO 16: servidor sem GEL para o local -> nada gravado
+        $ok16 = Get-VistoriaGelRemoto -LocalId 'ZE99-GEL-VAZIO'
+        $j16  = Join-Path $gelData 'vistoria-gel\ZE99-GEL-VAZIO.json'
+        if ((-not $ok16) -and -not (Test-Path $j16)) {
+            Write-Host "[16] Get-VistoriaGelRemoto: servidor sem GEL -> nada gravado  OK"
+        } else { Write-Host "[16] FALHA: ok=$ok16 json=$([bool](Test-Path $j16))"; $falhas++ }
+
+        # CASO 17: Start-EnvioGelWeb respeita o gate (ModoTeste) e nao lanca
+        $erro17 = $null
+        try {
+            $Global:ModoTeste = $true
+            Start-EnvioGelWeb -LocalId 'ZE99-GEL-TEM'
+            Start-EnvioGelWeb -LocalId 'ZE99-GEL-TEM' -Remover
+        } catch { $erro17 = "$_" } finally { $Global:ModoTeste = $false }
+        if (-not $erro17 -and -not $Global:GelWebState) {
+            Write-Host "[17] Start-EnvioGelWeb: gate ModoTeste respeitado, sem excecao  OK"
+        } else { Write-Host "[17] FALHA: erro='$erro17' state=$([bool]$Global:GelWebState)"; $falhas++ }
+    } finally {
+        $Global:PastaDadosOverride = $null
+        if (Test-Path $gelData) { Remove-Item $gelData -Recurse -Force -EA SilentlyContinue }
+    }
 }
 finally {
     try {

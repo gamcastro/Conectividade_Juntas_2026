@@ -90,6 +90,32 @@ function _driveUploadOuAtualiza(token, paiId, nome, mimeType, bytes) {
   return _driveUpload(token, paiId, nome, mimeType, bytes);
 }
 
+// lista os filhos (arquivos e pastas) de uma pasta -> [{id, name, mimeType}].
+function _driveListarFilhos(token, paiId) {
+  var url = DRIVE_API + '/files?q=' + encodeURIComponent("'" + paiId + "' in parents and trashed = false") +
+            '&fields=files(id,name,mimeType)&pageSize=200&corpora=allDrives&' + DRIVE_COMUM;
+  var j = _driveFetch(url, { method: 'get', muteHttpExceptions: true, headers: _driveHeaders(token) });
+  return j.files || [];
+}
+
+function _driveApagar(token, fileId) {
+  var resp = UrlFetchApp.fetch(DRIVE_API + '/files/' + fileId + '?' + DRIVE_COMUM, {
+    method: 'delete', muteHttpExceptions: true, headers: _driveHeaders(token)
+  });
+  var cod = resp.getResponseCode();
+  if (cod >= 300 && cod !== 404) throw new Error('Drive delete ' + cod + ': ' + resp.getContentText());
+}
+
+// baixa o conteudo (media) de um arquivo do Drive como string base64.
+function _driveBaixarBytesB64(token, fileId) {
+  var url = DRIVE_API + '/files/' + fileId + '?alt=media&' + DRIVE_COMUM;
+  var resp = UrlFetchApp.fetch(url, { method: 'get', muteHttpExceptions: true, headers: _driveHeaders(token) });
+  var cod = resp.getResponseCode();
+  if (cod === 403 && /insufficient|scope|permission/i.test(resp.getContentText())) throw new Error('DRIVE_SEM_ESCOPO');
+  if (cod >= 300) throw new Error('Drive media ' + cod + ': ' + resp.getContentText());
+  return Utilities.base64Encode(resp.getBlob().getBytes());
+}
+
 function _colA1(n) {
   var s = '';
   while (n > 0) { var m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = (n - m - 1) / 26; }

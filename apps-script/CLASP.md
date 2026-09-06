@@ -75,10 +75,15 @@ Funções chamadas por **`google.script.run`** (a página da console:
 
 Mas toda **nova `acao` dentro de `executar`** (`Codigo.gs`) que o DICON de campo
 chame pela Execution API (ex.: `checkin`, `evento`, `resultados.listar`,
-`pdf.relatorio`) **exige `clasp version` + `clasp redeploy AKfycbxHMp… -V <n>`
-também** — senão a implantação congela sem a ação e responde
-`{erro:'acao desconhecida: …'}`, e o DICON nunca tira os itens da fila. Já
-mordeu com `resultados.listar` e com `checkin`/`evento`.
+`pdf.relatorio`, `gel.enviar`, `gel.obter`) **exige `clasp version` +
+`clasp redeploy AKfycbxHMp… -V <n>` também** — senão a implantação congela sem a
+ação e responde `{erro:'acao desconhecida: …'}`, e o DICON nunca tira os itens da
+fila. Já mordeu com `resultados.listar` e com `checkin`/`evento`.
+O par `gel.enviar` / `gel.obter` (v0.6.125, `apps-script/web/GelWeb.gs` — sync do
+formulário do GEL + fotos: aba `GEL` da planilha de Resultados + Drive da
+coordenação em `vistoria-gel/<local_id>/`) foi adicionado nesse mesmo passo:
+`clasp push -f` copia o `GelWeb.gs` novo, e as DUAS implantações precisam do
+redeploy.
 
     clasp push -f
     clasp redeploy AKfycby4rG…wM-w -d "DICON Web homolog vN"        # Web App

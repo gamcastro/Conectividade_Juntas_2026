@@ -80,9 +80,14 @@ function Sync-Resultados {
         Write-Log 'Nenhum resultado transmitido encontrado para este roteiro.' -Nivel Info
     }
 
+    # ids p/ tentar puxar o GEL (Escopo 2): quando -LocalIds foi dado, todos os da
+    # lista (poucos, explicito); senao so' os que forem baixados agora.
+    $idsGel = New-Object System.Collections.Generic.List[string]
+
     foreach ($it in $itens) {
         $id = [string] $it.local_id
         if ([string]::IsNullOrWhiteSpace($id)) { continue }
+        if ($LocalIds -and $LocalIds.Count) { $idsGel.Add($id) }
 
         if (-not $Force -and $locais.ContainsKey($id)) {
             $qLocal = $null; try { $qLocal = [datetime] $locais[$id].Quando } catch { }
@@ -106,10 +111,22 @@ function Sync-Resultados {
             $nome  = 'sync_{0}_{1}.json' -f (Get-Date -Format 'yyyyMMdd_HHmmss_fff'), $idSan
             Write-TextoArquivo -Caminho (Join-Path $destino $nome) -Conteudo ($obj | ConvertTo-Json -Depth 12)
             $resumo.Baixados++
+            if (-not ($LocalIds -and $LocalIds.Count)) { $idsGel.Add($id) }
         } catch {
             Write-Log ("Falha ao baixar o resultado de {0}: {1}" -f $id, $_) -Nivel Erro
             $resumo.Falhas++
         }
+    }
+
+    # --- GEL (Escopo 2): puxa o formulario + fotos dos locais relevantes -------
+    # Best-effort: nao sobrescreve anexo local, degrada quieto se o servidor nao
+    # tiver o recurso. So' fora do modo de teste.
+    if (-not $Global:ModoTeste -and $idsGel.Count) {
+        $baixGel = 0
+        foreach ($gid in ($idsGel | Select-Object -Unique)) {
+            try { if (Get-VistoriaGelRemoto -LocalId $gid) { $baixGel++ } } catch { }
+        }
+        if ($baixGel) { Write-Log ("GEL: {0} formulario(s)/fotos baixado(s) da console." -f $baixGel) -Nivel Info }
     }
 
     # --- Reconciliacao (opcional, ver cabecalho) --------------------------------

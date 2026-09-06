@@ -243,6 +243,10 @@ function executar(req) {
     if (acao === 'checkin') return webCheckin(req);
     if (acao === 'evento')  return webRegistrarEvento(req);
     if (acao === 'pdf.relatorio') return webUploadPdfRelatorio(req);
+    // DICON Web -- sync do formulario do GEL + fotos (aba GEL + Drive), via token
+    // de servico. Ver apps-script/web/GelWeb.gs.
+    if (acao === 'gel.enviar') return webGelEnviar(req);
+    if (acao === 'gel.obter')  return webGelObter(req);
 
     if (acao === 'resultado') {
       if (!_idResultados()) return { status: 'ignorado', motivo: 'PLANILHA_RESULTADOS_ID nao configurado' };

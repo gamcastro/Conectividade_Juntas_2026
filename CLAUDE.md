@@ -180,9 +180,26 @@ ficar preso à própria rota**. Só nessa origem aparece o botão
 **`btnLdBaixarResultado`** ("Baixar resultado transmitido") → `Invoke-BaixarResultadoLocal`
 → `Sync-Resultados -LocalIds @($id)` **sem `-TecnicoNome`** (puxa da planilha o
 último diagnóstico transmitido daquele local, de qualquer técnico, para
-`resultados\enviados\`) → `Complete-BaixarResultadoLocal` — assim "Abrir relatório
-completo" funciona também para locais que **outro** técnico testou. GEL/fotos
-continuam **só nesta máquina** (ver "sync de GEL/fotos" em Ainda em aberto).
+`resultados\enviados\`; e, no mesmo passo, **`Get-VistoriaGelRemoto`** puxa o
+formulário do GEL + fotos daquele local se ainda não houver anexo local) →
+`Complete-BaixarResultadoLocal` — assim "Abrir relatório completo" funciona também
+para locais que **outro** técnico testou, já com GEL/fotos.
+**Sync de GEL/fotos (v0.6.125, `config/envio.json > gel_sync`, padrão ligado)**:
+o formulário do GEL (`data/vistoria-gel/<id>.json`) e as fotos deixaram de ser
+só-local. `Invoke-GelRegistrar` / `Invoke-GelAddFotos` / `Invoke-GelFotoRemover` /
+`Invoke-GelRemover` disparam **`Start-EnvioGelWeb -LocalId [-Remover]`**
+(`src/core/EventosWeb.ps1`, runspace best-effort) → ação **`gel.enviar`**
+(`apps-script/web/GelWeb.gs`, token de serviço): grava o JSON numa aba **`GEL`**
+da planilha de Resultados (1 linha/local, upsert) e sobe as fotos no Drive da
+coordenação em **`vistoria-gel/<local_id>/`** (`_driveUploadOuAtualiza` +
+`_driveApagar` das que saíram). A volta é **`Get-VistoriaGelRemoto`** → ação
+**`gel.obter`** (JSON + fotos base64), chamada por `Sync-Resultados` (no "Atualizar
+dados", para os locais baixados; via `-LocalIds`, todos os da lista) e pelo
+"Baixar resultado transmitido"; **nunca sobrescreve um anexo local** (só baixa se
+não houver, salvo `-Forcar`). Último envio ganha (last-writer-wins, como
+`gravarResultado`). **Exige redeploy manual (clasp) das duas implantações** — até
+lá degrada quieto ("acao desconhecida"). `Sem escopo de Drive no token →
+`DRIVE_SEM_ESCOPO`; o JSON do formulário ainda é gravado na planilha.
 Essa tela tem, no topo, um **card STATUS DO LOCAL** com 5 indicadores
 (`dot Ld Testado/Salvo/Transmitido/Exportado/Gel` — `Ellipse` vermelha quando
 não / verde quando sim; `dotLdTestado` usa a cor do veredito) + `txtLdStatusInfo`
@@ -464,12 +481,16 @@ resultado (`New-ResultadoJson`).
   = índice leve (`local_id` + data + veredito, sem o `json`), filtrado por
   técnico; `resultados.obter` = o `json` completo de um local. Só **adiciona**
   o que falta (nunca toca em `pendentes/`; pula o que já existe local e não é
-  mais novo). **As fotos do GEL não voltam** (só a contagem vai no `json`) —
-  reanexar pelo GEL web. **Exige redeploy manual (clasp)** das duas
-  implantações; até lá `Sync-Resultados` degrada com aviso ("recurso ainda
-  não disponível no servidor").
+  mais novo). O `json` transmitido leva só a **contagem** de fotos do GEL, mas
+  desde a v0.6.125 o `Sync-Resultados` também chama **`Get-VistoriaGelRemoto`**
+  (ação `gel.obter`) para os locais que baixou, trazendo o formulário do GEL +
+  as fotos de volta (ver "Sync de GEL/fotos" nas Telas). **Exige redeploy
+  manual (clasp)** das duas implantações; até lá `Sync-Resultados` degrada com
+  aviso ("recurso ainda não disponível no servidor") e o GEL não volta.
 - Teste: `tools/Testar-Envio.ps1` (HttpListener local simula o Apps Script;
-  cobre envio + as duas camadas do `Sync-Resultados`).
+  cobre envio + as duas camadas do `Sync-Resultados` + o sync de GEL/fotos —
+  `Get-VistoriaGelRemoto` baixa/não sobrescreve, `Start-EnvioGelWeb` respeita o
+  gate).
 - **Transporte: Apps Script Execution API (v0.6.73, `src/core/AppsScriptApi.ps1`)**:
   o DICON chama `POST script.googleapis.com/v1/scripts/{deployment_id}:run`
   (`function:'executar'`, `apps-script/Codigo.gs`) em vez da URL `/exec` do Web
@@ -518,16 +539,9 @@ resultado (`New-ResultadoJson`).
   Selenium/carregamento web (Fase 3) segue "em implementação"; "motivo da
   recomendação" é obrigatório sempre (provisório)
 - Fase 2 do admin: incluir/alterar Locais das Juntas
-- **Sync de GEL/fotos (Escopo 2 da tela Coordenação)**: hoje o formulário do GEL
-  (`data/vistoria-gel/<id>.json`) e as fotos ficam **só no computador onde foram
-  anexados** — não voltam pela planilha nem chegam ao técnico de campo. Se um 2º
-  coordenador (ou o técnico) regenerar o relatório desse local, sai **sem** a
-  seção GEL/fotos, e com `pdf_web` ligado ainda **sobrescreve** no Drive a versão
-  boa. Plano: ações `gel.enviar` / `gel.obter` no `executar` (mesmo padrão do
-  `pdf.relatorio`, best-effort, token de serviço) — GEL JSON numa coluna da
-  `Resultados`, fotos no Drive da coordenação em `vistoria-gel/<localid>/` via
-  `_driveUpload*`/`_driveGarantirPasta` do `DriveWeb.gs`; no desktop `Send-VistoriaGel`
-  (runspace) a partir de `Invoke-GelRegistrar`/`Invoke-GelAddFotos`/`Invoke-GelRemover`
-  e `Get-VistoriaGelRemoto` a partir de `Invoke-BaixarResultadoLocal`, com flag
-  `gel_sync` em `config/envio.json`; redeploy das duas implantações homolog→prod.
+- **Sync de GEL/fotos** (v0.6.125): implementado (`gel.enviar`/`gel.obter` em
+  `apps-script/web/GelWeb.gs`, `Start-EnvioGelWeb`/`Get-VistoriaGelRemoto` no
+  desktop, flag `gel_sync`) — **falta o redeploy manual (clasp) das duas
+  implantações em homologação e depois produção** e validar ponta a ponta
+  (subir num PC, baixar noutro). Até o redeploy, degrada quieto.
 - Empacotamento de campo (pasta portátil autocontida)

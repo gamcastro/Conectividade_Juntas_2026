@@ -1384,13 +1384,16 @@ function Complete-BaixarResultadoLocal {
         if ($s) { $s.Text = "Nao consegui baixar: $Erro" }
         Write-Log "Baixar resultado do local ($nome): $Erro" -Nivel Erro
     } elseif ($Resumo -and [int] $Resumo.Baixados -ge 1) {
-        if ($s) { $s.Text = 'Resultado baixado. Anexe o GEL / fotos e clique em "Abrir relatorio completo".' }
+        if ($s) { $s.Text = 'Resultado baixado. Confira o GEL / fotos e clique em "Abrir relatorio completo".' }
         Write-Log "Resultado do local $nome baixado da planilha." -Nivel Ok
     } elseif ($Resumo -and [int] $Resumo.NoServidor -eq 0) {
         if ($s) { $s.Text = 'A planilha nao tem diagnostico transmitido para este local ainda.' }
     } else {
         if ($s) { $s.Text = 'Este computador ja tem o resultado deste local (nada novo a baixar).' }
     }
+    # o Sync tambem pode ter puxado o formulario do GEL + fotos deste local
+    Update-CardGel
+    Update-FotosGel
     Update-StatusLocalDetalhe
 }
 
@@ -1788,6 +1791,7 @@ function Invoke-GelRemover {
     Remove-VistoriaGel -LocalId ([string] $d.id)
     if ([string] $d.id -eq [string] $Global:LocalMedicoesId) { $Global:VistoriaGel = $null }
     Write-Log 'Anexo GEL removido do local.' -Nivel Aviso
+    try { Start-EnvioGelWeb -LocalId ([string] $d.id) -Remover } catch { }
     Update-CardGel
     Update-FotosGel
     Update-StatusLocalDetalhe
@@ -1825,6 +1829,7 @@ function Invoke-GelAddFotos {
     }
     if ($st) { $st.Text = "Fotos adicionadas: $ok" + $(if ($erro) { " ($erro falharam)" } else { '' }) }
     Write-Log ("Fotos do GEL: {0} adicionada(s) ao local {1}." -f $ok, $d.nome) -Nivel Ok
+    if ($ok) { try { Start-EnvioGelWeb -LocalId ([string] $d.id) } catch { } }
     Update-FotosGel
     Update-CardGel
     Update-StatusLocalDetalhe
@@ -1839,6 +1844,7 @@ function Invoke-GelFotoRemover {
     if (-not $sel) { Write-Log 'Selecione uma foto na lista para remover.' -Nivel Aviso; return }
     Remove-FotoGel -LocalId ([string] $d.id) -Nome $sel
     Write-Log ("Foto '{0}' removida do local." -f $sel) -Nivel Aviso
+    try { Start-EnvioGelWeb -LocalId ([string] $d.id) } catch { }
     Update-FotosGel
     Update-CardGel
     Update-StatusLocalDetalhe
@@ -1946,6 +1952,7 @@ function Invoke-GelRegistrar {
     Save-VistoriaGel -LocalId ([string] $d.id) -Dados $obj | Out-Null
     if ([string] $d.id -eq [string] $Global:LocalMedicoesId) { $Global:VistoriaGel = $obj }
     Write-Log ('Formulario GEL anexado ao local {0}.' -f $d.nome) -Nivel Ok
+    try { Start-EnvioGelWeb -LocalId ([string] $d.id) } catch { }
     Update-CardGel
     Update-StatusLocalDetalhe
 }
