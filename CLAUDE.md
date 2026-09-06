@@ -142,7 +142,8 @@ Script), em vez de criar um BI/dashboard separado.
   `badgeHomologRail` no rail) e põe o sufixo `- HOMOLOGACAO` no título da janela.
 
 ## Telas (rail de navegação)
-`login → início → guia de bordo → **Locais** → diagnóstico → administração`,
+`login → início → guia de bordo → **Locais** → [**Coordenação**] → diagnóstico →
+administração` (Coordenação e Administração só aparecem para o admin).
 Grids empilhados alternados por `Visibility` (`$Global:Views`, `Show-View`).
 O rail recolhe/expande (`btnRailToggle` → `Invoke-ToggleRail` / `Set-RailRecolhido`:
 214 px ↔ 56 px só-ícones, oculta `railCabTexto`/`railRodape`/`lblNav*`;
@@ -157,10 +158,31 @@ locais de vistoria do roteiro do técnico (`Get-LocaisDoTecnico` achata
 `$Global:RoteiroAtual.juntas[].locais[]`), grade `dgLocais` + busca livre
 (`txtBuscaLocais`) + filtros por ZE (`cboFiltroZE`) e município (`cboFiltroMun`)
 em `Update-LocaisFiltrados`; clicar numa linha da grade abre a **tela dedicada**
-`viewLocalDetalhe` (`Invoke-AbrirLocalDetalhe`, que grava `$Global:LocalDetalheAtual`)
-com a ficha completa do local (tipo, endereço, internet, UC, responsável/função,
-telefone e `texto_completo` do roteiro); `btnLocalDetalheVoltar` →
-`Invoke-VoltarAosLocais` volta à lista com os filtros preservados.
+`viewLocalDetalhe` — via `Invoke-AbrirLocalDetalhe` → **`Open-LocalDetalhe -Dados
+-Origem`** (o corpo compartilhado que preenche a ficha, grava
+`$Global:LocalDetalheAtual` + `$Global:LocalDetalheOrigem`) — com a ficha completa
+do local (tipo, endereço, internet, UC, responsável/função, telefone e
+`texto_completo` do roteiro); `btnLocalDetalheVoltar` → `Invoke-VoltarDoDetalhe`
+roteia por `$Global:LocalDetalheOrigem` (`Invoke-VoltarAosLocais` ou
+`Invoke-VoltarACoordenacao`), preservando os filtros.
+**Coordenação** (`viewCoord`, item `navCoord` — **só admin**, `Enter-Home` liga a
+visibilidade junto de `navAdmin`): `Show-Coord` → `Initialize-Coord` lista **todos
+os locais de todos os roteiros** (`Get-TodosLocaisCoord` sobre `Get-Juntas`, com
+`RoteiroRotulo`/`RoteiroNum` de `Get-MapaRoteiroPorLocal` — mapa `local_id →
+{numero;rotulo}` a partir de `Get-Roteiros[].juntas_ids` — e as colunas de status
+`CoordStatusTeste` / `CoordStatusGel` já calculadas de uma varredura só). Grade
+`dgCoord` + busca + filtros roteiro/ZE/município (`Update-CoordFiltrados`); clicar
+numa linha → `Invoke-AbrirLocalCoord` → `Open-LocalDetalhe -Origem 'viewCoord'`
+(mesma ficha, mesmo `cardGel`/`Invoke-AnexarGel`/`Invoke-GelAddFotos`/
+`Invoke-AbrirRelatorioLocal`). É o caminho do **coordenador anexar o formulário do
+GEL + fotos e regenerar o relatório de qualquer local sem trocar de usuário nem
+ficar preso à própria rota**. Só nessa origem aparece o botão
+**`btnLdBaixarResultado`** ("Baixar resultado transmitido") → `Invoke-BaixarResultadoLocal`
+→ `Sync-Resultados -LocalIds @($id)` **sem `-TecnicoNome`** (puxa da planilha o
+último diagnóstico transmitido daquele local, de qualquer técnico, para
+`resultados\enviados\`) → `Complete-BaixarResultadoLocal` — assim "Abrir relatório
+completo" funciona também para locais que **outro** técnico testou. GEL/fotos
+continuam **só nesta máquina** (ver "sync de GEL/fotos" em Ainda em aberto).
 Essa tela tem, no topo, um **card STATUS DO LOCAL** com 5 indicadores
 (`dot Ld Testado/Salvo/Transmitido/Exportado/Gel` — `Ellipse` vermelha quando
 não / verde quando sim; `dotLdTestado` usa a cor do veredito) + `txtLdStatusInfo`
@@ -496,4 +518,16 @@ resultado (`New-ResultadoJson`).
   Selenium/carregamento web (Fase 3) segue "em implementação"; "motivo da
   recomendação" é obrigatório sempre (provisório)
 - Fase 2 do admin: incluir/alterar Locais das Juntas
+- **Sync de GEL/fotos (Escopo 2 da tela Coordenação)**: hoje o formulário do GEL
+  (`data/vistoria-gel/<id>.json`) e as fotos ficam **só no computador onde foram
+  anexados** — não voltam pela planilha nem chegam ao técnico de campo. Se um 2º
+  coordenador (ou o técnico) regenerar o relatório desse local, sai **sem** a
+  seção GEL/fotos, e com `pdf_web` ligado ainda **sobrescreve** no Drive a versão
+  boa. Plano: ações `gel.enviar` / `gel.obter` no `executar` (mesmo padrão do
+  `pdf.relatorio`, best-effort, token de serviço) — GEL JSON numa coluna da
+  `Resultados`, fotos no Drive da coordenação em `vistoria-gel/<localid>/` via
+  `_driveUpload*`/`_driveGarantirPasta` do `DriveWeb.gs`; no desktop `Send-VistoriaGel`
+  (runspace) a partir de `Invoke-GelRegistrar`/`Invoke-GelAddFotos`/`Invoke-GelRemover`
+  e `Get-VistoriaGelRemoto` a partir de `Invoke-BaixarResultadoLocal`, com flag
+  `gel_sync` em `config/envio.json`; redeploy das duas implantações homolog→prod.
 - Empacotamento de campo (pasta portátil autocontida)
