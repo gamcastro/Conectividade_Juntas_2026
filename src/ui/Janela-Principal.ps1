@@ -328,6 +328,7 @@ function New-JanelaPrincipal {
     $window.FindName('btnAbrirFortiClient').Add_Click({ Invoke-AbrirFortiClient })
     $window.FindName('btnReverificarVpn').Add_Click({ Invoke-ReverificarVpn })
     $window.FindName('chkVpnImpossivel').Add_Click({ Update-VpnImpossivel })
+    $window.FindName('txtVpnMotivo').Add_TextChanged({ Update-BotaoVpnImpossivel })
     $window.FindName('btnAtualizar').Add_Click({ Invoke-AtualizarListaJuntas })
     $window.FindName('cboJunta').Add_SelectionChanged({ Update-ComboLocais })
     $window.FindName('cboLocal').Add_SelectionChanged({ Update-DetalheLocal })
@@ -3698,6 +3699,7 @@ function Start-CheckFase2 {
         Set-ChkBotao
         $w.FindName('panelChkVpnGate').Visibility = 'Visible'
         $w.FindName('btnChkVpnImpossivel').Visibility = 'Visible'
+        Update-BotaoVpnImpossivel   # comeca desabilitado ate marcar o checkbox + motivo
         $pp = $w.FindName('txtChkVpnPassos'); if ($pp) { $pp.Visibility = 'Visible' }
         $rc = $w.FindName('txtChkVpnRecheck')
         if ($rc) {
@@ -4261,15 +4263,25 @@ function Update-CaboLanResumo {
     $lbl = $w.FindName('txtCaboLanResumo')
     if (-not $lbl) { return }
     $c = $Global:CaboLan
+    $incompleto = $false
     $lbl.Text = if (-not $c -or $null -eq $c.necessario) {
-        'Nao informado.'
+        $incompleto = $true
+        'Obrigatorio: escolha uma opcao acima.'
     } elseif (-not $c.necessario) {
         'Selecionado: nao precisa passar cabo de rede.'
     } elseif ($null -ne $c.metros -and [double] $c.metros -gt 0) {
         'Selecionado: precisa de cabo de rede de aprox. {0:0.#} m.' -f [double] $c.metros
     } else {
-        'Selecionado: precisa de cabo de rede - digite os metros no campo "Outro".'
+        $incompleto = $true
+        'Obrigatorio: precisa de cabo de rede - digite os metros no campo "Outro".'
     }
+    try {
+        $lbl.Foreground = if ($incompleto) {
+            [Windows.Media.SolidColorBrush]::new([Windows.Media.ColorConverter]::ConvertFromString('#E8695C'))
+        } else {
+            $w.TryFindResource('Dicon.Text3')
+        }
+    } catch { }
 }
 
 # Tabela read-only das medicoes feitas no local (passo 6).
@@ -4316,6 +4328,20 @@ function Test-RecomendacaoValida {
     }
     $Global:MotivoRecomendacao = $motivo
     $Global:RecomendacaoLocal  = Resolve-RecomendacaoSelecionada -Rotulo $sel
+
+    # Conexao escolhida = rede cabeada (LAN) -> e' obrigatorio dizer se precisa
+    # passar cabo de rede e, se precisar, a metragem (card "cabo de rede (LAN)").
+    if ([string] $Global:RecomendacaoLocal.meio -eq 'lan') {
+        $c = $Global:CaboLan
+        $okCabo = $c -and $null -ne $c.necessario -and (
+            (-not $c.necessario) -or ($null -ne $c.metros -and [double] $c.metros -gt 0)
+        )
+        if (-not $okCabo) {
+            Write-Log 'Conexao pela rede cabeada (LAN): informe se precisa passar cabo de rede e, se precisar, a metragem.' -Nivel Erro
+            return $false
+        }
+    }
+
     Write-Log ('Conexao recomendada: {0} -> {1}{2}' -f `
         $Global:RecomendacaoLocal.rotulo, (Get-RotuloVeredito $Global:RecomendacaoLocal.veredito),
         (& { if ($Global:RecomendacaoLocal.provisoria) { ' (provisoria)' } else { '' } })) -Nivel Ok
@@ -5261,6 +5287,18 @@ function Update-VpnImpossivel {
     $w.FindName('txtVpnMotivoDica').Visibility = $vis
     foreach ($n in 'wrapVpnSugestoes', 'txtVpnSugestoesDica') { $c = $w.FindName($n); if ($c) { $c.Visibility = $vis } }
     if ($on) { Update-SugestoesVpnImpossivel } else { $w.FindName('txtVpnMotivo').Text = '' }
+    Update-BotaoVpnImpossivel
+}
+
+# "Registrar este meio sem a VPN" so' habilita depois que o tecnico marca o
+# checkbox "nao foi possivel conectar a VPN" E descreve o motivo.
+function Update-BotaoVpnImpossivel {
+    $w = $Global:JanelaPrincipal
+    if (-not $w) { return }
+    $on = [bool] $w.FindName('chkVpnImpossivel').IsChecked
+    $motivo = ([string] $w.FindName('txtVpnMotivo').Text).Trim()
+    $b = $w.FindName('btnChkVpnImpossivel')
+    if ($b) { $b.IsEnabled = ($on -and -not [string]::IsNullOrWhiteSpace($motivo)) }
 }
 
 # Registra o local como INVIAVEL por VPN indisponivel (sem rodar a bateria).

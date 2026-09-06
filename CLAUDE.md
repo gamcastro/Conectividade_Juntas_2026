@@ -355,9 +355,11 @@ técnico avança pelo botão `btnChkIniciar` (`Invoke-ChkAvancar`, texto/estado 
 mostra IP da VPN/interface/DNS em verde e o estado vira `f2-vpn-ok` com o botão
 "Iniciar diagnóstico com a VPN"; só esse clique roda `Start-DiagnosticoVpn` →
 `Start-DiagnosticoAssincrono -AoConcluir` = ping + `Test-BandaVpn` + Selenium
-(velocímetro iperf3) → `Complete-CheckFase2`. Se a VPN estiver fora,
-`btnChkVpnImpossivel`→`Invoke-CheckVpnImpossivel` com motivo →
-`Set-DiagnosticoVpnImpossivel`, meio inviável → **Fase 3** (Selenium, "em
+(velocímetro iperf3) → `Complete-CheckFase2`. Se a VPN estiver fora, o técnico
+marca `chkVpnImpossivel` ("não foi possível conectar a VPN…") e descreve o
+motivo — só então **`Update-BotaoVpnImpossivel`** habilita o botão
+`btnChkVpnImpossivel` ("Registrar este meio sem a VPN"); `Invoke-CheckVpnImpossivel`
+→ `Set-DiagnosticoVpnImpossivel`, meio inviável → **Fase 3** (Selenium, "em
 implementação"). `Complete-CheckMeio` → `Add-MedicaoAtual`; `Close-OverlayCheck`
 (`btnChkFechar`) fecha. O corpo tem um stepper de 3 linhas
 (`txtChkS1/S2/S3`+`dotChkS1/S2/S3`, linhas `rowChkS1/S2/S3`) — **só informa se
@@ -394,7 +396,9 @@ exclusivo em **todos os modos** — v0.6.99+): combo `cboConexaoRec`
 (candidatos + "nenhuma") pré-selecionado por `Get-ConexaoRecomendada`,
 `txtMotivoRec` e a tabela read-only `dgMedicoes` de todas as medições do
 Local; `Test-RecomendacaoValida` é o gate 5→6, sempre exige a seleção do
-combo. No modo `completo`, o cartão "RECOMENDAÇÃO FINAL" (`cboDecisaoFinal`,
+combo **e, quando a conexão escolhida é `lan`, exige o card cabo de rede
+preenchido** (`$Global:CaboLan` — "não precisa" ou "precisa + metragem > 0").
+No modo `completo`, o cartão "RECOMENDAÇÃO FINAL" (`cboDecisaoFinal`,
 override manual do veredito) continua acima e o motivo é **obrigatório**;
 nos modos `medicao`/`referencia` esse cartão fica escondido
 (`cardDecisaoViavel`), o título/rótulo do motivo mudam para "SUGESTÃO DE
@@ -404,7 +408,9 @@ maior download) sem precisar justificar, já que é só informativo. Quando a
 conexão escolhida no combo é a **LAN**, aparece o card `cardCaboLan`
 (`Update-CardCaboLan`, chamado do `Update-ContextoRecomendacao`): chips
 "Não precisa / 5 m / 10 m / 15 m / Outro (digitar)" (`wrapCaboLan` +
-`txtCaboLanOutro`) → `$Global:CaboLan` = `{necessario;metros}`, que vai pro
+`txtCaboLanOutro`) → `$Global:CaboLan` = `{necessario;metros}` — **obrigatório
+preencher** (o gate 5→6 barra; `Update-CaboLanResumo` marca "Obrigatório…" em
+vermelho enquanto falta) —, que vai pro
 JSON (`cabo_lan`, via `-CaboLan` em `New-ResultadoJson`/`Save-Diagnostico`)
 e vira uma linha "Cabo de rede (LAN)" no relatório
 (`Get-CaboLanTextoRelatorio`) →
