@@ -66,6 +66,8 @@ todo o resto do Apps Script — documentar no `apps-script/CLASP.md`.
 
 ### Pasta no Drive (homolog)
 
+**Shared Drive da organização** (decisão 3), com a árvore:
+
 ```
 DICON-HOMOLOG/
   relatorios/               PDFs individuais (upload do DICON)
@@ -73,7 +75,8 @@ DICON-HOMOLOG/
   relatorios-finais/        Doc + PDF do relatório consolidado
 ```
 
-Dona: a conta do George ou um **Shared Drive** da coordenação.
+*Falta o ID do Shared Drive.* Escritas exigem que a allowlist tenha **acesso de
+colaborador** nesse Shared Drive.
 
 ## 4. Mudanças no DICON desktop (homologação)
 
@@ -83,8 +86,8 @@ tela nem fazer um diagnóstico falhar.
 1. **Fila de eventos** (`resultados\pendentes\` → padrão análogo `eventos\pendentes\`):
    grava um evento localmente e envia na próxima conexão.
    - `abriu_app` no login.
-   - `iniciou_diagnostico` ao abrir o assistente com um Local (ou ao chegar no
-     passo 3 — a decidir; talvez os dois).
+   - `iniciou_diagnostico` **ao chegar no passo 3** (meios de conexão) do
+     assistente, com o Local escolhido.
    - `rodou_checagem` (lan/wifi/celular), `salvou`, `transmitiu`, `finalizou`,
      `abandonou` (Sair do assistente sem testar).
 2. **Heartbeat**: um timer (~5 min) enquanto a janela está aberta **e com
@@ -140,8 +143,11 @@ Ao abrir: login Google implícito → `verificarAcesso()` → sem acesso ⇒ tel
    d. **upload de fotos**: `<input type=file multiple accept="image/*">` →
       redimensiona no `<canvas>` (1600 px / q80) → `uploadFotoGel` uma a uma;
       galeria com remover.
-5. **Relatório final** — botão "Gerar" (se < 100%, mostra "faltam N locais" e
-   permite **parcial**) → `gerarRelatorioFinal` → link do PDF + histórico.
+5. **Relatório final** — **só pelo botão** "Gerar" (se < 100%, mostra "faltam N
+   locais" e permite **parcial**) → `gerarRelatorioFinal` → link do PDF +
+   histórico. Conteúdo no modo `medicao`: por Local, **medições + meio sugerido +
+   cabo de rede + observações do técnico + GEL sim/não + link do PDF**; cobertura
+   por ZE/município/técnico; **sem** KPIs de viabilidade.
 6. **Acesso** (só papel `admin`) — edição da aba `Acesso` pela tela, ou link
    direto para a planilha.
 
@@ -168,16 +174,16 @@ Ao abrir: login Google implícito → `verificarAcesso()` → sem acesso ⇒ tel
 - Aba **`Acesso`** na planilha de homolog: `email` · `papel` · `ativo`.
 - `_exigirAcesso(papelMinimo)` no início de **toda** função de backend e no
   carregamento da página. Cliente só esconde botão — **a regra é no servidor**.
-- **Token de serviço em homolog**: verificar se o projeto de homolog tem
-  `setupServiceAuth` configurado.
-  - Se **sim** → dados sensíveis (Resultados) via token de serviço, como em
-    produção; membros da allowlist **não** precisam de acesso à planilha.
-  - Se **não** → como é homolog e o dado não é de produção, aceitar rodar "como o
-    usuário" e dar **leitor** nas 2–3 planilhas de referência para os membros da
-    allowlist. Mais simples; decidir na Fase 0.
+- **Sem token de serviço** (decisão 2). A console lê os dados **como o próprio
+  usuário logado** — por isso os membros da allowlist recebem **leitor** nas
+  planilhas `Resultados (Homologação)`, `Informações Juntas Especiais` e
+  `Roteiros`. As escritas (GEL, fotos, relatório final) vão para o **Shared
+  Drive** e para abas da planilha de homolog, onde a allowlist precisa de
+  **editor**.
 - Gerenciar acesso = editar a aba `Acesso` (ou, quando quiser "oficial", pedir ao
   admin do Workspace **uma vez** um Grupo `dicon-web-*@tre-ma.jus.br` e trocar a
-  checagem para `GroupsApp.hasUser`).
+  checagem para `GroupsApp.hasUser` — e compartilhar as planilhas/Shared Drive
+  com o Grupo em vez de e-mail a e-mail).
 
 ## 9. Deploy (homologação)
 
@@ -196,7 +202,7 @@ Ao abrir: login Google implícito → `verificarAcesso()` → sem acesso ⇒ tel
 | **0 — fundação** | abas novas + `verificarAcesso` + `listarPainel` + telas **Painel** e **Vistorias** (só leitura) | nada (dado já existe) — **já entrega valor** |
 | **1 — check-in** | DICON desktop: eventos + heartbeat + fila local + upload do PDF · backend `checkin`/`registrarEvento`/`uploadPdfRelatorio` · tela **Ao vivo** | bump de versão do DICON |
 | **2 — GEL web** | pdf.js + port do extrator + calibração · formulário de conferência · `salvarGelWeb` · upload de fotos com resize | Fase 0 |
-| **3 — relatório final** | `gerarRelatorioFinal` (Doc→PDF) + tela + botão + (opcional) trigger que gera e envia por e-mail ao fechar 100% | links dos PDFs individuais = upload da Fase 1 |
+| **3 — relatório final** | `gerarRelatorioFinal` (Doc→PDF, modo `medicao`) + tela + **botão manual** (parcial ou 100%) | links dos PDFs individuais = upload da Fase 1 |
 | **4 — polimento** | edição da aba `Acesso` pela UI · `CacheService` · aba-resumo agregada · retenção da `Eventos` (90 dias → arquivo) | — |
 
 ## 11. Riscos e mitigações
@@ -233,12 +239,24 @@ Ao abrir: login Google implícito → `verificarAcesso()` → sem acesso ⇒ tel
 - **DICON desktop**: `Testar-Fluxo.ps1` ganha checagens da fila de eventos e do
   upload do PDF (best-effort, não quebra offline).
 
-## 14. Pendências a decidir antes de começar
+## 14. Decisões tomadas (2026-09-05)
 
-1. Reportar `iniciou_diagnostico` **ao abrir o assistente** ou **ao chegar no
-   passo 3**? (ou os dois)
-2. Token de serviço em homolog: existe? Se não, aceitar "como o usuário"?
-3. Dona da pasta do Drive: conta pessoal ou Shared Drive?
-4. Relatório final: só botão manual, ou também trigger automático no 100%?
-5. Modo de avaliação predominante em campo (`medicao` × `completo`) — define se o
-   relatório final tem KPIs de viabilidade ou só medições + sugestão de conexão.
+1. **`iniciou_diagnostico` é reportado ao chegar no passo 3** (meios de conexão)
+   — não ao abrir o assistente. Evita registrar quem só abriu e saiu.
+2. **Sem token de serviço.** A console **executa "como o usuário que acessa"**;
+   os membros da allowlist recebem acesso de **leitor** nas planilhas de
+   referência (`Resultados (Homologação)`, `Informações Juntas Especiais`,
+   `Roteiros`).
+3. **Shared Drive da organização** guarda as pastas
+   (`relatorios/`, `gel/<local_id>/`, `relatorios-finais/`). *Falta o ID do
+   Shared Drive.*
+4. **Relatório final: só pelo botão manual.** Sem trigger automático no 100%.
+5. **Modo `medicao`.** O relatório final é **medições + sugestão de conexão**
+   (download/latência/perda por meio, meio sugerido, cabo de rede, observações do
+   técnico, GEL anexado) — **sem** KPIs de viável/ressalva/inviável.
+
+### O que ainda falta para arrancar a Fase 0
+
+- **ID do Shared Drive** da coordenação.
+- Compartilhar as **3 planilhas de referência** como *leitor* com os e-mails da
+  allowlist (ou com um Grupo, se preferir).
