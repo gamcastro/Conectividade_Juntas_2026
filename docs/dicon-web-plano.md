@@ -30,15 +30,33 @@
   - **Falta**: o upload do PDF individual para o Drive (mudança no DICON
     desktop) — a coluna PDF fica vazia até isso.
 - **Fase 3 — no ar em homologação** ✅ (relatório final)
-  - `apps-script/web/RelatorioFinal.gs`: `gerarRelatorioFinal(modo)` (Doc →
-    PDF em `relatorios-finais/` da pasta do Drive `1ZaV3-…`, registra em
-    `RelatoriosFinais`, funciona parcial ou 100%), `listarRelatoriosFinais`,
-    `_webTestadosCompleto` (lê a coluna `json`).
-  - `Console.gs`: `WEB_DRIVE_ROOT` = pasta DICON no Shared Drive.
-  - `Index.html`: aba **Relatório final** (botão Gerar + links + histórico).
-  - Redeploy Web App @11. Usa `DriveApp`/`DocumentApp` → o coordenador é
-    **re-solicitado a autorizar** no 1º acesso (escopos novos) e precisa de
-    **editor** na pasta do Drive.
+  - `apps-script/web/RelatorioFinal.gs`: `gerarRelatorioFinal(modo)` monta um
+    **HTML → PDF** com `Utilities.newBlob(html,'text/html').getAs('application/pdf')`
+    (NÃO `DocumentApp`/`DriveApp` — ver a trava de escopo abaixo). O PDF volta
+    em **base64** e o navegador baixa; a aba `RelatoriosFinais` guarda só os
+    metadados. `listarRelatoriosFinais`, `_webTestadosCompleto` (lê `json`).
+  - `Index.html`: aba **Relatório final** (Gerar → baixa o PDF + histórico).
+  - Redeploy Web App @12.
+
+### ⚠️ Trava de escopo OAuth (vale para Fase 2 também)
+
+O projeto Apps Script é **compartilhado** entre a console (Web App) e a
+implantação da **Execution API que o DICON de campo usa** (`AKfycbxHMp…`). A
+Execution API exige que o **token do DICON** tenha **todos os escopos do
+script** — e o token do DICON só tem `openid userinfo.email spreadsheets
+script.external_request` (`config/ambiente.exemplo.json > google_oauth.scopes`).
+Se qualquer `.gs` do projeto usar `DriveApp`/`DocumentApp`/Drive API, o manifest
+passa a exigir `drive`/`documents` e **o DICON de campo quebra**.
+
+**Regra:** nada no projeto pode exigir escopo além dos 4 acima, enquanto a
+console viver no mesmo projeto que a Execution API do DICON.
+
+**Opções para quando precisar do Drive (Fase 2 fotos, arquivar o relatório):**
+1. Token de serviço com escopo `drive` (novo grant OAuth do George, só backend
+   — não toca nos field techs) + Drive API via `UrlFetchApp`.
+2. Console em **projeto Apps Script separado** (isolamento total de escopo;
+   precisa de cópias dos leitores `listarJuntas`/`listarRoteiros`).
+
 - **Fase 2 — não iniciada** (GEL pela web). **Fase 4 — não iniciada**.
 
 ## 1. Objetivo
