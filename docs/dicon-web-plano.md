@@ -83,10 +83,18 @@
     `removerAcesso` (token de serviço) + tela pra incluir/editar/desativar
     e-mails da allowlist sem abrir a planilha. O admin inicial
     (`WEB_BOOTSTRAP_ADMIN`) não pode ser desativado.
-  - Redeploy Web App @21.
-  - **Falta**: aba-resumo agregada por trigger; retenção da aba `Eventos`;
-    arquivar o PDF individual de cada Local (depende de mudança no DICON
-    desktop — ver Fase 1 abaixo).
+  - **PDF individual → Drive (v0.6.123)**: `executar` ganhou `pdf.relatorio`
+    → `webUploadPdfRelatorio` (token de serviço, `drive.file`) sobe o PDF em
+    `DICON/relatorios/` (sobrescreve o do mesmo Local, sem duplicar) e grava
+    `pdf_url` na linha do Local na aba `Resultados` (`_resultadoSetPdf` cria a
+    coluna se faltar) → a coluna **PDF** das Vistorias / do relatório final
+    para de ficar vazia. No DICON desktop: `Start-EnvioPdfRelatorioWeb`
+    (`EventosWeb.ps1`, runspace próprio, guarda de 9 MB) disparado por
+    `Complete-ExportarRelatorio` / `Complete-AbrirRelatorioLocal` quando o
+    Local já foi transmitido; toggle `config/envio.json > pdf_web`.
+  - Nova ação em `executar` → redeploy das **duas** implantações: Web App
+    **@22**, Execution API **@23** (`clasp version` 23).
+  - **Falta**: aba-resumo agregada por trigger; retenção da aba `Eventos`.
 
 ### ⚠️ Trava de escopo OAuth (vale para Fase 2 também)
 

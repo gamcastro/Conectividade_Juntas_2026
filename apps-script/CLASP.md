@@ -43,14 +43,14 @@ e `rootDir` vazio.)
 ## DICON Web (console de coordenação) — homologação
 
 Vive no **mesmo projeto Apps Script de homolog** (`17BLQ6IOZ…`), pasta
-`apps-script/web/` (`Console.gs`, `GelWeb.gs`, `RelatorioFinal.gs`, `Brasao.gs`,
-`Index.html`). Ver `docs/dicon-web-plano.md`.
+`apps-script/web/` (`Console.gs`, `GelWeb.gs`, `DriveWeb.gs`, `RelatorioFinal.gs`,
+`Brasao.gs`, `Index.html`). Ver `docs/dicon-web-plano.md`.
 
 - **Implantação Web App** (a que a coordenação acessa) — **≠** a implantação da
   Execution API que o DICON de campo consome:
-  - deploymentId: `AKfycby4rGyTNWzgl6FxYkdAmnTQpO1zSsmolqJll6psftuH2S-SZQh76s6j2qLWYypZi6wM-w`
+  - deploymentId: `AKfycby4rGyTNWzgl6FxYkdAmnTQpO1zSsmolqJll6psftuH2S-SZQh76s6j2qLWYypZi6wM-w`  (homolog **@22**)
   - URL: `…/AKfycby4rG…wM-w/exec?app=web`  (`doGet` roteia `?app=web` → `webConsolePagina`)
-- **Implantação da Execution API do DICON**: `AKfycbxHMpUwQuDH1SwRiLersK1Qbk3x90Xpu76zxnPl12Upthotd3UiaTd_eOPQ01FF2PBk`.
+- **Implantação da Execution API do DICON**: `AKfycbxHMpUwQuDH1SwRiLersK1Qbk3x90Xpu76zxnPl12Upthotd3UiaTd_eOPQ01FF2PBk`  (homolog **@23**, `clasp version` 23).
 
 Redeploy da console (mantém a URL), da pasta `~/dicon-clasp-homolog`:
 
@@ -66,10 +66,16 @@ Funções chamadas por **`google.script.run`** (a página da console:
 `carregarGelLocal`, …) só precisam do redeploy do **Web App** acima.
 
 Mas toda **nova `acao` dentro de `executar`** (`Codigo.gs`) que o DICON de campo
-chame pela Execution API (ex.: `checkin`, `evento`, `resultados.listar`) **exige
-`clasp version` + `clasp redeploy AKfycbxHMp…` também** — senão a implantação
-congela sem a ação e responde `{erro:'acao desconhecida: …'}`, e o DICON nunca
-tira os itens da fila. Já mordeu com `resultados.listar` e com `checkin`/`evento`.
+chame pela Execution API (ex.: `checkin`, `evento`, `resultados.listar`,
+`pdf.relatorio`) **exige `clasp version` + `clasp redeploy AKfycbxHMp… -V <n>`
+também** — senão a implantação congela sem a ação e responde
+`{erro:'acao desconhecida: …'}`, e o DICON nunca tira os itens da fila. Já
+mordeu com `resultados.listar` e com `checkin`/`evento`.
+
+    clasp push -f
+    clasp redeploy AKfycby4rG…wM-w -d "DICON Web homolog vN"        # Web App
+    clasp version "vN <resumo>"                                     # cria a versao (imprime o numero)
+    clasp redeploy AKfycbxHMpUwQuDH1SwRiLersK1Qbk3x90Xpu76zxnPl12Upthotd3UiaTd_eOPQ01FF2PBk -V <numero> -d "vN"
 
 ## Config extra
 
