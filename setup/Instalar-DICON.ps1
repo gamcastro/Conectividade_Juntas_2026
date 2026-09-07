@@ -46,6 +46,27 @@ function OK($t)     { Write-Host "  [ok]   $t" -ForegroundColor Green }
 function Aviso($t)  { Write-Host "  [!]    $t" -ForegroundColor Yellow }
 function Erro($t)   { Write-Host "  [x]    $t" -ForegroundColor Red }
 
+# Extrai um .zip/.nupkg sem esbarrar no bug do Expand-Archive do WinPS 5.1
+# (limpeza interna estoura "nao e' possivel localizar ...\_rels\.rels" em pacotes
+# OPC como os .nupkg, e com $ErrorActionPreference='Stop' isso mata o script).
+# Usa System.IO.Compression; so' cai no Expand-Archive se aquilo faltar. Considera
+# OK se o destino ficou com pelo menos 1 arquivo.
+function Expand-ZipSafe {
+    param([string] $Zip, [string] $Destino)
+    if (Test-Path $Destino) { Remove-Item $Destino -Recurse -Force -ErrorAction SilentlyContinue }
+    New-Item -ItemType Directory -Path $Destino -Force | Out-Null
+    try {
+        Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction Stop
+        [System.IO.Compression.ZipFile]::ExtractToDirectory($Zip, $Destino)
+    } catch {
+        try { Expand-Archive -Path $Zip -DestinationPath $Destino -Force -ErrorAction Stop }
+        catch { }   # o Expand-Archive costuma extrair OK e so' falhar na limpeza
+    }
+    if (-not (Get-ChildItem -Path $Destino -Recurse -File -ErrorAction SilentlyContinue | Select-Object -First 1)) {
+        throw ("nao consegui extrair " + (Split-Path $Zip -Leaf))
+    }
+}
+
 # Grava texto (UTF-8 sem BOM) com retentativa: o antivirus costuma segurar um
 # arquivo recem-criado por um instante -> "sendo usado por outro processo".
 function Save-TextoResiliente {
@@ -208,8 +229,7 @@ if ($SoConfig -or $PularDeps) {
             if ($h -ne ([string] $Dep.sha256).ToLower()) { Erro "$($Dep.nome): SHA-256 nao confere"; return }
         }
         $ext = Join-Path $Tmp ("x-" + $Dep.id)
-        if (Test-Path $ext) { Remove-Item $ext -Recurse -Force }
-        Expand-Archive -Path $zip -DestinationPath $ext -Force
+        Expand-ZipSafe -Zip $zip -Destino $ext
         foreach ($padrao in $Dep.extrair) {
             $achou = Get-ChildItem -Path $ext -Recurse -File -Filter (Split-Path $padrao -Leaf) -ErrorAction SilentlyContinue
             foreach ($f in $achou) { Copy-Item $f.FullName (Join-Path $destDir $f.Name) -Force }
@@ -239,7 +259,7 @@ if ($SoConfig -or $PularDeps) {
         if (-not (Test-Path $DepsZip)) { Erro "DepsZip nao encontrado: $DepsZip"; }
         else {
             $raizDeps = Join-Path $Tmp 'deps'
-            Expand-Archive -Path $DepsZip -DestinationPath $raizDeps -Force
+            Expand-ZipSafe -Zip $DepsZip -Destino $raizDeps
             foreach ($sub in 'tools', 'bin', 'lib') {
                 $o = Join-Path $raizDeps $sub
                 if (Test-Path $o) { Copy-Item (Join-Path $o '*') (Join-Path $RaizApp $sub) -Recurse -Force }

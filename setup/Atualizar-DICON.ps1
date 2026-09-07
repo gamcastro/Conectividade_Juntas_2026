@@ -29,6 +29,23 @@ $ProgressPreference = 'SilentlyContinue'
 $RaizApp = Split-Path $PSScriptRoot -Parent
 $Repo    = 'https://github.com/gamcastro/Conectividade_Juntas_2026'
 
+# Extrai um .zip sem esbarrar no bug de limpeza do Expand-Archive do WinPS 5.1
+# (com $ErrorActionPreference='Stop' um erro na limpeza interna mata o script).
+function Expand-ZipSafe {
+    param([string] $Zip, [string] $Destino)
+    if (Test-Path $Destino) { Remove-Item $Destino -Recurse -Force -ErrorAction SilentlyContinue }
+    New-Item -ItemType Directory -Path $Destino -Force | Out-Null
+    try {
+        Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction Stop
+        [System.IO.Compression.ZipFile]::ExtractToDirectory($Zip, $Destino)
+    } catch {
+        try { Expand-Archive -Path $Zip -DestinationPath $Destino -Force -ErrorAction Stop } catch { }
+    }
+    if (-not (Get-ChildItem -Path $Destino -Recurse -File -ErrorAction SilentlyContinue | Select-Object -First 1)) {
+        throw ("nao consegui extrair " + (Split-Path $Zip -Leaf))
+    }
+}
+
 # Baixa um arquivo com varias tentativas e 3 metodos (BITS retoma quedas; depois
 # Invoke-WebRequest; depois WebClient). O zip da branch tem ~11 MB (o iperf3 vai
 # versionado), entao numa conexao instavel de campo uma queda no meio e comum -
@@ -93,8 +110,9 @@ if ($temGit) {
                "Tente de novo com uma internet melhor, ou rode manualmente:`n" +
                "  iex (irm https://raw.githubusercontent.com/gamcastro/Conectividade_Juntas_2026/$Branch/setup/Baixar-e-Instalar.ps1)")
     }
-    Expand-Archive -Path $zip -DestinationPath $tmp -Force
-    $novo = Get-ChildItem -Path $tmp -Directory | Where-Object { $_.Name -like 'Conectividade_Juntas_2026*' } | Select-Object -First 1
+    $extr = Join-Path $tmp 'x'
+    Expand-ZipSafe -Zip $zip -Destino $extr
+    $novo = Get-ChildItem -Path $extr -Directory | Where-Object { $_.Name -like 'Conectividade_Juntas_2026*' } | Select-Object -First 1
     if (-not $novo) { throw 'ZIP da branch nao extraiu como esperado.' }
 
     # pastas de codigo (+ iperf3, que agora vai no repo): espelha (remove sumidos)
