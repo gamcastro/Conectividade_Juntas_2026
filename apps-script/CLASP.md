@@ -90,12 +90,14 @@ redeploy.
     clasp version "vN <resumo>"                                     # cria a versao (imprime o numero)
     clasp redeploy AKfycbxHMpUwQuDH1SwRiLersK1Qbk3x90Xpu76zxnPl12Upthotd3UiaTd_eOPQ01FF2PBk -V <numero> -d "vN"
 
-### Aba "Mapa" da console (v0.6.132) — só Web App
+### Aba "Mapa" da console (v0.6.132 pinos · v0.6.133 choropleth) — só Web App
 
 `carregarMapa` / `carregarMalhaMA` (`apps-script/web/Console.gs` +
 `apps-script/web/MalhaMA.gs`, malha municipal do IBGE embutida) são chamadas por
 **`google.script.run`** → só o redeploy do **Web App** (`clasp push -f` +
-`clasp redeploy AKfycby4rG…wM-w -d "…"`), NÃO mexe em `executar`.
+`clasp redeploy AKfycby4rG…wM-w -d "…"`), NÃO mexe em `executar`. A v0.6.133
+acrescentou o choropleth por município (de-para nome→código IBGE por nome
+normalizado; nomes sem match voltam em `municipios_sem_codigo`).
 
 **Setup GCP (uma vez, o George faz)** — sem isto a aba mostra o aviso "chave não
 configurada" e a lista de pendentes, o resto da console segue normal:
