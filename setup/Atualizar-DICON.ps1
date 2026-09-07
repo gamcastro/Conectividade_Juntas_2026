@@ -33,7 +33,7 @@ $Repo    = 'https://github.com/gamcastro/Conectividade_Juntas_2026'
 # System.IO.Compression, Expand-Archive de reserva engolindo o erro de limpeza,
 # retenta em "arquivo em uso" (antivirus) e so' aceita quando extraiu tudo.
 function Expand-ZipSafe {
-    param([string] $Zip, [string] $Destino, [int] $Tentativas = 4)
+    param([string] $Zip, [string] $Destino, [int] $Tentativas = 6)
     $nEsperado = 0
     try {
         Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction Stop

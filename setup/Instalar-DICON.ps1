@@ -53,7 +53,7 @@ function Erro($t)   { Write-Host "  [x]    $t" -ForegroundColor Red }
 #  - retenta ao esbarrar em "arquivo em uso" (antivirus) e so' aceita quando
 #    extraiu TODAS as entradas.
 function Expand-ZipSafe {
-    param([string] $Zip, [string] $Destino, [int] $Tentativas = 4)
+    param([string] $Zip, [string] $Destino, [int] $Tentativas = 6)
     $nEsperado = 0
     try {
         Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction Stop
