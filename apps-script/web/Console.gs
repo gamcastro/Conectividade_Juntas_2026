@@ -454,27 +454,32 @@ function _webMalhaCodPorNome() {
   return idx;
 }
 
-// Estrutura das Zonas Eleitorais -- aba "Termos" da planilha corporativa
-// "Zonas Eleitorais" (colunas ZONA | TERMO | SEDE, 1 linha por termo de cada ZE;
-// uma sede pode ter varias ZEs). Lida pelo TOKEN DE SERVICO (como o George) --
-// os coordenadores nao precisam de acesso a essa planilha. Sem acesso -> {} e o
-// mapa cai pro modo "so' junta".  -> { porCod: {cod:{cod,nome,ze_sede{},ze_termo{},sede_nome}}, sem_codigo:{} }
+// Estrutura das Zonas Eleitorais -- aba "Zonas e Termos" da planilha corporativa
+// "Zonas Eleitorais" (colunas ZONA | SEDE | TERMO, 1 linha por termo de cada ZE;
+// uma sede pode ter varias ZEs). Regra: quando SEDE == TERMO na linha, aquele
+// municipio conta so' como SEDE (nao como termo). Lida pelo TOKEN DE SERVICO
+// (como o George) -- os coordenadores nao precisam de acesso a essa planilha.
+// Sem acesso -> {} e o mapa cai pro modo "so' junta".
+//   -> { porCod: {cod:{cod,nome,ze_sede{},ze_termo{},sede_nome}}, sem_codigo:{} }
 var WEB_ZE_SHEET = '1_2aZhFgplRqCdPVV_lq4XJT9wgqkfbZpEFZRu1Zu9_I';
-var WEB_ZE_ABA   = 'Termos';
+var WEB_ZE_ABA   = 'Zonas e Termos';
 function _webEstruturaZE() {
   var idx = _webMalhaCodPorNome();
   var out = { porCod: {}, sem_codigo: {} };
-  var rows;
-  try { rows = _sheetsGetValores(_tokenServico(), WEB_ZE_SHEET, WEB_ZE_ABA); }
-  catch (e) { return out; }
+  var tok = _tokenServico(), rows;
+  try { rows = _sheetsGetValores(tok, WEB_ZE_SHEET, "'" + WEB_ZE_ABA + "'"); }
+  catch (e1) {
+    try { rows = _sheetsGetValores(tok, WEB_ZE_SHEET, WEB_ZE_ABA); }
+    catch (e2) { return out; }
+  }
   if (!rows || !rows.length) return out;
 
-  // acha a linha de cabecalho (ZONA / TERMO / SEDE) -- nao esta' na linha 1
-  var hi = -1, cZ = 0, cT = 1, cS = 2;
+  // acha a linha de cabecalho (ZONA / SEDE / TERMO, em qualquer ordem)
+  var hi = -1, cZ = 0, cS = 1, cT = 2;
   for (var r = 0; r < Math.min(rows.length, 12); r++) {
     var norm = (rows[r] || []).map(function (c) { return _webNormNome(c); });
-    var iz = norm.indexOf('zona'), it = norm.indexOf('termo'), is = norm.indexOf('sede');
-    if (iz >= 0 && it >= 0 && is >= 0) { hi = r; cZ = iz; cT = it; cS = is; break; }
+    var iz = norm.indexOf('zona'), is = norm.indexOf('sede'), it = norm.indexOf('termo');
+    if (iz >= 0 && is >= 0 && it >= 0) { hi = r; cZ = iz; cS = is; cT = it; break; }
   }
   if (hi < 0) hi = 0;
 
@@ -484,16 +489,21 @@ function _webEstruturaZE() {
   }
   for (var k = hi + 1; k < rows.length; k++) {
     var row = rows[k] || [];
-    var ze = String(row[cZ] == null ? '' : row[cZ]).trim();
+    var ze   = String(row[cZ] == null ? '' : row[cZ]).trim();
+    var sede = String(row[cS] || '').trim();
     var termo = String(row[cT] || '').trim();
-    var sede  = String(row[cS] || '').trim();
-    if (!ze && !termo && !sede) continue;
-    var mt = idx[_webNormNome(termo)];
+    if (!ze && !sede && !termo) continue;
     var ms = idx[_webNormNome(sede)];
-    if (termo && !mt) out.sem_codigo[termo] = true;
+    var mt = idx[_webNormNome(termo)];
     if (sede && !ms) out.sem_codigo[sede] = true;
-    if (mt) { var et = ensure(mt.cod, mt.nome); if (ze) et.ze_termo[ze] = true; if (sede) et.sede_nome = sede; }
+    if (termo && !mt) out.sem_codigo[termo] = true;
     if (ms) { var es = ensure(ms.cod, ms.nome); if (ze) es.ze_sede[ze] = true; }
+    // termo so' quando for municipio DIFERENTE da sede
+    if (mt && (!ms || mt.cod !== ms.cod)) {
+      var et = ensure(mt.cod, mt.nome);
+      if (ze) et.ze_termo[ze] = true;
+      if (sede) et.sede_nome = sede;
+    }
   }
   return out;
 }
@@ -565,7 +575,7 @@ function carregarMapa(forcar) {
   var cache = null;
   try { cache = CacheService.getScriptCache(); } catch (e) { cache = null; }
   if (cache && !forcar) {
-    var hit = cache.get('mapa_v3');
+    var hit = cache.get('mapa_v4');
     if (hit) {
       try {
         var o = JSON.parse(hit);
@@ -618,7 +628,7 @@ function carregarMapa(forcar) {
     gerado_em: new Date().toISOString()
   };
   if (cache) {
-    try { var s = JSON.stringify(corpo); if (s.length < 95000) cache.put('mapa_v3', s, 60); } catch (e) { /* cache e' opcional */ }
+    try { var s = JSON.stringify(corpo); if (s.length < 95000) cache.put('mapa_v4', s, 60); } catch (e) { /* cache e' opcional */ }
   }
   corpo.acesso = acesso;
   corpo.ambiente = _webAmbiente();
