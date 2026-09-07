@@ -29,21 +29,31 @@ $ProgressPreference = 'SilentlyContinue'
 $RaizApp = Split-Path $PSScriptRoot -Parent
 $Repo    = 'https://github.com/gamcastro/Conectividade_Juntas_2026'
 
-# Extrai um .zip sem esbarrar no bug de limpeza do Expand-Archive do WinPS 5.1
-# (com $ErrorActionPreference='Stop' um erro na limpeza interna mata o script).
+# Extrai um .zip de forma resiliente (ver a mesma funcao no Baixar-e-Instalar.ps1):
+# System.IO.Compression, Expand-Archive de reserva engolindo o erro de limpeza,
+# retenta em "arquivo em uso" (antivirus) e so' aceita quando extraiu tudo.
 function Expand-ZipSafe {
-    param([string] $Zip, [string] $Destino)
-    if (Test-Path $Destino) { Remove-Item $Destino -Recurse -Force -ErrorAction SilentlyContinue }
-    New-Item -ItemType Directory -Path $Destino -Force | Out-Null
+    param([string] $Zip, [string] $Destino, [int] $Tentativas = 4)
+    $nEsperado = 0
     try {
         Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction Stop
-        [System.IO.Compression.ZipFile]::ExtractToDirectory($Zip, $Destino)
-    } catch {
-        try { Expand-Archive -Path $Zip -DestinationPath $Destino -Force -ErrorAction Stop } catch { }
+        $za = [System.IO.Compression.ZipFile]::OpenRead($Zip)
+        $nEsperado = @($za.Entries | Where-Object { $_.Name }).Count
+        $za.Dispose()
+    } catch { }
+    for ($t = 1; $t -le $Tentativas; $t++) {
+        if (Test-Path $Destino) { Remove-Item $Destino -Recurse -Force -ErrorAction SilentlyContinue }
+        New-Item -ItemType Directory -Path $Destino -Force | Out-Null
+        try {
+            [System.IO.Compression.ZipFile]::ExtractToDirectory($Zip, $Destino)
+        } catch {
+            try { Expand-Archive -Path $Zip -DestinationPath $Destino -Force -ErrorAction Stop } catch { }
+        }
+        $nExtraido = @(Get-ChildItem -Path $Destino -Recurse -File -ErrorAction SilentlyContinue).Count
+        if ($nExtraido -gt 0 -and ($nEsperado -eq 0 -or $nExtraido -ge $nEsperado)) { return }
+        if ($t -lt $Tentativas) { Start-Sleep -Seconds (2 * $t) }
     }
-    if (-not (Get-ChildItem -Path $Destino -Recurse -File -ErrorAction SilentlyContinue | Select-Object -First 1)) {
-        throw ("nao consegui extrair " + (Split-Path $Zip -Leaf))
-    }
+    throw ("nao consegui extrair " + (Split-Path $Zip -Leaf) + " -- arquivo em uso (antivirus?).")
 }
 
 # Baixa um arquivo com varias tentativas e 3 metodos (BITS retoma quedas; depois

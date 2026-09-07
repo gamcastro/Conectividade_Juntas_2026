@@ -46,25 +46,34 @@ function OK($t)     { Write-Host "  [ok]   $t" -ForegroundColor Green }
 function Aviso($t)  { Write-Host "  [!]    $t" -ForegroundColor Yellow }
 function Erro($t)   { Write-Host "  [x]    $t" -ForegroundColor Red }
 
-# Extrai um .zip/.nupkg sem esbarrar no bug do Expand-Archive do WinPS 5.1
-# (limpeza interna estoura "nao e' possivel localizar ...\_rels\.rels" em pacotes
-# OPC como os .nupkg, e com $ErrorActionPreference='Stop' isso mata o script).
-# Usa System.IO.Compression; so' cai no Expand-Archive se aquilo faltar. Considera
-# OK se o destino ficou com pelo menos 1 arquivo.
+# Extrai um .zip/.nupkg de forma resiliente:
+#  - System.IO.Compression (sem a limpeza interna que estoura no Expand-Archive
+#    do WinPS 5.1 com pacotes OPC como .nupkg -> "...\_rels\.rels");
+#  - Expand-Archive so' de reserva, engolindo o erro de limpeza;
+#  - retenta ao esbarrar em "arquivo em uso" (antivirus) e so' aceita quando
+#    extraiu TODAS as entradas.
 function Expand-ZipSafe {
-    param([string] $Zip, [string] $Destino)
-    if (Test-Path $Destino) { Remove-Item $Destino -Recurse -Force -ErrorAction SilentlyContinue }
-    New-Item -ItemType Directory -Path $Destino -Force | Out-Null
+    param([string] $Zip, [string] $Destino, [int] $Tentativas = 4)
+    $nEsperado = 0
     try {
         Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction Stop
-        [System.IO.Compression.ZipFile]::ExtractToDirectory($Zip, $Destino)
-    } catch {
-        try { Expand-Archive -Path $Zip -DestinationPath $Destino -Force -ErrorAction Stop }
-        catch { }   # o Expand-Archive costuma extrair OK e so' falhar na limpeza
+        $za = [System.IO.Compression.ZipFile]::OpenRead($Zip)
+        $nEsperado = @($za.Entries | Where-Object { $_.Name }).Count
+        $za.Dispose()
+    } catch { }
+    for ($t = 1; $t -le $Tentativas; $t++) {
+        if (Test-Path $Destino) { Remove-Item $Destino -Recurse -Force -ErrorAction SilentlyContinue }
+        New-Item -ItemType Directory -Path $Destino -Force | Out-Null
+        try {
+            [System.IO.Compression.ZipFile]::ExtractToDirectory($Zip, $Destino)
+        } catch {
+            try { Expand-Archive -Path $Zip -DestinationPath $Destino -Force -ErrorAction Stop } catch { }
+        }
+        $nExtraido = @(Get-ChildItem -Path $Destino -Recurse -File -ErrorAction SilentlyContinue).Count
+        if ($nExtraido -gt 0 -and ($nEsperado -eq 0 -or $nExtraido -ge $nEsperado)) { return }
+        if ($t -lt $Tentativas) { Start-Sleep -Seconds (2 * $t) }
     }
-    if (-not (Get-ChildItem -Path $Destino -Recurse -File -ErrorAction SilentlyContinue | Select-Object -First 1)) {
-        throw ("nao consegui extrair " + (Split-Path $Zip -Leaf))
-    }
+    throw ("nao consegui extrair " + (Split-Path $Zip -Leaf) + " -- arquivo em uso (antivirus?).")
 }
 
 # Grava texto (UTF-8 sem BOM) com retentativa: o antivirus costuma segurar um

@@ -45,6 +45,36 @@ function Save-ZipRemoto {
     return $false
 }
 
+# Extrai um .zip de forma resiliente:
+#  - System.IO.Compression (nao tem a limpeza interna que estoura no
+#    Expand-Archive do WinPS 5.1 com pacotes OPC / .nupkg);
+#  - Expand-Archive so' de reserva, engolindo o erro de limpeza;
+#  - retenta ao esbarrar em "arquivo em uso" (antivirus segurando um .gitattributes
+#    recem-extraido) e so' aceita quando extraiu TODAS as entradas.
+function Expand-ZipSafe {
+    param([string] $Zip, [string] $Destino, [int] $Tentativas = 4)
+    $nEsperado = 0
+    try {
+        Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction Stop
+        $za = [System.IO.Compression.ZipFile]::OpenRead($Zip)
+        $nEsperado = @($za.Entries | Where-Object { $_.Name }).Count
+        $za.Dispose()
+    } catch { }
+    for ($t = 1; $t -le $Tentativas; $t++) {
+        if (Test-Path $Destino) { Remove-Item $Destino -Recurse -Force -ErrorAction SilentlyContinue }
+        New-Item -ItemType Directory -Path $Destino -Force | Out-Null
+        try {
+            [System.IO.Compression.ZipFile]::ExtractToDirectory($Zip, $Destino)
+        } catch {
+            try { Expand-Archive -Path $Zip -DestinationPath $Destino -Force -ErrorAction Stop } catch { }
+        }
+        $nExtraido = @(Get-ChildItem -Path $Destino -Recurse -File -ErrorAction SilentlyContinue).Count
+        if ($nExtraido -gt 0 -and ($nEsperado -eq 0 -or $nExtraido -ge $nEsperado)) { return }
+        if ($t -lt $Tentativas) { Start-Sleep -Seconds (2 * $t) }   # da tempo do antivirus soltar
+    }
+    throw ("nao consegui extrair " + (Split-Path $Zip -Leaf) + " -- arquivo em uso (antivirus?). Tente de novo.")
+}
+
 # A pasta (ou o pai dela) e gravavel por este usuario?
 function Test-CaminhoGravavel {
     param([string] $Dir)
@@ -112,8 +142,9 @@ if ($temSrc) {
     try {
         if (-not (Save-ZipRemoto "$Repo/archive/refs/heads/$Branch.zip" $zip)) { throw "nao consegui baixar o codigo ($Branch)." }
         Unblock-File $zip -ErrorAction SilentlyContinue
-        Expand-Archive -Path $zip -DestinationPath $tmp -Force
-        $srcDir = Get-ChildItem $tmp -Directory | Where-Object { $_.Name -like 'Conectividade_Juntas_2026*' } | Select-Object -First 1
+        $extr = Join-Path $tmp 'x'
+        Expand-ZipSafe -Zip $zip -Destino $extr
+        $srcDir = Get-ChildItem $extr -Directory | Where-Object { $_.Name -like 'Conectividade_Juntas_2026*' } | Select-Object -First 1
         if (-not $srcDir) { throw 'o ZIP da branch nao extraiu como esperado.' }
         New-Item -ItemType Directory -Path $Dest -Force | Out-Null
         robocopy $srcDir.FullName $Dest /E /NFL /NDL /NJH /NJS /NP /R:1 /W:1 | Out-Null
