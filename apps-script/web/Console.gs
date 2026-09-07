@@ -854,6 +854,43 @@ function _webHora(v) {
   return Utilities.formatDate(d, Session.getScriptTimeZone(), 'dd/MM HH:mm');
 }
 
+// Telefone (E.164 BR) por tecnico -- aba "Telefones" da planilha de Resultados
+// (colunas: tecnico | telefone [| email]). Lida pelo TOKEN DE SERVICO. Devolve
+// { 'n:<nome normalizado>': '+55...', 'e:<email>': '+55...' }. Aba ausente -> {}.
+var WEB_ABA_TELEFONES = 'Telefones';
+function _webTelefonesTecnicos() {
+  var out = {};
+  try {
+    var rows = _sheetsGetValores(_tokenServico(), _idResultados(), WEB_ABA_TELEFONES);
+    if (!rows || rows.length < 2) return out;
+    var head = (rows[0] || []).map(function (c) { return _webNormNome(c); });
+    var iNome = head.indexOf('tecnico'); if (iNome < 0) iNome = head.indexOf('nome');
+    var iTel  = head.indexOf('telefone'); if (iTel < 0) iTel = head.indexOf('whatsapp'); if (iTel < 0) iTel = head.indexOf('celular');
+    var iMail = head.indexOf('email');
+    if (iNome < 0 || iTel < 0) return out;
+    for (var r = 1; r < rows.length; r++) {
+      var tel = _webTelE164(rows[r][iTel]);
+      if (!tel) continue;
+      var nk = _webNormNome(rows[r][iNome]);
+      if (nk) out['n:' + nk] = tel;
+      if (iMail >= 0) {
+        var em = String(rows[r][iMail] || '').toLowerCase().trim();
+        if (em) out['e:' + em] = tel;
+      }
+    }
+  } catch (e) { /* aba pode nao existir */ }
+  return out;
+}
+
+// Normaliza um telefone BR para E.164: so' digitos; tira zeros a esquerda; poe
+// 55 se vier so' DDD+numero. '' quando nao parece um telefone valido.
+function _webTelE164(v) {
+  var d = String(v == null ? '' : v).replace(/[^0-9]+/g, '').replace(/^0+/, '');
+  if (d.length === 10 || d.length === 11) d = '55' + d;   // (DD)NNNN... -> +55
+  if (d.indexOf('55') !== 0 || d.length < 12 || d.length > 13) return '';
+  return '+' + d;
+}
+
 // Aba "Ao vivo" da console: presenca (online se <=10 min) + feed de eventos.
 function carregarAoVivo() {
   var acesso = verificarAcesso();
@@ -877,14 +914,17 @@ function carregarAoVivo() {
     return (a.minutos == null ? 1e9 : a.minutos) - (b.minutos == null ? 1e9 : b.minutos);
   });
 
-  // Codigo IBGE do municipio onde cada tecnico ONLINE esta' diagnosticando (pro
-  // ponto pulsante da aba Mapa). So' resolve a malha se houver alguem ativo.
+  // Codigo IBGE do municipio + telefone do tecnico -- pro ponto pulsante e o
+  // botao WhatsApp da aba Mapa. So' resolve se houver alguem ONLINE diagnosticando.
   if (presencas.some(function (p) { return p.online && p.municipio_atual; })) {
     var mi = _webMalhaCodPorNome();
+    var tels = _webTelefonesTecnicos();
     presencas.forEach(function (p) {
       if (!p.municipio_atual) return;
       var mm = mi[_webNormNome(p.municipio_atual)];
       p.municipio_cod = mm ? mm.cod : '';
+      p.telefone = tels['e:' + String(p.email || '').toLowerCase().trim()] ||
+                   tels['n:' + _webNormNome(p.tecnico)] || '';
     });
   }
 
