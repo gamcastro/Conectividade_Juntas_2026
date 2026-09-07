@@ -192,11 +192,11 @@
         <div id="mapAviso" hidden style="padding:12px 14px;background:#FDF6E3;border:1px solid #E8D9A8;border-radius:8px;font-size:13px;line-height:1.5;margin-bottom:12px"></div>
         <div id="gmap" style="width:100%;height:64vh;border:1px solid var(--hair);border-radius:8px;background:#EEF1F5"></div>
         <div class="mleg">
-          <span><i style="background:#E8B93E"></i> sede de ZE</span>
-          <span><i style="background:#1B7F3B"></i> junta 100% testada</span>
-          <span><i style="background:#E8873E"></i> parcialmente testada</span>
-          <span><i style="background:#C0392B"></i> nenhum local testado</span>
-          <span><i style="background:#123FA8;opacity:.4"></i> município sem junta</span>
+          <span><i style="background:#6D3B9E"></i> sede de ZE + junta especial</span>
+          <span><i style="background:#E8B93E"></i> sede de ZE (sem junta)</span>
+          <span><i style="background:#1B7F3B"></i> termo com junta especial</span>
+          <span><i style="background:#123FA8;opacity:.4"></i> termo sem junta</span>
+          <span style="opacity:.85">tom mais forte = mais locais testados</span>
           <span><i class="pin" style="background:var(--verde)"></i> local testado (GEL c/ coord.)</span>
           <span><i class="pin" style="background:#C0392B"></i> local pendente (GEL c/ coord.)</span>
         </div>
@@ -564,7 +564,7 @@
       el('mSemCod').textContent = sc.length + ' município(s) não casaram com o mapa (ficam sem preenchimento): ' + sc.join(', ') + '.';
     } else { el('mSemCod').hidden = true; }
 
-    el('mContagem').textContent = (d.municipios||[]).length + ' município(s) no recorte';
+    el('mContagem').textContent = 'montando o mapa…';
 
     if (!d.maps_key){
       mapaAviso('<b>Mapa ainda não disponível.</b> A chave da API do Google Maps não foi configurada ' +
@@ -636,10 +636,9 @@
     return { temJunta: locais.length > 0, n: locais.length, testados: tt, locais: locais };
   }
 
-  // Estilo de cada polígono da malha.
-  //  sede de ZE ......... amarelo cheio (vence tudo)
-  //  junta ............... verde / laranja / vermelho pelo andamento
-  //  sem junta/sede ...... azul claro
+  // Estilo de cada polígono da malha. Cor = categoria estrutural; nas categorias
+  // COM junta a opacidade cresce com o nº de locais testados (nenhum/parcial/todos).
+  //  sede_junta  roxo  ·  sede  amarelo  ·  termo_junta  verde  ·  termo  azul claro
   function estiloFeature(feature){
     if (!el('mDivisas').checked && !el('mPintar').checked) return { visible:false };
     var m = MAPA.muniByCod[String(feature.getProperty('cod') || '')];
@@ -647,20 +646,22 @@
       return { visible:true, fillColor:'#9AA3B2', fillOpacity:0.03,
                strokeColor:'#B0B7C3', strokeWeight:0.6, clickable: !!m, zIndex:1 };
     }
-    var AZUL = { visible:true, fillColor:'#123FA8', fillOpacity:0.10,
-                 strokeColor:'#5A78B8', strokeWeight:0.6, clickable: !!m, zIndex:1 };
-    if (!m) return AZUL;
-    if (m.eh_sede){
-      return { visible:true, fillColor:'#E8B93E', fillOpacity:0.55,
-               strokeColor:'#B8901F', strokeWeight:2.2, clickable:true, zIndex:4 };
+    if (!m){
+      return { visible:true, fillColor:'#9AA3B2', fillOpacity:0.06,
+               strokeColor:'#B0B7C3', strokeWeight:0.5, clickable:false, zIndex:1 };
     }
     var a = aggMunicipio(m);
-    if (!a.temJunta) return AZUL;
-    var fill, op;
-    if (a.testados === 0)        { fill = '#C0392B'; op = 0.34; }
-    else if (a.testados === a.n) { fill = '#1B7F3B'; op = 0.40; }
-    else                        { fill = '#E8873E'; op = 0.42; }
-    return { visible:true, fillColor:fill, fillOpacity:op, strokeColor:'#1F4E79', strokeWeight:1.0, clickable:true, zIndex:2 };
+    var RAMPA = [0.26, 0.42, 0.58];   // nenhum / parcial / todos os locais testados
+    var passo = !a.temJunta ? 0 : (a.testados === 0 ? 0 : (a.testados === a.n ? 2 : 1));
+    var hue, op, stroke, sw = 0.9, z = 2;
+    switch (m.categoria){
+      case 'sede_junta':  hue = '#6D3B9E'; op = RAMPA[passo]; stroke = '#4A2470'; sw = 2.0; z = 4; break;
+      case 'sede':        hue = '#E8B93E'; op = 0.50;         stroke = '#B8901F'; sw = 2.0; z = 3; break;
+      case 'termo_junta': hue = '#1B7F3B'; op = RAMPA[passo]; stroke = '#125C29'; sw = 1.1; z = 2; break;
+      case 'termo':       hue = '#123FA8'; op = 0.15;         stroke = '#5A78B8'; sw = 0.7; z = 1; break;
+      default:            hue = '#9AA3B2'; op = 0.10;         stroke = '#8A93A3'; sw = 0.6; z = 1;
+    }
+    return { visible:true, fillColor:hue, fillOpacity:op, strokeColor:stroke, strokeWeight:sw, clickable:true, zIndex:z };
   }
 
   function estilizarMalha(){ if (MAPA.malhaOk) MAPA.map.data.setStyle(estiloFeature); }
@@ -687,9 +688,16 @@
       bounds.extend(mk.getPosition());
       n++;
     });
-    var comJunta = 0;
-    Object.keys(MAPA.muniByCod).forEach(function(k){ if (aggMunicipio(MAPA.muniByCod[k]).temJunta) comJunta++; });
-    el('mContagem').textContent = comJunta + ' município(s) com junta · ' + n + ' pino(s) do GEL';
+    var cSJ = 0, cS = 0, cTJ = 0;
+    Object.keys(MAPA.muniByCod).forEach(function(k){
+      var m = MAPA.muniByCod[k];
+      var temJ = aggMunicipio(m).temJunta;
+      if (m.categoria === 'sede_junta') cSJ++;
+      else if (m.categoria === 'sede') cS++;
+      else if (m.categoria === 'termo_junta' || (m.categoria === 'outro' && temJ)) cTJ++;
+    });
+    el('mContagem').textContent = (cSJ+cTJ) + ' município(s) com junta (' + cSJ + ' sede + ' + cTJ +
+      ' termo) · ' + cS + ' sede sem junta · ' + n + ' pino(s) do GEL';
     if (n && !MAPA.enquadrou){ MAPA.map.fitBounds(bounds); MAPA.enquadrou = true;
       if (n === 1) MAPA.map.setZoom(13); }
   }
@@ -722,9 +730,14 @@
     var L = [];
     L.push('<div style="font-weight:700;margin-bottom:2px">'+esc(m.nome)+'</div>');
     var sub = [];
-    if (m.eh_sede) sub.push('Sede ZE '+esc((m.zonas_sede||[]).join(', ')));
-    sub.push(a.temJunta ? (a.testados+'/'+a.n+' local(is) testado(s)') : 'sem junta neste recorte');
-    L.push('<div style="color:#5C6472;font-size:12px">'+sub.join(' · ')+'</div>');
+    var zs = m.ze_sede || [], zt = m.ze_termo || [];
+    if (zs.length) sub.push('Sede da'+(zs.length>1?'s ZE ':' ZE ')+esc(zs.join(', ')));
+    if (zt.length) sub.push('Termo da'+(zt.length>1?'s ZE ':' ZE ')+esc(zt.join(', '))+
+      (m.sede_nome ? (' <span style="color:#5C6472">(sede: '+esc(m.sede_nome)+')</span>') : ''));
+    L.push('<div style="color:#5C6472;font-size:12px">'+(sub.join(' · ')||'—')+'</div>');
+    L.push('<div style="font-size:12px;margin-top:4px">'+
+      (a.temJunta ? ('<b>'+a.testados+'/'+a.n+' local(is) testado(s)</b>')
+                  : ('<span style="color:#5C6472">sem junta especial'+(el('mRoteiro').value?' neste roteiro':'')+'</span>'))+'</div>');
     if (a.locais.length){
       L.push('<div style="margin-top:6px;font-size:12px">');
       a.locais.forEach(function(l){

@@ -454,45 +454,99 @@ function _webMalhaCodPorNome() {
   return idx;
 }
 
-// Agrega o universo por municipio do IBGE: um item por municipio COM junta ou
-// que seja SEDE de alguma ZE. `locais[]` traz o suficiente pro cliente colorir
-// (verde/laranja/vermelho) e montar a janelinha. Nomes que nao casaram com a
-// malha voltam em `sem_codigo` (o admin avisa e a gente adiciona um apelido).
+// Estrutura das Zonas Eleitorais -- aba "Termos" da planilha corporativa
+// "Zonas Eleitorais" (colunas ZONA | TERMO | SEDE, 1 linha por termo de cada ZE;
+// uma sede pode ter varias ZEs). Lida pelo TOKEN DE SERVICO (como o George) --
+// os coordenadores nao precisam de acesso a essa planilha. Sem acesso -> {} e o
+// mapa cai pro modo "so' junta".  -> { porCod: {cod:{cod,nome,ze_sede{},ze_termo{},sede_nome}}, sem_codigo:{} }
+var WEB_ZE_SHEET = '1_2aZhFgplRqCdPVV_lq4XJT9wgqkfbZpEFZRu1Zu9_I';
+var WEB_ZE_ABA   = 'Termos';
+function _webEstruturaZE() {
+  var idx = _webMalhaCodPorNome();
+  var out = { porCod: {}, sem_codigo: {} };
+  var rows;
+  try { rows = _sheetsGetValores(_tokenServico(), WEB_ZE_SHEET, WEB_ZE_ABA); }
+  catch (e) { return out; }
+  if (!rows || !rows.length) return out;
+
+  // acha a linha de cabecalho (ZONA / TERMO / SEDE) -- nao esta' na linha 1
+  var hi = -1, cZ = 0, cT = 1, cS = 2;
+  for (var r = 0; r < Math.min(rows.length, 12); r++) {
+    var norm = (rows[r] || []).map(function (c) { return _webNormNome(c); });
+    var iz = norm.indexOf('zona'), it = norm.indexOf('termo'), is = norm.indexOf('sede');
+    if (iz >= 0 && it >= 0 && is >= 0) { hi = r; cZ = iz; cT = it; cS = is; break; }
+  }
+  if (hi < 0) hi = 0;
+
+  function ensure(cod, nome) {
+    if (!out.porCod[cod]) out.porCod[cod] = { cod: cod, nome: nome, ze_sede: {}, ze_termo: {}, sede_nome: '' };
+    return out.porCod[cod];
+  }
+  for (var k = hi + 1; k < rows.length; k++) {
+    var row = rows[k] || [];
+    var ze = String(row[cZ] == null ? '' : row[cZ]).trim();
+    var termo = String(row[cT] || '').trim();
+    var sede  = String(row[cS] || '').trim();
+    if (!ze && !termo && !sede) continue;
+    var mt = idx[_webNormNome(termo)];
+    var ms = idx[_webNormNome(sede)];
+    if (termo && !mt) out.sem_codigo[termo] = true;
+    if (sede && !ms) out.sem_codigo[sede] = true;
+    if (mt) { var et = ensure(mt.cod, mt.nome); if (ze) et.ze_termo[ze] = true; if (sede) et.sede_nome = sede; }
+    if (ms) { var es = ensure(ms.cod, ms.nome); if (ze) es.ze_sede[ze] = true; }
+  }
+  return out;
+}
+
+// Agrega TODO municipio que aparece na estrutura das ZEs (sede ou termo) ou que
+// hospeda junta, com a categoria pro choropleth:
+//   sede_junta  = sede de ZE e tem junta especial
+//   sede        = sede de ZE, sem junta
+//   termo_junta = termo (nao sede) com junta especial
+//   termo       = termo (nao sede), sem junta
+//   outro       = fora da estrutura (nao devia acontecer)
+// `locais[]` (so' nas categorias com junta) alimenta a opacidade por andamento e
+// a lista da janelinha. Nomes que nao casaram com a malha -> `sem_codigo`.
 function _webMunicipiosMapa(universo, testados) {
   var idx = _webMalhaCodPorNome();
-  var muni = {}, semCodigo = {};
-  function ensure(cod, nome) {
-    if (!muni[cod]) muni[cod] = { cod: cod, nome: nome, eh_sede: false, zonas_sede: {}, locais: [] };
-    return muni[cod];
-  }
+  var est = _webEstruturaZE();
+  var semCodigo = {};
+  Object.keys(est.sem_codigo).forEach(function (n) { semCodigo[n] = true; });
+
+  // cod -> [locais] das juntas (+ nome do municipio, p/ os que nao estao na aba Termos)
+  var juntaLocais = {}, juntaNome = {};
   Object.keys(universo).forEach(function (id) {
     var u = universo[id];
     var mt = idx[_webNormNome(u.municipio)];
-    if (mt) {
-      var t = testados[id];
-      ensure(mt.cod, mt.nome).locais.push({
-        local_id: id, nome: u.nome || id, zona: String(u.zona || ''), tipo: u.tipo || '',
-        roteiro_rotulo: u.roteiro_rotulo || (u.roteiro ? ('Roteiro ' + u.roteiro) : ''),
-        testado: !!t, quando: t ? t.recebido_em : '', tecnico: t ? t.tecnico : ''
-      });
-    } else if (u.municipio) {
-      semCodigo[String(u.municipio)] = true;
-    }
-    var ms = idx[_webNormNome(u.sede)];
-    if (ms) {
-      var e = ensure(ms.cod, ms.nome);
-      e.eh_sede = true;
-      if (u.zona) e.zonas_sede[String(u.zona)] = true;
-    } else if (u.sede) {
-      semCodigo[String(u.sede)] = true;
-    }
+    if (!mt) { if (u.municipio) semCodigo[String(u.municipio)] = true; return; }
+    var t = testados[id];
+    juntaNome[mt.cod] = mt.nome;
+    (juntaLocais[mt.cod] = juntaLocais[mt.cod] || []).push({
+      local_id: id, nome: u.nome || id, zona: String(u.zona || ''), tipo: u.tipo || '',
+      roteiro_rotulo: u.roteiro_rotulo || (u.roteiro ? ('Roteiro ' + u.roteiro) : ''),
+      testado: !!t, quando: t ? t.recebido_em : '', tecnico: t ? t.tecnico : ''
+    });
   });
-  var lista = Object.keys(muni).map(function (cod) {
-    var e = muni[cod];
+
+  var cods = {};
+  Object.keys(est.porCod).forEach(function (c) { cods[c] = true; });
+  Object.keys(juntaLocais).forEach(function (c) { cods[c] = true; });
+
+  var lista = Object.keys(cods).map(function (cod) {
+    var e = est.porCod[cod] || { cod: cod, nome: juntaNome[cod] || cod, ze_sede: {}, ze_termo: {}, sede_nome: '' };
+    var ehSede = Object.keys(e.ze_sede).length > 0;
+    var ehTermo = Object.keys(e.ze_termo).length > 0;
+    var locs = juntaLocais[cod] || [];
+    var temJunta = locs.length > 0;
+    var categoria = ehSede ? (temJunta ? 'sede_junta' : 'sede')
+                  : ehTermo ? (temJunta ? 'termo_junta' : 'termo')
+                  : (temJunta ? 'termo_junta' : 'outro');
     return {
-      cod: e.cod, nome: e.nome, eh_sede: e.eh_sede,
-      zonas_sede: Object.keys(e.zonas_sede).sort(function (a, b) { return (+a) - (+b); }),
-      locais: e.locais
+      cod: cod, nome: e.nome || cod, categoria: categoria,
+      ze_sede: Object.keys(e.ze_sede).sort(function (a, b) { return (+a) - (+b); }),
+      ze_termo: Object.keys(e.ze_termo).sort(function (a, b) { return (+a) - (+b); }),
+      sede_nome: e.sede_nome || '',
+      locais: locs
     };
   });
   return { municipios: lista, sem_codigo: Object.keys(semCodigo).sort() };
@@ -511,7 +565,7 @@ function carregarMapa(forcar) {
   var cache = null;
   try { cache = CacheService.getScriptCache(); } catch (e) { cache = null; }
   if (cache && !forcar) {
-    var hit = cache.get('mapa_v2');
+    var hit = cache.get('mapa_v3');
     if (hit) {
       try {
         var o = JSON.parse(hit);
@@ -564,7 +618,7 @@ function carregarMapa(forcar) {
     gerado_em: new Date().toISOString()
   };
   if (cache) {
-    try { var s = JSON.stringify(corpo); if (s.length < 95000) cache.put('mapa_v2', s, 60); } catch (e) { /* cache e' opcional */ }
+    try { var s = JSON.stringify(corpo); if (s.length < 95000) cache.put('mapa_v3', s, 60); } catch (e) { /* cache e' opcional */ }
   }
   corpo.acesso = acesso;
   corpo.ambiente = _webAmbiente();
