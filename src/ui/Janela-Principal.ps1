@@ -900,7 +900,10 @@ function Invoke-SairAssistente {
             [System.Windows.MessageBoxButton]::YesNo, [System.Windows.MessageBoxImage]::Question)
         if ($r -ne [System.Windows.MessageBoxResult]::Yes) { return }
     }
-    Send-AbandonoWebSePendente
+    # Sincrono: o usuario costuma fechar o DICON logo depois de sair -- o runspace
+    # de fundo morreria antes de mandar o 'abandonou' e o ponto pulsante do mapa
+    # ficaria ate' o "online" expirar (~10 min).
+    Send-AbandonoWebSePendente -Sincrono
     Show-View 'viewHome'
 }
 

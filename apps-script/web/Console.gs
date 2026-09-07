@@ -950,15 +950,23 @@ function carregarAoVivo() {
   // Presenca (DICON fechado no tapa) ficaria pulsando pra sempre.
   var diag = _webDiagAtivoPorTecnico(evs);
   function _pDiag(p) { return diag[String(p.tecnico || '').trim()]; }
+  // O pulso usa uma janela de frescor MAIS CURTA (6 min) que o "online" da lista
+  // (10 min): se o DICON fechou e o 'abandonou' nao chegou, o pulso some em <=6
+  // min em vez de <=10. O heartbeat e' de 5 min, entao 6 min nao pisca em uso.
+  var MIN_PULSO = 6;
+  function _pulsoOk(p) {
+    var d = _pDiag(p);
+    return p.municipio_atual && d && d.ativo && p.minutos != null && p.minutos <= MIN_PULSO;
+  }
 
   // Codigo IBGE do municipio + telefone do tecnico -- pro ponto pulsante e o
-  // botao WhatsApp da aba Mapa. So' resolve se houver alguem ONLINE + diag ativo.
-  if (presencas.some(function (p) { var d = _pDiag(p); return p.online && p.municipio_atual && d && d.ativo; })) {
+  // botao WhatsApp da aba Mapa. So' resolve se houver alguem realmente ativo.
+  if (presencas.some(_pulsoOk)) {
     var mi = _webMalhaCodPorNome();
     var tels = _webTelefonesTecnicos();
     presencas.forEach(function (p) {
       var d = _pDiag(p);
-      if (!p.municipio_atual || !d || !d.ativo) return;
+      if (!_pulsoOk(p)) return;
       var mm = mi[_webNormNome(p.municipio_atual)];
       p.municipio_cod = mm ? mm.cod : '';
       p.diag_desde = d.desde || '';
