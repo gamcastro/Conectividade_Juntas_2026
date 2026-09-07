@@ -95,7 +95,7 @@
 
   .pulsedot { position:absolute; transform:translate(-50%,-50%); pointer-events:none; z-index:6; }
   .pulsedot i { position:absolute; left:-6px; top:-6px; width:12px; height:12px; border-radius:50%; display:block; }
-  .pulsedot .core { background:#C0392B; border:2px solid #fff; box-shadow:0 0 2px rgba(0,0,0,.5); }
+  .pulsedot .core { background:#C0392B; border:2px solid #fff; box-shadow:0 0 2px rgba(0,0,0,.5); pointer-events:auto; cursor:pointer; }
   .pulsedot .ring { background:rgba(192,57,43,.5); animation:pdpulse 1.7s ease-out infinite; }
   @keyframes pdpulse { 0%{transform:scale(1);opacity:.75} 70%{transform:scale(4.2);opacity:0} 100%{opacity:0} }
   @media (prefers-reduced-motion:reduce){ .pulsedot .ring{ animation:none; opacity:.35; transform:scale(2.4); } }
@@ -653,12 +653,22 @@
   /* --- diagnóstico em campo AGORA: ponto pulsante + linha na janelinha --- */
   function ensurePulseClass(){
     if (MAPA.PulseOverlay) return;
-    function P(latlng, map){ this.pos = latlng; this.div = null; this.setMap(map); }
+    function P(latlng, map, cod){ this.pos = latlng; this.cod = cod; this.div = null; this.setMap(map); }
     P.prototype = new google.maps.OverlayView();
     P.prototype.onAdd = function(){
+      var self = this;
       var d = document.createElement('div');
       d.className = 'pulsedot';
       d.innerHTML = '<i class="ring"></i><i class="core"></i>';
+      d.querySelector('.core').addEventListener('click', function(ev){
+        ev.stopPropagation();
+        var m = MAPA.muniByCod[self.cod];
+        if (!m) return;
+        MAPA.infoCodAberto = self.cod;
+        MAPA.info.setContent(muniInfoHtml(m));
+        MAPA.info.setPosition(self.pos);
+        MAPA.info.open(MAPA.map);
+      });
       this.div = d;
       this.getPanes().overlayMouseTarget.appendChild(d);
     };
@@ -691,13 +701,15 @@
         var ativos = (d.presencas || []).filter(function(p){
           return p.online && p.municipio_atual && p.municipio_cod;
         }).map(function(p){
-          // "desde": 1º iniciou_diagnostico desse técnico no feed (mais recente primeiro)
-          var desde = '';
-          for (var i = 0; i < evs.length; i++){
-            if (evs[i].tipo === 'iniciou_diagnostico' && evs[i].tecnico === p.tecnico){ desde = evs[i].hora; break; }
+          // "desde": vem do servidor (p.diag_desde); fallback = 1º iniciou_diagnostico do feed
+          var desde = p.diag_desde || '';
+          if (!desde){
+            for (var i = 0; i < evs.length; i++){
+              if (evs[i].tipo === 'iniciou_diagnostico' && evs[i].tecnico === p.tecnico){ desde = evs[i].hora; break; }
+            }
           }
           return { cod: String(p.municipio_cod), tecnico: p.tecnico || p.email || 'técnico',
-                   desde: desde || p.ultimo_checkin || '' };
+                   desde: desde || p.ultimo_checkin || '', telefone: p.telefone || '' };
         });
         aplicarPulsos(ativos);
       })
@@ -711,12 +723,12 @@
     MAPA.vivoPorCod = {};
     (ativos || []).forEach(function(a){
       if (!MAPA.centroPorCod[a.cod]) return;
-      (MAPA.vivoPorCod[a.cod] = MAPA.vivoPorCod[a.cod] || []).push({ tecnico: a.tecnico, desde: a.desde });
+      (MAPA.vivoPorCod[a.cod] = MAPA.vivoPorCod[a.cod] || []).push({ tecnico: a.tecnico, desde: a.desde, telefone: a.telefone || '' });
     });
     if (Object.keys(MAPA.vivoPorCod).length) ensurePulseClass();
     Object.keys(MAPA.vivoPorCod).forEach(function(cod){
       var c = MAPA.centroPorCod[cod];
-      MAPA.pulsos.push(new MAPA.PulseOverlay(new google.maps.LatLng(c.lat, c.lng), MAPA.map));
+      MAPA.pulsos.push(new MAPA.PulseOverlay(new google.maps.LatLng(c.lat, c.lng), MAPA.map, cod));
     });
     // se a janelinha de um município ativo estiver aberta, atualiza o texto
     if (MAPA.infoCodAberto && MAPA.muniByCod[MAPA.infoCodAberto]){
@@ -832,8 +844,20 @@
       (m.sede_nome ? (' <span style="color:#5C6472">(sede: '+esc(m.sede_nome)+')</span>') : ''));
     L.push('<div style="color:#5C6472;font-size:12px">'+(sub.join(' · ')||'—')+'</div>');
     (MAPA.vivoPorCod[m.cod] || []).forEach(function(v){
-      L.push('<div style="font-size:12px;color:#C0392B;font-weight:700;margin-top:4px">🔴 '+
+      L.push('<div style="font-size:12px;color:#C0392B;font-weight:700;margin-top:6px">🔴 '+
         esc(v.tecnico)+' diagnosticando'+(v.desde ? (' desde '+esc(v.desde)) : ' agora')+'</div>');
+      if (v.telefone){
+        var dig = v.telefone.replace(/[^0-9]/g,'');
+        var txt = encodeURIComponent('DICON — coordenação. '+v.tecnico+', posso te ligar sobre o diagnóstico em '+m.nome+'?');
+        L.push('<div style="display:flex;gap:6px;margin-top:3px">'+
+          '<a href="https://wa.me/'+dig+'?text='+txt+'" target="_blank" rel="noopener" '+
+            'style="background:#25D366;color:#fff;text-decoration:none;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:700">💬 WhatsApp</a>'+
+          '<a href="tel:'+esc(v.telefone)+'" '+
+            'style="background:#123FA8;color:#fff;text-decoration:none;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:700">📞 Ligar</a>'+
+        '</div>');
+      } else {
+        L.push('<div style="font-size:11px;color:#5C6472;margin-top:2px">sem telefone cadastrado (aba <b>Telefones</b>)</div>');
+      }
     });
 
     var ehSede = zs.length && !zt.length;

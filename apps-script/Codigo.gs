@@ -170,9 +170,9 @@ function _migrarLimiaresAntigos(linhas) {
 
 function doGet(e) {
   var p = (e && e.parameter) || {};
-  // Console web de coordenacao (DICON Web) -> ?app=web (desktop) ou ?app=mobile.
+  // Console web de coordenacao (DICON Web) -> ?app=web (desktop) | mobile | tv.
   // O resto segue como o Web App legado (?recurso=juntas|tecnicos|roteiros|limiares).
-  if (p.app === 'web' || p.app === 'mobile') return webConsolePagina(e);
+  if (p.app === 'web' || p.app === 'mobile' || p.app === 'tv') return webConsolePagina(e);
   var recurso = p.recurso || 'juntas';
   try {
     if (recurso === 'juntas') {

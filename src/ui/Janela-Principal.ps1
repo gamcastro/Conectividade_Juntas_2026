@@ -104,6 +104,20 @@ $Global:WizardTitulos = @(
 $Global:WizardNPassos = $Global:WizardPassos.Count
 $Global:EventoDiagIniciado = $false   # DICON Web: ja mandou 'iniciou_diagnostico' nesta sessao do assistente?
 
+# DICON Web: se um diagnostico esta' aberto (mandou 'iniciou_diagnostico' e nao
+# encerrou), avisa a console que saiu -- limpa o "onde" do card / o ponto pulsante
+# do mapa na hora, em vez de esperar o "online" expirar (~10 min). -Sincrono no
+# fechamento da janela (o runspace de fundo morreria antes de enviar).
+function Send-AbandonoWebSePendente {
+    param([switch] $Sincrono)
+    if (-not $Global:EventoDiagIniciado) { return }
+    $Global:EventoDiagIniciado = $false
+    try {
+        if ($Sincrono) { Add-EventoWeb -Tipo 'abandonou' -Sincrono }
+        else           { Add-EventoWeb -Tipo 'abandonou' }
+    } catch { }
+}
+
 # Ajusta o assistente ao modo de avaliacao: todos os modos tem os mesmos 6
 # passos agora (inclui sempre o passo de conexao recomendada/sugerida -- so
 # o titulo e o conteudo do passo mudam por modo, ver Update-Passo6Recomendacao).
@@ -475,6 +489,11 @@ function New-JanelaPrincipal {
         })
 
     Initialize-SeletorJuntas
+
+    # DICON Web: fechar a janela com um diagnostico aberto avisa a console (envio
+    # sincrono best-effort, timeout curto) -- senao o ponto pulsante do mapa
+    # segura ~10 min ate' o "online" expirar.
+    $window.Add_Closing({ param($s, $e) try { Send-AbandonoWebSePendente -Sincrono } catch { } })
 
     # Sempre comeca no login (sem pre-selecao). A sessao gravada nao faz auto-login.
     Initialize-Login
@@ -881,6 +900,10 @@ function Invoke-SairAssistente {
             [System.Windows.MessageBoxButton]::YesNo, [System.Windows.MessageBoxImage]::Question)
         if ($r -ne [System.Windows.MessageBoxResult]::Yes) { return }
     }
+    # Sincrono: o usuario costuma fechar o DICON logo depois de sair -- o runspace
+    # de fundo morreria antes de mandar o 'abandonou' e o ponto pulsante do mapa
+    # ficaria ate' o "online" expirar (~10 min).
+    Send-AbandonoWebSePendente -Sincrono
     Show-View 'viewHome'
 }
 
@@ -4543,6 +4566,7 @@ function Complete-TransmitirResultado {
         $st.Text = 'Resultado transmitido ao painel.'
         Write-Log 'Resultado transmitido ao painel.' -Nivel Ok
         try { Add-EventoWeb -Tipo 'transmitiu' } catch { }
+        $Global:EventoDiagIniciado = $false   # ja avisou a console que encerrou -> nao manda 'abandonou' ao fechar
         try { Start-EnvioWebAssincrono } catch { }
     } else {
         $st.Text = 'Nao foi possivel transmitir agora. O resultado fica pendente e vai no proximo "Atualizar dados".'
@@ -4566,6 +4590,7 @@ function Invoke-FinalizarDiagnostico {
         Write-Log 'Diagnostico finalizado.' -Nivel Ok
     }
     try { Add-EventoWeb -Tipo 'finalizou' } catch { }
+    $Global:EventoDiagIniciado = $false
     $Global:WizardStep = 1
     Enter-Home -Sessao $Global:SessaoAtual
 }

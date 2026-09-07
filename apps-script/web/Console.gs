@@ -45,8 +45,10 @@ function _webAmbiente() {
 
 function webConsolePagina(e) {
   var pp = (e && e.parameter) || {};
-  var m = (pp.app === 'mobile') || pp.m || pp.mobile;
-  return HtmlService.createHtmlOutputFromFile(m ? 'web/Mobile' : 'web/Index')
+  var arquivo = 'web/Index';
+  if (pp.app === 'mobile' || pp.m || pp.mobile) arquivo = 'web/Mobile';
+  else if (pp.app === 'tv' || pp.tv) arquivo = 'web/Tv';
+  return HtmlService.createHtmlOutputFromFile(arquivo)
     .setTitle('DICON Web — Coordenação')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
@@ -854,6 +856,69 @@ function _webHora(v) {
   return Utilities.formatDate(d, Session.getScriptTimeZone(), 'dd/MM HH:mm');
 }
 
+// Telefone (E.164 BR) por tecnico -- aba "Telefones" da planilha de Resultados
+// (colunas: tecnico | telefone [| email]). Lida pelo TOKEN DE SERVICO. Devolve
+// { 'n:<nome normalizado>': '+55...', 'e:<email>': '+55...' }. Aba ausente -> {}.
+var WEB_ABA_TELEFONES = 'Telefones';
+function _webTelefonesTecnicos() {
+  var out = {};
+  try {
+    var rows = _sheetsGetValores(_tokenServico(), _idResultados(), WEB_ABA_TELEFONES);
+    if (!rows || rows.length < 2) return out;
+    var head = (rows[0] || []).map(function (c) { return _webNormNome(c); });
+    var iNome = head.indexOf('tecnico'); if (iNome < 0) iNome = head.indexOf('nome');
+    var iTel  = head.indexOf('telefone'); if (iTel < 0) iTel = head.indexOf('whatsapp'); if (iTel < 0) iTel = head.indexOf('celular');
+    var iMail = head.indexOf('email');
+    if (iNome < 0 || iTel < 0) return out;
+    for (var r = 1; r < rows.length; r++) {
+      var tel = _webTelE164(rows[r][iTel]);
+      if (!tel) continue;
+      var nk = _webNormNome(rows[r][iNome]);
+      if (nk) out['n:' + nk] = tel;
+      if (iMail >= 0) {
+        var em = String(rows[r][iMail] || '').toLowerCase().trim();
+        if (em) out['e:' + em] = tel;
+      }
+    }
+  } catch (e) { /* aba pode nao existir */ }
+  return out;
+}
+
+// Normaliza um telefone BR para E.164: so' digitos; tira zeros a esquerda; poe
+// 55 se vier so' DDD+numero. '' quando nao parece um telefone valido.
+function _webTelE164(v) {
+  var d = String(v == null ? '' : v).replace(/[^0-9]+/g, '').replace(/^0+/, '');
+  if (d.length === 10 || d.length === 11) d = '55' + d;   // (DD)NNNN... -> +55
+  if (d.indexOf('55') !== 0 || d.length < 12 || d.length > 13) return '';
+  return '+' + d;
+}
+
+// Por tecnico, a partir do feed de Eventos (ordem cronologica): tem um
+// diagnostico ABERTO agora? -> { '<tecnico>': { ativo, ts, desde } }. Ativo =
+// ultimo evento relevante e' 'iniciou_diagnostico', sem transmitiu/finalizou/
+// abandonou depois, e no maximo 3 h atras.
+function _webDiagAtivoPorTecnico(evsRaw) {
+  var LIM_MS = 3 * 60 * 60 * 1000;
+  var agora = Date.now();
+  var st = {};
+  (evsRaw || []).forEach(function (e) {
+    var tec = String(e['tecnico'] || '').trim();
+    if (!tec) return;
+    var tipo = String(e['tipo'] || '');
+    if (tipo === 'iniciou_diagnostico') {
+      var d = _webParseData(e['hora_servidor'] || e['hora_cliente']);
+      st[tec] = { ativo: true, ts: d ? d.getTime() : agora,
+                  desde: _webHora(e['hora_cliente'] || e['hora_servidor']) };
+    } else if (tipo === 'transmitiu' || tipo === 'finalizou' || tipo === 'abandonou') {
+      st[tec] = { ativo: false };
+    }
+  });
+  Object.keys(st).forEach(function (t) {
+    if (st[t].ativo && (agora - st[t].ts) > LIM_MS) st[t] = { ativo: false };
+  });
+  return st;
+}
+
 // Aba "Ao vivo" da console: presenca (online se <=10 min) + feed de eventos.
 function carregarAoVivo() {
   var acesso = verificarAcesso();
@@ -877,18 +942,39 @@ function carregarAoVivo() {
     return (a.minutos == null ? 1e9 : a.minutos) - (b.minutos == null ? 1e9 : b.minutos);
   });
 
-  // Codigo IBGE do municipio onde cada tecnico ONLINE esta' diagnosticando (pro
-  // ponto pulsante da aba Mapa). So' resolve a malha se houver alguem ativo.
-  if (presencas.some(function (p) { return p.online && p.municipio_atual; })) {
+  var evs = _webLerAba(ss, 'Eventos');
+
+  // TRAVA: so' conta como "diagnosticando agora" (ponto pulsante do mapa) se o
+  // feed confirmar um 'iniciou_diagnostico' recente do tecnico, SEM encerramento
+  // depois e no maximo ~3 h atras -- senao um municipio_atual velho preso na
+  // Presenca (DICON fechado no tapa) ficaria pulsando pra sempre.
+  var diag = _webDiagAtivoPorTecnico(evs);
+  function _pDiag(p) { return diag[String(p.tecnico || '').trim()]; }
+  // O pulso usa uma janela de frescor MAIS CURTA (6 min) que o "online" da lista
+  // (10 min): se o DICON fechou e o 'abandonou' nao chegou, o pulso some em <=6
+  // min em vez de <=10. O heartbeat e' de 5 min, entao 6 min nao pisca em uso.
+  var MIN_PULSO = 8;
+  function _pulsoOk(p) {
+    var d = _pDiag(p);
+    return p.municipio_atual && d && d.ativo && p.minutos != null && p.minutos <= MIN_PULSO;
+  }
+
+  // Codigo IBGE do municipio + telefone do tecnico -- pro ponto pulsante e o
+  // botao WhatsApp da aba Mapa. So' resolve se houver alguem realmente ativo.
+  if (presencas.some(_pulsoOk)) {
     var mi = _webMalhaCodPorNome();
+    var tels = _webTelefonesTecnicos();
     presencas.forEach(function (p) {
-      if (!p.municipio_atual) return;
+      var d = _pDiag(p);
+      if (!_pulsoOk(p)) return;
       var mm = mi[_webNormNome(p.municipio_atual)];
       p.municipio_cod = mm ? mm.cod : '';
+      p.diag_desde = d.desde || '';
+      p.telefone = tels['e:' + String(p.email || '').toLowerCase().trim()] ||
+                   tels['n:' + _webNormNome(p.tecnico)] || '';
     });
   }
 
-  var evs = _webLerAba(ss, 'Eventos');
   var feed = evs.slice(-100).reverse().map(function (e) {
     return {
       hora: _webHora(e['hora_cliente'] || e['hora_servidor']),
