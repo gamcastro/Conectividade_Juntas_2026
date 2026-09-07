@@ -48,7 +48,7 @@ Vive no **mesmo projeto Apps Script de homolog** (`17BLQ6IOZ…`), pasta
 
 | ambiente | Web App da console (`?app=web`) | Execution API do DICON de campo |
 |---|---|---|
-| **homolog** | `AKfycby4rGyTNWzgl6FxYkdAmnTQpO1zSsmolqJll6psftuH2S-SZQh76s6j2qLWYypZi6wM-w` (@38, v0.6.136 Mapa) | `AKfycbxHMpUwQuDH1SwRiLersK1Qbk3x90Xpu76zxnPl12Upthotd3UiaTd_eOPQ01FF2PBk` (@33) |
+| **homolog** | `AKfycby4rGyTNWzgl6FxYkdAmnTQpO1zSsmolqJll6psftuH2S-SZQh76s6j2qLWYypZi6wM-w` (@39, v0.6.137 Mapa) | `AKfycbxHMpUwQuDH1SwRiLersK1Qbk3x90Xpu76zxnPl12Upthotd3UiaTd_eOPQ01FF2PBk` (@33) |
 | **prod** (2026-09-06) | `AKfycbylhIAahOf0coAHwpOH2OCMbySmfeZR1feT-JFG5aw69GGrtRWYAnxtcL4b3carWYNy0w` (@16) | `AKfycbya1hdu7dgLzXd8U2Totm8cffCtiAnIjJptppe7AuxfvbuHhkNGOAXlCa90QCE_-HOApQ` (@16, `clasp version` 16) |
 
 - URL da console = `.../macros/s/<Web App deploymentId>/exec?app=web` (`doGet`

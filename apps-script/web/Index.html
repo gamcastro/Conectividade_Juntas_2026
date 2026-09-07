@@ -735,8 +735,9 @@
     if (zt.length) sub.push('Termo da'+(zt.length>1?'s ZE ':' ZE ')+esc(zt.join(', '))+
       (m.sede_nome ? (' <span style="color:#5C6472">(sede: '+esc(m.sede_nome)+')</span>') : ''));
     L.push('<div style="color:#5C6472;font-size:12px">'+(sub.join(' · ')||'—')+'</div>');
+    var soSede = zs.length && !zt.length;   // clicou num municipio que e' sede
     L.push('<div style="font-size:12px;margin-top:4px">'+
-      (a.temJunta ? ('<b>'+a.testados+'/'+a.n+' local(is) testado(s)</b>')
+      (a.temJunta ? ('<b>'+a.testados+'/'+a.n+' local(is) testado(s)</b>'+(soSede?' <span style="color:#5C6472">— junta(s) na(s) ZE desta sede</span>':''))
                   : ('<span style="color:#5C6472">sem junta especial'+(el('mRoteiro').value?' neste roteiro':'')+'</span>'))+'</div>');
     if (a.locais.length){
       L.push('<div style="margin-top:6px;font-size:12px">');
