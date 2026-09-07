@@ -52,7 +52,7 @@ function Save-ZipRemoto {
 #  - retenta ao esbarrar em "arquivo em uso" (antivirus segurando um .gitattributes
 #    recem-extraido) e so' aceita quando extraiu TODAS as entradas.
 function Expand-ZipSafe {
-    param([string] $Zip, [string] $Destino, [int] $Tentativas = 4)
+    param([string] $Zip, [string] $Destino, [int] $Tentativas = 6)
     $nEsperado = 0
     try {
         Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction Stop
@@ -138,16 +138,41 @@ if ($temSrc) {
     Write-Host ("DICON: baixando a branch '{0}' para {1}" -f $Branch, $Dest) -ForegroundColor Cyan
     $tmp = Join-Path ([IO.Path]::GetTempPath()) ('dicon-boot-' + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $tmp -Force | Out-Null
-    $zip = Join-Path $tmp 'dicon.zip'
-    try {
-        if (-not (Save-ZipRemoto "$Repo/archive/refs/heads/$Branch.zip" $zip)) { throw "nao consegui baixar o codigo ($Branch)." }
+    $srcDir = $null
+    $temGit = [bool] (Get-Command git -ErrorAction SilentlyContinue)
+
+    # 1o tenta 'git clone' -- nao passa por Expand-Archive e o git.exe costuma
+    # estar na allowlist do antivirus (o ZIP -> Expand-Archive trava em
+    # '.gitattributes em uso'). Deixa o .git pra o Atualizar-DICON usar 'git pull'.
+    if ($temGit) {
+        try {
+            $clone = Join-Path $tmp 'repo'
+            Write-Host "  (via git clone)" -ForegroundColor DarkGray
+            git clone --quiet --branch $Branch --single-branch "$Repo.git" $clone 2>&1 | Out-Null
+            if ((Test-Path (Join-Path $clone 'src')) -and (Test-Path (Join-Path $clone '.git'))) { $srcDir = Get-Item $clone }
+        } catch { $srcDir = $null }
+    }
+
+    # 2o cai no ZIP + Expand-ZipSafe
+    if (-not $srcDir) {
+        $zip = Join-Path $tmp 'dicon.zip'
+        if (-not (Save-ZipRemoto "$Repo/archive/refs/heads/$Branch.zip" $zip)) { Remove-Item $tmp -Recurse -Force -EA SilentlyContinue; throw "nao consegui baixar o codigo ($Branch)." }
         Unblock-File $zip -ErrorAction SilentlyContinue
         $extr = Join-Path $tmp 'x'
-        Expand-ZipSafe -Zip $zip -Destino $extr
+        try { Expand-ZipSafe -Zip $zip -Destino $extr }
+        catch {
+            Remove-Item $tmp -Recurse -Force -EA SilentlyContinue
+            throw ("$_`n`nO antivirus esta' travando os arquivos durante a extracao. " +
+                   "Adicione C:\Aplic e a pasta Temp nas exclusoes do Windows Defender " +
+                   "(ou pause a protecao em tempo real) e rode o comando de novo.")
+        }
         $srcDir = Get-ChildItem $extr -Directory | Where-Object { $_.Name -like 'Conectividade_Juntas_2026*' } | Select-Object -First 1
-        if (-not $srcDir) { throw 'o ZIP da branch nao extraiu como esperado.' }
+        if (-not $srcDir) { Remove-Item $tmp -Recurse -Force -EA SilentlyContinue; throw 'o ZIP da branch nao extraiu como esperado.' }
+    }
+
+    try {
         New-Item -ItemType Directory -Path $Dest -Force | Out-Null
-        robocopy $srcDir.FullName $Dest /E /NFL /NDL /NJH /NJS /NP /R:1 /W:1 | Out-Null
+        robocopy $srcDir.FullName $Dest /E /NFL /NDL /NJH /NJS /NP /R:3 /W:2 | Out-Null
         if ($LASTEXITCODE -ge 8) { throw "robocopy falhou (codigo $LASTEXITCODE)." }
         $global:LASTEXITCODE = 0
         Get-ChildItem $Dest -Recurse -File -ErrorAction SilentlyContinue | Unblock-File -ErrorAction SilentlyContinue
