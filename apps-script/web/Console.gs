@@ -953,7 +953,7 @@ function carregarAoVivo() {
   // O pulso usa uma janela de frescor MAIS CURTA (6 min) que o "online" da lista
   // (10 min): se o DICON fechou e o 'abandonou' nao chegou, o pulso some em <=6
   // min em vez de <=10. O heartbeat e' de 5 min, entao 6 min nao pisca em uso.
-  var MIN_PULSO = 6;
+  var MIN_PULSO = 8;
   function _pulsoOk(p) {
     var d = _pDiag(p);
     return p.municipio_atual && d && d.ativo && p.minutos != null && p.minutos <= MIN_PULSO;

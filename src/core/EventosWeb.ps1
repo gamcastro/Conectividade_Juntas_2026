@@ -121,8 +121,11 @@ function Send-EventosWebPendentes {
 
 # Dispara, num runspace de segundo plano (fire-and-forget), o heartbeat
 # ('checkin') + o flush da fila de eventos. Nao bloqueia a UI. Nao empilha: se o
-# anterior ainda roda, sai.
+# anterior ainda roda, re-tenta em ~3 s (one-shot) -- senao um 'iniciou_diagnostico'
+# disparado logo apos o login ficaria esperando o heartbeat de 5 min pra sair, e
+# o "ao vivo" / o ponto pulsante do mapa apareceriam com minutos de atraso.
 $Global:EnvioWebState = $null
+$Global:EnvioWebRetryTimer = $null
 function Start-EnvioWebAssincrono {
     if (-not (Test-CheckinWebLigado)) { return }
 
@@ -132,6 +135,19 @@ function Start-EnvioWebAssincrono {
             try { $Global:EnvioWebState.PS.Dispose(); $Global:EnvioWebState.RS.Dispose() } catch { }
             $Global:EnvioWebState = $null
         } else {
+            if (-not $Global:EnvioWebRetryTimer) {
+                try {
+                    $t = [Windows.Threading.DispatcherTimer]::new()
+                    $t.Interval = [TimeSpan]::FromSeconds(3)
+                    $t.Add_Tick({
+                        try { $Global:EnvioWebRetryTimer.Stop() } catch { }
+                        $Global:EnvioWebRetryTimer = $null
+                        try { Start-EnvioWebAssincrono } catch { }
+                    })
+                    $Global:EnvioWebRetryTimer = $t
+                    $t.Start()
+                } catch { }
+            }
             return
         }
     }
