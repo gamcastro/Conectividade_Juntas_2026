@@ -39,8 +39,10 @@ function New-CheckinPayloadWeb {
 # Enfileira um evento (so' escreve arquivo -- sem rede). -Tipo:
 #   abriu_app | iniciou_diagnostico | rodou_checagem | salvou | transmitiu |
 #   finalizou | abandonou
+# -Sincrono: tenta MANDAR na hora (timeout curto) antes de enfileirar -- pro
+#   fechamento da janela, onde o runspace de fundo morreria antes de enviar.
 function Add-EventoWeb {
-    param([Parameter(Mandatory)] [string] $Tipo, $Local)
+    param([Parameter(Mandatory)] [string] $Tipo, $Local, [switch] $Sincrono)
     if (-not (Test-CheckinWebLigado)) { return }
     try {
         if (-not $Local -and $Tipo -ne 'abriu_app') {
@@ -62,12 +64,23 @@ function Add-EventoWeb {
             tipo_local   = $(if ($Local) { [string] $Local.tipo } else { '' })
             detalhe      = $(if ($Local -and $Local.nome) { [string] $Local.nome } else { '' })
         }
+
+        if ($Sincrono) {
+            # Best-effort, sem travar o fechamento por muito tempo. Se enviar, nao
+            # enfileira; se falhar (sem rede), cai na fila pro proximo flush.
+            try {
+                $resp = Invoke-FuncaoAppsScript -Acao 'evento' -Payload ([pscustomobject] $obj) -TimeoutS 6
+                if ($resp -and ([string] $resp.status) -eq 'ok') { return }
+            } catch { }
+        }
+
         $nome = '{0}_{1}.json' -f (Get-Date -Format 'yyyyMMdd_HHmmss_fff'), $Tipo
         Write-TextoArquivo -Caminho (Join-Path (Get-PastaEventosWeb) $nome) -Conteudo (([pscustomobject] $obj) | ConvertTo-Json -Depth 5)
         # Empurra a fila JA (fire-and-forget, nao empilha) -- senao o evento so'
         # sairia no proximo heartbeat de 5 min e o "ao vivo" da console ficaria
-        # muito atrasado. 'abriu_app' ja tem o seu envio no fluxo de login.
-        if ($Tipo -ne 'abriu_app') { try { Start-EnvioWebAssincrono } catch { } }
+        # muito atrasado. 'abriu_app' ja tem o seu envio no fluxo de login; no
+        # -Sincrono a janela esta' fechando, entao o runspace nem roda.
+        if ($Tipo -ne 'abriu_app' -and -not $Sincrono) { try { Start-EnvioWebAssincrono } catch { } }
     } catch {
         try { Write-Log "Evento web '$Tipo' nao enfileirado: $_" -Nivel Aviso } catch { }
     }
