@@ -335,6 +335,353 @@ function _carregarPainelCorpo() {
   };
 }
 
+/* ============================ MAPA ============================ */
+/* Aba "Mapa" da console. So' leitura, chamada por google.script.run -> redeploy
+ * do Web App apenas (nao mexe em Codigo.gs > executar). Duas camadas:
+ *
+ *  - CHOROPLETH por municipio (malha do IBGE -- web/MalhaMA.gs / carregarMalhaMA):
+ *    cada municipio com junta e' pintado pelo andamento dos testes -- verde
+ *    (todos os locais testados) / laranja (parcial) / vermelho (nenhum); borda
+ *    amarela grossa quando o municipio e' sede de alguma ZE; cinza claro nos
+ *    demais. O de-para nome->codigo IBGE e' por nome normalizado (sem acento,
+ *    so' letras/numeros); nomes que nao casarem vao em `municipios_sem_codigo`.
+ *  - PINOS do GEL: Locais cujo formulario do GEL trouxe latitude/longitude
+ *    (1) aba GEL, coluna gel_json; (2) reserva -- bloco vistoria_gel do json
+ *    transmitido na aba Resultados. Ficam por cima do choropleth.
+ *
+ * A chave do Maps JS fica na Script Property GOOGLE_MAPS_JS_KEY (so' o George/GCP
+ * configura); sem ela a aba mostra um aviso e a contagem de pendentes. */
+
+// Caixa envolvente do Maranhao (folgada) -- descarta (0,0) e coordenada fora do estado.
+var WEB_MA_BBOX = { latMin: -10.6, latMax: -0.5, lonMin: -49.5, lonMax: -41.0 };
+
+function _webNumCoord(v) {
+  if (v == null || v === '') return null;
+  var n = Number(String(v).replace(',', '.').trim());
+  return isFinite(n) ? n : null;
+}
+function _webCoordNoMA(lat, lon) {
+  if (typeof lat !== 'number' || typeof lon !== 'number') return false;
+  if (!isFinite(lat) || !isFinite(lon) || (lat === 0 && lon === 0)) return false;
+  return lat >= WEB_MA_BBOX.latMin && lat <= WEB_MA_BBOX.latMax &&
+         lon >= WEB_MA_BBOX.lonMin && lon <= WEB_MA_BBOX.lonMax;
+}
+
+// local_id -> { lat, lon, gel_em, fonte }. Aba GEL primeiro; o que faltar,
+// tenta no vistoria_gel do json da aba Resultados.
+function _webCoordenadasGel() {
+  var out = {};
+  var token = _tokenServico();
+  var sheetId = _idResultados();
+  if (!sheetId) return out;
+
+  // 1) aba GEL (coluna gel_json = data/vistoria-gel/<id>.json do desktop)
+  try {
+    var v = _sheetsGetValores(token, sheetId, ABA_GEL);
+    if (v && v.length >= 2) {
+      var head = v[0].map(function (c) { return String(c || '').trim(); });
+      var ix = {}; head.forEach(function (n, i) { ix[n] = i; });
+      for (var r = 1; r < v.length; r++) {
+        var id = String(v[r][ix['local_id']] || '').trim();
+        if (!id) continue;
+        var g = null;
+        try { g = JSON.parse(String(v[r][ix['gel_json']] || '')); } catch (e) { g = null; }
+        if (!g) continue;
+        var lat = _webNumCoord(g.lat != null ? g.lat : g.latitude);
+        var lon = _webNumCoord(g.long != null ? g.long : g.longitude);
+        if (!_webCoordNoMA(lat, lon)) continue;
+        out[id] = { lat: lat, lon: lon, gel_em: String(v[r][ix['atualizado_em']] || ''), fonte: 'gel' };
+      }
+    }
+  } catch (e) { /* a aba GEL pode nem existir ainda */ }
+
+  // 2) reserva: vistoria_gel dentro do json da aba Resultados
+  try {
+    var ss = SpreadsheetApp.openById(sheetId);
+    var aba = ss.getSheetByName(ABA_RESULTADOS);
+    if (aba && aba.getLastRow() >= 2) {
+      var vv = aba.getDataRange().getValues();
+      var ixr = {}; vv[0].forEach(function (c, i) { ixr[String(c || '').trim()] = i; });
+      var ixId = ixr['local_id'], ixJson = ixr['json'], ixReceb = ixr['recebido_em'];
+      for (var k = 1; k < vv.length; k++) {
+        var lid = String(vv[k][ixId] || '').trim();
+        if (!lid || out[lid]) continue;
+        var blob = null;
+        try { blob = JSON.parse(String(vv[k][ixJson] || '')); } catch (e) { blob = null; }
+        var vg = blob && blob.vistoria_gel;
+        if (!vg) continue;
+        var la = _webNumCoord(vg.latitude != null ? vg.latitude : vg.lat);
+        var lo = _webNumCoord(vg.longitude != null ? vg.longitude : vg.long);
+        if (!_webCoordNoMA(la, lo)) continue;
+        out[lid] = { lat: la, lon: lo, gel_em: _webDataAmigavel(vv[k][ixReceb]), fonte: 'resultado' };
+      }
+    }
+  } catch (e) { /* ok -- segue so' com o que a aba GEL deu */ }
+
+  return out;
+}
+
+// Nome -> chave normalizada (minusculo, sem acento, so' [a-z0-9]) -- casa
+// "Pindaré-Mirim" com "pindare mirim", "Zé Doca" com "ze doca", etc.
+function _webNormNome(s) {
+  s = String(s == null ? '' : s);
+  try { s = s.normalize('NFD'); } catch (e) { /* V8 tem normalize */ }
+  var out = '';
+  for (var i = 0; i < s.length; i++) {
+    var c = s.charCodeAt(i);
+    if (c >= 0x300 && c <= 0x36f) continue;              // marca de acento (forma NFD)
+    var ch = s.charAt(i).toLowerCase();
+    if ((ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9')) out += ch;
+  }
+  return out;
+}
+
+// { normNome: {cod, nome} } a partir da malha do IBGE (carregarMalhaMA).
+// Memoizado na execucao (a malha tem ~135 KB).
+var _WEB_MALHA_IDX = null;
+function _webMalhaCodPorNome() {
+  if (_WEB_MALHA_IDX) return _WEB_MALHA_IDX;
+  var idx = {};
+  try {
+    var fc = JSON.parse(carregarMalhaMA());
+    (fc.features || []).forEach(function (f) {
+      var p = f.properties || {};
+      var k = _webNormNome(p.nome);
+      if (k) idx[k] = { cod: String(p.cod || ''), nome: String(p.nome || '') };
+    });
+  } catch (e) { /* sem malha -> so' pinos, sem choropleth */ }
+  _WEB_MALHA_IDX = idx;
+  return idx;
+}
+
+// Estrutura das Zonas Eleitorais -- aba "Zonas e Termos" da planilha corporativa
+// "Zonas Eleitorais" (colunas ZONA | SEDE | TERMO, 1 linha por termo de cada ZE;
+// uma sede pode ter varias ZEs). Regra: quando SEDE == TERMO na linha, aquele
+// municipio conta so' como SEDE (nao como termo). Lida pelo TOKEN DE SERVICO
+// (como o George) -- os coordenadores nao precisam de acesso a essa planilha.
+// Sem acesso -> {} e o mapa cai pro modo "so' junta".
+//   -> { porCod: {cod:{cod,nome,ze_sede{},ze_termo{},sede_nome}}, sem_codigo:{} }
+var WEB_ZE_SHEET = '1_2aZhFgplRqCdPVV_lq4XJT9wgqkfbZpEFZRu1Zu9_I';
+var WEB_ZE_ABA   = 'Zonas e Termos';
+function _webEstruturaZE() {
+  var idx = _webMalhaCodPorNome();
+  var out = { porCod: {}, porZE: {}, sem_codigo: {} };
+  var tok = _tokenServico(), rows;
+  try { rows = _sheetsGetValores(tok, WEB_ZE_SHEET, "'" + WEB_ZE_ABA + "'"); }
+  catch (e1) {
+    try { rows = _sheetsGetValores(tok, WEB_ZE_SHEET, WEB_ZE_ABA); }
+    catch (e2) { return out; }
+  }
+  if (!rows || !rows.length) return out;
+
+  // acha a linha de cabecalho (ZONA / SEDE / TERMO, em qualquer ordem)
+  var hi = -1, cZ = 0, cS = 1, cT = 2;
+  for (var r = 0; r < Math.min(rows.length, 12); r++) {
+    var norm = (rows[r] || []).map(function (c) { return _webNormNome(c); });
+    var iz = norm.indexOf('zona'), is = norm.indexOf('sede'), it = norm.indexOf('termo');
+    if (iz >= 0 && is >= 0 && it >= 0) { hi = r; cZ = iz; cS = is; cT = it; break; }
+  }
+  if (hi < 0) hi = 0;
+
+  function ensure(cod, nome) {
+    if (!out.porCod[cod]) out.porCod[cod] = { cod: cod, nome: nome, ze_sede: {}, ze_termo: {}, sede_nome: '' };
+    return out.porCod[cod];
+  }
+  for (var k = hi + 1; k < rows.length; k++) {
+    var row = rows[k] || [];
+    var ze   = String(row[cZ] == null ? '' : row[cZ]).trim();
+    var sede = String(row[cS] || '').trim();
+    var termo = String(row[cT] || '').trim();
+    if (!ze && !sede && !termo) continue;
+    var ms = idx[_webNormNome(sede)];
+    var mt = idx[_webNormNome(termo)];
+    if (sede && !ms) out.sem_codigo[sede] = true;
+    if (termo && !mt) out.sem_codigo[termo] = true;
+    if (ms) { var es = ensure(ms.cod, ms.nome); if (ze) es.ze_sede[ze] = true; }
+    if (ze && ms) { (out.porZE[ze] = out.porZE[ze] || { termos: {} }).sede_cod = ms.cod; }
+    // termo so' quando for municipio DIFERENTE da sede
+    if (mt && (!ms || mt.cod !== ms.cod)) {
+      var et = ensure(mt.cod, mt.nome);
+      if (ze) et.ze_termo[ze] = true;
+      if (sede) et.sede_nome = ms ? ms.nome : sede;   // nome canonico do IBGE quando casou
+      if (ze) {
+        var pz = (out.porZE[ze] = out.porZE[ze] || { termos: {} });
+        pz.termos[mt.cod] = { cod: mt.cod, nome: mt.nome };
+      }
+    }
+  }
+  return out;
+}
+
+// Agrega TODO municipio que aparece na estrutura das ZEs (sede ou termo) ou que
+// hospeda junta, com a categoria pro choropleth:
+//   sede_junta  = sede de ZE cujo(s) termo(s) -- ou ela mesma -- tem junta especial
+//   sede        = sede de ZE sem nenhuma junta na(s) sua(s) ZE(s)
+//   termo_junta = termo (nao sede) que hospeda junta especial
+//   termo       = termo (nao sede) sem junta
+//   outro       = fora da estrutura (nao devia acontecer)
+// `locais[]` alimenta a opacidade por andamento e a lista da janelinha: pra sede,
+// sao os locais de TODAS as ZEs dela; pra termo, os locais dele. Nomes que nao
+// casaram com a malha -> `sem_codigo`.
+function _webMunicipiosMapa(universo, testados) {
+  var idx = _webMalhaCodPorNome();
+  var est = _webEstruturaZE();
+  var semCodigo = {};
+  Object.keys(est.sem_codigo).forEach(function (n) { semCodigo[n] = true; });
+
+  // cod -> [locais de junta] ;  ze (numero) -> [locais de junta daquela ZE]
+  var juntaLocais = {}, juntaNome = {}, juntaPorZE = {};
+  Object.keys(universo).forEach(function (id) {
+    var u = universo[id];
+    var mt = idx[_webNormNome(u.municipio)];
+    if (!mt) { if (u.municipio) semCodigo[String(u.municipio)] = true; return; }
+    var t = testados[id];
+    var loc = {
+      local_id: id, nome: u.nome || id, zona: String(u.zona || '').trim(), tipo: u.tipo || '',
+      roteiro_rotulo: u.roteiro_rotulo || (u.roteiro ? ('Roteiro ' + u.roteiro) : ''),
+      testado: !!t, quando: t ? t.recebido_em : '', tecnico: t ? t.tecnico : ''
+    };
+    juntaNome[mt.cod] = mt.nome;
+    (juntaLocais[mt.cod] = juntaLocais[mt.cod] || []).push(loc);
+    if (loc.zona) (juntaPorZE[loc.zona] = juntaPorZE[loc.zona] || []).push(loc);
+  });
+
+  var cods = {};
+  Object.keys(est.porCod).forEach(function (c) { cods[c] = true; });
+  Object.keys(juntaLocais).forEach(function (c) { cods[c] = true; });
+
+  var lista = Object.keys(cods).map(function (cod) {
+    var e = est.porCod[cod] || { cod: cod, nome: juntaNome[cod] || cod, ze_sede: {}, ze_termo: {}, sede_nome: '' };
+    var zesSede = Object.keys(e.ze_sede);
+    var zesTermo = Object.keys(e.ze_termo);
+    var ehSede = zesSede.length > 0;
+    var ehTermo = zesTermo.length > 0;
+    var proprios = juntaLocais[cod] || [];
+
+    var categoria, locais, termos = [];
+    if (ehSede) {
+      // locais de todas as ZEs de que este municipio e' sede (+ os proprios), sem repetir
+      var vistos = {}, acc = [];
+      proprios.concat.apply(proprios, zesSede.map(function (z) { return juntaPorZE[z] || []; }))
+        .forEach(function (l) { if (!vistos[l.local_id]) { vistos[l.local_id] = 1; acc.push(l); } });
+      locais = acc;
+      categoria = acc.length ? 'sede_junta' : 'sede';
+
+      // municipios TERMO das ZEs desta sede, com flag/contagem de junta
+      var tm = {};
+      zesSede.forEach(function (z) {
+        var pz = est.porZE[z]; if (!pz || !pz.termos) return;
+        Object.keys(pz.termos).forEach(function (tc) {
+          var t = tm[tc] || (tm[tc] = { cod: tc, nome: pz.termos[tc].nome, zes: {}, junta: false, n: 0, testados: 0 });
+          t.zes[z] = true;
+          var lc = juntaLocais[tc] || [];
+          if (lc.length) {
+            t.junta = true; t.n = lc.length;
+            t.testados = lc.filter(function (l) { return l.testado; }).length;
+          }
+        });
+      });
+      termos = Object.keys(tm).map(function (tc) {
+        var t = tm[tc];
+        return { cod: t.cod, nome: t.nome, junta: t.junta, n: t.n, testados: t.testados,
+                 zes: Object.keys(t.zes).sort(function (a, b) { return (+a) - (+b); }) };
+      }).sort(function (a, b) {
+        if (a.junta !== b.junta) return a.junta ? -1 : 1;
+        return a.nome < b.nome ? -1 : a.nome > b.nome ? 1 : 0;
+      });
+    } else if (ehTermo) {
+      locais = proprios;
+      categoria = proprios.length ? 'termo_junta' : 'termo';
+    } else {
+      locais = proprios;
+      categoria = proprios.length ? 'termo_junta' : 'outro';
+    }
+
+    return {
+      cod: cod, nome: e.nome || cod, categoria: categoria,
+      ze_sede: zesSede.sort(function (a, b) { return (+a) - (+b); }),
+      ze_termo: zesTermo.sort(function (a, b) { return (+a) - (+b); }),
+      sede_nome: e.sede_nome || '',
+      locais: locais, termos: termos
+    };
+  });
+  return { municipios: lista, sem_codigo: Object.keys(semCodigo).sort() };
+}
+
+// Uma chamada: acesso + choropleth por municipio + pinos do GEL + a chave do
+// Maps. Sem acesso -> { acesso, sem_acesso:true }. Corpo pesado em cache de 60 s
+// (a chave e o acesso vao frescos). `forcar` pula o cache.
+function carregarMapa(forcar) {
+  var acesso = verificarAcesso();
+  if (!acesso.papel) return { acesso: acesso, sem_acesso: true };
+
+  var mapsKey = '';
+  try { mapsKey = PropertiesService.getScriptProperties().getProperty('GOOGLE_MAPS_JS_KEY') || ''; } catch (e) { mapsKey = ''; }
+
+  var cache = null;
+  try { cache = CacheService.getScriptCache(); } catch (e) { cache = null; }
+  if (cache && !forcar) {
+    var hit = cache.get('mapa_v6');
+    if (hit) {
+      try {
+        var o = JSON.parse(hit);
+        o.acesso = acesso; o.maps_key = mapsKey; o.cache = true;
+        return o;
+      } catch (e) { /* recomputa */ }
+    }
+  }
+
+  var universo = {};
+  _webUniverso().forEach(function (u) { universo[u.local_id] = u; });
+  var testados = _webTestados();
+  var coords = _webCoordenadasGel();
+  var mm = _webMunicipiosMapa(universo, testados);
+
+  var pontos = [];
+  Object.keys(coords).forEach(function (id) {
+    var c = coords[id];
+    var u = universo[id] || {};
+    var t = testados[id];
+    pontos.push({
+      local_id: id,
+      nome: u.nome || id,
+      zona: u.zona || '',
+      municipio: u.municipio || '',
+      tipo: u.tipo || '',
+      roteiro: u.roteiro || '',
+      roteiro_rotulo: u.roteiro_rotulo || (u.roteiro ? ('Roteiro ' + u.roteiro) : ''),
+      tecnico_previsto: u.tecnico_previsto || '',
+      lat: c.lat, lng: c.lon,
+      gel_em: c.gel_em || '',
+      fonte: c.fonte || '',
+      testado: !!t,
+      quando: t ? t.recebido_em : '',
+      tecnico: t ? t.tecnico : '',
+      conexao: t ? (t.conexao_recomendada + (t.operadora_recomendada ? ' (' + t.operadora_recomendada + ')' : '')) : '',
+      download_mbps: t ? t.download_mbps : '',
+      latencia_ms: t ? t.latencia_ms : '',
+      pdf_url: t ? t.pdf_url : ''
+    });
+  });
+  pontos.sort(function (a, b) { return (a.municipio < b.municipio) ? -1 : (a.municipio > b.municipio) ? 1 : 0; });
+
+  var corpo = {
+    pontos: pontos,
+    municipios: mm.municipios,
+    municipios_sem_codigo: mm.sem_codigo,
+    total_universo: Object.keys(universo).length,
+    com_coord: pontos.length,
+    gerado_em: new Date().toISOString()
+  };
+  if (cache) {
+    try { var s = JSON.stringify(corpo); if (s.length < 95000) cache.put('mapa_v6', s, 60); } catch (e) { /* cache e' opcional */ }
+  }
+  corpo.acesso = acesso;
+  corpo.ambiente = _webAmbiente();
+  corpo.maps_key = mapsKey;
+  return corpo;
+}
+
 /* ==================== FASE 1: CHECK-IN AO VIVO ==================== */
 /* Escrita: webCheckin / webRegistrarEvento -- chamadas pela Execution API
  * (Codigo.gs > executar), gravadas com o TOKEN DE SERVICO (o tecnico nao e'
@@ -529,6 +876,17 @@ function carregarAoVivo() {
   }).sort(function (a, b) {
     return (a.minutos == null ? 1e9 : a.minutos) - (b.minutos == null ? 1e9 : b.minutos);
   });
+
+  // Codigo IBGE do municipio onde cada tecnico ONLINE esta' diagnosticando (pro
+  // ponto pulsante da aba Mapa). So' resolve a malha se houver alguem ativo.
+  if (presencas.some(function (p) { return p.online && p.municipio_atual; })) {
+    var mi = _webMalhaCodPorNome();
+    presencas.forEach(function (p) {
+      if (!p.municipio_atual) return;
+      var mm = mi[_webNormNome(p.municipio_atual)];
+      p.municipio_cod = mm ? mm.cod : '';
+    });
+  }
 
   var evs = _webLerAba(ss, 'Eventos');
   var feed = evs.slice(-100).reverse().map(function (e) {

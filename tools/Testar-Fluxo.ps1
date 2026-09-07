@@ -1402,10 +1402,10 @@ try {
 
         Reset-OverlayCheck
         Invoke-Pump
-        $visS1 = "$($w.FindName('rowChkS1').Visibility)"; $visS2 = "$($w.FindName('rowChkS2').Visibility)"; $visS3 = "$($w.FindName('rowChkS3').Visibility)"
-        if ($visS1 -eq 'Visible' -and $visS2 -eq 'Collapsed' -and $visS3 -eq 'Visible') {
-            Write-Host "[8c] overlay esconde so' a linha desmarcada (VPN) e mostra as outras 2"
-        } else { Write-Host "    FALHA: visibilidade das linhas do semaforo (1=$visS1 2=$visS2 3=$visS3)"; $falhas++ }
+        $visS1 = "$($w.FindName('rowChkS1').Visibility)"; $visS2 = "$($w.FindName('rowChkS2').Visibility)"
+        if ($visS1 -eq 'Visible' -and $visS2 -eq 'Collapsed') {
+            Write-Host "[8c] overlay esconde so' a linha desmarcada (VPN) e mostra a outra"
+        } else { Write-Host "    FALHA: visibilidade das linhas do semaforo (1=$visS1 2=$visS2)"; $falhas++ }
 
         # 8d. sugestoes de motivo (chips) sao configuraveis pelo admin -- mesma
         # pasta temporaria, sem tocar no config/ambiente.json real.

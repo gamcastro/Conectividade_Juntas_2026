@@ -3321,7 +3321,7 @@ function Set-ChkStep {
     }
     $b = [Windows.Media.SolidColorBrush]::new([Windows.Media.ColorConverter]::ConvertFromString($cor)); $b.Freeze()
     $dot.Fill = $b
-    $baseDef = @('1. Rede local (sem VPN)', '2. Diagnostico com a VPN', '3. Sistema de totalizacao')[$N - 1]
+    $baseDef = @('1. Rede local (sem VPN)', '2. Diagnostico com a VPN')[$N - 1]
     $baseUsar = if ($Base) { $Base } else { $baseDef }
     $lbl.Text = if ($Texto) { "$baseUsar - $Texto" } else { "$baseUsar - $palavra" }
 }
@@ -3346,11 +3346,9 @@ function Reset-OverlayCheck {
     if (-not $w) { return }
     Set-ChkStep 1 'pendente'
     Set-ChkStep 2 'pendente'
-    Set-ChkStep 3 'pendente' 'em implementacao'
     $passosVis = Get-OverlayPassosVisiveis
     $r1 = $w.FindName('rowChkS1'); if ($r1) { $r1.Visibility = if ($passosVis.rede_local)  { 'Visible' } else { 'Collapsed' } }
     $r2 = $w.FindName('rowChkS2'); if ($r2) { $r2.Visibility = if ($passosVis.vpn)         { 'Visible' } else { 'Collapsed' } }
-    $r3 = $w.FindName('rowChkS3'); if ($r3) { $r3.Visibility = if ($passosVis.totalizacao) { 'Visible' } else { 'Collapsed' } }
     $Global:ChkVpnPendente = $false
     $w.FindName('panelChkVpnGate').Visibility = 'Collapsed'
     foreach ($n in 'txtChkVpnPassos', 'txtChkVpnRecheck') { $c = $w.FindName($n); if ($c) { $c.Visibility = 'Collapsed' } }
@@ -4794,7 +4792,6 @@ function Initialize-Admin {
     $passosVis = Get-OverlayPassosVisiveis
     $w.FindName('chkOverlayRedeLocal').IsChecked   = $passosVis.rede_local
     $w.FindName('chkOverlayVpn').IsChecked         = $passosVis.vpn
-    $w.FindName('chkOverlayTotalizacao').IsChecked = $passosVis.totalizacao
 
     # sugestoes de motivo (chips + "Outro"), uma por linha
     $w.FindName('txtSugNaLan').Text        = (Get-SugestoesNaMeio 'lan')        -join "`n"
@@ -4828,7 +4825,7 @@ function Invoke-SalvarAmbiente {
     $mapsKey = ([string] $w.FindName('txtMapsKeyCfg').Text).Trim()
     $ovRedeLocal  = [bool] $w.FindName('chkOverlayRedeLocal').IsChecked
     $ovVpn        = [bool] $w.FindName('chkOverlayVpn').IsChecked
-    $ovTotal      = [bool] $w.FindName('chkOverlayTotalizacao').IsChecked
+    $ovTotal      = $true   # Fase 3 (totalizacao) "em implementacao" -- sem linha no overlay por ora
 
     # sugestoes de motivo: uma por linha nas caixas de texto -> array (tira
     # linhas vazias); lista vazia = volta a usar a padrao embutida no DICON.

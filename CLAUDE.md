@@ -31,8 +31,10 @@ Script), em vez de criar um BI/dashboard separado.
   — banda real pela VPN contra servidor iperf3 num Ubuntu no CPD (endereço/porta/duração
   editáveis na tela de **Administração** → `Save-ConfigAmbiente` grava o bloco
   `iperf3` em `config/ambiente.json` local, PIN do admin — o mesmo card também
-  tem 3 checkboxes pra escolher quais dos 3 itens do semáforo do overlay
-  aparecem (`overlay_passos.rede_local/vpn/totalizacao`, `Get-OverlayPassosVisiveis`
+  tem 2 checkboxes pra escolher quais itens do semáforo do overlay aparecem
+  (`overlay_passos.rede_local/vpn`; a 3ª etapa "Sistema de totalização — em
+  implementação" saiu do overlay na v0.6.130, mas `overlay_passos.totalizacao`
+  segue no config pra quando a Fase 3 existir; `Get-OverlayPassosVisiveis`
   aplicado em `Reset-OverlayCheck`; só visibilidade, não desliga a medição) e 4
   caixas de texto (uma sugestão por linha) para as **sugestões de motivo**
   (chips + "Outro") oferecidas ao técnico: no card "não se aplica" de cada meio
@@ -361,8 +363,9 @@ motivo — só então **`Update-BotaoVpnImpossivel`** habilita o botão
 `btnChkVpnImpossivel` ("Registrar este meio sem a VPN"); `Invoke-CheckVpnImpossivel`
 → `Set-DiagnosticoVpnImpossivel`, meio inviável → **Fase 3** (Selenium, "em
 implementação"). `Complete-CheckMeio` → `Add-MedicaoAtual`; `Close-OverlayCheck`
-(`btnChkFechar`) fecha. O corpo tem um stepper de 3 linhas
-(`txtChkS1/S2/S3`+`dotChkS1/S2/S3`, linhas `rowChkS1/S2/S3`) — **só informa se
+(`btnChkFechar`) fecha. O corpo tem um stepper de 2 linhas
+(`txtChkS1/S2`+`dotChkS1/S2`, linhas `rowChkS1/S2`; a linha "3. Sistema de
+totalização — em implementação" foi removida na v0.6.130) — **só informa se
 a etapa rodou** (verde/"testado"; vermelho só numa falha técnica real de
 execução, não por qualidade do resultado — isso fica pro painel/relatório) —
 e **3 colunas** — Origem (Servidor/IP,
@@ -436,7 +439,17 @@ depende do `modo_avaliacao` do JSON: `medicao`/`referencia` → **`Get-PainelMed
 valores, sem KPIs de viáveis/inviáveis nem "Conclusão do diagnóstico"; `referencia`
 mostra também a faixa nas tabelas por meio via `Get-TabelaAvaliacaoHtml -Modo`).
 `completo` → `Get-PainelHtml` (abaixo). `Get-MeioBlocoHtml -Modo` tira o badge de
-veredito do título fora do `completo`.
+veredito do título fora do `completo`. As faixas navy são só **"Painel de
+Medições"** / **"Painel de Viabilidade de Conectividade"** (sem o sufixo "— Junta
+Eleitoral Especial 2026", v0.6.130). O gráfico **"Comparação entre os meios"**
+(`Get-GraficoComparacaoMeiosHtml` → `.grafcomp`) sai da coluna estreita do painel
+e vira uma **faixa de largura total, centralizada** (`.grafcompwrap`
+`justify-content: space-around`), abaixo do bloco de 2 colunas. **Paginação**
+(v0.6.130): `.meio` e `.grafzona` passaram a `page-break-inside: auto` (um meio
+longo flui entre páginas), protegendo só as peças atômicas — `table` e `.grafpar`
+(par Download|Upload) com `break-inside: avoid`, `.bar`/`.ptit`/`.meiotit` com
+`break-after: avoid` — pra acabar com os blocos grandes empurrados inteiros
+deixando meia página em branco.
 1. **Cabeçalho** JE / TRE-MA / SEASU-COINF-STIC / DICON.
 2. **Título + subtítulo** — "Relatório de Diagnóstico de Conectividade" + "ZE N —
    Município (sede: X)".

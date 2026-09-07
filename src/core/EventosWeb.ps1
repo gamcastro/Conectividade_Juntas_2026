@@ -64,6 +64,10 @@ function Add-EventoWeb {
         }
         $nome = '{0}_{1}.json' -f (Get-Date -Format 'yyyyMMdd_HHmmss_fff'), $Tipo
         Write-TextoArquivo -Caminho (Join-Path (Get-PastaEventosWeb) $nome) -Conteudo (([pscustomobject] $obj) | ConvertTo-Json -Depth 5)
+        # Empurra a fila JA (fire-and-forget, nao empilha) -- senao o evento so'
+        # sairia no proximo heartbeat de 5 min e o "ao vivo" da console ficaria
+        # muito atrasado. 'abriu_app' ja tem o seu envio no fluxo de login.
+        if ($Tipo -ne 'abriu_app') { try { Start-EnvioWebAssincrono } catch { } }
     } catch {
         try { Write-Log "Evento web '$Tipo' nao enfileirado: $_" -Nivel Aviso } catch { }
     }

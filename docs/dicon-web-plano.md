@@ -85,6 +85,32 @@
     **@22**, Execution API **@23** (`clasp version` 23).
   - **Falta**: aba-resumo agregada por trigger; retenção da aba `Eventos`.
 
+- **Aba "Mapa" — em homologação (v0.6.132 pinos · v0.6.133 choropleth)** 🗺️
+  - `carregarMapa(forcar)` (`Console.gs`): junta o universo (`_webUniverso`),
+    os testados (`_webTestados`), as **coordenadas do GEL** (`_webCoordenadasGel`
+    — aba `GEL` coluna `gel_json` `lat`/`long`, reserva no `vistoria_gel` do
+    `json` da aba `Resultados`; bbox do Maranhão) **e o agregado por município**
+    (`_webMunicipiosMapa`): casa `municipio_termo` / `municipio_sede` de cada
+    Local com o código IBGE por **nome normalizado** (`_webNormNome` — sem acento,
+    só `[a-z0-9]`; índice `_webMalhaCodPorNome` da própria malha, memoizado);
+    nomes que não casam voltam em `municipios_sem_codigo`. Devolve `pontos[]`,
+    `municipios[]` (`{cod, nome, eh_sede, zonas_sede[], locais[]}`) + `maps_key`
+    (Script Property `GOOGLE_MAPS_JS_KEY`). Cache de 60 s (`mapa_v2`).
+  - `carregarMalhaMA()` (`apps-script/web/MalhaMA.gs`): malha municipal do IBGE
+    (217 municípios, `qualidade=minima`, ~135 KB) embutida como string.
+    Regenerada por `scratchpad/gen-malha-gs.mjs`.
+  - `Index.html`: aba **Mapa** (após Vistorias) — Google Maps JS sob demanda.
+    **Choropleth** (`map.data.setStyle(estiloFeature)`): município com junta
+    pintado por andamento — verde (todos testados) / laranja (parcial) / vermelho
+    (nenhum); **borda amarela grossa** se é sede de ZE (a junta vence a cor de
+    preenchimento); cinza claro nos demais. Clicar no polígono → info-window com
+    a lista de locais + status. **Pinos do GEL** por cima (`zIndex` alto) no ponto
+    exato lat/long, info-window com técnico/conexão/download/link. Filtros: roteiro
+    (recolore + filtra pinos), status (só pinos); toggles "pintar municípios" e
+    "mostrar divisas"; legenda fixa. Sem a chave → aviso.
+  - Só `google.script.run` → **redeploy do Web App apenas**. Setup GCP (chave
+    Maps JS + faturamento + Script Property) documentado em `apps-script/CLASP.md`.
+
 ### ⚠️ Trava de escopo OAuth (vale para Fase 2 também)
 
 O projeto Apps Script é **compartilhado** entre a console (Web App) e a

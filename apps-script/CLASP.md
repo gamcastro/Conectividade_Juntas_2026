@@ -53,7 +53,7 @@ Vive no **mesmo projeto Apps Script de homolog** (`17BLQ6IOZ…`), pasta
 
 | ambiente | Web App da console (`?app=web`) | Execution API do DICON de campo |
 |---|---|---|
-| **homolog** | `AKfycby4rGyTNWzgl6FxYkdAmnTQpO1zSsmolqJll6psftuH2S-SZQh76s6j2qLWYypZi6wM-w` (@26) | `AKfycbxHMpUwQuDH1SwRiLersK1Qbk3x90Xpu76zxnPl12Upthotd3UiaTd_eOPQ01FF2PBk` (@23) |
+| **homolog** | `AKfycby4rGyTNWzgl6FxYkdAmnTQpO1zSsmolqJll6psftuH2S-SZQh76s6j2qLWYypZi6wM-w` (@41, v0.6.139 Mapa) | `AKfycbxHMpUwQuDH1SwRiLersK1Qbk3x90Xpu76zxnPl12Upthotd3UiaTd_eOPQ01FF2PBk` (@33) |
 | **prod** (2026-09-06) | `AKfycbylhIAahOf0coAHwpOH2OCMbySmfeZR1feT-JFG5aw69GGrtRWYAnxtcL4b3carWYNy0w` (@16) | `AKfycbya1hdu7dgLzXd8U2Totm8cffCtiAnIjJptppe7AuxfvbuHhkNGOAXlCa90QCE_-HOApQ` (@16, `clasp version` 16) |
 
 - URL da console = `.../macros/s/<Web App deploymentId>/exec?app=web` (`doGet`
@@ -94,6 +94,30 @@ redeploy.
     clasp redeploy AKfycby4rG…wM-w -d "DICON Web homolog vN"        # Web App
     clasp version "vN <resumo>"                                     # cria a versao (imprime o numero)
     clasp redeploy AKfycbxHMpUwQuDH1SwRiLersK1Qbk3x90Xpu76zxnPl12Upthotd3UiaTd_eOPQ01FF2PBk -V <numero> -d "vN"
+
+### Aba "Mapa" da console (v0.6.132 pinos · v0.6.133 choropleth) — só Web App
+
+`carregarMapa` / `carregarMalhaMA` (`apps-script/web/Console.gs` +
+`apps-script/web/MalhaMA.gs`, malha municipal do IBGE embutida) são chamadas por
+**`google.script.run`** → só o redeploy do **Web App** (`clasp push -f` +
+`clasp redeploy AKfycby4rG…wM-w -d "…"`), NÃO mexe em `executar`. A v0.6.133
+acrescentou o choropleth por município (de-para nome→código IBGE por nome
+normalizado; nomes sem match voltam em `municipios_sem_codigo`).
+
+**Setup GCP (uma vez, o George faz)** — sem isto a aba mostra o aviso "chave não
+configurada" e a lista de pendentes, o resto da console segue normal:
+1. Projeto `dicon-oauth` no GCP → "APIs e serviços" → ativar **Maps JavaScript API**
+   (exige uma conta de faturamento anexada ao projeto; pôr um teto de orçamento).
+2. "Credenciais" → criar **Chave de API**; restringir por **referenciador HTTP**:
+   `*.googleusercontent.com/*` e `script.google.com/*` (o Web App roda em iframe
+   `*.googleusercontent.com`); restringir também a API à "Maps JavaScript API".
+3. Apps Script (projeto de homolog `17BLQ6IO…`) → **Configurações do projeto** →
+   **Propriedades do script** → adicionar `GOOGLE_MAPS_JS_KEY` = a chave.
+   (Em produção, repetir a property no projeto `1WWMSPY7…` quando promover.)
+
+A malha (`MalhaMA.gs`, ~135 KB) é servida por `carregarMalhaMA()` como string —
+`clasp push -f` já a leva. Regenerada por `scratchpad/gen-malha-gs.mjs` a partir
+da API de malhas do IBGE (`.../api/v3/malhas/estados/21`, domínio público).
 
 ## Config extra
 

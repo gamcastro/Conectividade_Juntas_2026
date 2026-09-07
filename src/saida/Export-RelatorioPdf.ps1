@@ -773,11 +773,13 @@ function Get-GraficoComparacaoMeiosHtml {
             [pscustomobject]@{ Rotulo = [string] $_.rotulo; Valor = (Get-Prop $_ $g.Campo); Cor = '#123FA8' }
         })
         if (-not @($barras | Where-Object { $null -ne $_.Valor }).Count) { continue }
-        Get-GraficoBarrasHtml -Barras $barras -Titulo $g.Titulo -Unidade $g.Unidade -Largura 260 -AlturaBarra 14 -EspacoBarra 6
+        Get-GraficoBarrasHtml -Barras $barras -Titulo $g.Titulo -Unidade $g.Unidade -Largura 340 -AlturaBarra 15 -EspacoBarra 7
     }
     $blocos = @($blocos | Where-Object { $_ })
     if (-not $blocos.Count) { return '' }
-    '<div class="ptit" style="margin-top:12px">Compara' + [char]0x00E7 + [char]0x00E3 + 'o entre os meios</div><div class="graflinha">' + ($blocos -join "`n") + '</div>'
+    # faixa de largura total, centralizada (sai da coluna estreita do painel)
+    '<div class="grafcomp"><div class="ptit">Compara' + [char]0x00E7 + [char]0x00E3 + 'o entre os meios</div>' +
+    '<div class="grafcompwrap">' + ($blocos -join "`n") + '</div></div>'
 }
 
 # Secao 3 - Painel de Medicoes (modo 'medicao' / 'referencia': sem juizo de viabilidade).
@@ -849,7 +851,7 @@ function Get-PainelMedicoesHtml {
     $grafComparacao = Get-GraficoComparacaoMeiosHtml -Meds $meds
 
     @"
-  <div class="bar">Painel de Medi&ccedil;&otilde;es &mdash; Junta Eleitoral Especial 2026</div>
+  <div class="bar">Painel de Medi&ccedil;&otilde;es</div>
   <div class="pnl">
     <div class="pcols">
       <div>
@@ -870,9 +872,9 @@ $($resumoRows -join "`n")
 $($medRows -join "`n")
           </tbody>
         </table>
-        $grafComparacao
       </div>
     </div>
+    $grafComparacao
     <div class="ptit" style="margin-top:4px">Observa&ccedil;&otilde;es</div>
     $obsHtml
   </div>
@@ -969,7 +971,7 @@ function Get-PainelHtml {
     $grafComparacao = Get-GraficoComparacaoMeiosHtml -Meds $meds
 
     @"
-  <div class="bar">Painel de Viabilidade de Conectividade &mdash; Junta Eleitoral Especial 2026</div>
+  <div class="bar">Painel de Viabilidade de Conectividade</div>
   <div class="pnl">
     <div class="pcols">
       <div>
@@ -988,9 +990,9 @@ $($idRows -join "`n")
 $($sitRows -join "`n")
           </tbody>
         </table>
-        $grafComparacao
       </div>
     </div>
+    $grafComparacao
     <div class="ptit" style="margin-top:4px">Conclus&atilde;o do diagn&oacute;stico</div>
     <table class="kv"><tbody>
 $($concRows -join "`n")
@@ -1150,12 +1152,15 @@ function New-RelatorioHtml {
   p.sub  { font-size: 12px; color: #333; margin: 0 0 12px; }
 
   .bar { background: #1F4E79; color: #fff; font-weight: 700; text-transform: uppercase;
-         letter-spacing: .06em; font-size: 11px; padding: 6px 12px; margin: 16px 0 8px; }
+         letter-spacing: .06em; font-size: 11px; padding: 6px 12px; margin: 16px 0 8px;
+         page-break-after: avoid; break-after: avoid; }
   .ptit, .subt { font-weight: 700; color: #1F4E79; font-size: 11px; text-transform: uppercase;
-                 letter-spacing: .04em; margin: 8px 0 5px; }
+                 letter-spacing: .04em; margin: 8px 0 5px;
+                 page-break-after: avoid; break-after: avoid; }
   .subt { color: #2E5A8A; }
 
-  table { border-collapse: collapse; width: 100%; margin: 4px 0 12px; }
+  table { border-collapse: collapse; width: 100%; margin: 4px 0 12px;
+          page-break-inside: avoid; break-inside: avoid; }
   th, td { border: 1px solid #BFC9DA; padding: 5px 8px; text-align: left; vertical-align: top; }
   th { background: #D9E2F3; font-size: 10px; color: #22324a; text-transform: uppercase; letter-spacing: .03em; }
   tbody tr:nth-child(even) td { background: #F4F7FB; }
@@ -1176,10 +1181,12 @@ function New-RelatorioHtml {
   .pnl ul { margin: 2px 0 2px 16px; padding: 0; }
   .pnl li { margin: 1px 0; }
 
-  .meio { border: 1px solid #BFC9DA; margin: 0 0 12px; page-break-inside: avoid; }
-  .meio.na { padding: 8px 12px; background: #F4F7FB; color: #555; }
+  .meio { border: 1px solid #BFC9DA; margin: 0 0 12px; page-break-inside: auto; break-inside: auto; }
+  .meio.na { padding: 8px 12px; background: #F4F7FB; color: #555;
+             page-break-inside: avoid; break-inside: avoid; }
   .meiotit { background: #E7EDF6; padding: 6px 12px; font-weight: 700; font-size: 12px;
-             display: flex; align-items: baseline; flex-wrap: wrap; gap: 3px 10px; }
+             display: flex; align-items: baseline; flex-wrap: wrap; gap: 3px 10px;
+             page-break-after: avoid; break-after: avoid; }
   .meiotit-props { font-weight: 400; font-size: 10px; color: #333; }
   .badge { border: 1px solid; border-radius: 3px; padding: 1px 7px; font-size: 10px; font-weight: 700; }
   .tag { background: #1F4E79; color: #fff; border-radius: 3px; padding: 1px 7px; font-size: 9px;
@@ -1194,9 +1201,14 @@ function New-RelatorioHtml {
   .graflegenda { font-size: 9px; color: #5C6472; margin-top: 2px; }
   .graflaudo { font-size: 9.5px; color: #333; margin-top: 3px; max-width: 400px; line-height: 1.35; }
   .grafzona { margin: 10px 0 2px; padding: 8px 12px; background: #FAFBFD;
-              border: 1px solid #E7EDF6; border-radius: 4px; page-break-inside: avoid; }
-  .grafzona > .graftit { margin-bottom: 6px; }
-  .grafpar { display: flex; flex-wrap: wrap; gap: 12px 26px; justify-content: center; }
+              border: 1px solid #E7EDF6; border-radius: 4px;
+              page-break-inside: auto; break-inside: auto; }
+  .grafzona > .graftit { margin-bottom: 6px; page-break-after: avoid; break-after: avoid; }
+  .grafpar { display: flex; flex-wrap: wrap; gap: 12px 26px; justify-content: center;
+             page-break-inside: avoid; break-inside: avoid; }
+  /* "Comparacao entre os meios": faixa de largura total, centralizada */
+  .grafcomp { margin: 14px 0 6px; page-break-inside: auto; break-inside: auto; }
+  .grafcompwrap { display: flex; flex-wrap: wrap; gap: 14px 36px; justify-content: space-around; }
 
   .gel { border: 1px solid #BFC9DA; border-top: none; padding: 10px 12px 4px; }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 24px; margin: 2px 0 10px; }

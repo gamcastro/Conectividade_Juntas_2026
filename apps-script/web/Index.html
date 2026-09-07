@@ -86,6 +86,20 @@
   .acbtn:hover { background:#E7ECF3; }
   .acbtn.rem:hover { background:#F6E3E1; color:#a3320f; }
 
+  .mleg { display:flex; flex-wrap:wrap; gap:6px 16px; margin-top:10px; font-size:11.5px; color:var(--tinta2); }
+  .mleg span { display:flex; align-items:center; gap:6px; }
+  .mleg i { width:14px; height:10px; border-radius:2px; flex:none; display:inline-block; }
+  .mleg i.pin { width:11px; height:11px; border-radius:50%; border:1.5px solid #fff; box-shadow:0 0 0 1px rgba(0,0,0,.15); }
+  .mleg i.live { width:11px; height:11px; border-radius:50%; background:#C0392B; border:1.5px solid #fff;
+                 box-shadow:0 0 0 3px rgba(192,57,43,.35); }
+
+  .pulsedot { position:absolute; transform:translate(-50%,-50%); pointer-events:none; z-index:6; }
+  .pulsedot i { position:absolute; left:-6px; top:-6px; width:12px; height:12px; border-radius:50%; display:block; }
+  .pulsedot .core { background:#C0392B; border:2px solid #fff; box-shadow:0 0 2px rgba(0,0,0,.5); }
+  .pulsedot .ring { background:rgba(192,57,43,.5); animation:pdpulse 1.7s ease-out infinite; }
+  @keyframes pdpulse { 0%{transform:scale(1);opacity:.75} 70%{transform:scale(4.2);opacity:0} 100%{opacity:0} }
+  @media (prefers-reduced-motion:reduce){ .pulsedot .ring{ animation:none; opacity:.35; transform:scale(2.4); } }
+
   [hidden] { display:none !important; }
 </style>
 </head>
@@ -135,6 +149,7 @@
       <button id="tabPainel" class="on" onclick="verTab('painel')">Painel</button>
       <button id="tabVivo" onclick="verTab('vivo')">Ao vivo</button>
       <button id="tabVist" onclick="verTab('vistorias')">Vistorias</button>
+      <button id="tabMapa" onclick="verTab('mapa')">Mapa</button>
       <button id="tabRel" onclick="verTab('rel')">Relatório final</button>
       <button id="tabAcesso" onclick="verTab('acesso')" hidden>Acesso</button>
     </div>
@@ -163,6 +178,39 @@
             <tbody id="vivoFeed"></tbody>
           </table>
         </div>
+      </div>
+    </div>
+
+    <div id="mapa" hidden>
+      <div class="card">
+        <div class="filtros">
+          <select id="mRoteiro" onchange="renderMapa()"><option value="">Todos os roteiros</option></select>
+          <select id="mStatus" onchange="renderMapaPinos()">
+            <option value="">Pinos: testados e pendentes</option>
+            <option value="sim">Pinos: só testados</option>
+            <option value="nao">Pinos: só pendentes</option>
+          </select>
+          <label class="lbl" style="align-self:center;display:flex;align-items:center;gap:6px;text-transform:none;letter-spacing:0;color:var(--tinta2)">
+            <input type="checkbox" id="mPintar" checked onchange="estilizarMalha()"> pintar municípios por status
+          </label>
+          <label class="lbl" style="align-self:center;display:flex;align-items:center;gap:6px;text-transform:none;letter-spacing:0;color:var(--tinta2)">
+            <input type="checkbox" id="mDivisas" checked onchange="estilizarMalha()"> mostrar divisas
+          </label>
+          <span id="mContagem" class="lbl" style="align-self:center;color:var(--tinta2)"></span>
+        </div>
+        <div id="mapAviso" hidden style="padding:12px 14px;background:#FDF6E3;border:1px solid #E8D9A8;border-radius:8px;font-size:13px;line-height:1.5;margin-bottom:12px"></div>
+        <div id="gmap" style="width:100%;height:64vh;border:1px solid var(--hair);border-radius:8px;background:#EEF1F5"></div>
+        <div class="mleg">
+          <span><i style="background:#6D3B9E"></i> sede de ZE + junta especial</span>
+          <span><i style="background:#E8B93E"></i> sede de ZE (sem junta)</span>
+          <span><i style="background:#1B7F3B"></i> termo com junta especial</span>
+          <span><i style="background:#123FA8;opacity:.4"></i> termo sem junta</span>
+          <span style="opacity:.85">tom mais forte = mais locais testados</span>
+          <span><i class="pin" style="background:var(--verde)"></i> local testado (GEL c/ coord.)</span>
+          <span><i class="pin" style="background:#C0392B"></i> local pendente (GEL c/ coord.)</span>
+          <span><i class="live"></i> diagnóstico em campo agora</span>
+        </div>
+        <div id="mSemCod" hidden class="lbl" style="margin-top:6px;text-transform:none;letter-spacing:0;color:#a3320f;line-height:1.5"></div>
       </div>
     </div>
 
@@ -329,14 +377,17 @@
     el('tabPainel').classList.toggle('on', t==='painel');
     el('tabVivo').classList.toggle('on', t==='vivo');
     el('tabVist').classList.toggle('on', t==='vistorias');
+    el('tabMapa').classList.toggle('on', t==='mapa');
     el('tabRel').classList.toggle('on', t==='rel');
     el('tabAcesso').classList.toggle('on', t==='acesso');
     el('painel').hidden    = (t!=='painel');
     el('vivo').hidden      = (t!=='vivo');
     el('vistorias').hidden = (t!=='vistorias');
+    el('mapa').hidden      = (t!=='mapa');
     el('rel').hidden       = (t!=='rel');
     el('acesso').hidden    = (t!=='acesso');
     if (t==='vivo') { carregarVivo(); iniciarVivoTimer(); } else { pararVivoTimer(); }
+    if (t==='mapa') { abrirMapa(); iniciarVivoMapa(); } else { pararVivoMapa(); }
     if (t==='rel')  { atualizarBotaoRel(); carregarRelHist(); }
     if (t==='acesso') { carregarAcesso(); }
   }
@@ -476,6 +527,353 @@
         '<td>'+pdf+'</td>' +
         '</tr>';
     }).join('');
+  }
+
+  /* ============================== ABA MAPA ============================== */
+
+  var MAPA = { dados:null, map:null, info:null, pinos:[], gmapsPromise:null,
+               malhaOk:false, muniByCod:{}, enquadrou:false,
+               centroPorCod:null, pulsos:[], vivoPorCod:{}, vivoTimer:null, PulseOverlay:null };
+
+  function abrirMapa(){
+    if (MAPA.map){
+      google.maps.event.trigger(MAPA.map, 'resize');
+      return;
+    }
+    if (MAPA.dados) return;               // ja em curso / ja falhou com aviso
+    el('mapAviso').hidden = true;
+    el('mContagem').textContent = 'carregando…';
+    google.script.run
+      .withSuccessHandler(onMapaDados)
+      .withFailureHandler(function(e){
+        el('mContagem').textContent = '';
+        mapaAviso('<b>Erro ao carregar o mapa.</b> ' + esc((e&&e.message)||e));
+      })
+      .carregarMapa(false);
+  }
+
+  function mapaAviso(html){ el('mapAviso').innerHTML = html; el('mapAviso').hidden = false; }
+
+  function onMapaDados(d){
+    if (!d || d.sem_acesso) return;
+    MAPA.dados = d;
+
+    MAPA.muniByCod = {};
+    (d.municipios||[]).forEach(function(m){ MAPA.muniByCod[String(m.cod)] = m; });
+
+    var sel = el('mRoteiro'); sel.length = 1;
+    var rots = {};
+    (d.municipios||[]).forEach(function(m){ (m.locais||[]).forEach(function(l){ if (l.roteiro_rotulo) rots[l.roteiro_rotulo] = true; }); });
+    (d.pontos||[]).forEach(function(p){ if (p.roteiro_rotulo) rots[p.roteiro_rotulo] = true; });
+    Object.keys(rots).sort().forEach(function(r){
+      var o = document.createElement('option'); o.value = r; o.textContent = r; sel.appendChild(o);
+    });
+
+    var sc = d.municipios_sem_codigo || [];
+    if (sc.length){
+      el('mSemCod').hidden = false;
+      el('mSemCod').textContent = sc.length + ' município(s) não casaram com o mapa (ficam sem preenchimento): ' + sc.join(', ') + '.';
+    } else { el('mSemCod').hidden = true; }
+
+    el('mContagem').textContent = 'montando o mapa…';
+
+    if (!d.maps_key){
+      mapaAviso('<b>Mapa ainda não disponível.</b> A chave da API do Google Maps não foi configurada ' +
+        'nesta implantação (Script Property <code>GOOGLE_MAPS_JS_KEY</code>). ' +
+        (d.com_coord||0) + ' local(is) com coordenada aguardando a ativação.');
+      return;
+    }
+    carregarGoogleMaps(d.maps_key)
+      .then(iniciarMapa)
+      .catch(function(e){
+        mapaAviso('<b>Não foi possível carregar o Google Maps.</b> ' + esc((e&&e.message)||e) +
+          ' — verifique a chave e o faturamento no projeto do GCP.');
+      });
+  }
+
+  function carregarGoogleMaps(key){
+    if (MAPA.gmapsPromise) return MAPA.gmapsPromise;
+    MAPA.gmapsPromise = new Promise(function(resolve, reject){
+      window.__gmapsReady = function(){ resolve(); };
+      var s = document.createElement('script');
+      s.src = 'https://maps.googleapis.com/maps/api/js?key=' + encodeURIComponent(key) +
+              '&callback=__gmapsReady&language=pt-BR&region=BR';
+      s.async = true;
+      s.onerror = function(){ reject(new Error('falha ao baixar o script do Maps')); };
+      document.head.appendChild(s);
+    });
+    return MAPA.gmapsPromise;
+  }
+
+  function iniciarMapa(){
+    if (!MAPA.map){
+      MAPA.map = new google.maps.Map(el('gmap'), {
+        center: { lat: -4.9, lng: -45.3 }, zoom: 6, mapTypeId: 'roadmap',
+        streetViewControl: false, fullscreenControl: true,
+        mapTypeControl: true, mapTypeControlOptions: { mapTypeIds: ['roadmap','hybrid','terrain'] }
+      });
+      MAPA.info = new google.maps.InfoWindow();
+      carregarMalha();
+    }
+    renderMapa();
+  }
+
+  function carregarMalha(){
+    google.script.run
+      .withSuccessHandler(function(txt){
+        try {
+          MAPA.map.data.addGeoJson(JSON.parse(txt));
+          MAPA.malhaOk = true;
+          MAPA.map.data.setStyle(estiloFeature);
+          MAPA.map.data.addListener('click', function(e){
+            var cod = String(e.feature.getProperty('cod') || '');
+            var m = MAPA.muniByCod[cod];
+            if (!m) return;
+            MAPA.infoCodAberto = cod;
+            MAPA.info.setContent(muniInfoHtml(m));
+            MAPA.info.setPosition(e.latLng);
+            MAPA.info.open(MAPA.map);
+          });
+          MAPA.info.addListener('closeclick', function(){ MAPA.infoCodAberto = null; });
+          // centroide de cada município (p/ o ponto pulsante de "diagnóstico agora")
+          MAPA.centroPorCod = {};
+          MAPA.map.data.forEach(function(f){
+            var cod = String(f.getProperty('cod') || ''); if (!cod) return;
+            var sx = 0, sy = 0, nn = 0;
+            f.getGeometry().forEachLatLng(function(ll){ sx += ll.lng(); sy += ll.lat(); nn++; });
+            if (nn) MAPA.centroPorCod[cod] = { lat: sy/nn, lng: sx/nn };
+          });
+          carregarVivoMapa();
+        } catch(e){ /* silencioso — o mapa funciona sem a malha */ }
+      })
+      .withFailureHandler(function(){})
+      .carregarMalhaMA();
+  }
+
+  /* --- diagnóstico em campo AGORA: ponto pulsante + linha na janelinha --- */
+  function ensurePulseClass(){
+    if (MAPA.PulseOverlay) return;
+    function P(latlng, map){ this.pos = latlng; this.div = null; this.setMap(map); }
+    P.prototype = new google.maps.OverlayView();
+    P.prototype.onAdd = function(){
+      var d = document.createElement('div');
+      d.className = 'pulsedot';
+      d.innerHTML = '<i class="ring"></i><i class="core"></i>';
+      this.div = d;
+      this.getPanes().overlayMouseTarget.appendChild(d);
+    };
+    P.prototype.draw = function(){
+      if (!this.div) return;
+      var pt = this.getProjection().fromLatLngToDivPixel(this.pos);
+      this.div.style.left = pt.x + 'px';
+      this.div.style.top = pt.y + 'px';
+    };
+    P.prototype.onRemove = function(){
+      if (this.div && this.div.parentNode) this.div.parentNode.removeChild(this.div);
+      this.div = null;
+    };
+    MAPA.PulseOverlay = P;
+  }
+
+  function iniciarVivoMapa(){
+    pararVivoMapa();
+    carregarVivoMapa();
+    MAPA.vivoTimer = setInterval(function(){ if (TAB === 'mapa') carregarVivoMapa(); }, 25000);
+  }
+  function pararVivoMapa(){ if (MAPA.vivoTimer){ clearInterval(MAPA.vivoTimer); MAPA.vivoTimer = null; } }
+
+  function carregarVivoMapa(){
+    if (!MAPA.map || !MAPA.centroPorCod) return;
+    google.script.run
+      .withSuccessHandler(function(d){
+        if (!d || d.sem_acesso) return;
+        var evs = d.eventos || [];
+        var ativos = (d.presencas || []).filter(function(p){
+          return p.online && p.municipio_atual && p.municipio_cod;
+        }).map(function(p){
+          // "desde": 1º iniciou_diagnostico desse técnico no feed (mais recente primeiro)
+          var desde = '';
+          for (var i = 0; i < evs.length; i++){
+            if (evs[i].tipo === 'iniciou_diagnostico' && evs[i].tecnico === p.tecnico){ desde = evs[i].hora; break; }
+          }
+          return { cod: String(p.municipio_cod), tecnico: p.tecnico || p.email || 'técnico',
+                   desde: desde || p.ultimo_checkin || '' };
+        });
+        aplicarPulsos(ativos);
+      })
+      .withFailureHandler(function(){})
+      .carregarAoVivo();
+  }
+
+  function aplicarPulsos(ativos){
+    (MAPA.pulsos || []).forEach(function(o){ o.setMap(null); });
+    MAPA.pulsos = [];
+    MAPA.vivoPorCod = {};
+    (ativos || []).forEach(function(a){
+      if (!MAPA.centroPorCod[a.cod]) return;
+      (MAPA.vivoPorCod[a.cod] = MAPA.vivoPorCod[a.cod] || []).push({ tecnico: a.tecnico, desde: a.desde });
+    });
+    if (Object.keys(MAPA.vivoPorCod).length) ensurePulseClass();
+    Object.keys(MAPA.vivoPorCod).forEach(function(cod){
+      var c = MAPA.centroPorCod[cod];
+      MAPA.pulsos.push(new MAPA.PulseOverlay(new google.maps.LatLng(c.lat, c.lng), MAPA.map));
+    });
+    // se a janelinha de um município ativo estiver aberta, atualiza o texto
+    if (MAPA.infoCodAberto && MAPA.muniByCod[MAPA.infoCodAberto]){
+      MAPA.info.setContent(muniInfoHtml(MAPA.muniByCod[MAPA.infoCodAberto]));
+    }
+  }
+
+  // Andamento dos testes de um município, respeitando o filtro de roteiro.
+  function aggMunicipio(m){
+    var fr = el('mRoteiro').value;
+    var locais = (m.locais||[]).filter(function(l){ return !fr || l.roteiro_rotulo === fr; });
+    var tt = 0; locais.forEach(function(l){ if (l.testado) tt++; });
+    return { temJunta: locais.length > 0, n: locais.length, testados: tt, locais: locais };
+  }
+
+  // Estilo de cada polígono da malha. Cor = categoria estrutural; nas categorias
+  // COM junta a opacidade cresce com o nº de locais testados (nenhum/parcial/todos).
+  //  sede_junta  roxo  ·  sede  amarelo  ·  termo_junta  verde  ·  termo  azul claro
+  function estiloFeature(feature){
+    if (!el('mDivisas').checked && !el('mPintar').checked) return { visible:false };
+    var m = MAPA.muniByCod[String(feature.getProperty('cod') || '')];
+    if (!el('mPintar').checked){
+      return { visible:true, fillColor:'#9AA3B2', fillOpacity:0.03,
+               strokeColor:'#B0B7C3', strokeWeight:0.6, clickable: !!m, zIndex:1 };
+    }
+    if (!m){
+      return { visible:true, fillColor:'#9AA3B2', fillOpacity:0.06,
+               strokeColor:'#B0B7C3', strokeWeight:0.5, clickable:false, zIndex:1 };
+    }
+    var a = aggMunicipio(m);
+    var RAMPA = [0.26, 0.42, 0.58];   // nenhum / parcial / todos os locais testados
+    var passo = !a.temJunta ? 0 : (a.testados === 0 ? 0 : (a.testados === a.n ? 2 : 1));
+    var hue, op, stroke, sw = 0.9, z = 2;
+    switch (m.categoria){
+      case 'sede_junta':  hue = '#6D3B9E'; op = RAMPA[passo]; stroke = '#4A2470'; sw = 2.0; z = 4; break;
+      case 'sede':        hue = '#E8B93E'; op = 0.50;         stroke = '#B8901F'; sw = 2.0; z = 3; break;
+      case 'termo_junta': hue = '#1B7F3B'; op = RAMPA[passo]; stroke = '#125C29'; sw = 1.1; z = 2; break;
+      case 'termo':       hue = '#123FA8'; op = 0.15;         stroke = '#5A78B8'; sw = 0.7; z = 1; break;
+      default:            hue = '#9AA3B2'; op = 0.10;         stroke = '#8A93A3'; sw = 0.6; z = 1;
+    }
+    return { visible:true, fillColor:hue, fillOpacity:op, strokeColor:stroke, strokeWeight:sw, clickable:true, zIndex:z };
+  }
+
+  function estilizarMalha(){ if (MAPA.malhaOk) MAPA.map.data.setStyle(estiloFeature); }
+  function renderMapa(){ estilizarMalha(); renderMapaPinos(); }
+
+  function renderMapaPinos(){
+    if (!MAPA.map || !MAPA.dados) return;
+    MAPA.pinos.forEach(function(m){ m.setMap(null); });
+    MAPA.pinos = [];
+    var fr = el('mRoteiro').value, fs = el('mStatus').value;
+    var bounds = new google.maps.LatLngBounds(), n = 0;
+    (MAPA.dados.pontos||[]).forEach(function(p){
+      if (fr && p.roteiro_rotulo !== fr) return;
+      if (fs === 'sim' && !p.testado) return;
+      if (fs === 'nao' && p.testado) return;
+      var mk = new google.maps.Marker({
+        position: { lat: p.lat, lng: p.lng }, map: MAPA.map, title: p.nome, zIndex: 9999,
+        icon: { path: google.maps.SymbolPath.CIRCLE, scale: 6.5,
+                fillColor: p.testado ? '#1B7F3B' : '#C0392B', fillOpacity: 1,
+                strokeColor: '#fff', strokeWeight: 1.5 }
+      });
+      mk.addListener('click', function(){ MAPA.infoCodAberto = null; MAPA.info.setContent(mapaInfoHtml(p)); MAPA.info.open(MAPA.map, mk); });
+      MAPA.pinos.push(mk);
+      bounds.extend(mk.getPosition());
+      n++;
+    });
+    var cSJ = 0, cS = 0, cTJ = 0;
+    Object.keys(MAPA.muniByCod).forEach(function(k){
+      var m = MAPA.muniByCod[k];
+      var temJ = aggMunicipio(m).temJunta;
+      if (m.categoria === 'sede_junta') cSJ++;
+      else if (m.categoria === 'sede') cS++;
+      else if (m.categoria === 'termo_junta' || (m.categoria === 'outro' && temJ)) cTJ++;
+    });
+    el('mContagem').textContent = (cSJ+cTJ) + ' município(s) com junta (' + cSJ + ' sede + ' + cTJ +
+      ' termo) · ' + cS + ' sede sem junta · ' + n + ' pino(s) do GEL';
+    if (n && !MAPA.enquadrou){ MAPA.map.fitBounds(bounds); MAPA.enquadrou = true;
+      if (n === 1) MAPA.map.setZoom(13); }
+  }
+
+  function mapaInfoHtml(p){
+    var L = [];
+    L.push('<div style="font-weight:700;margin-bottom:2px">'+esc(p.nome)+'</div>');
+    L.push('<div style="color:#5C6472;font-size:12px">'+esc(p.municipio)+' · ZE '+esc(p.zona)+
+           (p.tipo?(' · '+esc(p.tipo)):'')+'</div>');
+    if (p.roteiro_rotulo) L.push('<div style="font-size:12px;margin-top:3px">'+esc(p.roteiro_rotulo)+'</div>');
+    if (p.testado){
+      L.push('<div style="font-size:12px;margin-top:5px;color:#1B7F3B;font-weight:700">Testado'+
+             (p.quando?(' — '+esc(p.quando)):'')+'</div>');
+      if (p.tecnico) L.push('<div style="font-size:12px">Técnico: '+esc(p.tecnico)+'</div>');
+      if (p.conexao) L.push('<div style="font-size:12px">Conexão: '+esc(p.conexao)+'</div>');
+      if (p.download_mbps!=='' && p.download_mbps!=null)
+        L.push('<div style="font-size:12px">Download: '+fmt(p.download_mbps)+' Mbps</div>');
+    } else {
+      L.push('<div style="font-size:12px;margin-top:5px;color:#C0392B;font-weight:700">Ainda sem diagnóstico</div>');
+      if (p.tecnico_previsto) L.push('<div style="font-size:12px">Técnico previsto: '+esc(p.tecnico_previsto)+'</div>');
+    }
+    if (p.gel_em) L.push('<div style="font-size:11px;color:#5C6472;margin-top:4px">GEL de '+esc(p.gel_em)+'</div>');
+    if (p.pdf_url) L.push('<div style="font-size:12px;margin-top:4px"><a href="'+esc(p.pdf_url)+
+      '" target="_blank" rel="noopener">abrir relatório</a></div>');
+    return '<div style="min-width:190px;max-width:270px">'+L.join('')+'</div>';
+  }
+
+  function muniInfoHtml(m){
+    var a = aggMunicipio(m);
+    var L = [];
+    L.push('<div style="font-weight:700;margin-bottom:2px">'+esc(m.nome)+'</div>');
+    var sub = [];
+    var zs = m.ze_sede || [], zt = m.ze_termo || [];
+    if (zs.length) sub.push('Sede da'+(zs.length>1?'s ZE ':' ZE ')+esc(zs.join(', ')));
+    if (zt.length) sub.push('Termo da'+(zt.length>1?'s ZE ':' ZE ')+esc(zt.join(', '))+
+      (m.sede_nome ? (' <span style="color:#5C6472">(sede: '+esc(m.sede_nome)+')</span>') : ''));
+    L.push('<div style="color:#5C6472;font-size:12px">'+(sub.join(' · ')||'—')+'</div>');
+    (MAPA.vivoPorCod[m.cod] || []).forEach(function(v){
+      L.push('<div style="font-size:12px;color:#C0392B;font-weight:700;margin-top:4px">🔴 '+
+        esc(v.tecnico)+' diagnosticando'+(v.desde ? (' desde '+esc(v.desde)) : ' agora')+'</div>');
+    });
+
+    var ehSede = zs.length && !zt.length;
+    if (ehSede){
+      // SEDE: lista os municípios TERMO da(s) ZE, com badge nos que são junta especial
+      var ts = m.termos || [];
+      var comJ = ts.filter(function(t){ return t.junta; }).length;
+      L.push('<div style="font-size:12px;margin-top:5px;color:#5C6472">'+ts.length+' termo(s) · '+
+        comJ+' com junta especial</div>');
+      if (ts.length){
+        L.push('<div style="margin-top:5px;font-size:12px;max-height:180px;overflow:auto">');
+        ts.forEach(function(t){
+          var badge = t.junta
+            ? '<span style="background:#1B7F3B;color:#fff;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700;margin-left:6px">JUNTA'+
+              (t.n?(' '+t.testados+'/'+t.n):'')+'</span>'
+            : '';
+          L.push('<div style="padding:2px 0">'+esc(t.nome)+
+            (m.ze_sede.length>1?(' <span style="color:#5C6472">· ZE '+esc((t.zes||[]).join(', '))+'</span>'):'')+
+            badge+'</div>');
+        });
+        L.push('</div>');
+      }
+    } else {
+      // TERMO / outros: lista os locais de junta do município
+      L.push('<div style="font-size:12px;margin-top:4px">'+
+        (a.temJunta ? ('<b>'+a.testados+'/'+a.n+' local(is) testado(s)</b>')
+                    : ('<span style="color:#5C6472">sem junta especial'+(el('mRoteiro').value?' neste roteiro':'')+'</span>'))+'</div>');
+      if (a.locais.length){
+        L.push('<div style="margin-top:6px;font-size:12px">');
+        a.locais.forEach(function(l){
+          var cor = l.testado ? '#1B7F3B' : '#C0392B';
+          L.push('<div style="display:flex;align-items:center;gap:6px;padding:2px 0">' +
+            '<span style="width:8px;height:8px;border-radius:50%;background:'+cor+';flex:none"></span>' +
+            '<span>'+esc(l.nome)+' <span style="color:#5C6472">· ZE '+esc(l.zona)+
+            (l.tipo?(' · '+esc(l.tipo)):'')+(l.testado&&l.quando?(' · '+esc(l.quando)):'')+'</span></span></div>');
+        });
+        L.push('</div>');
+      }
+    }
+    return '<div style="min-width:200px;max-width:320px">'+L.join('')+'</div>';
   }
 
   /* ========================= ABA ACESSO (admin) ========================= */
