@@ -336,15 +336,21 @@ function _carregarPainelCorpo() {
 }
 
 /* ============================ MAPA ============================ */
-/* Aba "Mapa" da console: os Locais cujo formulario do GEL trouxe latitude/
- * longitude, plotados no Google Maps (com a malha municipal do IBGE -- ver
- * web/MalhaMA.gs / carregarMalhaMA). So' leitura, chamada por google.script.run
- * -> redeploy do Web App apenas (nao mexe em Codigo.gs > executar).
+/* Aba "Mapa" da console. So' leitura, chamada por google.script.run -> redeploy
+ * do Web App apenas (nao mexe em Codigo.gs > executar). Duas camadas:
  *
- * Coordenadas: (1) aba GEL, coluna gel_json (sync do desktop -- tela Coordenacao
- * ou campo); (2) reserva -- bloco vistoria_gel dentro do json transmitido na aba
- * Resultados. A chave do Maps JS fica na Script Property GOOGLE_MAPS_JS_KEY (so'
- * o George/GCP configura); sem ela a aba mostra um aviso e a lista de pendentes. */
+ *  - CHOROPLETH por municipio (malha do IBGE -- web/MalhaMA.gs / carregarMalhaMA):
+ *    cada municipio com junta e' pintado pelo andamento dos testes -- verde
+ *    (todos os locais testados) / laranja (parcial) / vermelho (nenhum); borda
+ *    amarela grossa quando o municipio e' sede de alguma ZE; cinza claro nos
+ *    demais. O de-para nome->codigo IBGE e' por nome normalizado (sem acento,
+ *    so' letras/numeros); nomes que nao casarem vao em `municipios_sem_codigo`.
+ *  - PINOS do GEL: Locais cujo formulario do GEL trouxe latitude/longitude
+ *    (1) aba GEL, coluna gel_json; (2) reserva -- bloco vistoria_gel do json
+ *    transmitido na aba Resultados. Ficam por cima do choropleth.
+ *
+ * A chave do Maps JS fica na Script Property GOOGLE_MAPS_JS_KEY (so' o George/GCP
+ * configura); sem ela a aba mostra um aviso e a contagem de pendentes. */
 
 // Caixa envolvente do Maranhao (folgada) -- descarta (0,0) e coordenada fora do estado.
 var WEB_MA_BBOX = { latMin: -10.6, latMax: -0.5, lonMin: -49.5, lonMax: -41.0 };
@@ -415,9 +421,86 @@ function _webCoordenadasGel() {
   return out;
 }
 
-// Uma chamada: acesso + os pontos (universo x coordenada do GEL x testado) + a
-// chave do Maps. Sem acesso -> { acesso, sem_acesso:true }. Corpo pesado em
-// cache de 60 s (a chave e o acesso vao frescos). `forcar` pula o cache.
+// Nome -> chave normalizada (minusculo, sem acento, so' [a-z0-9]) -- casa
+// "Pindaré-Mirim" com "pindare mirim", "Zé Doca" com "ze doca", etc.
+function _webNormNome(s) {
+  s = String(s == null ? '' : s);
+  try { s = s.normalize('NFD'); } catch (e) { /* V8 tem normalize */ }
+  var out = '';
+  for (var i = 0; i < s.length; i++) {
+    var c = s.charCodeAt(i);
+    if (c >= 0x300 && c <= 0x36f) continue;              // marca de acento (forma NFD)
+    var ch = s.charAt(i).toLowerCase();
+    if ((ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9')) out += ch;
+  }
+  return out;
+}
+
+// { normNome: {cod, nome} } a partir da malha do IBGE (carregarMalhaMA).
+// Memoizado na execucao (a malha tem ~135 KB).
+var _WEB_MALHA_IDX = null;
+function _webMalhaCodPorNome() {
+  if (_WEB_MALHA_IDX) return _WEB_MALHA_IDX;
+  var idx = {};
+  try {
+    var fc = JSON.parse(carregarMalhaMA());
+    (fc.features || []).forEach(function (f) {
+      var p = f.properties || {};
+      var k = _webNormNome(p.nome);
+      if (k) idx[k] = { cod: String(p.cod || ''), nome: String(p.nome || '') };
+    });
+  } catch (e) { /* sem malha -> so' pinos, sem choropleth */ }
+  _WEB_MALHA_IDX = idx;
+  return idx;
+}
+
+// Agrega o universo por municipio do IBGE: um item por municipio COM junta ou
+// que seja SEDE de alguma ZE. `locais[]` traz o suficiente pro cliente colorir
+// (verde/laranja/vermelho) e montar a janelinha. Nomes que nao casaram com a
+// malha voltam em `sem_codigo` (o admin avisa e a gente adiciona um apelido).
+function _webMunicipiosMapa(universo, testados) {
+  var idx = _webMalhaCodPorNome();
+  var muni = {}, semCodigo = {};
+  function ensure(cod, nome) {
+    if (!muni[cod]) muni[cod] = { cod: cod, nome: nome, eh_sede: false, zonas_sede: {}, locais: [] };
+    return muni[cod];
+  }
+  Object.keys(universo).forEach(function (id) {
+    var u = universo[id];
+    var mt = idx[_webNormNome(u.municipio)];
+    if (mt) {
+      var t = testados[id];
+      ensure(mt.cod, mt.nome).locais.push({
+        local_id: id, nome: u.nome || id, zona: String(u.zona || ''), tipo: u.tipo || '',
+        roteiro_rotulo: u.roteiro_rotulo || (u.roteiro ? ('Roteiro ' + u.roteiro) : ''),
+        testado: !!t, quando: t ? t.recebido_em : '', tecnico: t ? t.tecnico : ''
+      });
+    } else if (u.municipio) {
+      semCodigo[String(u.municipio)] = true;
+    }
+    var ms = idx[_webNormNome(u.sede)];
+    if (ms) {
+      var e = ensure(ms.cod, ms.nome);
+      e.eh_sede = true;
+      if (u.zona) e.zonas_sede[String(u.zona)] = true;
+    } else if (u.sede) {
+      semCodigo[String(u.sede)] = true;
+    }
+  });
+  var lista = Object.keys(muni).map(function (cod) {
+    var e = muni[cod];
+    return {
+      cod: e.cod, nome: e.nome, eh_sede: e.eh_sede,
+      zonas_sede: Object.keys(e.zonas_sede).sort(function (a, b) { return (+a) - (+b); }),
+      locais: e.locais
+    };
+  });
+  return { municipios: lista, sem_codigo: Object.keys(semCodigo).sort() };
+}
+
+// Uma chamada: acesso + choropleth por municipio + pinos do GEL + a chave do
+// Maps. Sem acesso -> { acesso, sem_acesso:true }. Corpo pesado em cache de 60 s
+// (a chave e o acesso vao frescos). `forcar` pula o cache.
 function carregarMapa(forcar) {
   var acesso = verificarAcesso();
   if (!acesso.papel) return { acesso: acesso, sem_acesso: true };
@@ -428,7 +511,7 @@ function carregarMapa(forcar) {
   var cache = null;
   try { cache = CacheService.getScriptCache(); } catch (e) { cache = null; }
   if (cache && !forcar) {
-    var hit = cache.get('mapa_v1');
+    var hit = cache.get('mapa_v2');
     if (hit) {
       try {
         var o = JSON.parse(hit);
@@ -442,6 +525,7 @@ function carregarMapa(forcar) {
   _webUniverso().forEach(function (u) { universo[u.local_id] = u; });
   var testados = _webTestados();
   var coords = _webCoordenadasGel();
+  var mm = _webMunicipiosMapa(universo, testados);
 
   var pontos = [];
   Object.keys(coords).forEach(function (id) {
@@ -473,12 +557,14 @@ function carregarMapa(forcar) {
 
   var corpo = {
     pontos: pontos,
+    municipios: mm.municipios,
+    municipios_sem_codigo: mm.sem_codigo,
     total_universo: Object.keys(universo).length,
     com_coord: pontos.length,
     gerado_em: new Date().toISOString()
   };
   if (cache) {
-    try { var s = JSON.stringify(corpo); if (s.length < 95000) cache.put('mapa_v1', s, 60); } catch (e) { /* cache e' opcional */ }
+    try { var s = JSON.stringify(corpo); if (s.length < 95000) cache.put('mapa_v2', s, 60); } catch (e) { /* cache e' opcional */ }
   }
   corpo.acesso = acesso;
   corpo.ambiente = _webAmbiente();

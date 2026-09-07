@@ -86,6 +86,11 @@
   .acbtn:hover { background:#E7ECF3; }
   .acbtn.rem:hover { background:#F6E3E1; color:#a3320f; }
 
+  .mleg { display:flex; flex-wrap:wrap; gap:6px 16px; margin-top:10px; font-size:11.5px; color:var(--tinta2); }
+  .mleg span { display:flex; align-items:center; gap:6px; }
+  .mleg i { width:14px; height:10px; border-radius:2px; flex:none; display:inline-block; }
+  .mleg i.pin { width:11px; height:11px; border-radius:50%; border:1.5px solid #fff; box-shadow:0 0 0 1px rgba(0,0,0,.15); }
+
   [hidden] { display:none !important; }
 </style>
 </head>
@@ -170,23 +175,32 @@
     <div id="mapa" hidden>
       <div class="card">
         <div class="filtros">
-          <select id="mRoteiro" onchange="renderMapaPinos()"><option value="">Todos os roteiros</option></select>
+          <select id="mRoteiro" onchange="renderMapa()"><option value="">Todos os roteiros</option></select>
           <select id="mStatus" onchange="renderMapaPinos()">
-            <option value="">Testados e pendentes</option>
-            <option value="sim">Só testados</option>
-            <option value="nao">Só pendentes</option>
+            <option value="">Pinos: testados e pendentes</option>
+            <option value="sim">Pinos: só testados</option>
+            <option value="nao">Pinos: só pendentes</option>
           </select>
           <label class="lbl" style="align-self:center;display:flex;align-items:center;gap:6px;text-transform:none;letter-spacing:0;color:var(--tinta2)">
-            <input type="checkbox" id="mDivisas" checked onchange="aplicarDivisas()"> divisas de município
+            <input type="checkbox" id="mPintar" checked onchange="estilizarMalha()"> pintar municípios por status
+          </label>
+          <label class="lbl" style="align-self:center;display:flex;align-items:center;gap:6px;text-transform:none;letter-spacing:0;color:var(--tinta2)">
+            <input type="checkbox" id="mDivisas" checked onchange="estilizarMalha()"> mostrar divisas
           </label>
           <span id="mContagem" class="lbl" style="align-self:center;color:var(--tinta2)"></span>
         </div>
         <div id="mapAviso" hidden style="padding:12px 14px;background:#FDF6E3;border:1px solid #E8D9A8;border-radius:8px;font-size:13px;line-height:1.5;margin-bottom:12px"></div>
         <div id="gmap" style="width:100%;height:64vh;border:1px solid var(--hair);border-radius:8px;background:#EEF1F5"></div>
-        <div class="lbl" style="margin-top:8px;text-transform:none;letter-spacing:0;color:var(--tinta2);line-height:1.5">
-          Pino <b style="color:var(--verde)">verde</b> = local já testado · <b style="color:#C0392B">vermelho</b> = ainda sem diagnóstico.
-          Só aparecem os locais cujo formulário do GEL trouxe latitude/longitude.
+        <div class="mleg">
+          <span><i style="background:#1B7F3B"></i> junta 100% testada</span>
+          <span><i style="background:#E8873E"></i> parcialmente testada</span>
+          <span><i style="background:#C0392B"></i> nenhum local testado</span>
+          <span><i style="background:transparent;border:2px solid #E8B93E"></i> sede de ZE</span>
+          <span><i style="background:#9AA3B2;opacity:.35"></i> município sem junta</span>
+          <span><i class="pin" style="background:var(--verde)"></i> local testado (GEL c/ coord.)</span>
+          <span><i class="pin" style="background:#C0392B"></i> local pendente (GEL c/ coord.)</span>
         </div>
+        <div id="mSemCod" hidden class="lbl" style="margin-top:6px;text-transform:none;letter-spacing:0;color:#a3320f;line-height:1.5"></div>
       </div>
     </div>
 
@@ -508,7 +522,7 @@
   /* ============================== ABA MAPA ============================== */
 
   var MAPA = { dados:null, map:null, info:null, pinos:[], gmapsPromise:null,
-               divisasOk:false, enquadrou:false };
+               malhaOk:false, muniByCod:{}, enquadrou:false };
 
   function abrirMapa(){
     if (MAPA.map){
@@ -522,7 +536,7 @@
       .withSuccessHandler(onMapaDados)
       .withFailureHandler(function(e){
         el('mContagem').textContent = '';
-        mapaAviso('<b>Erro ao carregar os pontos.</b> ' + esc((e&&e.message)||e));
+        mapaAviso('<b>Erro ao carregar o mapa.</b> ' + esc((e&&e.message)||e));
       })
       .carregarMapa(false);
   }
@@ -533,13 +547,24 @@
     if (!d || d.sem_acesso) return;
     MAPA.dados = d;
 
+    MAPA.muniByCod = {};
+    (d.municipios||[]).forEach(function(m){ MAPA.muniByCod[String(m.cod)] = m; });
+
     var sel = el('mRoteiro'); sel.length = 1;
     var rots = {};
+    (d.municipios||[]).forEach(function(m){ (m.locais||[]).forEach(function(l){ if (l.roteiro_rotulo) rots[l.roteiro_rotulo] = true; }); });
     (d.pontos||[]).forEach(function(p){ if (p.roteiro_rotulo) rots[p.roteiro_rotulo] = true; });
     Object.keys(rots).sort().forEach(function(r){
       var o = document.createElement('option'); o.value = r; o.textContent = r; sel.appendChild(o);
     });
-    el('mContagem').textContent = (d.com_coord||0) + ' de ' + (d.total_universo||0) + ' locais com coordenada';
+
+    var sc = d.municipios_sem_codigo || [];
+    if (sc.length){
+      el('mSemCod').hidden = false;
+      el('mSemCod').textContent = sc.length + ' município(s) não casaram com o mapa (ficam sem preenchimento): ' + sc.join(', ') + '.';
+    } else { el('mSemCod').hidden = true; }
+
+    el('mContagem').textContent = (d.municipios||[]).length + ' município(s) no recorte';
 
     if (!d.maps_key){
       mapaAviso('<b>Mapa ainda não disponível.</b> A chave da API do Google Maps não foi configurada ' +
@@ -577,32 +602,62 @@
         mapTypeControl: true, mapTypeControlOptions: { mapTypeIds: ['roadmap','hybrid','terrain'] }
       });
       MAPA.info = new google.maps.InfoWindow();
-      carregarDivisas();
+      carregarMalha();
     }
-    renderMapaPinos();
+    renderMapa();
   }
 
-  function carregarDivisas(){
+  function carregarMalha(){
     google.script.run
       .withSuccessHandler(function(txt){
         try {
           MAPA.map.data.addGeoJson(JSON.parse(txt));
-          MAPA.divisasOk = true;
-          aplicarDivisas();
-        } catch(e){ /* silencioso — o mapa funciona sem as divisas */ }
+          MAPA.malhaOk = true;
+          MAPA.map.data.setStyle(estiloFeature);
+          MAPA.map.data.addListener('click', function(e){
+            var cod = String(e.feature.getProperty('cod') || '');
+            var m = MAPA.muniByCod[cod];
+            if (!m) return;
+            MAPA.info.setContent(muniInfoHtml(m));
+            MAPA.info.setPosition(e.latLng);
+            MAPA.info.open(MAPA.map);
+          });
+        } catch(e){ /* silencioso — o mapa funciona sem a malha */ }
       })
       .withFailureHandler(function(){})
       .carregarMalhaMA();
   }
 
-  function aplicarDivisas(){
-    if (!MAPA.divisasOk) return;
-    MAPA.map.data.setStyle({
-      visible: el('mDivisas').checked,
-      fillColor: '#123FA8', fillOpacity: 0.03,
-      strokeColor: '#1F4E79', strokeWeight: 0.7, clickable: false
-    });
+  // Andamento dos testes de um município, respeitando o filtro de roteiro.
+  function aggMunicipio(m){
+    var fr = el('mRoteiro').value;
+    var locais = (m.locais||[]).filter(function(l){ return !fr || l.roteiro_rotulo === fr; });
+    var tt = 0; locais.forEach(function(l){ if (l.testado) tt++; });
+    return { temJunta: locais.length > 0, n: locais.length, testados: tt, locais: locais };
   }
+
+  // Estilo de cada polígono da malha (choropleth por status + borda de sede).
+  function estiloFeature(feature){
+    if (!el('mDivisas').checked && !el('mPintar').checked) return { visible:false };
+    var m = MAPA.muniByCod[String(feature.getProperty('cod') || '')];
+    if (!el('mPintar').checked || !m){
+      return { visible:true, fillColor:'#9AA3B2', fillOpacity: m ? 0.05 : 0.03,
+               strokeColor:'#B0B7C3', strokeWeight:0.6, clickable: !!m, zIndex:1 };
+    }
+    var a = aggMunicipio(m);
+    var fill = '#9AA3B2', op = 0.10, sw = 0.8, stroke = '#8A93A3', z = 1;
+    if (a.temJunta){
+      if (a.testados === 0)        { fill = '#C0392B'; op = 0.34; }
+      else if (a.testados === a.n) { fill = '#1B7F3B'; op = 0.40; }
+      else                        { fill = '#E8873E'; op = 0.42; }
+      stroke = '#1F4E79'; sw = 1.0; z = 2;
+    }
+    if (m.eh_sede){ stroke = '#E8B93E'; sw = 2.6; z = 3; }
+    return { visible:true, fillColor:fill, fillOpacity:op, strokeColor:stroke, strokeWeight:sw, clickable:true, zIndex:z };
+  }
+
+  function estilizarMalha(){ if (MAPA.malhaOk) MAPA.map.data.setStyle(estiloFeature); }
+  function renderMapa(){ estilizarMalha(); renderMapaPinos(); }
 
   function renderMapaPinos(){
     if (!MAPA.map || !MAPA.dados) return;
@@ -615,7 +670,7 @@
       if (fs === 'sim' && !p.testado) return;
       if (fs === 'nao' && p.testado) return;
       var mk = new google.maps.Marker({
-        position: { lat: p.lat, lng: p.lng }, map: MAPA.map, title: p.nome,
+        position: { lat: p.lat, lng: p.lng }, map: MAPA.map, title: p.nome, zIndex: 9999,
         icon: { path: google.maps.SymbolPath.CIRCLE, scale: 6.5,
                 fillColor: p.testado ? '#1B7F3B' : '#C0392B', fillOpacity: 1,
                 strokeColor: '#fff', strokeWeight: 1.5 }
@@ -625,8 +680,9 @@
       bounds.extend(mk.getPosition());
       n++;
     });
-    el('mContagem').textContent = n + ' ponto(s) no mapa · ' +
-      (MAPA.dados.com_coord||0) + ' de ' + (MAPA.dados.total_universo||0) + ' locais com coordenada';
+    var comJunta = 0;
+    Object.keys(MAPA.muniByCod).forEach(function(k){ if (aggMunicipio(MAPA.muniByCod[k]).temJunta) comJunta++; });
+    el('mContagem').textContent = comJunta + ' município(s) com junta · ' + n + ' pino(s) do GEL';
     if (n && !MAPA.enquadrou){ MAPA.map.fitBounds(bounds); MAPA.enquadrou = true;
       if (n === 1) MAPA.map.setZoom(13); }
   }
@@ -652,6 +708,28 @@
     if (p.pdf_url) L.push('<div style="font-size:12px;margin-top:4px"><a href="'+esc(p.pdf_url)+
       '" target="_blank" rel="noopener">abrir relatório</a></div>');
     return '<div style="min-width:190px;max-width:270px">'+L.join('')+'</div>';
+  }
+
+  function muniInfoHtml(m){
+    var a = aggMunicipio(m);
+    var L = [];
+    L.push('<div style="font-weight:700;margin-bottom:2px">'+esc(m.nome)+'</div>');
+    var sub = [];
+    if (m.eh_sede) sub.push('Sede ZE '+esc((m.zonas_sede||[]).join(', ')));
+    sub.push(a.temJunta ? (a.testados+'/'+a.n+' local(is) testado(s)') : 'sem junta neste recorte');
+    L.push('<div style="color:#5C6472;font-size:12px">'+sub.join(' · ')+'</div>');
+    if (a.locais.length){
+      L.push('<div style="margin-top:6px;font-size:12px">');
+      a.locais.forEach(function(l){
+        var cor = l.testado ? '#1B7F3B' : '#C0392B';
+        L.push('<div style="display:flex;align-items:center;gap:6px;padding:2px 0">' +
+          '<span style="width:8px;height:8px;border-radius:50%;background:'+cor+';flex:none"></span>' +
+          '<span>'+esc(l.nome)+' <span style="color:#5C6472">· ZE '+esc(l.zona)+
+          (l.tipo?(' · '+esc(l.tipo)):'')+(l.testado&&l.quando?(' · '+esc(l.quando)):'')+'</span></span></div>');
+      });
+      L.push('</div>');
+    }
+    return '<div style="min-width:200px;max-width:300px">'+L.join('')+'</div>';
   }
 
   /* ========================= ABA ACESSO (admin) ========================= */
