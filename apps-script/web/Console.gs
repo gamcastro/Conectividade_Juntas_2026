@@ -877,6 +877,17 @@ function carregarAoVivo() {
     return (a.minutos == null ? 1e9 : a.minutos) - (b.minutos == null ? 1e9 : b.minutos);
   });
 
+  // Codigo IBGE do municipio onde cada tecnico ONLINE esta' diagnosticando (pro
+  // ponto pulsante da aba Mapa). So' resolve a malha se houver alguem ativo.
+  if (presencas.some(function (p) { return p.online && p.municipio_atual; })) {
+    var mi = _webMalhaCodPorNome();
+    presencas.forEach(function (p) {
+      if (!p.municipio_atual) return;
+      var mm = mi[_webNormNome(p.municipio_atual)];
+      p.municipio_cod = mm ? mm.cod : '';
+    });
+  }
+
   var evs = _webLerAba(ss, 'Eventos');
   var feed = evs.slice(-100).reverse().map(function (e) {
     return {

@@ -90,6 +90,15 @@
   .mleg span { display:flex; align-items:center; gap:6px; }
   .mleg i { width:14px; height:10px; border-radius:2px; flex:none; display:inline-block; }
   .mleg i.pin { width:11px; height:11px; border-radius:50%; border:1.5px solid #fff; box-shadow:0 0 0 1px rgba(0,0,0,.15); }
+  .mleg i.live { width:11px; height:11px; border-radius:50%; background:#C0392B; border:1.5px solid #fff;
+                 box-shadow:0 0 0 3px rgba(192,57,43,.35); }
+
+  .pulsedot { position:absolute; transform:translate(-50%,-50%); pointer-events:none; z-index:6; }
+  .pulsedot i { position:absolute; left:-6px; top:-6px; width:12px; height:12px; border-radius:50%; display:block; }
+  .pulsedot .core { background:#C0392B; border:2px solid #fff; box-shadow:0 0 2px rgba(0,0,0,.5); }
+  .pulsedot .ring { background:rgba(192,57,43,.5); animation:pdpulse 1.7s ease-out infinite; }
+  @keyframes pdpulse { 0%{transform:scale(1);opacity:.75} 70%{transform:scale(4.2);opacity:0} 100%{opacity:0} }
+  @media (prefers-reduced-motion:reduce){ .pulsedot .ring{ animation:none; opacity:.35; transform:scale(2.4); } }
 
   [hidden] { display:none !important; }
 </style>
@@ -199,6 +208,7 @@
           <span style="opacity:.85">tom mais forte = mais locais testados</span>
           <span><i class="pin" style="background:var(--verde)"></i> local testado (GEL c/ coord.)</span>
           <span><i class="pin" style="background:#C0392B"></i> local pendente (GEL c/ coord.)</span>
+          <span><i class="live"></i> diagnóstico em campo agora</span>
         </div>
         <div id="mSemCod" hidden class="lbl" style="margin-top:6px;text-transform:none;letter-spacing:0;color:#a3320f;line-height:1.5"></div>
       </div>
@@ -377,7 +387,7 @@
     el('rel').hidden       = (t!=='rel');
     el('acesso').hidden    = (t!=='acesso');
     if (t==='vivo') { carregarVivo(); iniciarVivoTimer(); } else { pararVivoTimer(); }
-    if (t==='mapa') { abrirMapa(); }
+    if (t==='mapa') { abrirMapa(); iniciarVivoMapa(); } else { pararVivoMapa(); }
     if (t==='rel')  { atualizarBotaoRel(); carregarRelHist(); }
     if (t==='acesso') { carregarAcesso(); }
   }
@@ -522,7 +532,8 @@
   /* ============================== ABA MAPA ============================== */
 
   var MAPA = { dados:null, map:null, info:null, pinos:[], gmapsPromise:null,
-               malhaOk:false, muniByCod:{}, enquadrou:false };
+               malhaOk:false, muniByCod:{}, enquadrou:false,
+               centroPorCod:null, pulsos:[], vivoPorCod:{}, vivoTimer:null, PulseOverlay:null };
 
   function abrirMapa(){
     if (MAPA.map){
@@ -618,14 +629,99 @@
             var cod = String(e.feature.getProperty('cod') || '');
             var m = MAPA.muniByCod[cod];
             if (!m) return;
+            MAPA.infoCodAberto = cod;
             MAPA.info.setContent(muniInfoHtml(m));
             MAPA.info.setPosition(e.latLng);
             MAPA.info.open(MAPA.map);
           });
+          MAPA.info.addListener('closeclick', function(){ MAPA.infoCodAberto = null; });
+          // centroide de cada município (p/ o ponto pulsante de "diagnóstico agora")
+          MAPA.centroPorCod = {};
+          MAPA.map.data.forEach(function(f){
+            var cod = String(f.getProperty('cod') || ''); if (!cod) return;
+            var sx = 0, sy = 0, nn = 0;
+            f.getGeometry().forEachLatLng(function(ll){ sx += ll.lng(); sy += ll.lat(); nn++; });
+            if (nn) MAPA.centroPorCod[cod] = { lat: sy/nn, lng: sx/nn };
+          });
+          carregarVivoMapa();
         } catch(e){ /* silencioso — o mapa funciona sem a malha */ }
       })
       .withFailureHandler(function(){})
       .carregarMalhaMA();
+  }
+
+  /* --- diagnóstico em campo AGORA: ponto pulsante + linha na janelinha --- */
+  function ensurePulseClass(){
+    if (MAPA.PulseOverlay) return;
+    function P(latlng, map){ this.pos = latlng; this.div = null; this.setMap(map); }
+    P.prototype = new google.maps.OverlayView();
+    P.prototype.onAdd = function(){
+      var d = document.createElement('div');
+      d.className = 'pulsedot';
+      d.innerHTML = '<i class="ring"></i><i class="core"></i>';
+      this.div = d;
+      this.getPanes().overlayMouseTarget.appendChild(d);
+    };
+    P.prototype.draw = function(){
+      if (!this.div) return;
+      var pt = this.getProjection().fromLatLngToDivPixel(this.pos);
+      this.div.style.left = pt.x + 'px';
+      this.div.style.top = pt.y + 'px';
+    };
+    P.prototype.onRemove = function(){
+      if (this.div && this.div.parentNode) this.div.parentNode.removeChild(this.div);
+      this.div = null;
+    };
+    MAPA.PulseOverlay = P;
+  }
+
+  function iniciarVivoMapa(){
+    pararVivoMapa();
+    carregarVivoMapa();
+    MAPA.vivoTimer = setInterval(function(){ if (TAB === 'mapa') carregarVivoMapa(); }, 25000);
+  }
+  function pararVivoMapa(){ if (MAPA.vivoTimer){ clearInterval(MAPA.vivoTimer); MAPA.vivoTimer = null; } }
+
+  function carregarVivoMapa(){
+    if (!MAPA.map || !MAPA.centroPorCod) return;
+    google.script.run
+      .withSuccessHandler(function(d){
+        if (!d || d.sem_acesso) return;
+        var evs = d.eventos || [];
+        var ativos = (d.presencas || []).filter(function(p){
+          return p.online && p.municipio_atual && p.municipio_cod;
+        }).map(function(p){
+          // "desde": 1º iniciou_diagnostico desse técnico no feed (mais recente primeiro)
+          var desde = '';
+          for (var i = 0; i < evs.length; i++){
+            if (evs[i].tipo === 'iniciou_diagnostico' && evs[i].tecnico === p.tecnico){ desde = evs[i].hora; break; }
+          }
+          return { cod: String(p.municipio_cod), tecnico: p.tecnico || p.email || 'técnico',
+                   desde: desde || p.ultimo_checkin || '' };
+        });
+        aplicarPulsos(ativos);
+      })
+      .withFailureHandler(function(){})
+      .carregarAoVivo();
+  }
+
+  function aplicarPulsos(ativos){
+    (MAPA.pulsos || []).forEach(function(o){ o.setMap(null); });
+    MAPA.pulsos = [];
+    MAPA.vivoPorCod = {};
+    (ativos || []).forEach(function(a){
+      if (!MAPA.centroPorCod[a.cod]) return;
+      (MAPA.vivoPorCod[a.cod] = MAPA.vivoPorCod[a.cod] || []).push({ tecnico: a.tecnico, desde: a.desde });
+    });
+    if (Object.keys(MAPA.vivoPorCod).length) ensurePulseClass();
+    Object.keys(MAPA.vivoPorCod).forEach(function(cod){
+      var c = MAPA.centroPorCod[cod];
+      MAPA.pulsos.push(new MAPA.PulseOverlay(new google.maps.LatLng(c.lat, c.lng), MAPA.map));
+    });
+    // se a janelinha de um município ativo estiver aberta, atualiza o texto
+    if (MAPA.infoCodAberto && MAPA.muniByCod[MAPA.infoCodAberto]){
+      MAPA.info.setContent(muniInfoHtml(MAPA.muniByCod[MAPA.infoCodAberto]));
+    }
   }
 
   // Andamento dos testes de um município, respeitando o filtro de roteiro.
@@ -683,7 +779,7 @@
                 fillColor: p.testado ? '#1B7F3B' : '#C0392B', fillOpacity: 1,
                 strokeColor: '#fff', strokeWeight: 1.5 }
       });
-      mk.addListener('click', function(){ MAPA.info.setContent(mapaInfoHtml(p)); MAPA.info.open(MAPA.map, mk); });
+      mk.addListener('click', function(){ MAPA.infoCodAberto = null; MAPA.info.setContent(mapaInfoHtml(p)); MAPA.info.open(MAPA.map, mk); });
       MAPA.pinos.push(mk);
       bounds.extend(mk.getPosition());
       n++;
@@ -735,6 +831,10 @@
     if (zt.length) sub.push('Termo da'+(zt.length>1?'s ZE ':' ZE ')+esc(zt.join(', '))+
       (m.sede_nome ? (' <span style="color:#5C6472">(sede: '+esc(m.sede_nome)+')</span>') : ''));
     L.push('<div style="color:#5C6472;font-size:12px">'+(sub.join(' · ')||'—')+'</div>');
+    (MAPA.vivoPorCod[m.cod] || []).forEach(function(v){
+      L.push('<div style="font-size:12px;color:#C0392B;font-weight:700;margin-top:4px">🔴 '+
+        esc(v.tecnico)+' diagnosticando'+(v.desde ? (' desde '+esc(v.desde)) : ' agora')+'</div>');
+    });
 
     var ehSede = zs.length && !zt.length;
     if (ehSede){
