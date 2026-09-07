@@ -465,7 +465,7 @@ var WEB_ZE_SHEET = '1_2aZhFgplRqCdPVV_lq4XJT9wgqkfbZpEFZRu1Zu9_I';
 var WEB_ZE_ABA   = 'Zonas e Termos';
 function _webEstruturaZE() {
   var idx = _webMalhaCodPorNome();
-  var out = { porCod: {}, sem_codigo: {} };
+  var out = { porCod: {}, porZE: {}, sem_codigo: {} };
   var tok = _tokenServico(), rows;
   try { rows = _sheetsGetValores(tok, WEB_ZE_SHEET, "'" + WEB_ZE_ABA + "'"); }
   catch (e1) {
@@ -498,11 +498,16 @@ function _webEstruturaZE() {
     if (sede && !ms) out.sem_codigo[sede] = true;
     if (termo && !mt) out.sem_codigo[termo] = true;
     if (ms) { var es = ensure(ms.cod, ms.nome); if (ze) es.ze_sede[ze] = true; }
+    if (ze && ms) { (out.porZE[ze] = out.porZE[ze] || { termos: {} }).sede_cod = ms.cod; }
     // termo so' quando for municipio DIFERENTE da sede
     if (mt && (!ms || mt.cod !== ms.cod)) {
       var et = ensure(mt.cod, mt.nome);
       if (ze) et.ze_termo[ze] = true;
       if (sede) et.sede_nome = ms ? ms.nome : sede;   // nome canonico do IBGE quando casou
+      if (ze) {
+        var pz = (out.porZE[ze] = out.porZE[ze] || { termos: {} });
+        pz.termos[mt.cod] = { cod: mt.cod, nome: mt.nome };
+      }
     }
   }
   return out;
@@ -553,7 +558,7 @@ function _webMunicipiosMapa(universo, testados) {
     var ehTermo = zesTermo.length > 0;
     var proprios = juntaLocais[cod] || [];
 
-    var categoria, locais;
+    var categoria, locais, termos = [];
     if (ehSede) {
       // locais de todas as ZEs de que este municipio e' sede (+ os proprios), sem repetir
       var vistos = {}, acc = [];
@@ -561,6 +566,29 @@ function _webMunicipiosMapa(universo, testados) {
         .forEach(function (l) { if (!vistos[l.local_id]) { vistos[l.local_id] = 1; acc.push(l); } });
       locais = acc;
       categoria = acc.length ? 'sede_junta' : 'sede';
+
+      // municipios TERMO das ZEs desta sede, com flag/contagem de junta
+      var tm = {};
+      zesSede.forEach(function (z) {
+        var pz = est.porZE[z]; if (!pz || !pz.termos) return;
+        Object.keys(pz.termos).forEach(function (tc) {
+          var t = tm[tc] || (tm[tc] = { cod: tc, nome: pz.termos[tc].nome, zes: {}, junta: false, n: 0, testados: 0 });
+          t.zes[z] = true;
+          var lc = juntaLocais[tc] || [];
+          if (lc.length) {
+            t.junta = true; t.n = lc.length;
+            t.testados = lc.filter(function (l) { return l.testado; }).length;
+          }
+        });
+      });
+      termos = Object.keys(tm).map(function (tc) {
+        var t = tm[tc];
+        return { cod: t.cod, nome: t.nome, junta: t.junta, n: t.n, testados: t.testados,
+                 zes: Object.keys(t.zes).sort(function (a, b) { return (+a) - (+b); }) };
+      }).sort(function (a, b) {
+        if (a.junta !== b.junta) return a.junta ? -1 : 1;
+        return a.nome < b.nome ? -1 : a.nome > b.nome ? 1 : 0;
+      });
     } else if (ehTermo) {
       locais = proprios;
       categoria = proprios.length ? 'termo_junta' : 'termo';
@@ -574,7 +602,7 @@ function _webMunicipiosMapa(universo, testados) {
       ze_sede: zesSede.sort(function (a, b) { return (+a) - (+b); }),
       ze_termo: zesTermo.sort(function (a, b) { return (+a) - (+b); }),
       sede_nome: e.sede_nome || '',
-      locais: locais
+      locais: locais, termos: termos
     };
   });
   return { municipios: lista, sem_codigo: Object.keys(semCodigo).sort() };
@@ -593,7 +621,7 @@ function carregarMapa(forcar) {
   var cache = null;
   try { cache = CacheService.getScriptCache(); } catch (e) { cache = null; }
   if (cache && !forcar) {
-    var hit = cache.get('mapa_v5');
+    var hit = cache.get('mapa_v6');
     if (hit) {
       try {
         var o = JSON.parse(hit);
@@ -646,7 +674,7 @@ function carregarMapa(forcar) {
     gerado_em: new Date().toISOString()
   };
   if (cache) {
-    try { var s = JSON.stringify(corpo); if (s.length < 95000) cache.put('mapa_v5', s, 60); } catch (e) { /* cache e' opcional */ }
+    try { var s = JSON.stringify(corpo); if (s.length < 95000) cache.put('mapa_v6', s, 60); } catch (e) { /* cache e' opcional */ }
   }
   corpo.acesso = acesso;
   corpo.ambiente = _webAmbiente();

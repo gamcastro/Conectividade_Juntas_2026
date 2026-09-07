@@ -735,22 +735,45 @@
     if (zt.length) sub.push('Termo da'+(zt.length>1?'s ZE ':' ZE ')+esc(zt.join(', '))+
       (m.sede_nome ? (' <span style="color:#5C6472">(sede: '+esc(m.sede_nome)+')</span>') : ''));
     L.push('<div style="color:#5C6472;font-size:12px">'+(sub.join(' · ')||'—')+'</div>');
-    var soSede = zs.length && !zt.length;   // clicou num municipio que e' sede
-    L.push('<div style="font-size:12px;margin-top:4px">'+
-      (a.temJunta ? ('<b>'+a.testados+'/'+a.n+' local(is) testado(s)</b>'+(soSede?' <span style="color:#5C6472">— junta(s) na(s) ZE desta sede</span>':''))
-                  : ('<span style="color:#5C6472">sem junta especial'+(el('mRoteiro').value?' neste roteiro':'')+'</span>'))+'</div>');
-    if (a.locais.length){
-      L.push('<div style="margin-top:6px;font-size:12px">');
-      a.locais.forEach(function(l){
-        var cor = l.testado ? '#1B7F3B' : '#C0392B';
-        L.push('<div style="display:flex;align-items:center;gap:6px;padding:2px 0">' +
-          '<span style="width:8px;height:8px;border-radius:50%;background:'+cor+';flex:none"></span>' +
-          '<span>'+esc(l.nome)+' <span style="color:#5C6472">· ZE '+esc(l.zona)+
-          (l.tipo?(' · '+esc(l.tipo)):'')+(l.testado&&l.quando?(' · '+esc(l.quando)):'')+'</span></span></div>');
-      });
-      L.push('</div>');
+
+    var ehSede = zs.length && !zt.length;
+    if (ehSede){
+      // SEDE: lista os municípios TERMO da(s) ZE, com badge nos que são junta especial
+      var ts = m.termos || [];
+      var comJ = ts.filter(function(t){ return t.junta; }).length;
+      L.push('<div style="font-size:12px;margin-top:5px;color:#5C6472">'+ts.length+' termo(s) · '+
+        comJ+' com junta especial</div>');
+      if (ts.length){
+        L.push('<div style="margin-top:5px;font-size:12px;max-height:180px;overflow:auto">');
+        ts.forEach(function(t){
+          var badge = t.junta
+            ? '<span style="background:#1B7F3B;color:#fff;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700;margin-left:6px">JUNTA'+
+              (t.n?(' '+t.testados+'/'+t.n):'')+'</span>'
+            : '';
+          L.push('<div style="padding:2px 0">'+esc(t.nome)+
+            (m.ze_sede.length>1?(' <span style="color:#5C6472">· ZE '+esc((t.zes||[]).join(', '))+'</span>'):'')+
+            badge+'</div>');
+        });
+        L.push('</div>');
+      }
+    } else {
+      // TERMO / outros: lista os locais de junta do município
+      L.push('<div style="font-size:12px;margin-top:4px">'+
+        (a.temJunta ? ('<b>'+a.testados+'/'+a.n+' local(is) testado(s)</b>')
+                    : ('<span style="color:#5C6472">sem junta especial'+(el('mRoteiro').value?' neste roteiro':'')+'</span>'))+'</div>');
+      if (a.locais.length){
+        L.push('<div style="margin-top:6px;font-size:12px">');
+        a.locais.forEach(function(l){
+          var cor = l.testado ? '#1B7F3B' : '#C0392B';
+          L.push('<div style="display:flex;align-items:center;gap:6px;padding:2px 0">' +
+            '<span style="width:8px;height:8px;border-radius:50%;background:'+cor+';flex:none"></span>' +
+            '<span>'+esc(l.nome)+' <span style="color:#5C6472">· ZE '+esc(l.zona)+
+            (l.tipo?(' · '+esc(l.tipo)):'')+(l.testado&&l.quando?(' · '+esc(l.quando)):'')+'</span></span></div>');
+        });
+        L.push('</div>');
+      }
     }
-    return '<div style="min-width:200px;max-width:300px">'+L.join('')+'</div>';
+    return '<div style="min-width:200px;max-width:320px">'+L.join('')+'</div>';
   }
 
   /* ========================= ABA ACESSO (admin) ========================= */
