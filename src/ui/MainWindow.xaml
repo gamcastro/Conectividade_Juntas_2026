@@ -1926,13 +1926,12 @@
 
                             <TextBlock Text="Sem&#225;foro do assistente de diagn&#243;stico" Style="{DynamicResource Rotulo}"
                                        Margin="0,14,0,4"/>
-                            <TextBlock Text="Quais dos 3 itens aparecem no sem&#225;foro do overlay de checagem (so' informa se rodou, nao a qualidade do resultado)."
+                            <TextBlock Text="Quais dos itens aparecem no sem&#225;foro do overlay de checagem (so' informa se rodou, nao a qualidade do resultado)."
                                        FontSize="11" Foreground="{DynamicResource Dicon.Text3}" TextWrapping="Wrap"
                                        Margin="0,0,0,6"/>
                             <StackPanel Orientation="Horizontal">
                                 <CheckBox x:Name="chkOverlayRedeLocal" Content="Rede local (sem VPN)" IsChecked="True" Margin="0,0,20,0"/>
-                                <CheckBox x:Name="chkOverlayVpn" Content="Diagn&#243;stico com a VPN" IsChecked="True" Margin="0,0,20,0"/>
-                                <CheckBox x:Name="chkOverlayTotalizacao" Content="Sistema de totaliza&#231;&#227;o" IsChecked="True"/>
+                                <CheckBox x:Name="chkOverlayVpn" Content="Diagn&#243;stico com a VPN" IsChecked="True"/>
                             </StackPanel>
 
                             <TextBlock Text="Sugest&#245;es de motivo (chips)" Style="{DynamicResource Rotulo}"
@@ -2045,7 +2044,7 @@
                         <TextBlock FontFamily="{DynamicResource Dicon.Display}" FontWeight="Bold" FontSize="21"
                                    Foreground="{DynamicResource Dicon.Text}"><Run Text="Checagem do meio &#8212; "/><Run
                                    x:Name="txtChkMeioTitulo" Text="LAN"/></TextBlock>
-                        <TextBlock Text="Fase 1 (rede local, sem VPN) &#8594; Fase 2 (com a VPN do TRE) &#8594; Sistema de totaliza&#231;&#227;o"
+                        <TextBlock Text="Fase 1 (rede local, sem VPN) &#8594; Fase 2 (com a VPN do TRE)"
                                    FontSize="11" Foreground="{DynamicResource Dicon.Text3}" Margin="0,2,0,12"/>
 
                         <StackPanel Margin="0,0,0,12">
@@ -2060,12 +2059,6 @@
                                          Margin="0,0,8,0" Fill="{DynamicResource Dicon.Text3}"/>
                                 <TextBlock x:Name="txtChkS2" FontSize="12" Foreground="{DynamicResource Dicon.Text2}"
                                            Text="2. Diagnostico com a VPN - pendente"/>
-                            </StackPanel>
-                            <StackPanel x:Name="rowChkS3" Orientation="Horizontal" Margin="0,4,0,0">
-                                <Ellipse x:Name="dotChkS3" Width="10" Height="10" VerticalAlignment="Center"
-                                         Margin="0,0,8,0" Fill="{DynamicResource Dicon.Text3}"/>
-                                <TextBlock x:Name="txtChkS3" FontSize="12" Foreground="{DynamicResource Dicon.Text3}"
-                                           Text="3. Sistema de totalizacao - em implementacao"/>
                             </StackPanel>
                         </StackPanel>
 
