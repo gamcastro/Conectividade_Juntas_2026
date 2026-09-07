@@ -47,34 +47,51 @@ function Save-ZipRemoto {
     return $false
 }
 
-# Extrai um .zip de forma resiliente:
-#  - System.IO.Compression (nao tem a limpeza interna que estoura no
-#    Expand-Archive do WinPS 5.1 com pacotes OPC / .nupkg);
-#  - Expand-Archive so' de reserva, engolindo o erro de limpeza;
-#  - retenta ao esbarrar em "arquivo em uso" (antivirus segurando um .gitattributes
-#    recem-extraido) e so' aceita quando extraiu TODAS as entradas.
+# Extrai um .zip/.nupkg de forma resiliente contra antivirus corporativo
+# (Trend/etc.) que trava arquivos recem-escritos:
+#  - itera entrada por entrada (System.IO.Compression), com retentativa por
+#    arquivo, e PULA os dotfiles do repo (.gitattributes/.gitignore/.git*) que
+#    o DICON nao usa e que sao justamente os que o AV costuma segurar;
+#  - tolera algumas falhas isoladas em vez de abortar tudo;
+#  - Expand-Archive so' de reserva (engole o erro de limpeza dos .nupkg).
 function Expand-ZipSafe {
     param([string] $Zip, [string] $Destino, [int] $Tentativas = 6)
-    $nEsperado = 0
-    try {
-        Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction Stop
-        $za = [System.IO.Compression.ZipFile]::OpenRead($Zip)
-        $nEsperado = @($za.Entries | Where-Object { $_.Name }).Count
-        $za.Dispose()
-    } catch { }
-    for ($t = 1; $t -le $Tentativas; $t++) {
-        if (Test-Path $Destino) { Remove-Item $Destino -Recurse -Force -ErrorAction SilentlyContinue }
-        New-Item -ItemType Directory -Path $Destino -Force | Out-Null
+    try { Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction Stop } catch { }
+    if (Test-Path $Destino) { Remove-Item $Destino -Recurse -Force -ErrorAction SilentlyContinue }
+    New-Item -ItemType Directory -Path $Destino -Force | Out-Null
+
+    $za = $null
+    try { $za = [System.IO.Compression.ZipFile]::OpenRead($Zip) } catch { $za = $null }
+    if ($za) {
+        $okCount = 0; $falhas = New-Object System.Collections.Generic.List[string]
         try {
-            [System.IO.Compression.ZipFile]::ExtractToDirectory($Zip, $Destino)
-        } catch {
-            try { Expand-Archive -Path $Zip -DestinationPath $Destino -Force -ErrorAction Stop } catch { }
-        }
-        $nExtraido = @(Get-ChildItem -Path $Destino -Recurse -File -ErrorAction SilentlyContinue).Count
-        if ($nExtraido -gt 0 -and ($nEsperado -eq 0 -or $nExtraido -ge $nEsperado)) { return }
-        if ($t -lt $Tentativas) { Start-Sleep -Seconds (2 * $t) }   # da tempo do antivirus soltar
+            foreach ($ent in $za.Entries) {
+                if (-not $ent.Name) { continue }                 # entrada de diretorio
+                if ($ent.Name -match '^\.git') { continue }      # .gitattributes/.gitignore/... -> pula
+                $alvo = Join-Path $Destino ($ent.FullName -replace '/', '\')
+                $dir  = Split-Path $alvo -Parent
+                if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+                $feito = $false
+                for ($t = 1; $t -le $Tentativas -and -not $feito; $t++) {
+                    try {
+                        [System.IO.Compression.ZipFileExtensions]::ExtractToFile($ent, $alvo, $true)
+                        $feito = $true; $okCount++
+                    } catch {
+                        if ($t -lt $Tentativas) { Start-Sleep -Milliseconds (250 * $t) }
+                    }
+                }
+                if (-not $feito) { $falhas.Add($ent.FullName) }
+            }
+        } finally { $za.Dispose() }
+        if ($falhas.Count) { Write-Host ("  [!]    {0} arquivo(s) nao extraido(s) (antivirus?): {1}" -f $falhas.Count, ($falhas -join ', ')) -ForegroundColor DarkYellow }
+        if ($okCount -gt 0) { return }
     }
-    throw ("nao consegui extrair " + (Split-Path $Zip -Leaf) + " -- arquivo em uso (antivirus?). Tente de novo.")
+
+    # reserva
+    try { Expand-Archive -Path $Zip -DestinationPath $Destino -Force -ErrorAction Stop } catch { }
+    if (Get-ChildItem -Path $Destino -Recurse -File -ErrorAction SilentlyContinue | Select-Object -First 1) { return }
+    throw ("nao consegui extrair " + (Split-Path $Zip -Leaf) + " -- o antivirus esta' bloqueando. " +
+           "Peca a exclusao de C:\Aplic e da pasta Temp no console do antivirus, ou instale o Git for Windows.")
 }
 
 # A pasta (ou o pai dela) e gravavel por este usuario?
