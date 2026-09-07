@@ -124,6 +124,19 @@
   - Só `google.script.run` → **redeploy do Web App apenas**. Setup GCP (chave
     Maps JS + faturamento + Script Property) documentado em `apps-script/CLASP.md`.
 
+- **Painel de TV — em homologação (v0.6.144)** 📺
+  - Rota `?app=tv` (`webConsolePagina` → `web/Tv.html`, ao lado de `?app=mobile`).
+    Tela cheia, tema escuro, sem interação (`disableDefaultUI`, `gestureHandling:'none'`),
+    unidades fluidas (`vh`/`vw`) pra 16:9.
+  - Reaproveita `carregarPainel` (KPIs: cobertura %, testados/total, pendentes,
+    em campo agora + barras por roteiro), `carregarMapa` + `carregarMalhaMA`
+    (choropleth escuro, mesmas 4 categorias) e `carregarAoVivo` (pontos pulsantes
+    com rótulo `técnico · município`, lista "Em campo agora", ticker de eventos).
+  - Refresh: painel + mapa a cada 90 s; ao vivo a cada 20 s. Sem botões que
+    alteram nada (WhatsApp/Ligar ficam só no console interativo).
+  - Uso: Chrome em modo quiosque numa conta de leitura (`tv-dicon@…` em prod;
+    a conta do próprio admin serve nos testes de homolog).
+
 ### ⚠️ Trava de escopo OAuth (vale para Fase 2 também)
 
 O projeto Apps Script é **compartilhado** entre a console (Web App) e a
