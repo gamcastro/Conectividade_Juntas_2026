@@ -192,11 +192,11 @@
         <div id="mapAviso" hidden style="padding:12px 14px;background:#FDF6E3;border:1px solid #E8D9A8;border-radius:8px;font-size:13px;line-height:1.5;margin-bottom:12px"></div>
         <div id="gmap" style="width:100%;height:64vh;border:1px solid var(--hair);border-radius:8px;background:#EEF1F5"></div>
         <div class="mleg">
+          <span><i style="background:#E8B93E"></i> sede de ZE</span>
           <span><i style="background:#1B7F3B"></i> junta 100% testada</span>
           <span><i style="background:#E8873E"></i> parcialmente testada</span>
           <span><i style="background:#C0392B"></i> nenhum local testado</span>
-          <span><i style="background:transparent;border:2px solid #E8B93E"></i> sede de ZE</span>
-          <span><i style="background:#9AA3B2;opacity:.35"></i> município sem junta</span>
+          <span><i style="background:#123FA8;opacity:.4"></i> município sem junta</span>
           <span><i class="pin" style="background:var(--verde)"></i> local testado (GEL c/ coord.)</span>
           <span><i class="pin" style="background:#C0392B"></i> local pendente (GEL c/ coord.)</span>
         </div>
@@ -636,24 +636,31 @@
     return { temJunta: locais.length > 0, n: locais.length, testados: tt, locais: locais };
   }
 
-  // Estilo de cada polígono da malha (choropleth por status + borda de sede).
+  // Estilo de cada polígono da malha.
+  //  sede de ZE ......... amarelo cheio (vence tudo)
+  //  junta ............... verde / laranja / vermelho pelo andamento
+  //  sem junta/sede ...... azul claro
   function estiloFeature(feature){
     if (!el('mDivisas').checked && !el('mPintar').checked) return { visible:false };
     var m = MAPA.muniByCod[String(feature.getProperty('cod') || '')];
-    if (!el('mPintar').checked || !m){
-      return { visible:true, fillColor:'#9AA3B2', fillOpacity: m ? 0.05 : 0.03,
+    if (!el('mPintar').checked){
+      return { visible:true, fillColor:'#9AA3B2', fillOpacity:0.03,
                strokeColor:'#B0B7C3', strokeWeight:0.6, clickable: !!m, zIndex:1 };
     }
-    var a = aggMunicipio(m);
-    var fill = '#9AA3B2', op = 0.10, sw = 0.8, stroke = '#8A93A3', z = 1;
-    if (a.temJunta){
-      if (a.testados === 0)        { fill = '#C0392B'; op = 0.34; }
-      else if (a.testados === a.n) { fill = '#1B7F3B'; op = 0.40; }
-      else                        { fill = '#E8873E'; op = 0.42; }
-      stroke = '#1F4E79'; sw = 1.0; z = 2;
+    var AZUL = { visible:true, fillColor:'#123FA8', fillOpacity:0.10,
+                 strokeColor:'#5A78B8', strokeWeight:0.6, clickable: !!m, zIndex:1 };
+    if (!m) return AZUL;
+    if (m.eh_sede){
+      return { visible:true, fillColor:'#E8B93E', fillOpacity:0.55,
+               strokeColor:'#B8901F', strokeWeight:2.2, clickable:true, zIndex:4 };
     }
-    if (m.eh_sede){ stroke = '#E8B93E'; sw = 2.6; z = 3; }
-    return { visible:true, fillColor:fill, fillOpacity:op, strokeColor:stroke, strokeWeight:sw, clickable:true, zIndex:z };
+    var a = aggMunicipio(m);
+    if (!a.temJunta) return AZUL;
+    var fill, op;
+    if (a.testados === 0)        { fill = '#C0392B'; op = 0.34; }
+    else if (a.testados === a.n) { fill = '#1B7F3B'; op = 0.40; }
+    else                        { fill = '#E8873E'; op = 0.42; }
+    return { visible:true, fillColor:fill, fillOpacity:op, strokeColor:'#1F4E79', strokeWeight:1.0, clickable:true, zIndex:2 };
   }
 
   function estilizarMalha(){ if (MAPA.malhaOk) MAPA.map.data.setStyle(estiloFeature); }
