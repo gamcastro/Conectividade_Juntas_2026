@@ -48,6 +48,15 @@ $linhaBat = ('@echo off' + "`r`n" +
 [IO.File]::WriteAllText($bat, $linhaBat, [Text.Encoding]::ASCII)
 Write-Host "  [ok]  lancador: $bat" -ForegroundColor Green
 
+# --- icone do DICON (baixa; se falhar, usa o do Chrome) -------------------
+$ico = Join-Path $dest 'dicon.ico'
+try {
+    [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+    Invoke-WebRequest -UseBasicParsing -TimeoutSec 60 `
+        -Uri 'https://raw.githubusercontent.com/gamcastro/Conectividade_Juntas_2026/main/assets/marca/dicon.ico' `
+        -OutFile $ico
+} catch { $ico = $null }
+
 # --- atalho .lnk (aponta pro .bat) ----------------------------------------
 function New-AtalhoLnk {
     param([string] $Lnk, [string] $Alvo, [string] $Icone)
@@ -64,7 +73,7 @@ function New-AtalhoLnk {
 }
 
 $nome  = 'Painel DICON TV.lnk'
-$icone = "$chrome,0"
+$icone = if ($ico -and (Test-Path $ico)) { $ico } else { "$chrome,0" }
 $feitos = New-Object System.Collections.Generic.List[string]
 
 # 1) Area de Trabalho de TODOS os usuarios (precisa admin)
