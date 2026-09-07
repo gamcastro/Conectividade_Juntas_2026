@@ -891,6 +891,32 @@ function _webTelE164(v) {
   return '+' + d;
 }
 
+// Por tecnico, a partir do feed de Eventos (ordem cronologica): tem um
+// diagnostico ABERTO agora? -> { '<tecnico>': { ativo, ts, desde } }. Ativo =
+// ultimo evento relevante e' 'iniciou_diagnostico', sem transmitiu/finalizou/
+// abandonou depois, e no maximo 3 h atras.
+function _webDiagAtivoPorTecnico(evsRaw) {
+  var LIM_MS = 3 * 60 * 60 * 1000;
+  var agora = Date.now();
+  var st = {};
+  (evsRaw || []).forEach(function (e) {
+    var tec = String(e['tecnico'] || '').trim();
+    if (!tec) return;
+    var tipo = String(e['tipo'] || '');
+    if (tipo === 'iniciou_diagnostico') {
+      var d = _webParseData(e['hora_servidor'] || e['hora_cliente']);
+      st[tec] = { ativo: true, ts: d ? d.getTime() : agora,
+                  desde: _webHora(e['hora_cliente'] || e['hora_servidor']) };
+    } else if (tipo === 'transmitiu' || tipo === 'finalizou' || tipo === 'abandonou') {
+      st[tec] = { ativo: false };
+    }
+  });
+  Object.keys(st).forEach(function (t) {
+    if (st[t].ativo && (agora - st[t].ts) > LIM_MS) st[t] = { ativo: false };
+  });
+  return st;
+}
+
 // Aba "Ao vivo" da console: presenca (online se <=10 min) + feed de eventos.
 function carregarAoVivo() {
   var acesso = verificarAcesso();
@@ -914,21 +940,31 @@ function carregarAoVivo() {
     return (a.minutos == null ? 1e9 : a.minutos) - (b.minutos == null ? 1e9 : b.minutos);
   });
 
+  var evs = _webLerAba(ss, 'Eventos');
+
+  // TRAVA: so' conta como "diagnosticando agora" (ponto pulsante do mapa) se o
+  // feed confirmar um 'iniciou_diagnostico' recente do tecnico, SEM encerramento
+  // depois e no maximo ~3 h atras -- senao um municipio_atual velho preso na
+  // Presenca (DICON fechado no tapa) ficaria pulsando pra sempre.
+  var diag = _webDiagAtivoPorTecnico(evs);
+  function _pDiag(p) { return diag[String(p.tecnico || '').trim()]; }
+
   // Codigo IBGE do municipio + telefone do tecnico -- pro ponto pulsante e o
-  // botao WhatsApp da aba Mapa. So' resolve se houver alguem ONLINE diagnosticando.
-  if (presencas.some(function (p) { return p.online && p.municipio_atual; })) {
+  // botao WhatsApp da aba Mapa. So' resolve se houver alguem ONLINE + diag ativo.
+  if (presencas.some(function (p) { var d = _pDiag(p); return p.online && p.municipio_atual && d && d.ativo; })) {
     var mi = _webMalhaCodPorNome();
     var tels = _webTelefonesTecnicos();
     presencas.forEach(function (p) {
-      if (!p.municipio_atual) return;
+      var d = _pDiag(p);
+      if (!p.municipio_atual || !d || !d.ativo) return;
       var mm = mi[_webNormNome(p.municipio_atual)];
       p.municipio_cod = mm ? mm.cod : '';
+      p.diag_desde = d.desde || '';
       p.telefone = tels['e:' + String(p.email || '').toLowerCase().trim()] ||
                    tels['n:' + _webNormNome(p.tecnico)] || '';
     });
   }
 
-  var evs = _webLerAba(ss, 'Eventos');
   var feed = evs.slice(-100).reverse().map(function (e) {
     return {
       hora: _webHora(e['hora_cliente'] || e['hora_servidor']),

@@ -701,10 +701,12 @@
         var ativos = (d.presencas || []).filter(function(p){
           return p.online && p.municipio_atual && p.municipio_cod;
         }).map(function(p){
-          // "desde": 1º iniciou_diagnostico desse técnico no feed (mais recente primeiro)
-          var desde = '';
-          for (var i = 0; i < evs.length; i++){
-            if (evs[i].tipo === 'iniciou_diagnostico' && evs[i].tecnico === p.tecnico){ desde = evs[i].hora; break; }
+          // "desde": vem do servidor (p.diag_desde); fallback = 1º iniciou_diagnostico do feed
+          var desde = p.diag_desde || '';
+          if (!desde){
+            for (var i = 0; i < evs.length; i++){
+              if (evs[i].tipo === 'iniciou_diagnostico' && evs[i].tecnico === p.tecnico){ desde = evs[i].hora; break; }
+            }
           }
           return { cod: String(p.municipio_cod), tecnico: p.tecnico || p.email || 'técnico',
                    desde: desde || p.ultimo_checkin || '', telefone: p.telefone || '' };
