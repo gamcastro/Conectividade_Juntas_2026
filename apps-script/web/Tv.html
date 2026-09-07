@@ -8,6 +8,13 @@
     --bg:#0A0E1A; --panel:#121829; --panel2:#0F1424; --hair:#26304A;
     --tinta:#EAEEF6; --tinta2:#8A97B2; --azul:#4C7DFF;
     --verde:#2ECC71; --laranja:#E8873E; --vermelho:#E74C3C; --roxo:#9B6DE0; --amarelo:#E8B93E;
+    --minibar:#0c1428; --mapbg:#0d1526; --labbg:rgba(12,18,38,.92);
+  }
+  :root[data-tema="claro"]{
+    --bg:#EEF1F6; --panel:#FFFFFF; --panel2:#F6F8FC; --hair:#D6DCEA;
+    --tinta:#141A24; --tinta2:#5C6678; --azul:#123FA8;
+    --verde:#1B8f4c; --laranja:#C56A22; --vermelho:#C0392B; --roxo:#6C43A6; --amarelo:#B8901F;
+    --minibar:#E3E8F2; --mapbg:#e7edf6; --labbg:rgba(255,255,255,.95);
   }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;height:100%;}
@@ -25,11 +32,14 @@
   header .sp{flex:1;}
   header .clock{font-variant-numeric:tabular-nums;font-weight:700;font-size:2vh;}
   header .fresh{color:var(--tinta2);font-size:1.2vh;margin-left:1vw;}
+  #temaBtn{background:transparent;border:1px solid var(--hair);color:var(--tinta2);cursor:pointer;
+           border-radius:.6vh;font-size:1.7vh;line-height:1;padding:.5vh .8vh;margin-right:1vw;}
+  #temaBtn:hover{color:var(--tinta);}
 
   main{flex:1;display:grid;grid-template-columns:1fr 30vw;gap:1vh 1vw;padding:1vh 1.6vw;min-height:0;}
-  #mapwrap{position:relative;border:1px solid var(--hair);border-radius:1vh;overflow:hidden;background:#0d1526;}
+  #mapwrap{position:relative;border:1px solid var(--hair);border-radius:1vh;overflow:hidden;background:var(--mapbg);}
   #gmap{position:absolute;inset:0;}
-  #mapaviso{position:absolute;left:2vh;right:2vh;top:2vh;background:#20283f;border:1px solid var(--hair);
+  #mapaviso{position:absolute;left:2vh;right:2vh;top:2vh;background:var(--panel);border:1px solid var(--hair);
             border-radius:1vh;padding:1.6vh;font-size:1.5vh;line-height:1.5;}
 
   aside{display:flex;flex-direction:column;gap:1vh;min-height:0;}
@@ -42,7 +52,7 @@
   .kpi .lbl{font-size:1.2vh;color:var(--tinta2);margin-top:.4vh;}
   .kpi.cob .big{color:var(--verde);} .kpi.pend .big{color:var(--laranja);}
   .kpi.campo .big{color:var(--azul);}
-  .barwrap{height:.9vh;background:#0c1428;border-radius:99px;overflow:hidden;margin-top:.7vh;}
+  .barwrap{height:.9vh;background:var(--minibar);border-radius:99px;overflow:hidden;margin-top:.7vh;}
   .barwrap>i{display:block;height:100%;background:var(--verde);}
 
   #campo{flex:1;min-height:0;display:flex;flex-direction:column;}
@@ -59,7 +69,7 @@
 
   #roteiros .row{display:flex;align-items:center;gap:.8vw;padding:.55vh 0;font-size:1.35vh;}
   #roteiros .row .nm{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  #roteiros .row .mini{width:9vw;height:.8vh;background:#0c1428;border-radius:99px;overflow:hidden;flex:none;}
+  #roteiros .row .mini{width:9vw;height:.8vh;background:var(--minibar);border-radius:99px;overflow:hidden;flex:none;}
   #roteiros .row .mini>i{display:block;height:100%;background:var(--azul);}
   #roteiros .row .ct{font-variant-numeric:tabular-nums;color:var(--tinta2);width:4vw;text-align:right;}
 
@@ -77,8 +87,8 @@
   .pulsedot i{position:absolute;left:-.7vh;top:-.7vh;width:1.4vh;height:1.4vh;border-radius:50%;display:block;}
   .pulsedot .core{background:#E74C3C;border:.25vh solid #fff;box-shadow:0 0 .6vh rgba(0,0,0,.6);}
   .pulsedot .ring{background:rgba(231,76,60,.5);animation:pdp 1.7s ease-out infinite;}
-  .pulsedot .lab{position:absolute;left:1.4vh;top:-1.1vh;background:rgba(12,18,38,.92);border:1px solid var(--hair);
-                 color:#fff;font-size:1.15vh;font-weight:700;padding:.25vh .7vh;border-radius:.5vh;white-space:nowrap;}
+  .pulsedot .lab{position:absolute;left:1.4vh;top:-1.1vh;background:var(--labbg);border:1px solid var(--hair);
+                 color:var(--tinta);font-size:1.15vh;font-weight:700;padding:.25vh .7vh;border-radius:.5vh;white-space:nowrap;}
   @keyframes pdp{0%{transform:scale(1);opacity:.75}70%{transform:scale(4.2);opacity:0}100%{opacity:0}}
 
   #semacesso{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
@@ -96,6 +106,7 @@
     <span class="badge" id="envBadge" hidden>Homologação</span>
     <span class="sub">Juntas Eleitorais Especiais 2026 · SEASU-COINF-STIC</span>
     <span class="sp"></span>
+    <button id="temaBtn" title="Alternar tema claro/escuro">◑</button>
     <span class="clock" id="clock">--:--:--</span>
     <span class="fresh" id="fresh"></span>
   </header>
@@ -155,9 +166,32 @@
     return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
   function fnum(n){ return (n==null||n==='') ? '0' : String(n); }
 
-  var TV = { map:null, malhaOk:false, muniByCod:{}, centroPorCod:{},
-             gmapsPromise:null, pulsos:[], Pulse:null,
+  var TV = { map:null, malhaOk:false, muniByCod:{}, centroPorCod:{}, maBounds:null,
+             gmapsPromise:null, pulsos:[], Pulse:null, tema:'escuro',
              painelEm:0, mapaEm:0, vivoEm:0 };
+
+  /* ---------- tema (claro/escuro): URL ?tema= > localStorage > escuro ---------- */
+  (function(){
+    var q = (new URLSearchParams(location.search).get('tema') || '').toLowerCase();
+    var ls = '';
+    try { ls = localStorage.getItem('tv-tema') || ''; } catch(e){}
+    TV.tema = (q === 'claro' || q === 'escuro') ? q : ((ls === 'claro' || ls === 'escuro') ? ls : 'escuro');
+    aplicarTema();
+  })();
+  function aplicarTema(){
+    document.documentElement.setAttribute('data-tema', TV.tema);
+    var b = el('temaBtn'); if (b) b.textContent = (TV.tema === 'claro') ? '☾' : '◑';
+  }
+  function trocarTema(){
+    TV.tema = (TV.tema === 'claro') ? 'escuro' : 'claro';
+    try { localStorage.setItem('tv-tema', TV.tema); } catch(e){}
+    aplicarTema();
+    if (TV.map){
+      TV.map.setOptions({ styles: (TV.tema === 'claro') ? LIGHT : DARK });
+      if (TV.malhaOk) TV.map.data.setStyle(estiloFeature);
+    }
+  }
+  el('temaBtn').addEventListener('click', trocarTema);
 
   /* ---------- relógio + "atualizado há" ---------- */
   setInterval(function(){
@@ -198,12 +232,32 @@
     {featureType:'water',elementType:'geometry',stylers:[{color:'#0c1526'}]},
     {featureType:'water',elementType:'labels.text.fill',stylers:[{color:'#3a4660'}]}
   ];
+  var LIGHT = [
+    {elementType:'geometry',stylers:[{color:'#eef1f6'}]},
+    {elementType:'labels.text.stroke',stylers:[{color:'#ffffff'}]},
+    {elementType:'labels.text.fill',stylers:[{color:'#6b7590'}]},
+    {featureType:'administrative',elementType:'geometry',stylers:[{color:'#c4ccdd'}]},
+    {featureType:'administrative.country',elementType:'geometry.stroke',stylers:[{color:'#9aa5bf'}]},
+    {featureType:'administrative.province',elementType:'geometry.stroke',stylers:[{color:'#b3bcd2'}]},
+    {featureType:'poi',stylers:[{visibility:'off'}]},
+    {featureType:'road',stylers:[{visibility:'off'}]},
+    {featureType:'transit',stylers:[{visibility:'off'}]},
+    {featureType:'water',elementType:'geometry',stylers:[{color:'#dbe4f0'}]},
+    {featureType:'water',elementType:'labels.text.fill',stylers:[{color:'#9aa5bf'}]}
+  ];
 
   function iniciarMapa(){
     if (TV.map) return;
     TV.map = new google.maps.Map(el('gmap'), {
-      center:{lat:-4.9,lng:-45.3}, zoom:6, mapTypeId:'roadmap', disableDefaultUI:true,
-      gestureHandling:'none', keyboardShortcuts:false, styles:DARK
+      center:{lat:-5.2,lng:-45.3}, zoom:6, mapTypeId:'roadmap', disableDefaultUI:true,
+      gestureHandling:'none', keyboardShortcuts:false, clickableIcons:false,
+      styles:(TV.tema === 'claro') ? LIGHT : DARK
+    });
+    // re-enquadra o Maranhão quando a janela/TV muda de tamanho
+    var rt;
+    window.addEventListener('resize', function(){
+      clearTimeout(rt);
+      rt = setTimeout(function(){ if (TV.map && TV.maBounds) TV.map.fitBounds(TV.maBounds); }, 250);
     });
     carregarMalha();
   }
@@ -215,12 +269,14 @@
         TV.malhaOk = true;
         TV.map.data.setStyle(estiloFeature);
         TV.centroPorCod = {};
+        var b = new google.maps.LatLngBounds();
         TV.map.data.forEach(function(f){
           var cod = String(f.getProperty('cod')||''); if(!cod) return;
           var sx=0, sy=0, n=0;
-          f.getGeometry().forEachLatLng(function(ll){ sx+=ll.lng(); sy+=ll.lat(); n++; });
+          f.getGeometry().forEachLatLng(function(ll){ sx+=ll.lng(); sy+=ll.lat(); n++; b.extend(ll); });
           if(n) TV.centroPorCod[cod] = { lat:sy/n, lng:sx/n };
         });
+        if(!b.isEmpty()){ TV.maBounds = b; TV.map.fitBounds(b); }
       }catch(e){}
     }).withFailureHandler(function(){}).carregarMalhaMA();
   }
@@ -232,18 +288,21 @@
   }
 
   function estiloFeature(feature){
+    var claro = (TV.tema === 'claro');
+    var neutro = claro ? '#9aa5bf' : '#2a3350';
     var m = TV.muniByCod[String(feature.getProperty('cod')||'')];
-    if(!m) return { visible:true, fillColor:'#8A93A3', fillOpacity:.05, strokeColor:'#2a3350', strokeWeight:.5, clickable:false, zIndex:1 };
+    if(!m) return { visible:true, fillColor:claro?'#c4ccdd':'#8A93A3', fillOpacity:claro?.10:.05,
+                    strokeColor:neutro, strokeWeight:.5, clickable:false, zIndex:1 };
     var a = aggMun(m);
-    var RAMPA = [.32,.5,.68];
+    var RAMPA = claro ? [.22,.4,.6] : [.32,.5,.68];
     var passo = !a.temJunta ? 0 : (a.testados===0 ? 0 : (a.testados===a.n ? 2 : 1));
-    var hue, op, st='#3a4660', sw=.9, z=2;
+    var hue, op, st=neutro, sw=.9, z=2;
     switch(m.categoria){
-      case 'sede_junta':  hue='#9B6DE0'; op=RAMPA[passo]; st='#6C43A6'; sw=2; z=4; break;
-      case 'sede':        hue='#E8B93E'; op=.55;          st='#B8901F'; sw=2; z=3; break;
-      case 'termo_junta': hue='#2ECC71'; op=RAMPA[passo]; st='#1B8f4c'; sw=1.1; z=2; break;
-      case 'termo':       hue='#4C7DFF'; op=.18;          st='#3a5bb0'; sw=.7; z=1; break;
-      default:            hue='#8A93A3'; op=.12;          st='#3a4660'; sw=.6; z=1;
+      case 'sede_junta':  hue='#9B6DE0'; op=RAMPA[passo];      st=claro?'#5a2f96':'#6C43A6'; sw=2;   z=4; break;
+      case 'sede':        hue='#E8B93E'; op=claro?.42:.55;     st=claro?'#9a7614':'#B8901F'; sw=2;   z=3; break;
+      case 'termo_junta': hue='#2ECC71'; op=RAMPA[passo];      st=claro?'#15723d':'#1B8f4c'; sw=1.1; z=2; break;
+      case 'termo':       hue='#4C7DFF'; op=claro?.14:.18;     st=claro?'#3358b5':'#3a5bb0'; sw=.7;  z=1; break;
+      default:            hue='#8A93A3'; op=.12;               st=neutro;                    sw=.6;  z=1;
     }
     return { visible:true, fillColor:hue, fillOpacity:op, strokeColor:st, strokeWeight:sw, clickable:false, zIndex:z };
   }
