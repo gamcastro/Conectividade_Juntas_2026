@@ -135,6 +135,7 @@
       <button id="tabPainel" class="on" onclick="verTab('painel')">Painel</button>
       <button id="tabVivo" onclick="verTab('vivo')">Ao vivo</button>
       <button id="tabVist" onclick="verTab('vistorias')">Vistorias</button>
+      <button id="tabMapa" onclick="verTab('mapa')">Mapa</button>
       <button id="tabRel" onclick="verTab('rel')">Relatório final</button>
       <button id="tabAcesso" onclick="verTab('acesso')" hidden>Acesso</button>
     </div>
@@ -162,6 +163,29 @@
             <thead><tr><th>Hora</th><th>Técnico</th><th>Evento</th><th>Local</th><th>Roteiro</th></tr></thead>
             <tbody id="vivoFeed"></tbody>
           </table>
+        </div>
+      </div>
+    </div>
+
+    <div id="mapa" hidden>
+      <div class="card">
+        <div class="filtros">
+          <select id="mRoteiro" onchange="renderMapaPinos()"><option value="">Todos os roteiros</option></select>
+          <select id="mStatus" onchange="renderMapaPinos()">
+            <option value="">Testados e pendentes</option>
+            <option value="sim">Só testados</option>
+            <option value="nao">Só pendentes</option>
+          </select>
+          <label class="lbl" style="align-self:center;display:flex;align-items:center;gap:6px;text-transform:none;letter-spacing:0;color:var(--tinta2)">
+            <input type="checkbox" id="mDivisas" checked onchange="aplicarDivisas()"> divisas de município
+          </label>
+          <span id="mContagem" class="lbl" style="align-self:center;color:var(--tinta2)"></span>
+        </div>
+        <div id="mapAviso" hidden style="padding:12px 14px;background:#FDF6E3;border:1px solid #E8D9A8;border-radius:8px;font-size:13px;line-height:1.5;margin-bottom:12px"></div>
+        <div id="gmap" style="width:100%;height:64vh;border:1px solid var(--hair);border-radius:8px;background:#EEF1F5"></div>
+        <div class="lbl" style="margin-top:8px;text-transform:none;letter-spacing:0;color:var(--tinta2);line-height:1.5">
+          Pino <b style="color:var(--verde)">verde</b> = local já testado · <b style="color:#C0392B">vermelho</b> = ainda sem diagnóstico.
+          Só aparecem os locais cujo formulário do GEL trouxe latitude/longitude.
         </div>
       </div>
     </div>
@@ -329,14 +353,17 @@
     el('tabPainel').classList.toggle('on', t==='painel');
     el('tabVivo').classList.toggle('on', t==='vivo');
     el('tabVist').classList.toggle('on', t==='vistorias');
+    el('tabMapa').classList.toggle('on', t==='mapa');
     el('tabRel').classList.toggle('on', t==='rel');
     el('tabAcesso').classList.toggle('on', t==='acesso');
     el('painel').hidden    = (t!=='painel');
     el('vivo').hidden      = (t!=='vivo');
     el('vistorias').hidden = (t!=='vistorias');
+    el('mapa').hidden      = (t!=='mapa');
     el('rel').hidden       = (t!=='rel');
     el('acesso').hidden    = (t!=='acesso');
     if (t==='vivo') { carregarVivo(); iniciarVivoTimer(); } else { pararVivoTimer(); }
+    if (t==='mapa') { abrirMapa(); }
     if (t==='rel')  { atualizarBotaoRel(); carregarRelHist(); }
     if (t==='acesso') { carregarAcesso(); }
   }
@@ -476,6 +503,155 @@
         '<td>'+pdf+'</td>' +
         '</tr>';
     }).join('');
+  }
+
+  /* ============================== ABA MAPA ============================== */
+
+  var MAPA = { dados:null, map:null, info:null, pinos:[], gmapsPromise:null,
+               divisasOk:false, enquadrou:false };
+
+  function abrirMapa(){
+    if (MAPA.map){
+      google.maps.event.trigger(MAPA.map, 'resize');
+      return;
+    }
+    if (MAPA.dados) return;               // ja em curso / ja falhou com aviso
+    el('mapAviso').hidden = true;
+    el('mContagem').textContent = 'carregando…';
+    google.script.run
+      .withSuccessHandler(onMapaDados)
+      .withFailureHandler(function(e){
+        el('mContagem').textContent = '';
+        mapaAviso('<b>Erro ao carregar os pontos.</b> ' + esc((e&&e.message)||e));
+      })
+      .carregarMapa(false);
+  }
+
+  function mapaAviso(html){ el('mapAviso').innerHTML = html; el('mapAviso').hidden = false; }
+
+  function onMapaDados(d){
+    if (!d || d.sem_acesso) return;
+    MAPA.dados = d;
+
+    var sel = el('mRoteiro'); sel.length = 1;
+    var rots = {};
+    (d.pontos||[]).forEach(function(p){ if (p.roteiro_rotulo) rots[p.roteiro_rotulo] = true; });
+    Object.keys(rots).sort().forEach(function(r){
+      var o = document.createElement('option'); o.value = r; o.textContent = r; sel.appendChild(o);
+    });
+    el('mContagem').textContent = (d.com_coord||0) + ' de ' + (d.total_universo||0) + ' locais com coordenada';
+
+    if (!d.maps_key){
+      mapaAviso('<b>Mapa ainda não disponível.</b> A chave da API do Google Maps não foi configurada ' +
+        'nesta implantação (Script Property <code>GOOGLE_MAPS_JS_KEY</code>). ' +
+        (d.com_coord||0) + ' local(is) com coordenada aguardando a ativação.');
+      return;
+    }
+    carregarGoogleMaps(d.maps_key)
+      .then(iniciarMapa)
+      .catch(function(e){
+        mapaAviso('<b>Não foi possível carregar o Google Maps.</b> ' + esc((e&&e.message)||e) +
+          ' — verifique a chave e o faturamento no projeto do GCP.');
+      });
+  }
+
+  function carregarGoogleMaps(key){
+    if (MAPA.gmapsPromise) return MAPA.gmapsPromise;
+    MAPA.gmapsPromise = new Promise(function(resolve, reject){
+      window.__gmapsReady = function(){ resolve(); };
+      var s = document.createElement('script');
+      s.src = 'https://maps.googleapis.com/maps/api/js?key=' + encodeURIComponent(key) +
+              '&callback=__gmapsReady&language=pt-BR&region=BR';
+      s.async = true;
+      s.onerror = function(){ reject(new Error('falha ao baixar o script do Maps')); };
+      document.head.appendChild(s);
+    });
+    return MAPA.gmapsPromise;
+  }
+
+  function iniciarMapa(){
+    if (!MAPA.map){
+      MAPA.map = new google.maps.Map(el('gmap'), {
+        center: { lat: -4.9, lng: -45.3 }, zoom: 6, mapTypeId: 'roadmap',
+        streetViewControl: false, fullscreenControl: true,
+        mapTypeControl: true, mapTypeControlOptions: { mapTypeIds: ['roadmap','hybrid','terrain'] }
+      });
+      MAPA.info = new google.maps.InfoWindow();
+      carregarDivisas();
+    }
+    renderMapaPinos();
+  }
+
+  function carregarDivisas(){
+    google.script.run
+      .withSuccessHandler(function(txt){
+        try {
+          MAPA.map.data.addGeoJson(JSON.parse(txt));
+          MAPA.divisasOk = true;
+          aplicarDivisas();
+        } catch(e){ /* silencioso — o mapa funciona sem as divisas */ }
+      })
+      .withFailureHandler(function(){})
+      .carregarMalhaMA();
+  }
+
+  function aplicarDivisas(){
+    if (!MAPA.divisasOk) return;
+    MAPA.map.data.setStyle({
+      visible: el('mDivisas').checked,
+      fillColor: '#123FA8', fillOpacity: 0.03,
+      strokeColor: '#1F4E79', strokeWeight: 0.7, clickable: false
+    });
+  }
+
+  function renderMapaPinos(){
+    if (!MAPA.map || !MAPA.dados) return;
+    MAPA.pinos.forEach(function(m){ m.setMap(null); });
+    MAPA.pinos = [];
+    var fr = el('mRoteiro').value, fs = el('mStatus').value;
+    var bounds = new google.maps.LatLngBounds(), n = 0;
+    (MAPA.dados.pontos||[]).forEach(function(p){
+      if (fr && p.roteiro_rotulo !== fr) return;
+      if (fs === 'sim' && !p.testado) return;
+      if (fs === 'nao' && p.testado) return;
+      var mk = new google.maps.Marker({
+        position: { lat: p.lat, lng: p.lng }, map: MAPA.map, title: p.nome,
+        icon: { path: google.maps.SymbolPath.CIRCLE, scale: 6.5,
+                fillColor: p.testado ? '#1B7F3B' : '#C0392B', fillOpacity: 1,
+                strokeColor: '#fff', strokeWeight: 1.5 }
+      });
+      mk.addListener('click', function(){ MAPA.info.setContent(mapaInfoHtml(p)); MAPA.info.open(MAPA.map, mk); });
+      MAPA.pinos.push(mk);
+      bounds.extend(mk.getPosition());
+      n++;
+    });
+    el('mContagem').textContent = n + ' ponto(s) no mapa · ' +
+      (MAPA.dados.com_coord||0) + ' de ' + (MAPA.dados.total_universo||0) + ' locais com coordenada';
+    if (n && !MAPA.enquadrou){ MAPA.map.fitBounds(bounds); MAPA.enquadrou = true;
+      if (n === 1) MAPA.map.setZoom(13); }
+  }
+
+  function mapaInfoHtml(p){
+    var L = [];
+    L.push('<div style="font-weight:700;margin-bottom:2px">'+esc(p.nome)+'</div>');
+    L.push('<div style="color:#5C6472;font-size:12px">'+esc(p.municipio)+' · ZE '+esc(p.zona)+
+           (p.tipo?(' · '+esc(p.tipo)):'')+'</div>');
+    if (p.roteiro_rotulo) L.push('<div style="font-size:12px;margin-top:3px">'+esc(p.roteiro_rotulo)+'</div>');
+    if (p.testado){
+      L.push('<div style="font-size:12px;margin-top:5px;color:#1B7F3B;font-weight:700">Testado'+
+             (p.quando?(' — '+esc(p.quando)):'')+'</div>');
+      if (p.tecnico) L.push('<div style="font-size:12px">Técnico: '+esc(p.tecnico)+'</div>');
+      if (p.conexao) L.push('<div style="font-size:12px">Conexão: '+esc(p.conexao)+'</div>');
+      if (p.download_mbps!=='' && p.download_mbps!=null)
+        L.push('<div style="font-size:12px">Download: '+fmt(p.download_mbps)+' Mbps</div>');
+    } else {
+      L.push('<div style="font-size:12px;margin-top:5px;color:#C0392B;font-weight:700">Ainda sem diagnóstico</div>');
+      if (p.tecnico_previsto) L.push('<div style="font-size:12px">Técnico previsto: '+esc(p.tecnico_previsto)+'</div>');
+    }
+    if (p.gel_em) L.push('<div style="font-size:11px;color:#5C6472;margin-top:4px">GEL de '+esc(p.gel_em)+'</div>');
+    if (p.pdf_url) L.push('<div style="font-size:12px;margin-top:4px"><a href="'+esc(p.pdf_url)+
+      '" target="_blank" rel="noopener">abrir relatório</a></div>');
+    return '<div style="min-width:190px;max-width:270px">'+L.join('')+'</div>';
   }
 
   /* ========================= ABA ACESSO (admin) ========================= */

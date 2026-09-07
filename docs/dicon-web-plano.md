@@ -85,6 +85,24 @@
     **@22**, Execution API **@23** (`clasp version` 23).
   - **Falta**: aba-resumo agregada por trigger; retenção da aba `Eventos`.
 
+- **Aba "Mapa" — em homologação (v0.6.132)** 🗺️
+  - `carregarMapa(forcar)` (`Console.gs`): junta o universo (`_webUniverso`),
+    os testados (`_webTestados`) e as **coordenadas do GEL** — `_webCoordenadasGel`
+    lê a aba `GEL` (coluna `gel_json`, `lat`/`long` do formulário) e, como
+    reserva, o bloco `vistoria_gel` do `json` transmitido na aba `Resultados`;
+    filtra pela caixa envolvente do Maranhão. Devolve `pontos[]` +
+    `maps_key` (Script Property `GOOGLE_MAPS_JS_KEY`). Cache de 60 s.
+  - `carregarMalhaMA()` (`apps-script/web/MalhaMA.gs`): malha municipal do IBGE
+    (217 municípios, `qualidade=minima`, ~135 KB) embutida como string —
+    `map.data.addGeoJson` desenha as divisas. Regenerada por
+    `scratchpad/gen-malha-gs.mjs`.
+  - `Index.html`: aba **Mapa** (após Vistorias) — Google Maps JS carregado sob
+    demanda no 1º acesso, pino verde (testado) / vermelho (pendente), info-window
+    com técnico/conexão/download/link do relatório, filtros roteiro/status e
+    toggle das divisas. Sem a chave → aviso + contagem de pendentes.
+  - Só `google.script.run` → **redeploy do Web App apenas**. Setup GCP (chave
+    Maps JS + faturamento + Script Property) documentado em `apps-script/CLASP.md`.
+
 ### ⚠️ Trava de escopo OAuth (vale para Fase 2 também)
 
 O projeto Apps Script é **compartilhado** entre a console (Web App) e a

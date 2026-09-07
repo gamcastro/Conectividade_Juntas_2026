@@ -335,6 +335,157 @@ function _carregarPainelCorpo() {
   };
 }
 
+/* ============================ MAPA ============================ */
+/* Aba "Mapa" da console: os Locais cujo formulario do GEL trouxe latitude/
+ * longitude, plotados no Google Maps (com a malha municipal do IBGE -- ver
+ * web/MalhaMA.gs / carregarMalhaMA). So' leitura, chamada por google.script.run
+ * -> redeploy do Web App apenas (nao mexe em Codigo.gs > executar).
+ *
+ * Coordenadas: (1) aba GEL, coluna gel_json (sync do desktop -- tela Coordenacao
+ * ou campo); (2) reserva -- bloco vistoria_gel dentro do json transmitido na aba
+ * Resultados. A chave do Maps JS fica na Script Property GOOGLE_MAPS_JS_KEY (so'
+ * o George/GCP configura); sem ela a aba mostra um aviso e a lista de pendentes. */
+
+// Caixa envolvente do Maranhao (folgada) -- descarta (0,0) e coordenada fora do estado.
+var WEB_MA_BBOX = { latMin: -10.6, latMax: -0.5, lonMin: -49.5, lonMax: -41.0 };
+
+function _webNumCoord(v) {
+  if (v == null || v === '') return null;
+  var n = Number(String(v).replace(',', '.').trim());
+  return isFinite(n) ? n : null;
+}
+function _webCoordNoMA(lat, lon) {
+  if (typeof lat !== 'number' || typeof lon !== 'number') return false;
+  if (!isFinite(lat) || !isFinite(lon) || (lat === 0 && lon === 0)) return false;
+  return lat >= WEB_MA_BBOX.latMin && lat <= WEB_MA_BBOX.latMax &&
+         lon >= WEB_MA_BBOX.lonMin && lon <= WEB_MA_BBOX.lonMax;
+}
+
+// local_id -> { lat, lon, gel_em, fonte }. Aba GEL primeiro; o que faltar,
+// tenta no vistoria_gel do json da aba Resultados.
+function _webCoordenadasGel() {
+  var out = {};
+  var token = _tokenServico();
+  var sheetId = _idResultados();
+  if (!sheetId) return out;
+
+  // 1) aba GEL (coluna gel_json = data/vistoria-gel/<id>.json do desktop)
+  try {
+    var v = _sheetsGetValores(token, sheetId, ABA_GEL);
+    if (v && v.length >= 2) {
+      var head = v[0].map(function (c) { return String(c || '').trim(); });
+      var ix = {}; head.forEach(function (n, i) { ix[n] = i; });
+      for (var r = 1; r < v.length; r++) {
+        var id = String(v[r][ix['local_id']] || '').trim();
+        if (!id) continue;
+        var g = null;
+        try { g = JSON.parse(String(v[r][ix['gel_json']] || '')); } catch (e) { g = null; }
+        if (!g) continue;
+        var lat = _webNumCoord(g.lat != null ? g.lat : g.latitude);
+        var lon = _webNumCoord(g.long != null ? g.long : g.longitude);
+        if (!_webCoordNoMA(lat, lon)) continue;
+        out[id] = { lat: lat, lon: lon, gel_em: String(v[r][ix['atualizado_em']] || ''), fonte: 'gel' };
+      }
+    }
+  } catch (e) { /* a aba GEL pode nem existir ainda */ }
+
+  // 2) reserva: vistoria_gel dentro do json da aba Resultados
+  try {
+    var ss = SpreadsheetApp.openById(sheetId);
+    var aba = ss.getSheetByName(ABA_RESULTADOS);
+    if (aba && aba.getLastRow() >= 2) {
+      var vv = aba.getDataRange().getValues();
+      var ixr = {}; vv[0].forEach(function (c, i) { ixr[String(c || '').trim()] = i; });
+      var ixId = ixr['local_id'], ixJson = ixr['json'], ixReceb = ixr['recebido_em'];
+      for (var k = 1; k < vv.length; k++) {
+        var lid = String(vv[k][ixId] || '').trim();
+        if (!lid || out[lid]) continue;
+        var blob = null;
+        try { blob = JSON.parse(String(vv[k][ixJson] || '')); } catch (e) { blob = null; }
+        var vg = blob && blob.vistoria_gel;
+        if (!vg) continue;
+        var la = _webNumCoord(vg.latitude != null ? vg.latitude : vg.lat);
+        var lo = _webNumCoord(vg.longitude != null ? vg.longitude : vg.long);
+        if (!_webCoordNoMA(la, lo)) continue;
+        out[lid] = { lat: la, lon: lo, gel_em: _webDataAmigavel(vv[k][ixReceb]), fonte: 'resultado' };
+      }
+    }
+  } catch (e) { /* ok -- segue so' com o que a aba GEL deu */ }
+
+  return out;
+}
+
+// Uma chamada: acesso + os pontos (universo x coordenada do GEL x testado) + a
+// chave do Maps. Sem acesso -> { acesso, sem_acesso:true }. Corpo pesado em
+// cache de 60 s (a chave e o acesso vao frescos). `forcar` pula o cache.
+function carregarMapa(forcar) {
+  var acesso = verificarAcesso();
+  if (!acesso.papel) return { acesso: acesso, sem_acesso: true };
+
+  var mapsKey = '';
+  try { mapsKey = PropertiesService.getScriptProperties().getProperty('GOOGLE_MAPS_JS_KEY') || ''; } catch (e) { mapsKey = ''; }
+
+  var cache = null;
+  try { cache = CacheService.getScriptCache(); } catch (e) { cache = null; }
+  if (cache && !forcar) {
+    var hit = cache.get('mapa_v1');
+    if (hit) {
+      try {
+        var o = JSON.parse(hit);
+        o.acesso = acesso; o.maps_key = mapsKey; o.cache = true;
+        return o;
+      } catch (e) { /* recomputa */ }
+    }
+  }
+
+  var universo = {};
+  _webUniverso().forEach(function (u) { universo[u.local_id] = u; });
+  var testados = _webTestados();
+  var coords = _webCoordenadasGel();
+
+  var pontos = [];
+  Object.keys(coords).forEach(function (id) {
+    var c = coords[id];
+    var u = universo[id] || {};
+    var t = testados[id];
+    pontos.push({
+      local_id: id,
+      nome: u.nome || id,
+      zona: u.zona || '',
+      municipio: u.municipio || '',
+      tipo: u.tipo || '',
+      roteiro: u.roteiro || '',
+      roteiro_rotulo: u.roteiro_rotulo || (u.roteiro ? ('Roteiro ' + u.roteiro) : ''),
+      tecnico_previsto: u.tecnico_previsto || '',
+      lat: c.lat, lng: c.lon,
+      gel_em: c.gel_em || '',
+      fonte: c.fonte || '',
+      testado: !!t,
+      quando: t ? t.recebido_em : '',
+      tecnico: t ? t.tecnico : '',
+      conexao: t ? (t.conexao_recomendada + (t.operadora_recomendada ? ' (' + t.operadora_recomendada + ')' : '')) : '',
+      download_mbps: t ? t.download_mbps : '',
+      latencia_ms: t ? t.latencia_ms : '',
+      pdf_url: t ? t.pdf_url : ''
+    });
+  });
+  pontos.sort(function (a, b) { return (a.municipio < b.municipio) ? -1 : (a.municipio > b.municipio) ? 1 : 0; });
+
+  var corpo = {
+    pontos: pontos,
+    total_universo: Object.keys(universo).length,
+    com_coord: pontos.length,
+    gerado_em: new Date().toISOString()
+  };
+  if (cache) {
+    try { var s = JSON.stringify(corpo); if (s.length < 95000) cache.put('mapa_v1', s, 60); } catch (e) { /* cache e' opcional */ }
+  }
+  corpo.acesso = acesso;
+  corpo.ambiente = _webAmbiente();
+  corpo.maps_key = mapsKey;
+  return corpo;
+}
+
 /* ==================== FASE 1: CHECK-IN AO VIVO ==================== */
 /* Escrita: webCheckin / webRegistrarEvento -- chamadas pela Execution API
  * (Codigo.gs > executar), gravadas com o TOKEN DE SERVICO (o tecnico nao e'
