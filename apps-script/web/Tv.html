@@ -316,24 +316,26 @@
     return { temJunta: loc.length>0, n: loc.length, testados: t };
   }
 
+  // Município TERMO COM JUNTA ESPECIAL -- o único tipo realçado no mapa.
+  function ehTermoJunta(m){
+    return !!m && (m.categoria === 'termo_junta' ||
+                   (m.categoria === 'outro' && aggMun(m).temJunta));
+  }
+
+  // Mapa simplificado: só "termo com junta especial" fica verde (tom mais forte =
+  // mais locais testados); todos os demais municípios em laranja de fundo.
   function estiloFeature(feature){
     var claro = (TV.tema === 'claro');
-    var neutro = claro ? '#9aa5bf' : '#2a3350';
     var m = TV.muniByCod[String(feature.getProperty('cod')||'')];
-    if(!m) return { visible:true, fillColor:claro?'#c4ccdd':'#8A93A3', fillOpacity:claro?.10:.05,
-                    strokeColor:neutro, strokeWeight:.5, clickable:false, zIndex:1 };
-    var a = aggMun(m);
-    var RAMPA = claro ? [.22,.4,.6] : [.32,.5,.68];
-    var passo = !a.temJunta ? 0 : (a.testados===0 ? 0 : (a.testados===a.n ? 2 : 1));
-    var hue, op, st=neutro, sw=.9, z=2;
-    switch(m.categoria){
-      case 'sede_junta':  hue='#9B6DE0'; op=RAMPA[passo];      st=claro?'#5a2f96':'#6C43A6'; sw=2;   z=4; break;
-      case 'sede':        hue='#E8B93E'; op=claro?.42:.55;     st=claro?'#9a7614':'#B8901F'; sw=2;   z=3; break;
-      case 'termo_junta': hue='#2ECC71'; op=RAMPA[passo];      st=claro?'#15723d':'#1B8f4c'; sw=1.1; z=2; break;
-      case 'termo':       hue='#4C7DFF'; op=claro?.14:.18;     st=claro?'#3358b5':'#3a5bb0'; sw=.7;  z=1; break;
-      default:            hue='#8A93A3'; op=.12;               st=neutro;                    sw=.6;  z=1;
+    if (ehTermoJunta(m)){
+      var a = aggMun(m);
+      var RAMPA = claro ? [.24,.42,.62] : [.34,.52,.70];
+      var passo = a.testados===0 ? 0 : (a.testados===a.n ? 2 : 1);
+      return { visible:true, fillColor:'#2ECC71', fillOpacity:RAMPA[passo],
+               strokeColor:claro?'#15723d':'#1B8f4c', strokeWeight:1.2, clickable:false, zIndex:3 };
     }
-    return { visible:true, fillColor:hue, fillOpacity:op, strokeColor:st, strokeWeight:sw, clickable:false, zIndex:z };
+    return { visible:true, fillColor:'#E8873E', fillOpacity:(claro ? .13 : .16),
+             strokeColor:(claro ? '#b06a2e' : '#8a5a2e'), strokeWeight:.6, clickable:false, zIndex:1 };
   }
 
   /* ---------- ponto pulsante ---------- */
