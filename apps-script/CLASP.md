@@ -118,6 +118,10 @@ da API de malhas do IBGE (`.../api/v3/malhas/estados/21`, domínio público).
 
 - `?recurso=juntas` -> Juntas/locais; `?recurso=tecnicos`; `?recurso=roteiros`; `?recurso=limiares`.
 - Planilha de config (limiares): `1wAZTeRsbDcFL4lyLF0J9pOmtR-cGElSh93HSpMKTCww` (aba `Limiares`, celula A2 = JSON aninhado, criada no 1o salvar).
+- Painel de TV (`?app=tv`): `&tema=claro|escuro`; `&zoom=<n>` fixa o zoom do
+  mapa (ex.: `&zoom=7.2`); `&zoombump=<n>` ajusta o empurrao de zoom sobre o
+  `fitBounds` (padrao `0.7`). Sem `zoom`, o mapa faz `fitBounds` apertado no MA
+  + `zoombump`. `setup/Painel-TV.ps1` aceita `$env:DICON_TV_ZOOM`.
 
 ## Acesso do Web App: DOMAIN (v0.6.69+) -- so URL /exec, nao usado pelo cliente
 

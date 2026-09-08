@@ -168,7 +168,11 @@
 
   var TV = { map:null, malhaOk:false, muniByCod:{}, centroPorCod:{}, maBounds:null,
              gmapsPromise:null, pulsos:[], Pulse:null, tema:'escuro',
-             painelEm:0, mapaEm:0, vivoEm:0 };
+             painelEm:0, mapaEm:0, vivoEm:0,
+             // enquadramento do mapa: fitBounds apertado (fitPad px) + um empurrao
+             // de zoom por cima (zoomBump). ?zoom= força um zoom absoluto;
+             // ?zoombump= ajusta o empurrao. Ver enquadrarMA().
+             fitPad:26, zoomBump:0.7, zoomOverride:null };
 
   /* ---------- tema (claro/escuro): URL ?tema= > localStorage > escuro ---------- */
   (function(){
@@ -177,6 +181,15 @@
     try { ls = localStorage.getItem('tv-tema') || ''; } catch(e){}
     TV.tema = (q === 'claro' || q === 'escuro') ? q : ((ls === 'claro' || ls === 'escuro') ? ls : 'escuro');
     aplicarTema();
+  })();
+
+  /* ---------- zoom do mapa: ?zoom= (absoluto) e ?zoombump= (relativo) ---------- */
+  (function(){
+    var qs = new URLSearchParams(location.search);
+    var z = parseFloat(qs.get('zoom'));
+    if (!isNaN(z) && z >= 3 && z <= 14) TV.zoomOverride = z;
+    var zb = parseFloat(qs.get('zoombump'));
+    if (!isNaN(zb) && zb >= 0 && zb <= 4) TV.zoomBump = zb;
   })();
   function aplicarTema(){
     document.documentElement.setAttribute('data-tema', TV.tema);
@@ -251,15 +264,30 @@
     TV.map = new google.maps.Map(el('gmap'), {
       center:{lat:-5.2,lng:-45.3}, zoom:6, mapTypeId:'roadmap', disableDefaultUI:true,
       gestureHandling:'none', keyboardShortcuts:false, clickableIcons:false,
+      isFractionalZoomEnabled:true,
       styles:(TV.tema === 'claro') ? LIGHT : DARK
     });
     // re-enquadra o Maranhão quando a janela/TV muda de tamanho
     var rt;
     window.addEventListener('resize', function(){
       clearTimeout(rt);
-      rt = setTimeout(function(){ if (TV.map && TV.maBounds) TV.map.fitBounds(TV.maBounds); }, 250);
+      rt = setTimeout(enquadrarMA, 250);
     });
     carregarMalha();
+  }
+
+  // Enquadra o Maranhão: fitBounds com margem curta e, por cima, ?zoom= (absoluto)
+  // ou um empurrao relativo (zoomBump). O zoom só existe depois do fitBounds
+  // assentar, por isso o ajuste vai no 'idle'.
+  function enquadrarMA(){
+    if (!TV.map || !TV.maBounds) return;
+    if (TV._idleL) { google.maps.event.removeListener(TV._idleL); TV._idleL = null; }
+    TV._idleL = google.maps.event.addListenerOnce(TV.map, 'idle', function(){
+      TV._idleL = null;
+      var z = (TV.zoomOverride != null) ? TV.zoomOverride : (TV.map.getZoom() + TV.zoomBump);
+      if (Math.abs(z - TV.map.getZoom()) > 0.01) TV.map.setZoom(z);
+    });
+    TV.map.fitBounds(TV.maBounds, TV.fitPad);
   }
 
   function carregarMalha(){
@@ -276,7 +304,7 @@
           f.getGeometry().forEachLatLng(function(ll){ sx+=ll.lng(); sy+=ll.lat(); n++; b.extend(ll); });
           if(n) TV.centroPorCod[cod] = { lat:sy/n, lng:sx/n };
         });
-        if(!b.isEmpty()){ TV.maBounds = b; TV.map.fitBounds(b); }
+        if(!b.isEmpty()){ TV.maBounds = b; enquadrarMA(); }
       }catch(e){}
     }).withFailureHandler(function(){}).carregarMalhaMA();
   }
