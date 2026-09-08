@@ -201,9 +201,10 @@
         <div id="mapAviso" hidden style="padding:12px 14px;background:#FDF6E3;border:1px solid #E8D9A8;border-radius:8px;font-size:13px;line-height:1.5;margin-bottom:12px"></div>
         <div id="gmap" style="width:100%;height:64vh;border:1px solid var(--hair);border-radius:8px;background:#EEF1F5"></div>
         <div class="mleg">
-          <span><i style="background:#1B7F3B"></i> termo com junta especial — clique para detalhes</span>
-          <span style="opacity:.85">tom mais forte = mais locais testados</span>
-          <span><i style="background:#E8873E;opacity:.6"></i> demais municípios</span>
+          <span><i style="background:#F26419"></i> atenção — nenhum local testado</span>
+          <span><i style="background:#2ECC71"></i> em andamento — parte dos locais testada</span>
+          <span><i style="background:#0E5C2A"></i> concluído — todos os locais testados</span>
+          <span style="opacity:.8">clique numa cidade destacada para ver os locais</span>
           <span><i class="live"></i> diagnóstico em campo agora</span>
         </div>
         <div id="mSemCod" hidden class="lbl" style="margin-top:6px;text-transform:none;letter-spacing:0;color:#a3320f;line-height:1.5"></div>
@@ -749,21 +750,30 @@
   }
 
   // Estilo de cada polígono da malha. SÓ os municípios "termo com junta especial"
-  // aparecem realçados (verde, tom mais forte = mais locais testados) e clicáveis.
-  // Todos os demais recebem uma cor única de "desabilitado" e não respondem ao clique.
+  // são clicáveis, e pintados pelo andamento dos testes:
+  //   nenhum local testado -> laranja (atenção)
+  //   parte dos locais testada -> verde claro
+  //   todos os locais testados -> verde bem escuro
+  // Todos os demais municípios ficam num laranja de fundo e não respondem ao clique.
   function estiloFeature(feature){
     if (!el('mDivisas').checked && !el('mPintar').checked) return { visible:false };
     var m = MAPA.muniByCod[String(feature.getProperty('cod') || '')];
     var pintar = el('mPintar').checked;
     if (ehTermoJunta(m)){
       var a = aggMunicipio(m);
-      var RAMPA = [0.30, 0.46, 0.62];   // nenhum / parcial / todos os locais testados
-      var passo = a.testados === 0 ? 0 : (a.testados === a.n ? 2 : 1);
-      return { visible:true, fillColor:'#1B7F3B', fillOpacity:(pintar ? RAMPA[passo] : 0),
-               strokeColor:'#125C29', strokeWeight:1.3, clickable:true, zIndex:3 };
+      if (a.testados === 0){
+        return { visible:true, fillColor:'#F26419', fillOpacity:(pintar ? 0.62 : 0),
+                 strokeColor:'#A63D0A', strokeWeight:2.0, clickable:true, zIndex:3 };
+      }
+      var completo = (a.n > 0 && a.testados >= a.n);
+      return { visible:true,
+               fillColor:  completo ? '#0E5C2A' : '#2ECC71',
+               fillOpacity:(pintar ? (completo ? 0.80 : 0.44) : 0),
+               strokeColor:completo ? '#0A3D1C' : '#1B8F4C',
+               strokeWeight:completo ? 1.5 : 1.1, clickable:true, zIndex:3 };
     }
-    return { visible:true, fillColor:'#E8873E', fillOpacity:(pintar ? 0.16 : 0.03),
-             strokeColor:'#CC7A33', strokeWeight:0.6, clickable:false, zIndex:1 };
+    return { visible:true, fillColor:'#2F4468', fillOpacity:(pintar ? 0.40 : 0.06),
+             strokeColor:'#22345A', strokeWeight:0.5, clickable:false, zIndex:1 };
   }
 
   function estilizarMalha(){ if (MAPA.malhaOk) MAPA.map.data.setStyle(estiloFeature); }
