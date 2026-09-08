@@ -169,10 +169,11 @@
   var TV = { map:null, malhaOk:false, muniByCod:{}, centroPorCod:{}, maBounds:null,
              gmapsPromise:null, pulsos:[], Pulse:null, tema:'escuro',
              painelEm:0, mapaEm:0, vivoEm:0,
-             // enquadramento do mapa: fitBounds apertado (fitPad px) + um empurrao
-             // de zoom por cima (zoomBump). ?zoom= força um zoom absoluto;
-             // ?zoombump= ajusta o empurrao. Ver enquadrarMA().
-             fitPad:26, zoomBump:0.7, zoomOverride:null };
+             // enquadramento do mapa: com zoom fracionario ligado, o fitBounds
+             // ja encaixa o MA justo (margem = fitPad px). zoomBump e' um
+             // empurrao opcional por cima (0 = so o fitBounds). ?zoom= força um
+             // zoom absoluto; ?zoombump= ajusta o empurrao. Ver enquadrarMA().
+             fitPad:34, zoomBump:0, zoomOverride:null };
 
   /* ---------- tema (claro/escuro): URL ?tema= > localStorage > escuro ---------- */
   (function(){
