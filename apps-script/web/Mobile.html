@@ -101,7 +101,7 @@
 <body>
 
 <header>
-  <span class="wm">DICON&nbsp;Web</span>
+  <span class="wm">DICON&nbsp;Mobile</span>
   <span class="badge" id="envBadge" hidden>Homolog</span>
   <span class="sp"></span>
   <button id="btnRefresh" onclick="carregar(true)" aria-label="Atualizar">&#x21bb;</button>
@@ -231,7 +231,7 @@
     });
 
     renderVist();
-    el('foot').textContent = 'DICON Web · ' + (amb === 'homologacao' ? 'homologação' : 'produção') +
+    el('foot').textContent = 'DICON Mobile · ' + (amb === 'homologacao' ? 'homologação' : 'produção') +
       ' · ' + new Date(d.gerado_em).toLocaleString('pt-BR');
     el('app').hidden = false;
     if (TAB === 'vivo') carregarVivo();

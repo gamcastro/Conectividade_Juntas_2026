@@ -46,10 +46,11 @@ function _webAmbiente() {
 function webConsolePagina(e) {
   var pp = (e && e.parameter) || {};
   var arquivo = 'web/Index';
-  if (pp.app === 'mobile' || pp.m || pp.mobile) arquivo = 'web/Mobile';
+  var titulo = 'DICON Web — Coordenação';
+  if (pp.app === 'mobile' || pp.m || pp.mobile) { arquivo = 'web/Mobile'; titulo = 'DICON Mobile'; }
   else if (pp.app === 'tv' || pp.tv) arquivo = 'web/Tv';
   return HtmlService.createHtmlOutputFromFile(arquivo)
-    .setTitle('DICON Web — Coordenação')
+    .setTitle(titulo)
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
 
