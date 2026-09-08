@@ -201,7 +201,7 @@
         <div id="mapAviso" hidden style="padding:12px 14px;background:#FDF6E3;border:1px solid #E8D9A8;border-radius:8px;font-size:13px;line-height:1.5;margin-bottom:12px"></div>
         <div id="gmap" style="width:100%;height:64vh;border:1px solid var(--hair);border-radius:8px;background:#EEF1F5"></div>
         <div class="mleg">
-          <span><i style="background:#E8873E"></i> atenção — nenhum local testado</span>
+          <span><i style="background:#F26419"></i> atenção — nenhum local testado</span>
           <span><i style="background:#2ECC71"></i> em andamento — parte dos locais testada</span>
           <span><i style="background:#0E5C2A"></i> concluído — todos os locais testados</span>
           <span style="opacity:.8">clique numa cidade destacada para ver os locais</span>
@@ -762,8 +762,8 @@
     if (ehTermoJunta(m)){
       var a = aggMunicipio(m);
       if (a.testados === 0){
-        return { visible:true, fillColor:'#E8873E', fillOpacity:(pintar ? 0.32 : 0),
-                 strokeColor:'#C9702E', strokeWeight:1.1, clickable:true, zIndex:3 };
+        return { visible:true, fillColor:'#F26419', fillOpacity:(pintar ? 0.62 : 0),
+                 strokeColor:'#A63D0A', strokeWeight:2.0, clickable:true, zIndex:3 };
       }
       var completo = (a.n > 0 && a.testados >= a.n);
       return { visible:true,
@@ -772,8 +772,8 @@
                strokeColor:completo ? '#0A3D1C' : '#1B8F4C',
                strokeWeight:completo ? 1.5 : 1.1, clickable:true, zIndex:3 };
     }
-    return { visible:true, fillColor:'#E8873E', fillOpacity:(pintar ? 0.13 : 0.03),
-             strokeColor:'#CC7A33', strokeWeight:0.5, clickable:false, zIndex:1 };
+    return { visible:true, fillColor:'#E8B98C', fillOpacity:(pintar ? 0.12 : 0.03),
+             strokeColor:'#CBB79E', strokeWeight:0.5, clickable:false, zIndex:1 };
   }
 
   function estilizarMalha(){ if (MAPA.malhaOk) MAPA.map.data.setStyle(estiloFeature); }

@@ -331,8 +331,8 @@
     if (ehTermoJunta(m)){
       var a = aggMun(m);
       if (a.testados === 0){
-        return { visible:true, fillColor:'#E8873E', fillOpacity:(claro ? .30 : .34),
-                 strokeColor:(claro ? '#b06a2e' : '#c9822e'), strokeWeight:1.1, clickable:false, zIndex:3 };
+        return { visible:true, fillColor:'#F26419', fillOpacity:(claro ? .60 : .66),
+                 strokeColor:(claro ? '#A63D0A' : '#FF8A3D'), strokeWeight:1.8, clickable:false, zIndex:3 };
       }
       var completo = (a.n > 0 && a.testados >= a.n);
       return { visible:true,
@@ -341,8 +341,8 @@
                strokeColor: completo ? (claro ? '#0A3D1C' : '#4FD07E') : (claro ? '#15723d' : '#1B8f4c'),
                strokeWeight: completo ? 1.6 : 1.1, clickable:false, zIndex:3 };
     }
-    return { visible:true, fillColor:'#E8873E', fillOpacity:(claro ? .12 : .15),
-             strokeColor:(claro ? '#b06a2e' : '#8a5a2e'), strokeWeight:.6, clickable:false, zIndex:1 };
+    return { visible:true, fillColor:(claro ? '#E8B98C' : '#7a6a55'), fillOpacity:(claro ? .12 : .14),
+             strokeColor:(claro ? '#cbb79e' : '#6a5c48'), strokeWeight:.5, clickable:false, zIndex:1 };
   }
 
   /* ---------- ponto pulsante ---------- */
