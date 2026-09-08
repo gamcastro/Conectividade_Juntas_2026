@@ -201,13 +201,9 @@
         <div id="mapAviso" hidden style="padding:12px 14px;background:#FDF6E3;border:1px solid #E8D9A8;border-radius:8px;font-size:13px;line-height:1.5;margin-bottom:12px"></div>
         <div id="gmap" style="width:100%;height:64vh;border:1px solid var(--hair);border-radius:8px;background:#EEF1F5"></div>
         <div class="mleg">
-          <span><i style="background:#6D3B9E"></i> sede de ZE + junta especial</span>
-          <span><i style="background:#E8B93E"></i> sede de ZE (sem junta)</span>
-          <span><i style="background:#1B7F3B"></i> termo com junta especial</span>
-          <span><i style="background:#123FA8;opacity:.4"></i> termo sem junta</span>
+          <span><i style="background:#1B7F3B"></i> termo com junta especial — clique para detalhes</span>
           <span style="opacity:.85">tom mais forte = mais locais testados</span>
-          <span><i class="pin" style="background:var(--verde)"></i> local testado (GEL c/ coord.)</span>
-          <span><i class="pin" style="background:#C0392B"></i> local pendente (GEL c/ coord.)</span>
+          <span><i style="background:#E8873E;opacity:.6"></i> demais municípios</span>
           <span><i class="live"></i> diagnóstico em campo agora</span>
         </div>
         <div id="mSemCod" hidden class="lbl" style="margin-top:6px;text-transform:none;letter-spacing:0;color:#a3320f;line-height:1.5"></div>
@@ -609,7 +605,7 @@
     if (!MAPA.map){
       MAPA.map = new google.maps.Map(el('gmap'), {
         center: { lat: -4.9, lng: -45.3 }, zoom: 6, mapTypeId: 'roadmap',
-        streetViewControl: false, fullscreenControl: true,
+        streetViewControl: false, fullscreenControl: true, isFractionalZoomEnabled: true,
         mapTypeControl: true, mapTypeControlOptions: { mapTypeIds: ['roadmap','hybrid','terrain'] }
       });
       MAPA.info = new google.maps.InfoWindow();
@@ -628,21 +624,23 @@
           MAPA.map.data.addListener('click', function(e){
             var cod = String(e.feature.getProperty('cod') || '');
             var m = MAPA.muniByCod[cod];
-            if (!m) return;
+            if (!ehTermoJunta(m)) return;   // só termo com junta especial abre a janelinha
             MAPA.infoCodAberto = cod;
             MAPA.info.setContent(muniInfoHtml(m));
             MAPA.info.setPosition(e.latLng);
             MAPA.info.open(MAPA.map);
           });
           MAPA.info.addListener('closeclick', function(){ MAPA.infoCodAberto = null; });
-          // centroide de cada município (p/ o ponto pulsante de "diagnóstico agora")
+          // centroide de cada município (p/ o ponto pulsante) + bounds do MA (p/ enquadrar)
           MAPA.centroPorCod = {};
+          var mb = new google.maps.LatLngBounds();
           MAPA.map.data.forEach(function(f){
             var cod = String(f.getProperty('cod') || ''); if (!cod) return;
             var sx = 0, sy = 0, nn = 0;
-            f.getGeometry().forEachLatLng(function(ll){ sx += ll.lng(); sy += ll.lat(); nn++; });
+            f.getGeometry().forEachLatLng(function(ll){ sx += ll.lng(); sy += ll.lat(); nn++; mb.extend(ll); });
             if (nn) MAPA.centroPorCod[cod] = { lat: sy/nn, lng: sx/nn };
           });
+          if (!mb.isEmpty() && !MAPA.enquadrou){ MAPA.map.fitBounds(mb, 20); MAPA.enquadrou = true; }
           carregarVivoMapa();
         } catch(e){ /* silencioso — o mapa funciona sem a malha */ }
       })
@@ -744,32 +742,28 @@
     return { temJunta: locais.length > 0, n: locais.length, testados: tt, locais: locais };
   }
 
-  // Estilo de cada polígono da malha. Cor = categoria estrutural; nas categorias
-  // COM junta a opacidade cresce com o nº de locais testados (nenhum/parcial/todos).
-  //  sede_junta  roxo  ·  sede  amarelo  ·  termo_junta  verde  ·  termo  azul claro
+  // Município TERMO COM JUNTA ESPECIAL -- o único tipo realçado e clicável no mapa.
+  function ehTermoJunta(m){
+    return !!m && (m.categoria === 'termo_junta' ||
+                   (m.categoria === 'outro' && aggMunicipio(m).temJunta));
+  }
+
+  // Estilo de cada polígono da malha. SÓ os municípios "termo com junta especial"
+  // aparecem realçados (verde, tom mais forte = mais locais testados) e clicáveis.
+  // Todos os demais recebem uma cor única de "desabilitado" e não respondem ao clique.
   function estiloFeature(feature){
     if (!el('mDivisas').checked && !el('mPintar').checked) return { visible:false };
     var m = MAPA.muniByCod[String(feature.getProperty('cod') || '')];
-    if (!el('mPintar').checked){
-      return { visible:true, fillColor:'#9AA3B2', fillOpacity:0.03,
-               strokeColor:'#B0B7C3', strokeWeight:0.6, clickable: !!m, zIndex:1 };
+    var pintar = el('mPintar').checked;
+    if (ehTermoJunta(m)){
+      var a = aggMunicipio(m);
+      var RAMPA = [0.30, 0.46, 0.62];   // nenhum / parcial / todos os locais testados
+      var passo = a.testados === 0 ? 0 : (a.testados === a.n ? 2 : 1);
+      return { visible:true, fillColor:'#1B7F3B', fillOpacity:(pintar ? RAMPA[passo] : 0),
+               strokeColor:'#125C29', strokeWeight:1.3, clickable:true, zIndex:3 };
     }
-    if (!m){
-      return { visible:true, fillColor:'#9AA3B2', fillOpacity:0.06,
-               strokeColor:'#B0B7C3', strokeWeight:0.5, clickable:false, zIndex:1 };
-    }
-    var a = aggMunicipio(m);
-    var RAMPA = [0.26, 0.42, 0.58];   // nenhum / parcial / todos os locais testados
-    var passo = !a.temJunta ? 0 : (a.testados === 0 ? 0 : (a.testados === a.n ? 2 : 1));
-    var hue, op, stroke, sw = 0.9, z = 2;
-    switch (m.categoria){
-      case 'sede_junta':  hue = '#6D3B9E'; op = RAMPA[passo]; stroke = '#4A2470'; sw = 2.0; z = 4; break;
-      case 'sede':        hue = '#E8B93E'; op = 0.50;         stroke = '#B8901F'; sw = 2.0; z = 3; break;
-      case 'termo_junta': hue = '#1B7F3B'; op = RAMPA[passo]; stroke = '#125C29'; sw = 1.1; z = 2; break;
-      case 'termo':       hue = '#123FA8'; op = 0.15;         stroke = '#5A78B8'; sw = 0.7; z = 1; break;
-      default:            hue = '#9AA3B2'; op = 0.10;         stroke = '#8A93A3'; sw = 0.6; z = 1;
-    }
-    return { visible:true, fillColor:hue, fillOpacity:op, strokeColor:stroke, strokeWeight:sw, clickable:true, zIndex:z };
+    return { visible:true, fillColor:'#E8873E', fillOpacity:(pintar ? 0.16 : 0.03),
+             strokeColor:'#CC7A33', strokeWeight:0.6, clickable:false, zIndex:1 };
   }
 
   function estilizarMalha(){ if (MAPA.malhaOk) MAPA.map.data.setStyle(estiloFeature); }
@@ -796,17 +790,12 @@
       bounds.extend(mk.getPosition());
       n++;
     });
-    var cSJ = 0, cS = 0, cTJ = 0;
-    Object.keys(MAPA.muniByCod).forEach(function(k){
-      var m = MAPA.muniByCod[k];
-      var temJ = aggMunicipio(m).temJunta;
-      if (m.categoria === 'sede_junta') cSJ++;
-      else if (m.categoria === 'sede') cS++;
-      else if (m.categoria === 'termo_junta' || (m.categoria === 'outro' && temJ)) cTJ++;
-    });
-    el('mContagem').textContent = (cSJ+cTJ) + ' município(s) com junta (' + cSJ + ' sede + ' + cTJ +
-      ' termo) · ' + cS + ' sede sem junta · ' + n + ' pino(s) do GEL';
-    if (n && !MAPA.enquadrou){ MAPA.map.fitBounds(bounds); MAPA.enquadrou = true;
+    var cTJ = 0;
+    Object.keys(MAPA.muniByCod).forEach(function(k){ if (ehTermoJunta(MAPA.muniByCod[k])) cTJ++; });
+    el('mContagem').textContent = cTJ + ' município(s) termo com junta especial · ' + n + ' pino(s) do GEL';
+    // enquadramento: a malha do MA tem prioridade (feito em carregarMalha);
+    // só cai nos pinos se a malha não carregou.
+    if (!MAPA.malhaOk && n && !MAPA.enquadrou){ MAPA.map.fitBounds(bounds); MAPA.enquadrou = true;
       if (n === 1) MAPA.map.setZoom(13); }
   }
 
