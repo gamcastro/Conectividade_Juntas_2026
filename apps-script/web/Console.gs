@@ -43,14 +43,21 @@ function _webAmbiente() {
 
 /* ============================ PAGINA ============================ */
 
+// Icone do DICON (mesmo simbolo do app desktop) servido pelo GitHub raw --
+// vira o favicon da pagina e, no celular, o icone do atalho "Criar atalho".
+var WEB_FAVICON = 'https://raw.githubusercontent.com/gamcastro/Conectividade_Juntas_2026/main/assets/marca/icones/dicon-256.png';
+
 function webConsolePagina(e) {
   var pp = (e && e.parameter) || {};
   var arquivo = 'web/Index';
-  if (pp.app === 'mobile' || pp.m || pp.mobile) arquivo = 'web/Mobile';
+  var titulo = 'DICON Web — Coordenação';
+  if (pp.app === 'mobile' || pp.m || pp.mobile) { arquivo = 'web/Mobile'; titulo = 'DICON Mobile'; }
   else if (pp.app === 'tv' || pp.tv) arquivo = 'web/Tv';
-  return HtmlService.createHtmlOutputFromFile(arquivo)
-    .setTitle('DICON Web — Coordenação')
+  var out = HtmlService.createHtmlOutputFromFile(arquivo)
+    .setTitle(titulo)
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+  try { out.setFaviconUrl(WEB_FAVICON); } catch (err) { /* favicon e' opcional */ }
+  return out;
 }
 
 /* ============================ ACESSO ============================ */
