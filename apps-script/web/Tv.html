@@ -322,19 +322,26 @@
                    (m.categoria === 'outro' && aggMun(m).temJunta));
   }
 
-  // Mapa simplificado: só "termo com junta especial" fica verde (tom mais forte =
-  // mais locais testados); todos os demais municípios em laranja de fundo.
+  // Mapa simplificado, pintado pelo andamento dos testes do "termo com junta especial":
+  //   nenhum local testado -> laranja (atenção)  ·  parte -> verde claro  ·  todos -> verde escuro.
+  // Demais municípios ficam num laranja de fundo.
   function estiloFeature(feature){
     var claro = (TV.tema === 'claro');
     var m = TV.muniByCod[String(feature.getProperty('cod')||'')];
     if (ehTermoJunta(m)){
       var a = aggMun(m);
-      var RAMPA = claro ? [.24,.42,.62] : [.34,.52,.70];
-      var passo = a.testados===0 ? 0 : (a.testados===a.n ? 2 : 1);
-      return { visible:true, fillColor:'#2ECC71', fillOpacity:RAMPA[passo],
-               strokeColor:claro?'#15723d':'#1B8f4c', strokeWeight:1.2, clickable:false, zIndex:3 };
+      if (a.testados === 0){
+        return { visible:true, fillColor:'#E8873E', fillOpacity:(claro ? .30 : .34),
+                 strokeColor:(claro ? '#b06a2e' : '#c9822e'), strokeWeight:1.1, clickable:false, zIndex:3 };
+      }
+      var completo = (a.n > 0 && a.testados >= a.n);
+      return { visible:true,
+               fillColor:  completo ? '#0E5C2A' : '#2ECC71',
+               fillOpacity: completo ? (claro ? .80 : .84) : (claro ? .44 : .52),
+               strokeColor: completo ? (claro ? '#0A3D1C' : '#4FD07E') : (claro ? '#15723d' : '#1B8f4c'),
+               strokeWeight: completo ? 1.6 : 1.1, clickable:false, zIndex:3 };
     }
-    return { visible:true, fillColor:'#E8873E', fillOpacity:(claro ? .13 : .16),
+    return { visible:true, fillColor:'#E8873E', fillOpacity:(claro ? .12 : .15),
              strokeColor:(claro ? '#b06a2e' : '#8a5a2e'), strokeWeight:.6, clickable:false, zIndex:1 };
   }
 
