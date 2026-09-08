@@ -13,6 +13,7 @@
 #  Opcoes (definir ANTES do comando, todas opcionais):
 #      $env:DICON_TV_AMBIENTE  = 'prod'    # 'prod' (padrao) | 'homolog'
 #      $env:DICON_TV_TEMA      = 'escuro'  # 'escuro' (padrao) | 'claro'
+#      $env:DICON_TV_ZOOM      = '7.2'     # zoom fixo do mapa (ex.: 6.5..8); vazio = automatico
 #      $env:DICON_TV_AUTOSTART = '1'       # inicia junto com o Windows
 #      $env:DICON_TV_DEST      = 'C:\dicon-tv'   # pasta do perfil + .bat
 # =============================================================================
@@ -25,7 +26,9 @@ $WEBAPP = @{
 $amb  = ([string] $env:DICON_TV_AMBIENTE).ToLower(); if ($amb -ne 'homolog') { $amb = 'prod' }
 $tema = ([string] $env:DICON_TV_TEMA).ToLower();     if ($tema -ne 'claro')   { $tema = 'escuro' }
 $dest = if ($env:DICON_TV_DEST) { $env:DICON_TV_DEST } else { 'C:\dicon-tv' }
+$zoom = ([string] $env:DICON_TV_ZOOM).Trim()
 $url  = "https://script.google.com/a/macros/tre-ma.jus.br/s/$($WEBAPP[$amb])/exec?app=tv&tema=$tema"
+if ($zoom -match '^\d+(\.\d+)?$') { $url += "&zoom=$zoom" }
 
 Write-Host ("Painel de TV do DICON  --  {0}  --  tema {1}" -f $amb.ToUpper(), $tema) -ForegroundColor Cyan
 
