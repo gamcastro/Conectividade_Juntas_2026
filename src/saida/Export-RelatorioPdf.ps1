@@ -567,6 +567,27 @@ function Get-GraficoTentativasHtml {
     '<div class="ptit" style="margin-top:8px">Tentativas do "Refazer"</div><div class="graflinha">' + ($blocos -join "`n") + '</div>'
 }
 
+# Enderecamento da placa usada neste meio (IP / mascara / gateway / DNS / origem),
+# congelado no snapshot da Fase 1 -- mostrado logo abaixo do titulo do meio.
+# '' se nao houver IP (meio "nao se aplica" ou resultado antigo sem os campos).
+function Get-EnderecamentoMeioHtml {
+    param($M)
+    $p  = $M.PSObject.Properties
+    $ip = if ($p['rede_local_ip']) { [string] $M.rede_local_ip } else { '' }
+    if (-not $ip) { return '' }
+    $itens = @('<span><b>IP:</b> ' + (ConvertTo-HtmlSafe $ip) + '</span>')
+    if ($p['rede_local_mascara'] -and [string] $M.rede_local_mascara) {
+        $itens += '<span><b>M&aacute;scara:</b> ' + (ConvertTo-HtmlSafe ([string] $M.rede_local_mascara)) + '</span>' }
+    if ($p['rede_local_gateway'] -and [string] $M.rede_local_gateway) {
+        $itens += '<span><b>Gateway:</b> ' + (ConvertTo-HtmlSafe ([string] $M.rede_local_gateway)) + '</span>' }
+    $dns = if ($p['rede_local_dns']) { @($M.rede_local_dns) | Where-Object { $_ } } else { @() }
+    if ($dns.Count) {
+        $itens += '<span><b>DNS:</b> ' + (ConvertTo-HtmlSafe ($dns -join ', ')) + '</span>' }
+    if ($p['rede_local_ip_origem'] -and [string] $M.rede_local_ip_origem) {
+        $itens += '<span><b>Origem do IP:</b> ' + (ConvertTo-HtmlSafe ([string] $M.rede_local_ip_origem)) + '</span>' }
+    '  <div class="endr">' + ($itens -join '') + '</div>'
+}
+
 # Bloco de um meio na secao 4 (Rede local sem VPN + Com a VPN, lado a lado).
 function Get-MeioBlocoHtml {
     param($R, $M, [bool] $Recomendado, [string] $Modo = 'completo')
@@ -601,7 +622,6 @@ function Get-MeioBlocoHtml {
     if ($meio -eq 'lan') {
         if ($velLink) { $props += '<b>Velocidade da placa de rede:</b> ' + $velLink + ' Mbps' }
     } elseif ($meio -eq 'wifi_local') {
-        if ($M.rede_local_provedor)   { $props += '<b>Provedor:</b> ' + (ConvertTo-HtmlSafe ([string] $M.rede_local_provedor)) }
         if ($M.rede_local_wifi_ssid)  { $props += '<b>Rede (SSID):</b> ' + (ConvertTo-HtmlSafe ([string] $M.rede_local_wifi_ssid)) }
         if ($M.rede_local_wifi_banda) { $props += '<b>Banda:</b> ' + (ConvertTo-HtmlSafe ([string] $M.rede_local_wifi_banda)) }
         if ($null -ne $sinalPct -and "$sinalPct" -ne '') { $props += '<b>N&iacute;vel do sinal:</b> ' + $sinalPct + ' %' }
@@ -613,6 +633,16 @@ function Get-MeioBlocoHtml {
         if ($velLink) { $props += '<b>Velocidade da placa Wi-Fi:</b> ' + $velLink + ' Mbps' }
     }
     $titPropsHtml = if ($props.Count) { '<span class="meiotit-props">' + ($props -join ' &middot; ') + '</span>' } else { '' }
+
+    # Enderecamento da placa (logo abaixo do titulo do meio).
+    $endrHtml = Get-EnderecamentoMeioHtml -M $M
+
+    # Provedor + servidor do teste de velocidade -- ao lado da secao "SEM VPN".
+    $rlMetaItens = @()
+    if ($M.rede_local_provedor) { $rlMetaItens += '<b>Provedor:</b> ' + (ConvertTo-HtmlSafe ([string] $M.rede_local_provedor)) }
+    $rlServidor = if ($M.PSObject.Properties['rede_local_servidor']) { [string] $M.rede_local_servidor } else { '' }
+    if ($rlServidor) { $rlMetaItens += '<b>Servidor:</b> ' + (ConvertTo-HtmlSafe $rlServidor) }
+    $rlMetaHtml = if ($rlMetaItens.Count) { '<div class="rlmeta">' + ($rlMetaItens -join ' &middot; ') + '</div>' } else { '' }
 
     $diagBox = ''
     if ($M.rede_local_diagnostico -and (@('handshake', 'bloqueio') -contains [string] $M.rede_local_falha_tipo)) {
@@ -652,10 +682,12 @@ function Get-MeioBlocoHtml {
     @"
   <div class="meio">
     <div class="meiotit"><span>$tit</span>$badge$flag$titPropsHtml</div>
+    $endrHtml
     $grafSemCom
     <div class="cols">
       <div>
         <div class="subt">$subSem</div>
+        $rlMetaHtml
         $diagBox
         $f1
       </div>
@@ -1188,6 +1220,12 @@ function New-RelatorioHtml {
              display: flex; align-items: baseline; flex-wrap: wrap; gap: 3px 10px;
              page-break-after: avoid; break-after: avoid; }
   .meiotit-props { font-weight: 400; font-size: 10px; color: #333; }
+  .endr { background: #F4F7FB; border-bottom: 1px solid #DFE6F0; padding: 5px 12px;
+          font-size: 10px; color: #333; display: flex; flex-wrap: wrap; gap: 2px 18px;
+          page-break-after: avoid; break-after: avoid; }
+  .endr b { color: #1F3A63; }
+  .rlmeta { font-size: 10px; color: #333; margin: 0 0 5px; }
+  .rlmeta b { color: #1F3A63; }
   .badge { border: 1px solid; border-radius: 3px; padding: 1px 7px; font-size: 10px; font-weight: 700; }
   .tag { background: #1F4E79; color: #fff; border-radius: 3px; padding: 1px 7px; font-size: 9px;
          font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }

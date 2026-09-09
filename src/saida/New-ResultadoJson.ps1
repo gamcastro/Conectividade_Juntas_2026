@@ -211,6 +211,16 @@ function New-ResultadoJson {
             rede_local_wifi_banda           = $mWifiBanda
             rede_local_wifi_sinal_pct       = $mWifiSinal
             rede_local_wifi_ssid            = $mWifiSsid
+            # Provedor / servidor do teste de velocidade (Ookla) deste meio.
+            rede_local_servidor            = ((([string] (Get-Prop $mIt 'servidor_nome')) + ' - ' + ([string] (Get-Prop $mIt 'servidor_local'))).Trim(' -'))
+            rede_local_resultado_url      = [string] (Get-Prop $mIt 'resultado_url')
+            # Enderecamento da placa deste meio, congelado no snapshot da Fase 1.
+            rede_local_ip                 = [string] (Get-Prop $mSnap 'ipv4')
+            rede_local_mascara            = [string] (Get-Prop $mSnap 'mascara')
+            rede_local_gateway            = [string] (Get-Prop $mSnap 'gateway')
+            rede_local_dns                = @((Get-Prop $mSnap 'dns') | Where-Object { $_ })
+            rede_local_ip_origem          = [string] (Get-Prop $mSnap 'ip_origem')
+            rede_local_mac                = [string] (Get-Prop $mSnap 'mac')
             limiares_meio          = $mMeio
             rede_local_avaliacao   = @(Get-AvaliacaoRedeLocalJson $mIt $mOvr $mMeio)
             # curva de velocidade do teste (sem VPN), pro grafico do relatorio
